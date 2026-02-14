@@ -1,0 +1,447 @@
+/**
+ * 核心更新服务
+ * 负责检查 Sing-box 核心更新、下载并替换
+ */
+
+import { app } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as https from 'https';
+
+import { LogManager } from './LogManager';
+import { ProxyManager } from './ProxyManager';
+import { resourceManager } from './ResourceManager';
+
+
+export interface CoreUpdateCheckResult {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  downloadUrl?: string;
+  releaseNotes?: string;
+  error?: string;
+}
+
+export class CoreUpdateService {
+  private logManager: LogManager;
+  private proxyManager: ProxyManager | null = null;
+  private isUpdating: boolean = false;
+
+  constructor(logManager: LogManager) {
+    this.logManager = logManager;
+  }
+
+  setProxyManager(proxyManager: ProxyManager): void {
+    this.proxyManager = proxyManager;
+  }
+
+  /**
+   * 检查核心更新
+   */
+  async checkUpdate(): Promise<CoreUpdateCheckResult> {
+    try {
+      this.logManager.addLog('info', '正在检查 Sing-box 核心更新...', 'CoreUpdateService');
+      
+      const currentVersion = await this.getCurrentVersion();
+      const releases = await this.fetchReleases();
+      
+      if (!releases || releases.length === 0) {
+        return { hasUpdate: false, currentVersion, error: '未找到发布版本' };
+      }
+
+      // 过滤出正式版 (非 prerelease)
+      const validReleases = releases.filter((r: any) => !r.prerelease);
+      if (validReleases.length === 0) {
+        return { hasUpdate: false, currentVersion, error: '未找到正式版本' };
+      }
+
+      const latestRelease = validReleases[0];
+      // release tag 通常是 v1.8.0 格式，去掉 v
+      const latestVersion = latestRelease.tag_name.replace(/^v/, '');
+
+      this.logManager.addLog('info', `当前版本: ${currentVersion}, 最新版本: ${latestVersion}`, 'CoreUpdateService');
+
+
+      if (this.compareVersions(latestVersion, currentVersion) > 0) {
+        // 找到适合当前平台的资源
+        const asset = this.findSuitableAsset(latestRelease.assets);
+        if (asset) {
+          const result = {
+            hasUpdate: true,
+            currentVersion,
+            latestVersion,
+            downloadUrl: asset.browser_download_url,
+            releaseNotes: latestRelease.body
+          };
+          this.logManager.addLog('info', `Found suitable asset: ${asset.browser_download_url}`, 'CoreUpdateService');
+          return result;
+        } else {
+          const msg = `未找到适合当前平台的构建 (Platform: ${process.platform}, Arch: ${process.arch})`;
+          this.logManager.addLog('warn', msg, 'CoreUpdateService');
+          return { hasUpdate: false, currentVersion, error: msg };
+        }
+      }
+
+      return { hasUpdate: false, currentVersion };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logManager.addLog('error', `检查核心更新失败: ${msg}`, 'CoreUpdateService');
+      return { hasUpdate: false, currentVersion: '未知', error: msg };
+    }
+  }
+
+  /**
+   * 执行更新
+   */
+  async updateCore(downloadUrl: string): Promise<boolean> {
+    if (this.isUpdating) {
+      throw new Error('更新正在进行中');
+    }
+
+    this.isUpdating = true;
+    
+    try {
+      // 1. 下载文件
+      this.logManager.addLog('info', '开始下载核心文件...', 'CoreUpdateService');
+      const tempPath = await this.downloadFile(downloadUrl);
+      
+      // 2. 解压文件 (如果需要)
+      // Sing-box release 通常是 .tar.gz 或 .zip
+      this.logManager.addLog('info', '正在解压核心文件...', 'CoreUpdateService');
+      const corePath = await this.extractCore(tempPath);
+      
+      // 3. 停止代理
+      let wasRunning = false;
+      if (this.proxyManager) {
+        const status = this.proxyManager.getStatus();
+        if (status.running) {
+          this.logManager.addLog('info', '正在停止代理服务...', 'CoreUpdateService');
+          await this.proxyManager.stop();
+          wasRunning = true;
+          // 等待进程完全退出
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      // 4. 备份旧核心
+      await this.backupCurrentCore();
+      
+      // 5. 替换核心
+      this.logManager.addLog('info', '正在替换核心文件...', 'CoreUpdateService');
+      const targetPath = resourceManager.getSingBoxPath();
+      
+      // 确保目标目录存在
+      const targetDir = path.dirname(targetPath);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      
+      // 复制新核心到目标位置
+      await this.copyFileWithRetry(corePath, targetPath);
+      
+      // 设置执行权限 (macOS/Linux)
+      if (process.platform !== 'win32') {
+        fs.chmodSync(targetPath, 0o755);
+      }
+      
+      this.logManager.addLog('info', '核心文件替换成功', 'CoreUpdateService');
+      
+      // 6. 清理临时文件
+      try {
+        fs.unlinkSync(tempPath);
+        // 如果 corePath 是解压出来的临时文件，也删除它
+        if (corePath.includes(app.getPath('temp')) && corePath !== tempPath) {
+          fs.unlinkSync(corePath);
+        }
+      } catch (e) {
+        // 忽略清理错误
+      }
+      
+      // 7. 重启代理 (如果之前在运行)
+      if (wasRunning && this.proxyManager) {
+        this.logManager.addLog('info', '正在重启代理服务...', 'CoreUpdateService');
+        // 需要重新加载配置? 通常不需要，config没变
+        // 但需要获取当前的配置
+        // 由于 ProxyManager.start 需要 config 参数，这里可能有点麻烦
+        // 我们可以尝试触发一个事件或者让用户手动启动
+        // 或者我们假设 Index.ts 会处理重启?
+        // 简单起见，我们通知用户手动重启或由上层调用者处理
+      }
+      
+      return true;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logManager.addLog('error', `更新核心失败: ${msg}`, 'CoreUpdateService');
+      
+      // 尝试恢复备份
+      await this.restoreBackup();
+      
+      throw error;
+    } finally {
+      this.isUpdating = false;
+    }
+  }
+
+  /*
+   * 带重试机制的文件复制，遇到 EBUSY 会尝试强制结束进程 (Windows)
+   */
+  private async copyFileWithRetry(src: string, dest: string, retries: number = 3): Promise<void> {
+    for (let i = 0; i < retries; i++) {
+        try {
+            fs.copyFileSync(src, dest);
+            return;
+        } catch (error: any) {
+            this.logManager.addLog('warn', `Copy failed (attempt ${i+1}/${retries}): ${error.message}`, 'CoreUpdateService');
+            
+            // 如果是最后一次尝试，直接抛出异常
+            if (i === retries - 1) throw error;
+            
+            // Windows 下如果是 EBUSY 或 EPERM，尝试强制结束 sing-box 进程
+            if (process.platform === 'win32' && (error.code === 'EBUSY' || error.code === 'EPERM')) {
+                 this.logManager.addLog('info', 'File locked, attempting to force kill sing-box.exe...', 'CoreUpdateService');
+                 try {
+                     require('child_process').execSync('taskkill /F /IM sing-box.exe', { stdio: 'ignore' });
+                     // 杀进程后多等一会儿
+                     await new Promise(resolve => setTimeout(resolve, 1000));
+                 } catch (e) {
+                     // 忽略错误（可能进程不存在）
+                 }
+            }
+            
+            // 等待后重试
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+  }
+
+  /**
+
+   * 获取当前核心版本
+   */
+  async getCurrentVersion(): Promise<string> {
+    if (this.proxyManager) {
+      return await this.proxyManager.getCoreVersion();
+    }
+    return '未知';
+  }
+
+  // --- 私有辅助方法 ---
+
+  private async fetchReleases(): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.github.com',
+        path: '/repos/SagerNet/sing-box/releases',
+        method: 'GET',
+        headers: {
+          'User-Agent': 'FlowZ-Electron',
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              resolve(JSON.parse(data));
+            } else {
+              reject(new Error(`GitHub API Error: ${res.statusCode}`));
+            }
+          } catch (e) {
+            reject(new Error('Failed to parse GitHub response'));
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
+  private compareVersions(v1: string, v2: string): number {
+    const p1 = v1.split('.').map(Number);
+    const p2 = v2.split('.').map(Number);
+    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+      const n1 = p1[i] || 0;
+      const n2 = p2[i] || 0;
+      if (n1 > n2) return 1;
+      if (n1 < n2) return -1;
+    }
+    return 0;
+  }
+
+  private findSuitableAsset(assets: any[]): any {
+    const platform = process.platform;
+    const arch = process.arch;
+    
+    // 映射 Node.js 平台/架构到 Sing-box 命名规则
+    // darwin, win32, linux
+    // x64, arm64
+    
+    let keyword = '';
+    let ext = '';
+    
+    if (platform === 'win32') {
+      keyword = 'windows';
+      ext = '.zip';
+    } else if (platform === 'darwin') {
+      keyword = 'darwin';
+      ext = '.tar.gz'; // 通常是 tar.gz 或者 zip
+    } else if (platform === 'linux') {
+      keyword = 'linux';
+      ext = '.tar.gz';
+    }
+    
+    let archKeyword = '';
+    if (arch === 'x64') {
+      archKeyword = 'amd64';
+    } else if (arch === 'arm64') {
+      archKeyword = 'arm64';
+    }
+
+    // 优先查找包含特定架构的
+    return assets.find((a: any) => 
+      a.name.toLowerCase().includes(keyword) && 
+      a.name.toLowerCase().includes(archKeyword) && 
+      (a.name.endsWith(ext) || a.name.endsWith('.zip'))
+    );
+  }
+
+  private async downloadFile(url: string): Promise<string> {
+    let ext = '.zip';
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      const urlExt = path.extname(pathname);
+      if (urlExt) {
+        ext = urlExt;
+      }
+    } catch (e) {
+      console.error('Failed to parse URL for extension:', e);
+    }
+    
+    // 如果是 Windows，且后缀不是 .zip，强制使用 .zip (因为 Sing-box Windows 构建通常是 zip)
+    // 这是一个保险措施
+    if (process.platform === 'win32' && ext !== '.zip') {
+        ext = '.zip';
+    }
+
+    const tempPath = path.join(app.getPath('temp'), `sing-box-core-update-${Date.now()}${ext}`);
+    const file = fs.createWriteStream(tempPath);
+
+    return new Promise((resolve, reject) => {
+      https.get(url, { headers: { 'User-Agent': 'FlowZ-Electron' } }, (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+           const redirectUrl = response.headers.location;
+           if (redirectUrl) {
+             this.downloadFile(redirectUrl).then(resolve).catch(reject);
+             return;
+           }
+        }
+        
+        if (response.statusCode !== 200) {
+          reject(new Error(`Download failed: ${response.statusCode}`));
+          return;
+        }
+        
+        response.pipe(file);
+        
+        file.on('finish', () => {
+          file.close();
+          resolve(tempPath);
+        });
+      }).on('error', (err) => {
+        fs.unlink(tempPath, () => {});
+        reject(err);
+      });
+    });
+  }
+
+  private async extractCore(filePath: string): Promise<string> {
+    // 这是一个简化实现，处理 zip 和 tar.gz 需要引入 adm-zip 或 tar 库
+    // 假设项目中可能有这些依赖，或者使用系统命令
+    // 为了稳健性，这里使用系统命令 (tar / powershell Expand-Archive)
+    
+    const extractDir = path.join(app.getPath('temp'), `sing-box-extracted-${Date.now()}`);
+    fs.mkdirSync(extractDir);
+
+    try {
+      if (process.platform === 'win32') {
+        // Windows: 使用 PowerShell 解压 zip
+        const { execSync } = require('child_process');
+        execSync(`powershell -command "Expand-Archive -Path '${filePath}' -DestinationPath '${extractDir}' -Force"`);
+      } else {
+        // macOS/Linux: 使用 tar
+        const { execSync } = require('child_process');
+        // 检测是 zip 还是 tar.gz
+        if (filePath.endsWith('.zip')) {
+           execSync(`unzip -o "${filePath}" -d "${extractDir}"`);
+        } else {
+           execSync(`tar -xzf "${filePath}" -C "${extractDir}"`);
+        }
+      }
+
+      // 查找解压后的可执行文件
+      const exeName = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
+      
+      // 递归查找
+      const findFile = (dir: string): string | null => {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const fullPath = path.join(dir, file);
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            const found = findFile(fullPath);
+            if (found) return found;
+          } else if (file === exeName) {
+            return fullPath;
+          }
+        }
+        return null;
+      };
+
+      const corePath = findFile(extractDir);
+      if (!corePath) {
+        throw new Error('无法在压缩包中找到 sing-box 可执行文件');
+      }
+
+      return corePath;
+
+    } catch (error) {
+      throw new Error(`解压失败: ${(error as any).message}`);
+    }
+  }
+
+  private getBackupPath(): string {
+    return resourceManager.getSingBoxPath() + '.bak';
+  }
+
+  private async backupCurrentCore(): Promise<void> {
+    const currentPath = resourceManager.getSingBoxPath();
+    const backupPath = this.getBackupPath();
+    
+    if (fs.existsSync(currentPath)) {
+      fs.copyFileSync(currentPath, backupPath);
+      this.logManager.addLog('info', '已备份当前核心', 'CoreUpdateService');
+    }
+  }
+
+  private async restoreBackup(): Promise<void> {
+    const currentPath = resourceManager.getSingBoxPath();
+    const backupPath = this.getBackupPath();
+    
+    if (fs.existsSync(backupPath)) {
+      try {
+        fs.copyFileSync(backupPath, currentPath);
+         if (process.platform !== 'win32') {
+          fs.chmodSync(currentPath, 0o755);
+        }
+        this.logManager.addLog('info', '已从备份恢复核心', 'CoreUpdateService');
+      } catch (e) {
+        this.logManager.addLog('error', '恢复备份失败', 'CoreUpdateService');
+      }
+    }
+  }
+}

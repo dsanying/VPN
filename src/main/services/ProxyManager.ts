@@ -1,0 +1,3031 @@
+/**
+ * 代理管理服务
+ * 负责 sing-box 进程的生命周期管理和配置生成
+ */
+
+import { BrowserWindow } from 'electron';
+import { spawn, ChildProcess } from 'child_process';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { EventEmitter } from 'events';
+import type { UserConfig, ServerConfig, ProxyStatus } from '../../shared/types';
+import type { ILogManager } from './LogManager';
+import { IPC_CHANNELS } from '../../shared/ipc-channels';
+import { resourceManager } from './ResourceManager';
+import { retry } from '../utils/retry';
+import { getUserDataPath } from '../utils/paths';
+
+/**
+ * 私有 IP 地址段（CIDR 格式）
+ * 用于路由规则中的直连配置
+ */
+const PRIVATE_IP_CIDRS = [
+  // IPv4 私有地址
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '127.0.0.0/8',
+  '169.254.0.0/16',
+  '224.0.0.0/4',
+  '240.0.0.0/4',
+  // IPv6 私有地址
+  '::1/128',           // loopback
+  'fc00::/7',          // unique local address (ULA)
+  'fe80::/10',         // link-local
+  'ff00::/8',          // multicast
+];
+
+/**
+ * 私有 IP 地址正则表达式
+ * 用于日志过滤中识别内网请求
+ */
+const PRIVATE_IP_PATTERNS = [
+  /\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
+  /\b172\.(1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3}/,
+  /\b192\.168\.\d{1,3}\.\d{1,3}/,
+  /\b127\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
+  /\b169\.254\.\d{1,3}\.\d{1,3}/,
+];
+
+/**
+ * sing-box 1.12.x 配置类型定义
+ */
+
+interface SingBoxLogConfig {
+  level: string;
+  timestamp: boolean;
+  output?: string;
+}
+
+interface SingBoxDnsServer {
+  tag: string;
+  type: string;
+  server?: string;
+  detour?: string;
+  // DoH 专用字段
+  address?: string;
+  address_resolver?: string;
+  // FakeIP 专用字段
+  inet4_range?: string;
+  inet6_range?: string;
+}
+
+interface SingBoxDnsRule {
+  rule_set?: string;
+  query_type?: string[];
+  domain?: string[];
+  domain_suffix?: string[];
+  domain_keyword?: string[];
+  server: string;
+}
+
+interface SingBoxFakeIPConfig {
+  enabled: boolean;
+  inet4_range?: string;
+  inet6_range?: string;
+}
+
+interface SingBoxDnsConfig {
+  servers: SingBoxDnsServer[];
+  rules?: SingBoxDnsRule[];
+  final?: string;
+  strategy?: string;
+  fakeip?: SingBoxFakeIPConfig;
+}
+
+interface SingBoxInbound {
+  type: string;
+  tag: string;
+  listen?: string;
+  listen_port?: number;
+  // TUN 模式
+  interface_name?: string;
+  address?: string[];
+  mtu?: number;
+  auto_route?: boolean;
+  strict_route?: boolean;
+  stack?: string;
+  sniff?: boolean;
+  sniff_override_destination?: boolean;
+  route_exclude_address?: string[];
+  platform?: {
+    http_proxy?: {
+      enabled: boolean;
+      server: string;
+      server_port: number;
+    };
+  };
+}
+
+interface SingBoxOutbound {
+  type: string;
+  tag: string;
+  detour?: string; // 代理链
+  server?: string;
+  server_port?: number;
+  // Shadowsocks
+  method?: string;
+  password?: string;
+  plugin?: string;
+  plugin_opts?: string;
+  // VLESS
+  uuid?: string;
+  flow?: string;
+  packet_encoding?: string;
+  // Trojan and Hysteria2
+  // password?: string; // Shared with SS
+  // Hysteria2 specific
+  up_mbps?: number;
+  down_mbps?: number;
+  obfs?: {
+    type: string;
+    password: string;
+  };
+  network?: string;
+  // TLS
+  tls?: {
+    enabled: boolean;
+    server_name?: string;
+    insecure?: boolean;
+    alpn?: string[];
+    utls?: {
+      enabled: boolean;
+      fingerprint: string;
+    };
+    reality?: {
+      enabled: boolean;
+      public_key: string;
+      short_id: string;
+    };
+  };
+  // Transport
+  transport?: {
+    type: string;
+    path?: string;
+    headers?: Record<string, string | string[]>;
+    service_name?: string;
+  };
+  // DNS resolver for outbound server domain
+  domain_resolver?: string;
+}
+
+interface SingBoxRouteRule {
+  protocol?: string;
+  rule_set?: string | string[];
+  domain?: string[];
+  domain_suffix?: string[];
+  domain_keyword?: string[];
+  geosite?: string[];
+  ip_cidr?: string[];
+  port?: number | number[];
+  action: string;
+  outbound?: string;
+}
+
+interface SingBoxRuleSet {
+  tag: string;
+  type: string;
+  format: string;
+  path: string;
+}
+
+interface SingBoxRouteConfig {
+  rule_set?: SingBoxRuleSet[];
+  rules: SingBoxRouteRule[];
+  default_domain_resolver?: string;
+  auto_detect_interface?: boolean;
+  final?: string;
+}
+
+interface SingBoxExperimental {
+  cache_file?: {
+    enabled: boolean;
+    path: string;
+  };
+}
+
+interface SingBoxConfig {
+  log: SingBoxLogConfig;
+  dns?: SingBoxDnsConfig;
+  inbounds: SingBoxInbound[];
+  outbounds: SingBoxOutbound[];
+  route?: SingBoxRouteConfig;
+  experimental?: SingBoxExperimental & {
+    clash_api?: {
+      external_controller: string;
+      external_ui?: string;
+      secret?: string;
+      external_ui_download_url?: string;
+      external_ui_download_detour?: string;
+      default_mode?: string;
+    };
+  };
+}
+
+export interface IProxyManager {
+  start(config: UserConfig): Promise<void>;
+  stop(): Promise<void>;
+  restart(config: UserConfig): Promise<void>;
+  getStatus(): ProxyStatus;
+  generateSingBoxConfig(config: UserConfig): SingBoxConfig;
+  on(event: 'started' | 'stopped' | 'error', listener: (...args: any[]) => void): void;
+  off(event: 'started' | 'stopped' | 'error', listener: (...args: any[]) => void): void;
+  getCoreVersion(): Promise<string>;
+}
+
+export class ProxyManager extends EventEmitter implements IProxyManager {
+  private singboxProcess: ChildProcess | null = null;
+  private startTime: Date | null = null;
+  private pid: number | null = null;
+  private singboxPid: number | null = null; // macOS TUN 模式下实际的 sing-box PID
+  private currentConfig: UserConfig | null = null;
+  private configPath: string;
+  private singboxPath: string;
+  private logManager: ILogManager | null = null;
+  private lastLogMessage: string = '';
+  private lastLogCount: number = 0;
+  private lastLogTime: number = 0;
+  private mainWindow: BrowserWindow | null = null;
+  private lastErrorOutput: string = '';
+  private logFileWatcher: ReturnType<typeof setInterval> | null = null;
+  private lastLogFileSize: number = 0;
+  private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private static readonly HEALTH_CHECK_INTERVAL = 10000; // 10秒检查一次
+
+  // 自动重启相关
+  private autoRestartEnabled: boolean = true;
+  private restartCount: number = 0;
+  private lastRestartTime: number = 0;
+  private static readonly MAX_RESTART_COUNT = 3; // 最大重启次数
+  private static readonly RESTART_COOLDOWN = 60000; // 重启冷却时间（1分钟内最多重启3次）
+  private isRestarting: boolean = false;
+
+  constructor(
+    logManager?: ILogManager,
+    mainWindow?: BrowserWindow,
+    configPath?: string,
+    singboxPath?: string
+  ) {
+    super();
+    this.logManager = logManager || null;
+    this.mainWindow = mainWindow || null;
+
+    // 配置文件路径
+    if (configPath) {
+      this.configPath = configPath;
+    } else {
+      const userDataPath = getUserDataPath();
+      this.configPath = path.join(userDataPath, 'singbox_config.json');
+    }
+
+    // sing-box 可执行文件路径
+    if (singboxPath) {
+      this.singboxPath = singboxPath;
+    } else {
+      this.singboxPath = this.getSingBoxPath();
+    }
+  }
+
+  /**
+   * 启动代理
+   */
+  async start(config: UserConfig): Promise<void> {
+    // 如果已经在运行，先停止
+    if (this.singboxProcess || this.singboxPid) {
+      await this.stop();
+    }
+
+    // 用户手动启动时重置重启计数
+    if (!this.isRestarting) {
+      this.resetRestartCount();
+    }
+
+    // 先保存当前配置（needsRootPrivilege 等方法需要用到）
+    this.currentConfig = config;
+
+    // 仅在 TUN 模式下清理可能残留的 sing-box 进程
+    // 系统代理模式不需要管理员权限，也不会有残留的 TUN 进程问题
+    const isTunMode = config.proxyModeType === 'tun';
+    if (isTunMode) {
+      await this.killOrphanedSingBoxProcesses();
+    }
+
+    // 修复可能被 root 创建的文件权限（从 TUN 模式切换到系统代理模式时）
+    await this.fixFilePermissions();
+
+    // 检查是否选择了服务器
+    if (!config.selectedServerId) {
+      throw new Error('No server selected');
+    }
+
+    // 查找选中的服务器
+    const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
+    if (!selectedServer) {
+      throw new Error('Selected server not found');
+    }
+
+    // 3. 准备规则文件（必须在生成配置前完成）
+    await this.copyRuleSetsToUserData();
+
+    // 4. 生成 sing-box 配置文件
+    const singboxConfig = this.generateSingBoxConfig(config);
+
+    // 写入配置文件
+    await this.writeSingBoxConfig(singboxConfig);
+    this.logToManager('info', 'sing-box 配置文件已生成');
+
+    // TUN 模式下，删除旧的 PID 文件，确保不会读到旧的 PID
+    if (this.needsOsascript() || this.needsWindowsUAC()) {
+      await this.deletePidFile();
+    }
+
+    // 使用重试机制启动 sing-box 进程
+    await retry(() => this.startSingBoxProcess(), {
+      maxRetries: 2,
+      delay: 2000,
+      exponentialBackoff: true,
+      shouldRetry: (error) => {
+        // 只对特定错误进行重试
+        const message = error.message.toLowerCase();
+
+        // 不重试的错误类型
+        const nonRetryableErrors = [
+          '找不到',
+          '权限',
+          'permission',
+          'enoent',
+          'eacces',
+          'eperm',
+          '配置文件格式错误',
+          'invalid config',
+        ];
+
+        // 如果是不可重试的错误，直接失败
+        if (nonRetryableErrors.some((pattern) => message.includes(pattern))) {
+          return false;
+        }
+
+        // 其他错误可以重试
+        return true;
+      },
+      onRetry: (error, attempt) => {
+        this.logToManager('warn', `启动失败，正在进行第 ${attempt} 次重试: ${error.message}`);
+      },
+    });
+
+    // 如果是系统代理模式，设置系统代理
+    if (!isTunMode) {
+      await this.setSystemProxy(config);
+    }
+  }
+
+  /**
+   * 停止代理
+   */
+  async stop(): Promise<void> {
+    // macOS TUN 模式：即使 singboxProcess 为 null，也可能有后台进程在运行
+    if (!this.singboxProcess && !this.singboxPid) {
+      return;
+    }
+
+    // 如果当前是系统代理模式，取消系统代理
+    if (this.currentConfig && this.currentConfig.proxyModeType === 'systemProxy') {
+      await this.unsetSystemProxy();
+    }
+
+    await this.stopSingBoxProcess();
+  }
+
+  /**
+   * 重启代理
+   */
+  async restart(config: UserConfig): Promise<void> {
+    await this.stop();
+    await this.start(config);
+  }
+
+  /**
+   * 切换代理模式
+   * 检测模式变化，如果代理正在运行则重启
+   */
+  async switchMode(newConfig: UserConfig): Promise<void> {
+    // 检查是否有模式变化
+    const modeChanged = this.hasModeChanged(newConfig);
+
+    if (!modeChanged) {
+      // 模式没有变化，只更新配置
+      this.currentConfig = newConfig;
+      return;
+    }
+
+    // 如果代理正在运行，需要重启
+    if (this.singboxProcess) {
+      this.logToManager('info', '代理模式已更改，正在重启代理...');
+      await this.restart(newConfig);
+    } else {
+      // 代理未运行，只更新配置
+      this.currentConfig = newConfig;
+    }
+  }
+
+  /**
+   * 检查模式是否变化
+   */
+  private hasModeChanged(newConfig: UserConfig): boolean {
+    if (!this.currentConfig) {
+      return true;
+    }
+
+    // 检查代理模式
+    if (this.currentConfig.proxyMode !== newConfig.proxyMode) {
+      return true;
+    }
+
+    // 检查代理模式类型
+    if (this.currentConfig.proxyModeType !== newConfig.proxyModeType) {
+      return true;
+    }
+
+    // 检查选中的服务器
+    if (this.currentConfig.selectedServerId !== newConfig.selectedServerId) {
+      return true;
+    }
+
+    // 检查端口
+    if (
+      this.currentConfig.socksPort !== newConfig.socksPort ||
+      this.currentConfig.httpPort !== newConfig.httpPort
+    ) {
+      return true;
+    }
+
+    // 检查 TUN 配置（如果是 TUN 模式）
+    if (newConfig.proxyModeType === 'tun') {
+      const oldTun = this.currentConfig.tunConfig;
+      const newTun = newConfig.tunConfig;
+
+      if (
+        oldTun.mtu !== newTun.mtu ||
+        oldTun.stack !== newTun.stack ||
+        oldTun.autoRoute !== newTun.autoRoute ||
+        oldTun.strictRoute !== newTun.strictRoute
+      ) {
+        return true;
+      }
+    }
+
+    // 检查自定义规则
+    if (JSON.stringify(this.currentConfig.customRules) !== JSON.stringify(newConfig.customRules)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * 获取代理状态
+   */
+  getStatus(): ProxyStatus {
+    // TUN 模式下只检查 singboxPid（sing-box 的实际 PID）
+    // 系统代理模式下检查 pid（直接启动的进程 PID）
+    // 注意：TUN 模式下 this.pid 是 osascript/PowerShell 的 PID，不是 sing-box 的
+    const isTunMode = this.currentConfig?.proxyModeType === 'tun';
+    const activePid = isTunMode ? this.singboxPid : (this.singboxPid || this.pid);
+    
+    // 验证进程是否真正存活
+    const isRunning = activePid !== null && this.isProcessAlive(activePid);
+
+    if (!isRunning || !activePid) {
+      return {
+        running: false,
+      };
+    }
+
+    // 计算运行时间
+    let uptime: number | undefined;
+    if (this.startTime) {
+      uptime = Math.floor((Date.now() - this.startTime.getTime()) / 1000);
+    }
+
+    return {
+      running: true,
+      pid: activePid,
+      startTime: this.startTime || undefined,
+      uptime,
+      currentServer: this.currentConfig?.servers.find(
+        (s) => s.id === this.currentConfig?.selectedServerId
+      ),
+    };
+  }
+
+  /**
+   * 获取核心版本
+   */
+  async getCoreVersion(): Promise<string> {
+    try {
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execAsync = util.promisify(exec);
+      
+      const { stdout } = await execAsync(`"${this.singboxPath}" version`);
+      // 输出示例: sing-box version 1.8.0 ...
+      const match = stdout.match(/version\s+(\S+)/);
+      return match ? match[1] : '未知';
+    } catch (error) {
+      this.logToManager('error', `获取核心版本失败: ${(error as any).message}`);
+      return '未知';
+    }
+  }
+
+  /**
+   * 生成 sing-box 配置（sing-box 1.12.x 格式）
+   */
+  generateSingBoxConfig(config: UserConfig): SingBoxConfig {
+    const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
+    if (!selectedServer) {
+      throw new Error('Selected server not found');
+    }
+
+    // 调试日志
+    console.log('[ProxyManager] Generating config with:', {
+      proxyMode: config.proxyMode,
+      proxyModeType: config.proxyModeType,
+      selectedServerId: config.selectedServerId,
+      serverProtocol: selectedServer.protocol,
+    });
+
+    // 获取用户数据目录用于缓存文件
+    const userDataPath = getUserDataPath();
+    const cachePath = path.join(userDataPath, 'cache.db');
+
+    const singboxConfig: SingBoxConfig = {
+      log: this.generateLogConfig(config),
+      dns: this.generateDnsConfig(config, selectedServer),
+      inbounds: this.generateInbounds(config),
+      outbounds: this.generateOutbounds(selectedServer),
+      route: this.generateRouteConfig(config),
+      experimental: {
+        cache_file: {
+          enabled: true,
+          path: cachePath,
+        },
+        clash_api: {
+          external_controller: '127.0.0.1:9090',
+          external_ui: 'ui',
+          external_ui_download_url: 'https://github.com/MetaCubeX/Yacd-meta/archive/gh-pages.zip',
+          external_ui_download_detour: 'direct',
+          default_mode: 'rule',
+        },
+      },
+    };
+
+    // 调试日志
+    console.log('[ProxyManager] Generated inbounds count:', singboxConfig.inbounds.length);
+    console.log('[ProxyManager] Generated outbounds count:', singboxConfig.outbounds.length);
+    console.log('[ProxyManager] Route rule_set count:', singboxConfig.route?.rule_set?.length || 0);
+
+    return singboxConfig;
+  }
+
+  /**
+   * 生成日志配置
+   */
+  private generateLogConfig(config: UserConfig): SingBoxLogConfig {
+    // 默认使用 debug 级别以显示路由决策（哪些请求走代理/直连）
+    // 应用层会过滤掉不重要的日志，只保留有价值的信息
+    const logConfig: SingBoxLogConfig = {
+      level: config.logLevel || 'debug',
+      timestamp: true,
+    };
+
+    // 在 TUN 模式下（macOS 和 Windows），使用权限提升运行时无法捕获 stdout
+    // 需要将日志输出到文件，然后通过文件监控读取
+    // 注意：这里直接根据 config 参数判断，而不是 this.currentConfig
+    const isTunMode = config.proxyModeType?.toLowerCase() !== 'systemproxy';
+    const isMacTunMode = process.platform === 'darwin' && isTunMode;
+    const isWindowsTunMode = process.platform === 'win32' && isTunMode;
+    
+    if (isMacTunMode || isWindowsTunMode) {
+      logConfig.output = this.getLogFilePath();
+    }
+
+    return logConfig;
+  }
+
+  /**
+   * 获取 sing-box 日志文件路径
+   */
+  private getLogFilePath(): string {
+    const userDataPath = getUserDataPath();
+    return path.join(userDataPath, 'singbox.log');
+  }
+
+  /**
+   * 清空 sing-box 日志文件
+   * 在 Windows 和 macOS 上都能工作
+   */
+  async clearSingBoxLogFile(): Promise<void> {
+    const logFilePath = this.getLogFilePath();
+    try {
+      // 清空日志文件（截断为空）
+      await fs.writeFile(logFilePath, '', 'utf-8');
+      this.logToManager('info', 'sing-box 日志文件已清空');
+    } catch (error: any) {
+      // 文件不存在，忽略
+      if (error.code !== 'ENOENT') {
+        this.logToManager('error', `清空 sing-box 日志文件失败: ${error.message}`);
+      }
+    }
+  }
+
+  /**
+   * 生成 DNS 配置（sing-box 1.12.x 格式）
+   * 统一使用 FakeIP 模式：DNS 查询直接返回虚假 IP，由 sniff 识别真实域名后路由
+   * 这避免了 DNS 污染和超时问题，TUN 和系统代理模式都使用相同的逻辑
+   */
+  private generateDnsConfig(config: UserConfig, selectedServer: ServerConfig): SingBoxDnsConfig {
+    const proxyMode = (config.proxyMode || 'smart').toLowerCase();
+
+    const dnsConfig: SingBoxDnsConfig = {
+      servers: [
+        {
+          // 本地/系统 DNS：使用操作系统当前的 DNS 配置
+          // 用于解析代理服务器地址、Fail-safe 解析以及直连域名的真实 IP 解析
+          tag: 'dns-local',
+          type: 'local',
+        },
+        {
+          // 远程 DNS：通过代理查询，用于解析国外域名
+          tag: 'dns-remote',
+          type: 'udp',
+          server: '8.8.8.8',
+          detour: 'proxy',
+        },
+        {
+          // FakeIP 服务器：返回虚假 IP，由 sniff 识别真实域名
+          tag: 'fakeip',
+          type: 'fakeip',
+          inet4_range: '198.18.0.0/15',
+          inet6_range: 'fc00::/18',
+        },
+      ],
+      rules: [],
+      // 默认使用本地 DNS，规则未匹配的通过 local 解析 (Fail-safe)
+      // 但实际上我们会有规则覆盖大部分情况
+      final: 'dns-local',
+      // Google 等服务可能解析到 IPv6 但代理不支持，导致连接拒绝
+      // 恢复为 prefer_ipv4，避免 IPv6 环境下完全断网
+      strategy: 'prefer_ipv4',
+    };
+
+    const dnsRules: SingBoxDnsRule[] = [];
+
+    // 代理服务器域名必须使用本地 DNS 解析（避免死循环）
+    if (selectedServer?.address) {
+      dnsRules.push({
+        domain: [selectedServer.address],
+        server: 'dns-local',
+      } as SingBoxDnsRule);
+    }
+
+    // 绕过 FakeIP 的域名：使用本地 DNS 解析真实 IP
+    const bypassFakeIPDomains = this.collectBypassFakeIPDomains(config.customRules || []);
+    if (bypassFakeIPDomains.length > 0) {
+      dnsRules.push({
+        domain_suffix: bypassFakeIPDomains,
+        server: 'dns-local',
+      } as SingBoxDnsRule);
+    }
+
+    // 智能分流/全局代理模式下的 DNS 规则
+    if (proxyMode === 'smart' || proxyMode === 'global') {
+      // 0. 显式 Google 域名走远程 DNS (防止各种 DNS 污染)
+      dnsRules.push({
+        domain_keyword: ['google', 'gmail', 'youtube'],
+        server: 'dns-remote',
+      } as SingBoxDnsRule);
+
+      // 1. geosite-cn 走本地 DNS
+      dnsRules.push({
+        rule_set: 'geosite-cn',
+        server: 'dns-local',
+      } as SingBoxDnsRule);
+
+      // 2. 其他域名 (国外域名) 走远程 DNS (Real IP)
+      // 改用 Real IP 而不是 FakeIP，以解决 Google 等服务在某些网络环境下的 QUIC/UDP 问题
+      // 同时也避免了 Sniff 失败导致的连接问题
+      if (proxyMode === 'smart') {
+         dnsRules.push({
+            rule_set: 'geosite-geolocation-!cn',
+            server: 'dns-remote',
+         } as SingBoxDnsRule);
+         
+         // 兜底：如果没有匹配到 geosite，也尝试走 remote（或者保留 final dns-local?）
+         // 为了更好的访问体验，未知的通常假设为国外
+         // 但为了避免国内小众域名误杀，也可以让 final 走 local，或者加一个 fallback
+      } else {
+        // Global 模式：除明确排除的（代理服务器等）外，全部走 Remote
+        dnsRules.push({
+          query_type: ['A', 'AAAA'], 
+          server: 'dns-remote'
+        } as SingBoxDnsRule);
+      }
+    }
+    
+    // 如果是直连模式，全部走默认的 final: dns-local
+
+    dnsConfig.rules = dnsRules;
+
+    return dnsConfig;
+  }
+
+  /**
+   * 收集需要绕过 FakeIP 的域名列表
+   * 这些域名将使用本地 DNS 解析真实 IP，而不是返回 FakeIP
+   */
+  private collectBypassFakeIPDomains(
+    customRules: import('../../shared/types').DomainRule[]
+  ): string[] {
+    const domains: string[] = [];
+
+    for (const rule of customRules) {
+      if (!rule.enabled || !rule.bypassFakeIP || rule.domains.length === 0) continue;
+
+      // 统一处理域名格式，移除可能的 *. 前缀
+      for (const domain of rule.domains) {
+        const normalizedDomain = domain.startsWith('*.') ? domain.slice(2) : domain;
+        domains.push(normalizedDomain);
+      }
+    }
+
+    return domains;
+  }
+
+  /**
+   * 生成 Inbound 配置（sing-box 1.12.x 格式）
+   */
+  private generateInbounds(config: UserConfig): SingBoxInbound[] {
+    const inbounds: SingBoxInbound[] = [];
+
+    // 使用小写比较，兼容 SystemProxy/systemProxy 和 Tun/tun
+    const modeType = (config.proxyModeType || 'systemProxy').toLowerCase();
+
+    console.log('[ProxyManager] generateInbounds - proxyModeType:', config.proxyModeType);
+    console.log('[ProxyManager] generateInbounds - modeType (lowercase):', modeType);
+
+    // 无论哪种模式，都添加 HTTP + SOCKS inbound
+    // 这样用户在终端配置的代理环境变量在切换模式后仍然可用
+    inbounds.push(
+      {
+        type: 'http',
+        tag: 'http-in',
+        listen: '127.0.0.1',
+        listen_port: config.httpPort || 65533,
+        sniff: true,
+        sniff_override_destination: true,
+      },
+      {
+        type: 'socks',
+        tag: 'socks-in',
+        listen: '127.0.0.1',
+        listen_port: config.socksPort || 65534,
+        sniff: true,
+        sniff_override_destination: true,
+      }
+    );
+
+    // TUN 模式额外添加 TUN inbound
+    if (modeType !== 'systemproxy') {
+      const tunInbound: SingBoxInbound = {
+        type: 'tun',
+        tag: 'tun-in',
+        address: [
+          config.tunConfig?.inet4Address || '172.19.0.1/30',
+          config.tunConfig?.inet6Address || 'fdfe:dcba:9876::1/126',
+        ],
+        mtu: config.tunConfig?.mtu || 1400,
+        auto_route: config.tunConfig?.autoRoute ?? true,
+        // macOS 上不使用 strict_route，避免网络完全不通
+        strict_route: process.platform === 'darwin' ? false : (config.tunConfig?.strictRoute ?? true),
+        // 关键修复：Windows 和 macOS 使用 gvisor stack
+        // 原因：Windows 的 system stack 在处理流量嗅探时存在竞态条件，导致 TLS 握手超时
+        // gvisor 是用户态网络栈，绕过内核 TUN 实现，消除竞态条件
+        // macOS 也使用 gvisor 以保持跨平台行为一致
+        stack:
+          process.platform === 'win32' || process.platform === 'darwin'
+            ? 'gvisor'
+            : config.tunConfig?.stack || 'system',
+        sniff: true,
+        sniff_override_destination: true,
+        // 在系统路由层面排除本地地址，确保本地代理端口可访问
+        route_exclude_address: ['127.0.0.0/8', '::1/128'],
+      };
+
+      // macOS 平台特定配置
+      if (process.platform === 'darwin') {
+        tunInbound.platform = {
+          http_proxy: {
+            enabled: true,
+            server: '127.0.0.1',
+            server_port: config.httpPort || 65533,
+          },
+        };
+      }
+
+      inbounds.push(tunInbound);
+    }
+
+    return inbounds;
+  }
+
+  /**
+   * 递归获取代理链中的所有前置节点
+   */
+  private getDetourChain(server: ServerConfig, allServers: ServerConfig[]): ServerConfig[] {
+    const chain: ServerConfig[] = [];
+    const visitedIds = new Set<string>();
+    visitedIds.add(server.id);
+
+    let currentServer = server;
+    while (currentServer.detour) {
+      if (visitedIds.has(currentServer.detour)) {
+        console.warn(`[ProxyManager] Detected proxy chain loop: ${currentServer.name} -> ${currentServer.detour}`);
+        break;
+      }
+
+      const detourServer = allServers.find((s) => s.id === currentServer.detour);
+      if (!detourServer) {
+        console.warn(`[ProxyManager] Detour server not found: ${currentServer.detour}`);
+        break;
+      }
+
+      chain.push(detourServer);
+      visitedIds.add(detourServer.id);
+      currentServer = detourServer;
+    }
+
+    return chain;
+  }
+
+  /**
+   * 生成 Outbound 配置（sing-box 1.12.x 格式）
+   * 包含 proxy, direct, block 三个出站
+   */
+  private generateOutbounds(selectedServer: ServerConfig): SingBoxOutbound[] {
+    const outbounds: SingBoxOutbound[] = [];
+    const config = this.currentConfig;
+
+    if (config) {
+      // 1. 生成主选节点的 Outbound 及其前置节点
+      const mainChain = this.getDetourChain(selectedServer, config.servers);
+      
+      // 添加前置节点
+      for (const detourServer of mainChain.reverse()) {
+        const detourOutbound = this.generateProxyOutbound(detourServer);
+        detourOutbound.tag = `proxy-${detourServer.id}`;
+        // 避免重复添加
+        if (!outbounds.some(o => o.tag === detourOutbound.tag)) {
+          outbounds.push(detourOutbound);
+        }
+      }
+
+      // 添加主节点
+      const mainOutbound = this.generateProxyOutbound(selectedServer);
+      // 主节点默认使用 'proxy' tag
+      if (selectedServer.detour) {
+        mainOutbound.detour = `proxy-${selectedServer.detour}`;
+      }
+      outbounds.push(mainOutbound);
+
+      // 2. 生成自定义规则中指定的目标节点的 Outbound
+      // 遍历所有启用且指定了 targetServerId 的规则
+      if (config.customRules) {
+        const targetServerIds = new Set<string>();
+        for (const rule of config.customRules) {
+          if (rule.enabled && rule.action === 'proxy' && rule.targetServerId) {
+            targetServerIds.add(rule.targetServerId);
+          }
+        }
+
+        for (const targetId of targetServerIds) {
+          // 如果目标节点就是主节点，不需要额外添加（主节点已有 'proxy' tag）
+          if (targetId === selectedServer.id) continue;
+
+          // 查找目标服务器配置
+          const targetServer = config.servers.find(s => s.id === targetId);
+          if (!targetServer) continue;
+
+          // 获取目标节点的前置链
+          const targetChain = this.getDetourChain(targetServer, config.servers);
+
+          // 添加目标节点的前置节点
+          for (const detourServer of targetChain.reverse()) {
+            const detourOutbound = this.generateProxyOutbound(detourServer);
+            detourOutbound.tag = `proxy-${detourServer.id}`;
+            // 避免重复添加
+            if (!outbounds.some(o => o.tag === detourOutbound.tag)) {
+              outbounds.push(detourOutbound);
+            }
+          }
+
+          // 添加目标节点本身
+          const targetOutbound = this.generateProxyOutbound(targetServer);
+          targetOutbound.tag = `proxy-${targetServer.id}`; // 使用特定 tag
+          if (targetServer.detour) {
+            targetOutbound.detour = `proxy-${targetServer.detour}`;
+          }
+          
+          // 避免重复添加
+          if (!outbounds.some(o => o.tag === targetOutbound.tag)) {
+            outbounds.push(targetOutbound);
+          }
+        }
+      }
+    } else {
+      // Fallback if config is missing (shouldn't happen)
+      outbounds.push(this.generateProxyOutbound(selectedServer));
+    }
+
+    // 直连出站
+    outbounds.push({
+      type: 'direct',
+      tag: 'direct',
+    });
+
+    // 阻断出站
+    outbounds.push({
+      type: 'block',
+      tag: 'block',
+    });
+
+    return outbounds;
+  }
+
+  /**
+   * 生成代理 Outbound 配置（sing-box 1.12.x 格式）
+   */
+  private generateProxyOutbound(server: ServerConfig): SingBoxOutbound {
+    // sing-box 要求协议类型必须是小写
+    const protocol = server.protocol.toLowerCase();
+
+    const outbound: SingBoxOutbound = {
+      type: protocol,
+      tag: 'proxy',
+      server: server.address,
+      server_port: server.port,
+      // 代理服务器域名使用本地 DNS 解析
+      domain_resolver: 'dns-local',
+    };
+
+    // VLESS 特定配置
+    if (protocol === 'vless') {
+      outbound.uuid = server.uuid;
+      if (server.flow) {
+        outbound.flow = server.flow;
+      }
+      outbound.packet_encoding = 'xudp';
+    }
+
+    // Trojan 特定配置
+    if (protocol === 'trojan') {
+      outbound.password = server.password;
+    }
+
+    // Hysteria2 特定配置
+    if (protocol === 'hysteria2') {
+      outbound.password = server.password;
+
+      // 带宽限制
+      if (server.hysteria2Settings?.upMbps) {
+        outbound.up_mbps = server.hysteria2Settings.upMbps;
+      }
+      if (server.hysteria2Settings?.downMbps) {
+        outbound.down_mbps = server.hysteria2Settings.downMbps;
+      }
+
+      // 混淆配置
+      if (server.hysteria2Settings?.obfs?.type && server.hysteria2Settings?.obfs?.password) {
+        outbound.obfs = {
+          type: server.hysteria2Settings.obfs.type,
+          password: server.hysteria2Settings.obfs.password,
+        };
+      }
+
+      // 网络类型 (tcp/udp)
+      if (server.hysteria2Settings?.network) {
+        outbound.network = server.hysteria2Settings.network;
+      }
+    }
+
+    // Shadowsocks 特定配置
+    if (protocol === 'shadowsocks') {
+      if (!server.shadowsocksSettings) {
+         throw new Error(`Shadowsocks server ${server.name} missing settings`);
+      }
+      outbound.method = server.shadowsocksSettings.method;
+      outbound.password = server.shadowsocksSettings.password;
+      if (server.shadowsocksSettings.plugin) {
+        outbound.plugin = server.shadowsocksSettings.plugin;
+        outbound.plugin_opts = server.shadowsocksSettings.pluginOptions;
+      }
+    }
+
+    // TLS 配置
+    if (server.security === 'tls' || server.tlsSettings) {
+      outbound.tls = {
+        enabled: true,
+        server_name: server.tlsSettings?.serverName || server.address,
+        insecure: server.tlsSettings?.allowInsecure || false,
+      };
+
+      // uTLS 仅适用于基于 TCP 的协议，Hysteria2 使用 QUIC (UDP) 不支持 uTLS
+      if (protocol !== 'hysteria2') {
+        outbound.tls.utls = {
+          enabled: true,
+          fingerprint: server.tlsSettings?.fingerprint || 'chrome',
+        };
+      }
+
+      if (server.tlsSettings?.alpn) {
+        outbound.tls.alpn = server.tlsSettings.alpn;
+      }
+    }
+
+    // Reality 配置
+    if (server.security === 'reality' && server.realitySettings) {
+      outbound.tls = {
+        enabled: true,
+        server_name: server.tlsSettings?.serverName || server.address,
+        utls: {
+          enabled: true,
+          fingerprint: server.tlsSettings?.fingerprint || 'chrome',
+        },
+        reality: {
+          enabled: true,
+          public_key: server.realitySettings.publicKey,
+          short_id: server.realitySettings.shortId || '',
+        },
+      };
+    }
+
+    // 传输层配置（不适用于 hysteria2）
+    if (protocol !== 'hysteria2' && server.network && server.network !== 'tcp') {
+      outbound.transport = this.generateTransportConfig(server);
+    }
+
+    return outbound;
+  }
+
+  /**
+   * 生成传输层配置
+   */
+  private generateTransportConfig(server: ServerConfig): SingBoxOutbound['transport'] {
+    if (server.network === 'ws' && server.wsSettings) {
+      return {
+        type: 'ws',
+        path: server.wsSettings.path || '/',
+        headers: server.wsSettings.headers,
+      };
+    }
+
+    if (server.network === 'grpc' && server.grpcSettings) {
+      return {
+        type: 'grpc',
+        service_name: server.grpcSettings.serviceName || '',
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * 生成路由配置（sing-box 1.12.x 格式）
+   */
+  private generateRouteConfig(config: UserConfig): SingBoxRouteConfig {
+    const rules: SingBoxRouteRule[] = [];
+
+    // 使用小写比较代理模式
+    const proxyMode = (config.proxyMode || 'smart').toLowerCase();
+
+    // 获取当前选中的服务器，用于排除代理服务器域名
+    const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
+
+    // DNS 劫持规则（必须）
+    rules.push({
+      protocol: 'dns',
+      action: 'hijack-dns',
+    });
+
+    // 排除代理服务器域名，确保代理服务器的连接走直连
+    // 这必须放在其他规则之前，否则可能被 geosite-cn 匹配导致死循环
+    if (selectedServer?.address) {
+      rules.push({
+        domain: [selectedServer.address],
+        action: 'route',
+        outbound: 'direct',
+      });
+    }
+
+    // 自定义规则（优先级最高，必须放在智能分流规则之前）
+    // 这样用户可以覆盖任何默认的分流行为
+    // 自定义规则（优先级最高，必须放在智能分流规则之前）
+    // 仅在非直连模式下生效
+    if (proxyMode !== 'direct') {
+      const customRules = this.generateCustomRules(config.customRules || []);
+      rules.push(...customRules);
+    }
+
+    // 私有 IP 段直连（内网地址不应该走代理）
+    rules.push({
+      ip_cidr: PRIVATE_IP_CIDRS,
+      action: 'route',
+      outbound: 'direct',
+    });
+
+    // 智能分流规则（仅在智能分流模式下启用）
+    if (proxyMode === 'smart') {
+      // 屏蔽 QUIC (UDP 443)，强制浏览器回退到 TCP/HTTP2
+      // 这可以解决 Google 等服务在 TUN 模式下的 UDP 连接问题
+      rules.push({
+        protocol: 'udp',
+        port: 443,
+        action: 'reject', 
+      });
+
+      // 显式添加 Google 规则，确保其走代理 (防止被 IP 规则误判)
+      rules.push({
+        domain_keyword: ['google', 'gmail', 'youtube'],
+        action: 'route',
+        outbound: 'proxy',
+      });
+
+      // 国外域名走代理
+      rules.push({
+        rule_set: 'geosite-geolocation-!cn',
+        action: 'route',
+        outbound: 'proxy',
+      });
+      // 中国域名直连
+      rules.push({
+        rule_set: 'geosite-cn',
+        action: 'route',
+        outbound: 'direct',
+      });
+      // 中国 IP 直连
+      rules.push({
+        rule_set: 'geoip-cn',
+        action: 'route',
+        outbound: 'direct',
+      });
+    }
+
+    // 始终添加 rule_set 配置（除非是直连模式）
+    // 统一使用 dns-local 作为默认解析器
+    const routeConfig: SingBoxRouteConfig = {
+      rules,
+      default_domain_resolver: 'dns-local',
+      auto_detect_interface: true,
+      final: proxyMode === 'direct' ? 'direct' : 'proxy',
+    };
+
+    // 添加 rule_set（除非是直连模式）
+    // 直连模式下不需要 rule_set，因为全部走 direct
+    if (proxyMode !== 'direct') {
+      routeConfig.rule_set = [
+        {
+          tag: 'geosite-cn',
+          type: 'local',
+          format: 'binary',
+          path: path.join(getUserDataPath(), 'rules', 'geosite-cn.srs'),
+        },
+        {
+          tag: 'geosite-geolocation-!cn',
+          type: 'local',
+          format: 'binary',
+          path: path.join(getUserDataPath(), 'rules', 'geosite-geolocation-!cn.srs'),
+        },
+        {
+          tag: 'geoip-cn',
+          type: 'local',
+          format: 'binary',
+          path: path.join(getUserDataPath(), 'rules', 'geoip-cn.srs'),
+        },
+      ];
+    }
+
+    // 添加自定义规则所需的 Geosite rule_set
+    const customGeositeCategories = this.getRequiredGeoSiteCategories(config.customRules || []);
+    if (customGeositeCategories.size > 0) {
+      if (!routeConfig.rule_set) {
+        routeConfig.rule_set = [];
+      }
+
+      for (const category of customGeositeCategories) {
+        routeConfig.rule_set.push({
+          tag: `geosite-${category}`,
+          type: 'remote',
+          format: 'binary',
+          url: category === 'category-ai'
+            ? 'https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-ai-!cn.srs'
+            : `https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-${category}.srs`,
+          download_detour: proxyMode !== 'direct' ? 'proxy' : undefined,
+        } as any); // Type cast as necessary if SingBoxRuleSet interface doesn't match perfectly or update interface
+      }
+    }
+
+    return routeConfig;
+  }
+
+  /**
+   * 收集自定义规则中使用的 Geosite 类别
+   */
+  private getRequiredGeoSiteCategories(
+    customRules: import('../../shared/types').DomainRule[]
+  ): Set<string> {
+    const categories = new Set<string>();
+    for (const rule of customRules) {
+      if (!rule.enabled) continue;
+      for (const domain of rule.domains) {
+        if (domain.startsWith('geosite:')) {
+          const category = domain.slice(8);
+          categories.add(category);
+        }
+      }
+    }
+    return categories;
+  }
+
+  /**
+   * 生成自定义路由规则
+   * 所有域名统一使用 domain_suffix 匹配，即匹配该域名及其所有子域名
+   */
+  private generateCustomRules(
+    customRules: import('../../shared/types').DomainRule[]
+  ): SingBoxRouteRule[] {
+    const rules: SingBoxRouteRule[] = [];
+
+    for (const rule of customRules) {
+      if (!rule.enabled || rule.domains.length === 0) continue;
+
+      // 统一使用 domain_suffix，匹配域名及其所有子域名
+      // 如 google.com 会匹配 google.com、www.google.com、mail.google.com 等
+      // 同时支持 geosite: 前缀，转换为 rule_set
+      const domainSuffix: string[] = [];
+      const geositeTags: string[] = [];
+
+      for (const d of rule.domains) {
+        if (d.startsWith('geosite:')) {
+          const category = d.slice(8);
+           geositeTags.push(`geosite-${category}`);
+        } else {
+          domainSuffix.push(d.startsWith('*.') ? d.slice(2) : d);
+        }
+      }
+
+      // 如果有普通域名，创建一条规则
+      if (domainSuffix.length > 0) {
+        const singboxRule: SingBoxRouteRule = {
+          action: 'route',
+          domain_suffix: domainSuffix,
+        };
+        this.applyRuleAction(singboxRule, rule, this.currentConfig?.selectedServerId || undefined);
+        rules.push(singboxRule);
+      }
+
+      // 如果有 Geosite 引用，创建一条规则
+      if (geositeTags.length > 0) {
+        const singboxRule: SingBoxRouteRule = {
+          action: 'route',
+          rule_set: geositeTags,
+        };
+        this.applyRuleAction(singboxRule, rule, this.currentConfig?.selectedServerId || undefined);
+        rules.push(singboxRule);
+      }
+    }
+
+    return rules;
+  }
+
+  /**
+   * 应用规则动作到 sing-box 规则对象
+   */
+  private applyRuleAction(
+    singboxRule: SingBoxRouteRule,
+    rule: import('../../shared/types').DomainRule,
+    selectedServerId?: string
+  ): void {
+     // 设置出站
+     if (rule.action === 'proxy') {
+      // 如果指定了目标服务器，且不是主节点，则路由到特定的 outbound tag
+      if (rule.targetServerId && selectedServerId !== rule.targetServerId) {
+        singboxRule.outbound = `proxy-${rule.targetServerId}`;
+      } else {
+        singboxRule.outbound = 'proxy';
+      }
+    } else if (rule.action === 'direct') {
+      singboxRule.outbound = 'direct';
+    } else if (rule.action === 'block') {
+      singboxRule.outbound = 'block';
+    }
+  }
+
+  /**
+   * 写入 sing-box 配置文件
+   */
+  private async writeSingBoxConfig(config: SingBoxConfig): Promise<void> {
+    const content = JSON.stringify(config, null, 2);
+    await fs.writeFile(this.configPath, content, 'utf-8');
+  }
+
+  /**
+   * 检查当前配置是否需要 root/admin 权限（TUN 模式）
+   * Windows 和 macOS 的 TUN 模式都需要管理员权限
+   */
+  private needsRootPrivilege(): boolean {
+    // 只有 TUN 模式才需要管理员权限
+    // proxyModeType 的值为 'systemProxy' 或 'tun'
+    const isTunMode = this.currentConfig?.proxyModeType === 'tun';
+    // Windows 和 macOS 的 TUN 模式都需要管理员权限
+    return isTunMode && (process.platform === 'darwin' || process.platform === 'win32');
+  }
+
+  /**
+   * 检查是否需要使用 osascript 运行（仅 macOS）
+   */
+  private needsOsascript(): boolean {
+    return process.platform === 'darwin' && this.needsRootPrivilege();
+  }
+
+  /**
+   * 检查是否需要使用 UAC 提升权限运行（仅 Windows TUN 模式）
+   */
+  private needsWindowsUAC(): boolean {
+    return process.platform === 'win32' && this.needsRootPrivilege();
+  }
+
+  /**
+   * 修复可能被 root 创建的文件权限（macOS）
+   * 当从 TUN 模式切换到系统代理模式时，某些文件可能仍然属于 root
+   * 需要在普通用户模式下修复这些文件的权限
+   */
+  private async fixFilePermissions(): Promise<void> {
+    // 只在 macOS 上需要处理
+    if (process.platform !== 'darwin') {
+      return;
+    }
+
+    // 如果是 TUN 模式，不需要修复（会以 root 权限运行）
+    if (this.needsRootPrivilege()) {
+      return;
+    }
+
+    const userDataPath = getUserDataPath();
+    const filesToFix = [
+      path.join(userDataPath, 'cache.db'),
+      path.join(userDataPath, 'singbox.log'),
+      path.join(userDataPath, 'singbox.pid'),
+    ];
+
+    const fsSync = require('fs');
+    const { execSync } = require('child_process');
+
+    for (const filePath of filesToFix) {
+      try {
+        if (fsSync.existsSync(filePath)) {
+          const stats = fsSync.statSync(filePath);
+          // 检查文件是否属于 root (uid 0)
+          if (stats.uid === 0) {
+            this.logToManager('info', `修复文件权限: ${filePath}`);
+            // 使用 chown 修改文件所有权为当前用户
+            const currentUser = process.env.USER || process.env.LOGNAME;
+            if (currentUser) {
+              try {
+                // 尝试使用 chown（可能需要密码）
+                execSync(`chown ${currentUser} "${filePath}"`, { stdio: 'ignore' });
+              } catch {
+                // 如果 chown 失败，尝试删除文件让 sing-box 重新创建
+                try {
+                  fsSync.unlinkSync(filePath);
+                  this.logToManager('info', `已删除需要重新创建的文件: ${filePath}`);
+                } catch {
+                  this.logToManager('warn', `无法修复文件权限: ${filePath}，请手动删除或运行: sudo chown ${currentUser} "${filePath}"`);
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // 忽略检查错误
+      }
+    }
+  }
+
+  /**
+   * 启动 sing-box 进程
+   */
+  private async startSingBoxProcess(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // 检查 sing-box 可执行文件是否存在
+        const fs = require('fs');
+        if (!fs.existsSync(this.singboxPath)) {
+          const error = new Error(`找不到 sing-box 可执行文件: ${this.singboxPath}`);
+          this.logToManager('error', error.message);
+          reject(error);
+          return;
+        }
+
+        // 根据平台和模式选择启动方式：
+        // - macOS TUN 模式: 使用 osascript 请求管理员权限
+        // - Windows TUN 模式: 使用 PowerShell Start-Process -Verb RunAs 请求 UAC 权限
+        // - 其他情况: 直接运行
+        let command: string;
+        let args: string[];
+
+        if (this.needsOsascript()) {
+          // macOS: 使用 osascript 请求管理员权限运行
+          // 注意：路径中可能包含空格，需要使用转义引号
+          // sing-box 配置中已经设置了 log.output，日志会写入文件
+          // 使用 & 让进程在后台运行，并将 PID 写入文件
+          const pidFile = path.join(getUserDataPath(), 'singbox.pid');
+          const startupLogFile = path.join(getUserDataPath(), 'singbox_startup.log');
+          command = '/usr/bin/osascript';
+          // 使用 bash -c 来执行后台命令，确保 & 正常工作
+          // 重定向 stdout 和 stderr 到日志文件，以便排查启动失败原因
+          args = [
+            '-e',
+            `do shell script "/bin/bash -c '\\"${this.singboxPath}\\" run -c \\"${this.configPath}\\" > \\"${startupLogFile}\\" 2>&1 & echo $! > \\"${pidFile}\\"'" with administrator privileges`,
+          ];
+          this.logToManager('info', 'TUN 模式需要管理员权限，正在请求...');
+        } else if (this.needsWindowsUAC()) {
+          // Windows TUN 模式: 使用 PowerShell 请求 UAC 权限运行
+          // 使用 Start-Process -Verb RunAs 来请求管理员权限
+          const pidFile = path.join(getUserDataPath(), 'singbox.pid');
+          command = 'powershell.exe';
+
+          // PowerShell 脚本：以管理员权限启动 sing-box 并记录 PID
+          // 使用数组构建脚本避免模板字符串中 $ 被 JS 解析
+          // 详细日志输出到 singbox_startup.log 帮助诊断启动问题
+          const startupLogFile = path.join(getUserDataPath(), 'singbox_startup.log');
+          const singboxPathEsc = this.singboxPath.replace(/'/g, "''");
+          const configPathEsc = this.configPath.replace(/'/g, "''");
+          const pidFileEsc = pidFile.replace(/'/g, "''");
+          const logFileEsc = startupLogFile.replace(/'/g, "''");
+
+          const psScript = [
+            "$ErrorActionPreference = 'Stop'",
+            "$logFile = '" + logFileEsc + "'",
+            "$pidFile = '" + pidFileEsc + "'",
+            "$singboxPath = '" + singboxPathEsc + "'",
+            "$configPath = '" + configPathEsc + "'",
+            "try {",
+            "  'Starting sing-box...' | Out-File -FilePath $logFile -Encoding UTF8",
+            "  'SingboxPath: ' + $singboxPath | Out-File -FilePath $logFile -Append -Encoding UTF8",
+            "  'ConfigPath: ' + $configPath | Out-File -FilePath $logFile -Append -Encoding UTF8",
+            "  if (-not (Test-Path $singboxPath)) { 'ERROR: sing-box not found' | Out-File -FilePath $logFile -Append -Encoding UTF8; exit 1 }",
+            "  if (-not (Test-Path $configPath)) { 'ERROR: config not found' | Out-File -FilePath $logFile -Append -Encoding UTF8; exit 1 }",
+            "  'Starting with UAC...' | Out-File -FilePath $logFile -Append -Encoding UTF8",
+            "  $process = Start-Process -FilePath $singboxPath -ArgumentList 'run','-c',$configPath -Verb RunAs -PassThru -WindowStyle Hidden",
+            "  if ($process -and $process.Id) {",
+            "    'Process started PID: ' + $process.Id | Out-File -FilePath $logFile -Append -Encoding UTF8",
+            "    $process.Id | Out-File -FilePath $pidFile -Encoding ASCII -NoNewline",
+            "    exit 0",
+            "  } else {",
+            "    'ERROR: Start-Process returned null' | Out-File -FilePath $logFile -Append -Encoding UTF8",
+            "    exit 1",
+            "  }",
+            "} catch {",
+            "  'ERROR: ' + $_.Exception.Message | Out-File -FilePath $logFile -Append -Encoding UTF8",
+            "  exit 1",
+            "}"
+          ].join("; ");
+
+          args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript];
+          this.logToManager('info', 'TUN 模式需要管理员权限，正在请求 UAC 授权...');
+        } else {
+          // 系统代理模式或 Linux：直接运行
+          command = this.singboxPath;
+          args = ['run', '-c', this.configPath];
+        }
+
+        // 启动进程
+        this.singboxProcess = spawn(command, args, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        // 记录启动信息
+        this.pid = this.singboxProcess.pid || null;
+        this.startTime = new Date();
+
+        // macOS/Windows TUN 模式下，这个 PID 是 osascript/PowerShell 的 PID，不是 sing-box 的
+        // 实际的 sing-box PID 会在 waitForPidFile 中从 PID 文件读取
+        if (this.needsOsascript() || this.needsWindowsUAC()) {
+          this.logToManager('info', `正在启动 sing-box（权限提升进程 PID: ${this.pid}）...`);
+        } else {
+          this.logToManager('info', `正在启动 sing-box 进程 (PID: ${this.pid})...`);
+        }
+
+        // 监听进程输出
+        if (this.singboxProcess.stdout) {
+          this.singboxProcess.stdout.on('data', (data: Buffer) => {
+            this.handleProcessOutput(data.toString());
+          });
+        }
+
+        if (this.singboxProcess.stderr) {
+          this.singboxProcess.stderr.on('data', (data: Buffer) => {
+            const output = data.toString();
+            this.lastErrorOutput = output;
+            this.handleProcessOutput(output);
+          });
+        }
+
+        // 监听进程事件
+        this.singboxProcess.on('error', (error) => {
+          console.error('sing-box process error:', error);
+          const friendlyError = this.parseLaunchError(error);
+          this.logToManager('error', friendlyError);
+          this.handleProcessError(error);
+          reject(new Error(friendlyError));
+        });
+
+        this.singboxProcess.on('exit', (code, signal) => {
+          console.log(`sing-box process exited with code ${code}, signal ${signal}`);
+
+          // 对于 macOS TUN 模式，osascript 退出码为 0 表示成功启动了后台进程
+          if (this.needsOsascript()) {
+            if (code === 0) {
+              // osascript 成功执行，sing-box 在后台运行
+              // PID 文件读取由 setTimeout 中的 waitForPidFile 统一处理
+              return; // 不调用 handleProcessExit，因为 sing-box 还在运行
+            } else {
+              // osascript 执行失败（用户取消或其他错误）
+              const errorMessage =
+                code === 1 ? '用户取消了管理员权限请求' : `启动失败，退出码: ${code}`;
+              this.logToManager('error', errorMessage);
+              reject(new Error(errorMessage));
+              this.handleProcessExit(code, signal);
+              return;
+            }
+          }
+
+          // 对于 Windows TUN 模式，PowerShell 退出码为 0 表示成功启动了 sing-box
+          if (this.needsWindowsUAC()) {
+            if (code === 0) {
+              // PowerShell 成功执行，sing-box 以管理员权限在后台运行
+              // PID 文件读取由 setTimeout 中的 waitForPidFile 统一处理
+              return; // 不调用 handleProcessExit，因为 sing-box 还在运行
+            } else {
+              // PowerShell 执行失败（用户取消 UAC 或其他错误）
+              const errorMessage =
+                code === 1 ? '用户取消了管理员权限请求' : `UAC 授权失败，退出码: ${code}`;
+              this.logToManager('error', errorMessage);
+              reject(new Error(errorMessage));
+              this.handleProcessExit(code, signal);
+              return;
+            }
+          }
+
+          // 如果在启动阶段就退出了，说明启动失败
+          const startupTime = Date.now() - (this.startTime?.getTime() || Date.now());
+          if (startupTime < 2000 && code !== null && code !== 0) {
+            const errorMessage = this.parseStartupError(code, this.lastErrorOutput);
+            this.logToManager('error', errorMessage);
+            reject(new Error(errorMessage));
+          }
+
+          this.handleProcessExit(code, signal);
+        });
+
+        // 等待一小段时间确保进程启动成功
+        setTimeout(async () => {
+          // macOS TUN 模式或 Windows TUN 模式：检查 singboxPid（从 PID 文件读取）
+          // 其他模式：检查 singboxProcess 和 pid
+          const isMacTunMode = this.needsOsascript();
+          const isWindowsTunMode = this.needsWindowsUAC();
+
+          if (isMacTunMode || isWindowsTunMode) {
+            // TUN 模式：等待 PID 文件被写入
+            await this.waitForPidFile();
+
+            if (this.singboxPid) {
+              // 启动日志文件监控（macOS 和 Windows TUN 模式都需要，因为后台进程的 stdout 无法被捕获）
+              this.startLogFileWatcher();
+              // 启动健康检查定时器
+              this.startHealthCheck();
+
+              // 触发启动事件
+              this.emit('started');
+              this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STARTED, {
+                pid: this.singboxPid,
+                startTime: this.startTime,
+              });
+              this.logToManager('info', 'sing-box 进程启动成功');
+              resolve();
+            } else {
+              const error = '启动 sing-box 进程失败：无法获取进程 PID';
+              this.logToManager('error', error);
+              // 启动失败，清理状态，避免健康检查使用错误的 PID
+              this.cleanup();
+              reject(new Error(error));
+            }
+          } else {
+            // 系统代理模式或 Linux
+            if (this.singboxProcess && this.pid) {
+              // 启动健康检查定时器
+              this.startHealthCheck();
+
+              // 触发启动事件
+              this.emit('started');
+              this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STARTED, {
+                pid: this.pid,
+                startTime: this.startTime,
+              });
+              this.logToManager('info', 'sing-box 进程启动成功');
+              resolve();
+            } else {
+              const error = '启动 sing-box 进程失败：进程未能正常启动';
+              this.logToManager('error', error);
+              // 启动失败，清理状态
+              this.cleanup();
+              reject(new Error(error));
+            }
+          }
+        }, 1000);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logToManager('error', `启动 sing-box 进程时发生异常: ${errorMessage}`);
+        // 异常时也要清理状态
+        this.cleanup();
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * 解析进程启动错误
+   */
+  private parseLaunchError(error: Error): string {
+    const errorCode = (error as NodeJS.ErrnoException).code;
+
+    switch (errorCode) {
+      case 'ENOENT':
+        return '找不到 sing-box 可执行文件，请检查安装是否完整';
+      case 'EACCES':
+        return 'sing-box 可执行文件没有执行权限，请检查文件权限';
+      case 'EPERM':
+        return '权限不足，无法启动 sing-box 进程。TUN 模式需要管理员权限';
+      default:
+        return `启动 sing-box 进程失败: ${error.message}`;
+    }
+  }
+
+  /**
+   * 解析启动阶段的错误
+   */
+  private parseStartupError(exitCode: number, errorOutput: string): string {
+    // 首先尝试从错误输出中提取有用信息
+    if (errorOutput) {
+      const lowerOutput = errorOutput.toLowerCase();
+
+      if (lowerOutput.includes('permission denied') || lowerOutput.includes('access denied')) {
+        return `TUN 模式需要管理员权限，请以管理员身份运行应用 [${errorOutput}]`;
+      }
+
+      if (lowerOutput.includes('address already in use') || lowerOutput.includes('bind')) {
+        return `端口已被占用，请在设置中更换其他端口或关闭占用端口的程序 [${errorOutput}]`;
+      }
+
+      if (
+        lowerOutput.includes('invalid config') ||
+        lowerOutput.includes('parse') ||
+        lowerOutput.includes('json')
+      ) {
+        return `sing-box 配置文件格式错误，请检查服务器配置 [${errorOutput}]`;
+      }
+
+      if (lowerOutput.includes('connection refused') || lowerOutput.includes('dial')) {
+        return `无法连接到代理服务器，请检查服务器地址和端口 [${errorOutput}]`;
+      }
+
+      if (lowerOutput.includes('certificate') || lowerOutput.includes('tls')) {
+        return `TLS 证书验证失败，请检查服务器 TLS 配置 [${errorOutput}]`;
+      }
+
+      // 如果有具体的错误信息，翻译后返回
+      const friendlyMessage = this.translateErrorMessage(errorOutput);
+      if (friendlyMessage !== errorOutput) {
+        return `sing-box 启动失败: ${friendlyMessage}`;
+      }
+    }
+
+    // 根据退出码返回通用错误信息
+    switch (exitCode) {
+      case 1:
+        return 'sing-box 启动失败，请检查配置文件和服务器设置';
+      case 2:
+        return 'sing-box 配置文件格式错误，请检查服务器配置';
+      case 126:
+        return 'sing-box 可执行文件没有执行权限';
+      case 127:
+        return '找不到 sing-box 可执行文件';
+      default:
+        return `sing-box 启动失败，退出码: ${exitCode}`;
+    }
+  }
+
+  /**
+   * 停止 sing-box 进程
+   */
+  private async stopSingBoxProcess(): Promise<void> {
+    // macOS TUN 模式：sing-box 以 root 权限在后台运行，需要用 osascript 终止
+    if (this.singboxPid && process.platform === 'darwin') {
+      return this.stopSingBoxWithSudo();
+    }
+
+    // Windows TUN 模式：sing-box 以管理员权限在后台运行，使用 taskkill 终止
+    if (this.singboxPid && process.platform === 'win32') {
+      return this.stopSingBoxOnWindows();
+    }
+
+    if (!this.singboxProcess) {
+      return;
+    }
+
+    return new Promise((resolve) => {
+      const proc = this.singboxProcess!;
+
+      // 设置超时强制终止
+      const killTimeout = setTimeout(() => {
+        if (proc.killed === false) {
+          console.warn('sing-box process did not exit gracefully, force killing');
+          proc.kill('SIGKILL');
+        }
+      }, 5000);
+
+      // 监听退出事件
+      proc.once('exit', () => {
+        clearTimeout(killTimeout);
+        this.cleanup();
+        resolve();
+      });
+
+      // 发送 SIGTERM 信号优雅终止
+      proc.kill('SIGTERM');
+    });
+  }
+
+  /**
+   * 使用 sudo 停止 sing-box 进程（macOS TUN 模式）
+   */
+  private async stopSingBoxWithSudo(): Promise<void> {
+    if (!this.singboxPid) {
+      this.cleanup();
+      return;
+    }
+
+    const pidToKill = this.singboxPid;
+    this.logToManager('info', `正在停止 sing-box 进程 (PID: ${pidToKill})...`);
+
+    return new Promise((resolve) => {
+      // 先尝试 SIGTERM 优雅终止
+      const killProcess = spawn('/usr/bin/osascript', [
+        '-e',
+        `do shell script "kill -TERM ${pidToKill}" with administrator privileges`,
+      ]);
+
+      killProcess.on('exit', async (code) => {
+        if (code === 0) {
+          // 等待进程退出
+          await this.waitForProcessExit(pidToKill, 3000);
+
+          // 检查进程是否真的退出了
+          if (this.isProcessAlive(pidToKill)) {
+            this.logToManager('warn', '进程未响应 SIGTERM，尝试强制终止...');
+            await this.forceKillProcess(pidToKill);
+          } else {
+            this.logToManager('info', 'sing-box 进程已停止');
+          }
+        } else {
+          this.logToManager('warn', `停止 sing-box 进程可能失败，退出码: ${code}`);
+          // 尝试强制终止
+          await this.forceKillProcess(pidToKill);
+        }
+
+        // 清理 PID 文件
+        const fsSync = require('fs');
+        try {
+          fsSync.unlinkSync(this.getPidFilePath());
+        } catch {
+          // 忽略错误
+        }
+
+        this.cleanup();
+
+        // 触发停止事件
+        this.emit('stopped');
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STOPPED, {});
+
+        resolve();
+      });
+
+      killProcess.on('error', async (error) => {
+        this.logToManager('error', `停止 sing-box 进程失败: ${error.message}`);
+        // 尝试强制终止
+        await this.forceKillProcess(pidToKill);
+        this.cleanup();
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * 停止 sing-box 进程（Windows TUN 模式）
+   * sing-box 以管理员权限（UAC）启动，停止时也需要管理员权限
+   * 使用 PowerShell Start-Process -Verb RunAs 来请求 UAC 权限执行 taskkill
+   */
+  private async stopSingBoxOnWindows(): Promise<void> {
+    if (!this.singboxPid) {
+      this.cleanup();
+      return;
+    }
+
+    const pidToKill = this.singboxPid;
+    this.logToManager('info', `正在停止 sing-box 进程 (PID: ${pidToKill})，需要管理员权限...`);
+
+    return new Promise((resolve) => {
+      // 直接使用 PowerShell 以管理员权限执行 taskkill
+      // sing-box 以 UAC 启动，必须用 UAC 权限才能终止
+      const psScript = "Start-Process -FilePath 'taskkill' -ArgumentList '/F','/PID','" + pidToKill.toString() + "' -Verb RunAs -Wait -WindowStyle Hidden";
+
+      const killProcess = spawn('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command', psScript
+      ], {
+        windowsHide: true,
+      });
+
+      killProcess.stderr?.on('data', (data) => {
+        this.logToManager('warn', `taskkill stderr: ${data.toString()}`);
+      });
+
+      killProcess.on('exit', (code) => {
+        if (code === 0) {
+          this.logToManager('info', 'sing-box 进程已停止');
+        } else {
+          // 非零退出码可能是进程已退出或用户取消 UAC
+          this.logToManager('warn', `停止进程结果: code=${code}`);
+        }
+
+        // 清理 PID 文件
+        const fsSync = require('fs');
+        try {
+          fsSync.unlinkSync(this.getPidFilePath());
+        } catch {
+          // 忽略错误
+        }
+
+        this.cleanup();
+
+        // 触发停止事件
+        this.emit('stopped');
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STOPPED, {});
+
+        resolve();
+      });
+
+      killProcess.on('error', (error) => {
+        this.logToManager('error', `停止 sing-box 进程失败: ${error.message}`);
+        this.cleanup();
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * 等待进程退出
+   */
+  private async waitForProcessExit(pid: number, timeout: number): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeout) {
+      if (!this.isProcessAlive(pid)) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return !this.isProcessAlive(pid);
+  }
+
+  /**
+   * 强制终止进程
+   */
+  private async forceKillProcess(pid: number): Promise<void> {
+    return new Promise((resolve) => {
+      const killProcess = spawn('/usr/bin/osascript', [
+        '-e',
+        `do shell script "kill -9 ${pid}" with administrator privileges`,
+      ]);
+
+      killProcess.on('close', () => {
+        resolve();
+      });
+
+      killProcess.on('error', () => {
+        // 最后尝试普通 kill
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          // 忽略错误
+        }
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * 清理资源
+   */
+  private cleanup(): void {
+    this.stopLogFileWatcher();
+    this.stopHealthCheck();
+    this.singboxProcess = null;
+    this.pid = null;
+    this.singboxPid = null;
+    this.startTime = null;
+  }
+
+  /**
+   * 清理可能残留的 sing-box 进程
+   * 这是解决"重启代理后网络不恢复"问题的关键
+   */
+  private async killOrphanedSingBoxProcesses(): Promise<void> {
+    if (process.platform === 'darwin') {
+      await this.killOrphanedProcessesMac();
+    } else if (process.platform === 'win32') {
+      await this.killOrphanedProcessesWindows();
+    }
+  }
+
+  /**
+   * macOS: 清理残留的 sing-box 进程
+   * 优化：排除当前正在管理的进程，避免误杀
+   * 
+   * 注意：TUN 模式下 sing-box 以 root 权限运行，必须用 osascript 请求管理员权限才能终止
+   */
+  private async killOrphanedProcessesMac(): Promise<void> {
+    return new Promise((resolve) => {
+      // 使用 pgrep 查找所有 sing-box 进程
+      const pgrep = spawn('/usr/bin/pgrep', ['-f', 'sing-box']);
+      let pids = '';
+
+      pgrep.stdout.on('data', (data: Buffer) => {
+        pids += data.toString();
+      });
+
+      pgrep.on('close', async () => {
+        let pidList = pids
+          .trim()
+          .split('\n')
+          .filter((p) => p.trim())
+          .map((p) => parseInt(p.trim(), 10))
+          .filter((p) => !isNaN(p) && p > 0);
+
+        // 排除当前正在管理的进程（避免误杀）
+        const currentPid = this.singboxPid || this.pid;
+        if (currentPid) {
+          pidList = pidList.filter((p) => p !== currentPid);
+        }
+
+        if (pidList.length === 0) {
+          resolve();
+          return;
+        }
+
+        this.logToManager('warn', `发现 ${pidList.length} 个残留的 sing-box 进程，正在清理: ${pidList.join(', ')}`);
+
+        // TUN 模式下 sing-box 以 root 权限运行，必须用 osascript 请求管理员权限终止
+        const killCmd = pidList.map((p) => `kill -9 ${p}`).join('; ');
+        const killProcess = spawn('/usr/bin/osascript', [
+          '-e',
+          `do shell script "${killCmd}" with administrator privileges`,
+        ]);
+
+        killProcess.on('close', async (code) => {
+          if (code === 0) {
+            this.logToManager('info', '残留进程已清理');
+          } else {
+            this.logToManager('warn', `清理残留进程可能失败，退出码: ${code}`);
+          }
+          // 等待系统完全清理 TUN 接口和路由表
+          await this.waitForNetworkCleanup();
+          resolve();
+        });
+
+        killProcess.on('error', async (error) => {
+          this.logToManager('warn', `清理残留进程失败: ${error.message}`);
+          await this.waitForNetworkCleanup();
+          resolve();
+        });
+      });
+
+      pgrep.on('error', () => {
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * 等待网络清理完成
+   * sing-box 进程终止后，系统需要时间清理 TUN 接口和路由表
+   */
+  private async waitForNetworkCleanup(): Promise<void> {
+    // 等待 2 秒让系统清理 TUN 接口
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // 可选：刷新 DNS 缓存（macOS）
+    if (process.platform === 'darwin') {
+      try {
+        const { exec } = require('child_process');
+        exec('dscacheutil -flushcache; killall -HUP mDNSResponder', (error: Error | null) => {
+          if (error) {
+            this.logToManager('debug', `刷新 DNS 缓存失败: ${error.message}`);
+          } else {
+            this.logToManager('debug', 'DNS 缓存已刷新');
+          }
+        });
+      } catch {
+        // 忽略错误
+      }
+    }
+  }
+
+  /**
+   * Windows: 清理残留的 sing-box 进程
+   * 优化：排除当前正在管理的进程，避免误杀
+   */
+  private async killOrphanedProcessesWindows(): Promise<void> {
+    return new Promise((resolve) => {
+      const { execSync } = require('child_process');
+      
+      try {
+        // 使用 wmic 获取所有 sing-box.exe 进程的 PID
+        const result = execSync('wmic process where "name=\'sing-box.exe\'" get ProcessId /format:list', {
+          encoding: 'utf-8',
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore']
+        });
+        
+        // 解析 PID 列表
+        const pidMatches = result.match(/ProcessId=(\d+)/g);
+        if (!pidMatches || pidMatches.length === 0) {
+          resolve();
+          return;
+        }
+        
+        let pidList = pidMatches
+          .map((m: string) => parseInt(m.replace('ProcessId=', ''), 10))
+          .filter((p: number) => !isNaN(p) && p > 0);
+        
+        // 排除当前正在管理的进程
+        const currentPid = this.singboxPid || this.pid;
+        if (currentPid) {
+          pidList = pidList.filter((p: number) => p !== currentPid);
+        }
+        
+        if (pidList.length === 0) {
+          resolve();
+          return;
+        }
+        
+        this.logToManager('warn', `发现 ${pidList.length} 个残留的 sing-box 进程，正在清理: ${pidList.join(', ')}`);
+        
+        // 逐个终止进程
+        for (const pid of pidList) {
+          try {
+            execSync(`taskkill /F /PID ${pid}`, {
+              windowsHide: true,
+              stdio: 'ignore'
+            });
+          } catch {
+            // 忽略单个进程终止失败
+          }
+        }
+        
+        this.logToManager('info', '残留进程已清理');
+        
+        // 等待一小段时间让系统清理
+        setTimeout(resolve, 500);
+      } catch {
+        // wmic 命令失败，可能没有残留进程
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * 检查进程是否存活
+   * 
+   * 统一使用系统命令检测进程，避免 Node.js process.kill(pid, 0) 在检测
+   * 特权进程时的不可靠性（macOS/Windows TUN 模式下 sing-box 以管理员权限运行）
+   */
+  private isProcessAlive(pid: number): boolean {
+    try {
+      const { execSync } = require('child_process');
+      
+      if (process.platform === 'win32') {
+        // Windows: 使用 tasklist 检测进程
+        // /FI "PID eq xxx" 过滤指定 PID，/NH 不显示表头
+        const result = execSync(`tasklist /FI "PID eq ${pid}" /NH`, { 
+          encoding: 'utf-8',
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore']
+        });
+        // 如果进程存在，输出会包含进程信息；不存在则输出 "INFO: No tasks..."
+        return !result.includes('No tasks') && result.includes(String(pid));
+      } else {
+        // macOS/Linux: 使用 ps 检测进程
+        const result = execSync(`ps -p ${pid} -o pid=`, { 
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'ignore']
+        });
+        return result.trim() === String(pid);
+      }
+    } catch {
+      // 命令执行失败，进程不存在
+      return false;
+    }
+  }
+
+  /**
+   * 启动健康检查定时器
+   */
+  private startHealthCheck(): void {
+    if (this.healthCheckTimer) {
+      return;
+    }
+
+    this.healthCheckTimer = setInterval(() => {
+      this.performHealthCheck();
+    }, ProxyManager.HEALTH_CHECK_INTERVAL);
+
+    this.logToManager('debug', '已启动进程健康检查');
+  }
+
+  /**
+   * 停止健康检查定时器
+   */
+  private stopHealthCheck(): void {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+  }
+
+  /**
+   * 执行健康检查
+   */
+  private performHealthCheck(): void {
+    // 如果正在重启中，跳过检查
+    if (this.isRestarting) {
+      return;
+    }
+
+    // TUN 模式下只检查 singboxPid（sing-box 的实际 PID）
+    // 系统代理模式下检查 pid（直接启动的进程 PID）
+    // 注意：TUN 模式下 this.pid 是 osascript/PowerShell 的 PID，不是 sing-box 的
+    const isTunMode = this.currentConfig?.proxyModeType === 'tun';
+    const activePid = isTunMode ? this.singboxPid : (this.singboxPid || this.pid);
+
+    if (!activePid) {
+      return;
+    }
+
+    if (!this.isProcessAlive(activePid)) {
+      // 尝试获取更多退出信息
+      const exitInfo = this.getProcessExitInfo();
+      this.logToManager('error', `检测到 sing-box 进程 (PID: ${activePid}) 已意外退出${exitInfo ? `，${exitInfo}` : ''}`);
+
+      // 清理资源（但不停止健康检查，因为可能要重启）
+      this.singboxProcess = null;
+      this.pid = null;
+      this.singboxPid = null;
+      this.stopLogFileWatcher();
+
+      // 尝试自动重启
+      if (this.shouldAutoRestart()) {
+        this.attemptAutoRestart();
+      } else {
+        // 无法自动重启，通知用户
+        this.emit('error', {
+          message: 'sing-box 进程意外退出，已达到最大重启次数，请手动重启',
+          code: -1,
+        });
+
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
+          message: 'sing-box 进程多次异常退出，请检查网络或服务器配置后手动重启',
+          code: -1,
+        });
+
+        this.emit('stopped');
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STOPPED, {});
+
+        // 完全清理
+        this.cleanup();
+      }
+    }
+  }
+
+  /**
+   * 检查是否应该自动重启
+   */
+  private shouldAutoRestart(): boolean {
+    if (!this.autoRestartEnabled || !this.currentConfig) {
+      return false;
+    }
+
+    const now = Date.now();
+
+    // 如果距离上次重启超过冷却时间，重置计数
+    if (now - this.lastRestartTime > ProxyManager.RESTART_COOLDOWN) {
+      this.restartCount = 0;
+    }
+
+    // 检查是否超过最大重启次数
+    return this.restartCount < ProxyManager.MAX_RESTART_COUNT;
+  }
+
+  /**
+   * 尝试自动重启
+   */
+  private async attemptAutoRestart(): Promise<void> {
+    if (!this.currentConfig) {
+      return;
+    }
+
+    this.isRestarting = true;
+    this.restartCount++;
+    this.lastRestartTime = Date.now();
+
+    this.logToManager(
+      'warn',
+      `正在尝试自动重启 sing-box (第 ${this.restartCount}/${ProxyManager.MAX_RESTART_COUNT} 次)...`
+    );
+
+    // 通知前端正在重启
+    this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
+      message: `sing-box 进程异常退出，正在自动重启 (${this.restartCount}/${ProxyManager.MAX_RESTART_COUNT})...`,
+      code: -2, // 特殊代码表示正在重启
+    });
+
+    try {
+      // 等待一小段时间让系统清理
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // 重新启动
+      await this.start(this.currentConfig);
+
+      this.logToManager('info', 'sing-box 自动重启成功');
+
+      // 通知前端重启成功
+      this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STARTED, {
+        pid: this.singboxPid || this.pid,
+        startTime: this.startTime,
+        autoRestarted: true,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logToManager('error', `自动重启失败: ${errorMessage}`);
+
+      // 如果还有重试机会，会在下次健康检查时再次尝试
+      if (this.restartCount >= ProxyManager.MAX_RESTART_COUNT) {
+        this.emit('error', {
+          message: `自动重启失败: ${errorMessage}`,
+          code: -1,
+        });
+
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
+          message: `自动重启失败，请手动重启: ${errorMessage}`,
+          code: -1,
+        });
+
+        this.emit('stopped');
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STOPPED, {});
+        this.cleanup();
+      }
+    } finally {
+      this.isRestarting = false;
+    }
+  }
+
+  /**
+   * 设置是否启用自动重启
+   */
+  setAutoRestartEnabled(enabled: boolean): void {
+    this.autoRestartEnabled = enabled;
+    this.logToManager('info', `自动重启已${enabled ? '启用' : '禁用'}`);
+  }
+
+  /**
+   * 重置重启计数（用于用户手动启动后）
+   */
+  private resetRestartCount(): void {
+    this.restartCount = 0;
+    this.lastRestartTime = 0;
+  }
+
+  /**
+   * 获取进程退出信息（用于诊断）
+   * 尝试从系统日志或 sing-box 日志文件中获取退出原因
+   */
+  private getProcessExitInfo(): string {
+    const info: string[] = [];
+    
+    try {
+      const fsSync = require('fs');
+      const logFilePath = this.getLogFilePath();
+      
+      // 读取 sing-box 日志文件的最后几行
+      if (fsSync.existsSync(logFilePath)) {
+        const logContent = fsSync.readFileSync(logFilePath, 'utf-8');
+        const lines = logContent.trim().split('\n');
+        const lastLines = lines.slice(-10); // 最后 10 行
+        
+        // 查找错误或警告信息
+        for (const line of lastLines) {
+          const lowerLine = line.toLowerCase();
+          if (lowerLine.includes('error') || lowerLine.includes('fatal') || 
+              lowerLine.includes('panic') || lowerLine.includes('failed')) {
+            info.push(`日志: ${line.substring(0, 200)}`);
+          }
+        }
+      }
+      
+      // macOS: 尝试从系统日志获取信息
+      if (process.platform === 'darwin') {
+        const { execSync } = require('child_process');
+        try {
+          // 查询最近的 sing-box 相关系统日志
+          const sysLog = execSync(
+            `log show --predicate 'process == "sing-box"' --last 1m --style compact 2>/dev/null | tail -5`,
+            { encoding: 'utf-8', timeout: 3000 }
+          ).trim();
+          if (sysLog) {
+            info.push(`系统日志: ${sysLog.substring(0, 300)}`);
+          }
+        } catch {
+          // 忽略系统日志查询失败
+        }
+      }
+    } catch (error) {
+      // 忽略诊断错误
+    }
+    
+    return info.length > 0 ? info.join('; ') : '';
+  }
+
+  /**
+   * 等待 PID 文件被写入（macOS/Windows TUN 模式）
+   * 
+   * 重要：在调用此方法前，必须先删除旧的 PID 文件，否则可能读到旧的 PID
+   */
+  private async waitForPidFile(): Promise<void> {
+    const pidFile = this.getPidFilePath();
+    const maxWaitTime = 10000; // 最多等待 10 秒
+    const checkInterval = 200; // 每 200ms 检查一次
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        const pidContent = await fs.readFile(pidFile, 'utf-8');
+        const pid = parseInt(pidContent.trim(), 10);
+        if (!isNaN(pid) && pid > 0) {
+          // 验证这个 PID 对应的进程确实存在且是 sing-box
+          if (this.isProcessAlive(pid)) {
+            this.singboxPid = pid;
+            this.pid = pid;
+            this.logToManager('info', `sing-box 后台进程 PID: ${pid}`);
+            return;
+          }
+        }
+      } catch {
+        // 文件还不存在，继续等待
+      }
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
+    }
+
+    this.logToManager('warn', 'PID 文件等待超时');
+  }
+
+  /**
+   * 删除 PID 文件
+   * 在启动新进程前调用，确保不会读到旧的 PID
+   */
+  private async deletePidFile(): Promise<void> {
+    try {
+      await fs.unlink(this.getPidFilePath());
+    } catch {
+      // 文件不存在，忽略
+    }
+  }
+
+  /**
+   * 获取 PID 文件路径
+   */
+  private getPidFilePath(): string {
+    return path.join(getUserDataPath(), 'singbox.pid');
+  }
+
+  /**
+   * 将规则文件复制到 User Data 目录
+   * 解决 macOS TUN 模式下特权进程无法读取 Downloads/Documents 目录的问题
+   */
+  private async copyRuleSetsToUserData(): Promise<void> {
+    const rulesDir = path.join(getUserDataPath(), 'rules');
+    
+    // 确保目录存在
+    try {
+      if (!require('fs').existsSync(rulesDir)) {
+        require('fs').mkdirSync(rulesDir, { recursive: true });
+      }
+    } catch (error) {
+       this.logToManager('error', `创建规则目录失败: ${error}`);
+       return;
+    }
+
+    const filesToCopy = [
+      { src: resourceManager.getGeoSiteCNPath(), dest: 'geosite-cn.srs' },
+      { src: resourceManager.getGeoSiteNonCNPath(), dest: 'geosite-geolocation-!cn.srs' },
+      { src: resourceManager.getGeoIPPath(), dest: 'geoip-cn.srs' },
+    ];
+
+    const fs = require('fs/promises');
+    
+    for (const file of filesToCopy) {
+      try {
+        const destPath = path.join(rulesDir, file.dest);
+        
+        // 检查源文件是否存在
+        if (!require('fs').existsSync(file.src)) {
+          this.logToManager('warn', `源规则文件不存在: ${file.src}`);
+          continue;
+        }
+
+        // 复制文件（覆盖）
+        await fs.copyFile(file.src, destPath);
+        // this.logToManager('debug', `已复制规则文件: ${file.dest}`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.logToManager('error', `复制规则文件失败 ${file.dest}: ${errorMessage}`);
+      }
+    }
+  }
+
+  /**
+   * 启动日志文件监控（用于 macOS TUN 模式）
+   */
+  private startLogFileWatcher(): void {
+    if (this.logFileWatcher) {
+      return;
+    }
+
+    const logFilePath = this.getLogFilePath();
+    this.lastLogFileSize = 0;
+
+    // 清空旧的日志文件
+    const fsSync = require('fs');
+    try {
+      fsSync.writeFileSync(logFilePath, '');
+    } catch {
+      // 忽略错误
+    }
+
+    // 每 500ms 检查一次日志文件
+    this.logFileWatcher = setInterval(async () => {
+      try {
+        const stats = await fs.stat(logFilePath);
+        if (stats.size > this.lastLogFileSize) {
+          // 读取新增的内容
+          const fd = await fs.open(logFilePath, 'r');
+          const buffer = Buffer.alloc(stats.size - this.lastLogFileSize);
+          await fd.read(buffer, 0, buffer.length, this.lastLogFileSize);
+          await fd.close();
+
+          const newContent = buffer.toString('utf-8');
+          this.lastLogFileSize = stats.size;
+
+          // 处理日志内容
+          if (newContent.trim()) {
+            this.handleProcessOutput(newContent);
+          }
+        }
+      } catch {
+        // 文件可能还不存在，忽略错误
+      }
+    }, 500);
+  }
+
+  /**
+   * 停止日志文件监控
+   */
+  private stopLogFileWatcher(): void {
+    if (this.logFileWatcher) {
+      clearInterval(this.logFileWatcher);
+      this.logFileWatcher = null;
+    }
+    this.lastLogFileSize = 0;
+  }
+
+  /**
+   * 处理进程输出
+   */
+  private handleProcessOutput(data: string): void {
+    // 移除 ANSI 颜色代码
+    const cleanData = this.removeAnsiCodes(data);
+
+    // 按行分割
+    const lines = cleanData.split('\n').filter((line) => line.trim());
+
+    for (const line of lines) {
+      this.parseAndLogLine(line);
+    }
+  }
+
+  /**
+   * 移除 ANSI 颜色代码
+   */
+  private removeAnsiCodes(text: string): string {
+    // eslint-disable-next-line no-control-regex
+    return text.replace(/\x1b\[[0-9;]*m/g, '');
+  }
+
+  /**
+   * 解析并记录日志行
+   */
+  private parseAndLogLine(line: string): void {
+    // 过滤重复日志
+    if (this.isDuplicateLog(line)) {
+      return;
+    }
+
+    // 过滤低价值日志（连接建立、DNS 查询等频繁日志）
+    if (this.isLowValueLog(line)) {
+      return;
+    }
+
+    // 解析 sing-box 日志格式
+    const logInfo = this.parseSingBoxLog(line);
+
+    if (logInfo) {
+      // 转换为友好的中文提示
+      const friendlyMessage = this.translateErrorMessage(logInfo.message);
+
+      // 空消息不记录（如私有 IP 超时）
+      if (friendlyMessage) {
+        this.logToManager(logInfo.level, friendlyMessage);
+      }
+    } else {
+      // 无法解析的日志，直接记录
+      this.logToManager('info', line);
+    }
+  }
+
+  /**
+   * 检查是否为低价值日志（应该被过滤）
+   * 保留：路由决策、错误、启动/停止等重要日志
+   * 过滤：频繁的连接关闭、握手细节等日志
+   */
+  private isLowValueLog(line: string): boolean {
+    const lowerLine = line.toLowerCase();
+
+    // 优先过滤的噪音日志（即使包含其他关键词也要过滤）
+    const noisePatterns = [
+      'connection upload closed',
+      'connection download closed',
+      'forcibly closed',
+      'connection closed',
+      'connection established',
+      'tls handshake',
+      'handshake completed',
+    ];
+
+    for (const pattern of noisePatterns) {
+      if (lowerLine.includes(pattern)) {
+        return true; // 过滤掉
+      }
+    }
+
+    // 高价值日志模式 - 这些日志应该保留
+    const keepPatterns = [
+      'started', // 启动完成
+      'stopped', // 停止
+      'sing-box started', // sing-box 启动
+      'error', // 错误
+      'fatal', // 致命错误
+      'warn', // 警告
+      'failed', // 失败
+      'updated default interface', // 网络接口变化
+      // 路由决策相关 - 关键日志
+      'match rule', // 匹配规则
+      'final rule', // 最终规则
+      'rule-set', // 规则集匹配
+      'outbound/proxy', // 代理出站 - 用户关心的
+    ];
+
+    // 检查是否包含高价值模式
+    for (const pattern of keepPatterns) {
+      if (lowerLine.includes(pattern)) {
+        return false; // 不过滤，保留这条日志
+      }
+    }
+
+    // 检查是否为内网IP的直连连接（这些太频繁，需要过滤）
+    if (lowerLine.includes('outbound/direct')) {
+      // 检查是否连接到私有IP地址
+      for (const pattern of PRIVATE_IP_PATTERNS) {
+        if (pattern.test(line)) {
+          return true; // 过滤内网直连
+        }
+      }
+      // 公网直连保留（如 CDN、国内网站等）
+      return false;
+    }
+
+    // 过滤的低价值日志模式
+    const filterPatterns = [
+      'dns query', // DNS 查询
+      'dns response', // DNS 响应
+      'dns: exchanged', // DNS 交换
+      'dns: cached', // DNS 缓存
+      'resolved', // DNS 解析完成
+      'udp packet', // UDP 包
+      'inbound/tun[tun-in]', // TUN 入站细节
+      'inbound/http[http-in]', // HTTP 入站细节
+      'inbound/socks[socks-in]', // SOCKS 入站细节
+    ];
+
+    for (const pattern of filterPatterns) {
+      if (lowerLine.includes(pattern)) {
+        return true; // 过滤掉
+      }
+    }
+
+    return false; // 默认保留
+  }
+
+  /**
+   * 检查是否为重复日志
+   */
+  private isDuplicateLog(message: string): boolean {
+    const now = Date.now();
+
+    // 如果消息相同且在 1 秒内
+    if (message === this.lastLogMessage && now - this.lastLogTime < 1000) {
+      this.lastLogCount++;
+
+      // 如果重复超过 5 次，过滤掉
+      if (this.lastLogCount > 5) {
+        return true;
+      }
+    } else {
+      // 新消息，重置计数
+      this.lastLogMessage = message;
+      this.lastLogCount = 1;
+      this.lastLogTime = now;
+    }
+
+    return false;
+  }
+
+  /**
+   * 解析 sing-box 日志
+   */
+  private parseSingBoxLog(
+    line: string
+  ): { level: 'debug' | 'info' | 'warn' | 'error' | 'fatal'; message: string } | null {
+    // sing-box 日志格式示例：
+    // 2024-01-01 12:00:00 INFO message
+    // 2024-01-01 12:00:00 [INFO] message
+
+    // 尝试匹配日志级别
+    const levelMatch = line.match(/\b(DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b/i);
+    if (!levelMatch) {
+      return null;
+    }
+
+    let level = levelMatch[1].toUpperCase();
+    if (level === 'WARNING') {
+      level = 'WARN';
+    }
+
+    // 提取消息内容（去掉时间戳和级别）
+    const message = line
+      .replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/, '')
+      .replace(/\[?(DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\]?/i, '')
+      .trim();
+
+    return {
+      level: level.toLowerCase() as 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+      message,
+    };
+  }
+
+  /**
+   * 翻译错误消息为友好的中文提示
+   * 返回格式：友好提示 + 原始错误（如果有翻译）
+   */
+  private translateErrorMessage(message: string): string {
+    console.error(message);
+    const lowerMessage = message.toLowerCase();
+
+    // 常见错误模式匹配
+    if (
+      lowerMessage.includes('connection refused') ||
+      lowerMessage.includes('connect: connection refused')
+    ) {
+      return `连接被拒绝：无法连接到代理服务器，请检查服务器地址和端口是否正确 [${message}]`;
+    }
+
+    if (lowerMessage.includes('timeout') || lowerMessage.includes('timed out')) {
+      // 尝试提取目标地址
+      const match = message.match(/connection.*?to\s+([^\s:]+(?::\d+)?)/i);
+      const target = match ? match[1] : '';
+      // 私有 IP 超时不显示（内网服务走代理必然超时）
+      if (target && /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(target)) {
+        return ''; // 返回空字符串，后续会被过滤
+      }
+      return target ? `连接超时: ${target}` : '连接超时：服务器响应超时';
+    }
+
+    if (lowerMessage.includes('dns') && lowerMessage.includes('fail')) {
+      return `DNS 解析失败：无法解析服务器域名，请检查 DNS 设置 [${message}]`;
+    }
+
+    if (
+      lowerMessage.includes('certificate') ||
+      lowerMessage.includes('tls') ||
+      lowerMessage.includes('ssl')
+    ) {
+      // 保留原始错误信息，帮助用户诊断具体的证书问题
+      return `TLS 证书错误：服务器证书验证失败 [${message}]`;
+    }
+
+    if (lowerMessage.includes('authentication failed') || lowerMessage.includes('auth fail')) {
+      return `认证失败：用户名或密码错误，请检查服务器配置 [${message}]`;
+    }
+
+    if (lowerMessage.includes('permission denied') || lowerMessage.includes('access denied')) {
+      return `权限不足：需要管理员权限才能启动 TUN 模式 [${message}]`;
+    }
+
+    if (
+      lowerMessage.includes('address already in use') ||
+      lowerMessage.includes('bind: address already in use')
+    ) {
+      return `端口已被占用：请更换其他端口或关闭占用端口的程序 [${message}]`;
+    }
+
+    if (lowerMessage.includes('invalid config') || lowerMessage.includes('config error')) {
+      return `配置错误：sing-box 配置文件格式不正确 [${message}]`;
+    }
+
+    // 如果没有匹配到特定错误，返回原始消息
+    return message;
+  }
+
+  /**
+   * 记录日志到 LogManager
+   */
+  private logToManager(
+    level: 'debug' | 'info' | 'warn' | 'error' | 'fatal',
+    message: string
+  ): void {
+    if (this.logManager) {
+      this.logManager.addLog(level, message, 'sing-box');
+    }
+  }
+
+  /**
+   * 处理进程错误
+   */
+  private handleProcessError(error: Error): void {
+    const errorMessage = this.translateErrorMessage(error.message);
+
+    // 触发错误事件
+    this.emit('error', {
+      message: errorMessage,
+      error: error.message,
+    });
+
+    // 发送到前端
+    this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
+      message: errorMessage,
+      error: error.message,
+    });
+  }
+
+  /**
+   * 处理进程退出
+   */
+  private handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void {
+    // 解析退出原因
+    const exitReason = this.parseExitReason(code, signal);
+
+    this.logToManager('info', `sing-box process exited: ${exitReason}`);
+
+    // 如果是异常退出（非正常停止）
+    if (code !== null && code !== 0 && signal !== 'SIGTERM' && signal !== 'SIGKILL') {
+      const errorMessage = this.parseExitError(code);
+
+      this.logToManager('error', `sing-box异常退出: ${errorMessage}`);
+
+      // 触发错误事件
+      this.emit('error', {
+        message: errorMessage,
+        code,
+        signal,
+      });
+
+      // 发送到前端
+      this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
+        message: errorMessage,
+        code,
+        signal,
+      });
+    } else {
+      // 正常退出，触发停止事件
+      this.emit('stopped');
+      this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STOPPED, {});
+    }
+
+    this.cleanup();
+  }
+
+  /**
+   * 解析退出原因
+   */
+  private parseExitReason(code: number | null, signal: NodeJS.Signals | null): string {
+    if (signal) {
+      return `信号 ${signal}`;
+    }
+    if (code !== null) {
+      return `退出码 ${code}`;
+    }
+    return '未知原因';
+  }
+
+  /**
+   * 解析退出错误
+   */
+  private parseExitError(code: number): string {
+    // 尝试从最后的错误输出中提取错误信息
+    if (this.lastErrorOutput) {
+      const friendlyMessage = this.translateErrorMessage(this.lastErrorOutput);
+      if (friendlyMessage !== this.lastErrorOutput) {
+        return friendlyMessage;
+      }
+    }
+
+    // 根据退出码返回通用错误信息
+    switch (code) {
+      case 1:
+        return 'sing-box 启动失败，请检查配置文件';
+      case 2:
+        return 'sing-box 配置文件格式错误';
+      case 126:
+        return 'sing-box 可执行文件没有执行权限';
+      case 127:
+        return '找不到 sing-box 可执行文件';
+      case 137:
+        return 'sing-box 进程被强制终止';
+      case 143:
+        return 'sing-box 进程被正常终止';
+      default:
+        return `sing-box 异常退出，退出码: ${code}`;
+    }
+  }
+
+  /**
+   * 发送事件到渲染进程
+   */
+  private sendEventToRenderer(channel: string, data: any): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send(channel, data);
+    }
+  }
+
+  /**
+   * 获取 sing-box 可执行文件路径
+   */
+  private getSingBoxPath(): string {
+    return resourceManager.getSingBoxPath();
+  }
+
+  /**
+   * 设置系统代理
+   */
+  private async setSystemProxy(config: UserConfig): Promise<void> {
+    const port = config.httpPort || 2080;
+    const host = '127.0.0.1';
+    
+    this.logToManager('info', `正在设置系统代理 (${host}:${port})...`);
+
+    if (process.platform === 'win32') {
+      try {
+        const { exec } = require('child_process');
+        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
+          exec(cmd, (error: any) => {
+            if (error) reject(error);
+            else resolve(null);
+          });
+        });
+
+        // 启用代理
+        await runCommand(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 1 /f`);
+        // 设置代理服务器
+        await runCommand(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /t REG_SZ /d "${host}:${port}" /f`);
+        
+        this.logToManager('info', 'Windows 系统代理已设置');
+      } catch (error) {
+        this.logToManager('error', `设置 Windows 系统代理失败: ${error}`);
+      }
+    } else if (process.platform === 'darwin') {
+      try {
+        const { exec } = require('child_process');
+        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
+            exec(cmd, (error: any) => {
+                if (error) reject(error);
+                else resolve(null);
+            });
+        });
+
+        const services = ['Wi-Fi', 'Ethernet', 'Thunderbolt Bridge'];
+        
+        for (const service of services) {
+            try {
+                await runCommand(`networksetup -setwebproxy "${service}" ${host} ${port}`);
+                await runCommand(`networksetup -setsecurewebproxy "${service}" ${host} ${port}`);
+                await runCommand(`networksetup -setsocksfirewallproxy "${service}" ${host} ${port}`);
+                if (config.socksPort) {
+                     await runCommand(`networksetup -setsocksfirewallproxy "${service}" ${host} ${config.socksPort}`);
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+        this.logToManager('info', 'macOS 系统代理已设置');
+      } catch (error) {
+        this.logToManager('error', `设置 macOS 系统代理失败: ${error}`);
+      }
+    }
+  }
+
+  /**
+   * 取消系统代理
+   */
+  private async unsetSystemProxy(): Promise<void> {
+    this.logToManager('info', '正在取消系统代理...');
+
+    if (process.platform === 'win32') {
+      try {
+        const { exec } = require('child_process');
+        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
+          exec(cmd, (error: any) => {
+            if (error) reject(error);
+            else resolve(null);
+          });
+        });
+
+        // 禁用代理
+        await runCommand(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`);
+        this.logToManager('info', 'Windows 系统代理已取消');
+      } catch (error) {
+         this.logToManager('error', `取消 Windows 系统代理失败: ${error}`);
+      }
+    } else if (process.platform === 'darwin') {
+      try {
+        const { exec } = require('child_process');
+        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
+            exec(cmd, (error: any) => {
+                if (error) reject(error);
+                else resolve(null);
+            });
+        });
+
+        const services = ['Wi-Fi', 'Ethernet', 'Thunderbolt Bridge'];
+        for (const service of services) {
+            try {
+                await runCommand(`networksetup -setwebproxystate "${service}" off`);
+                await runCommand(`networksetup -setsecurewebproxystate "${service}" off`);
+                await runCommand(`networksetup -setsocksfirewallproxystate "${service}" off`);
+            } catch (e) {
+                // Ignore
+            }
+        }
+        this.logToManager('info', 'macOS 系统代理已取消');
+      } catch (error) {
+        this.logToManager('error', `取消 macOS 系统代理失败: ${error}`);
+      }
+    }
+  }
+}

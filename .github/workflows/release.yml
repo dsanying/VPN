@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-14
+            platform: mac
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Package application
+        run: npm run package:${{ matrix.platform }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Create DMG (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          APP_PATH="dist-package/mac-arm64/FlowZ.app"
+          DMG_PATH="dist-package/FlowZ-${VERSION}-mac-arm64.dmg"
+          
+          echo "Creating DMG..."
+          TEMP_DIR=$(mktemp -d)
+          cp -R "$APP_PATH" "$TEMP_DIR/"
+          ln -s /Applications "$TEMP_DIR/Applications"
+          
+          hdiutil create -volname "FlowZ ${VERSION}" \
+            -srcfolder "$TEMP_DIR" \
+            -ov -format UDZO \
+            "$DMG_PATH"
+          
+          rm -rf "$TEMP_DIR"
+          echo "Created: $DMG_PATH"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            dist-package/*.exe
+            dist-package/*.dmg
+          retention-days: 5
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            VERSION=${{ steps.version.outputs.VERSION }}
+            NOTES=$(sed -n "/## \[*${VERSION}\]*/,/## \[*/p" CHANGELOG.md | sed '$d')
+            if [ -z "$NOTES" ]; then
+              NOTES="Release $VERSION"
+            fi
+          else
+            NOTES=$(git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s" || git log --pretty=format:"- %s")
+            NOTES="## What's Changed
+
+          $NOTES"
+          fi
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: ${{ steps.release_notes.outputs.NOTES }}
+          draft: true
+          prerelease: false
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
