@@ -18,7 +18,7 @@
 - 
 <img src="https://cdn.nodeimage.com/i/ns0xeUtvL7WUqXTcqpIoD9ucKL1oXiOl.webp" alt="ns0xeUtvL7WUqXTcqpIoD9ucKL1oXiOl.webp">
 <img src="https://cdn.nodeimage.com/i/CqlzFHAJO0MoEyyoUhUIjDjY2Xl41tCi.webp" alt="CqlzFHAJO0MoEyyoUhUIjDjY2Xl41tCi.webp">
-<img src="https://cdn.nodeimage.com/i/xW3wXXCgxBBZ7hqV3HVpQSzFcB9gfv9l.webp" alt="xW3wXXCgxBBZ7hqV3HVpQSzFcB9gfv9l.webp">
+<img src="https://cdn.nodeimage.com/i/Ob4dWzZrKM6yrLmUSxfAzvrnTyoTxxeR.webp" alt="Ob4dWzZrKM6yrLmUSxfAzvrnTyoTxxeR.webp">
 <img src="https://cdn.nodeimage.com/i/kxhVxYFpfgGH9XgGqypLBhMIC7kj2XTF.webp" alt="kxhVxYFpfgGH9XgGqypLBhMIC7kj2XTF.webp">
 
 ## 📋 系统要求
