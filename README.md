@@ -16,7 +16,7 @@
 - ✅ 现代化的用户界面（基于 Shadcn UI）
 - ✅ 跨平台支持（Windows / macOS）
 
-https://cdn.nodeimage.com/i/ns0xeUtvL7WUqXTcqpIoD9ucKL1oXiOl.webp
+<img src="https://cdn.nodeimage.com/i/ns0xeUtvL7WUqXTcqpIoD9ucKL1oXiOl.webp" alt="ns0xeUtvL7WUqXTcqpIoD9ucKL1oXiOl.webp">
 
 
 ## 📋 系统要求
