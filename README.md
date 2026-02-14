@@ -6,14 +6,32 @@
 
 ## ✨ 功能特性
 
-- ✅ 支持 VLESS 、Trojan 和hysteria2协议
+- ✅ 支持 VLESS、Trojan、Hysteria2 以及 Shadowsocks 协议
+- ✅ 强大的路由规则系统（geosite/geoip 规则集支持）
 - ✅ 多种代理模式（全局、智能、直连）
-- ✅ TUN 透明代理模式
-- ✅ 自定义域名路由规则
-- ✅ 系统托盘集成
+- ✅ TUN 透明代理模式（支持 System/gVisor/Mixed 堆栈）
+- ✅ 系统级代理设置自动接管
+- ✅ 实时流量统计图表与速度测速
+- ✅ 亮色/暗色主题切换
 - ✅ 开机自启动和自动连接
-- ✅ 现代化的用户界面
+- ✅ 现代化的用户界面（基于 Shadcn UI）
 - ✅ 跨平台支持（Windows / macOS）
+
+## 📸 功能预览
+
+> _请将您的截图拖拽到此处，或上传到 GitHub Issues 并复制链接替换下方占位符_
+
+### 1. 仪表盘与实时测速
+
+![Dashboard Preview](your-dashboard-screenshot-link-here)
+
+### 2. 强大的路由规则
+
+![Rules Preview](your-rules-screenshot-link-here)
+
+### 3. 设置与深色模式
+
+![Settings Preview](your-settings-screenshot-link-here)
 
 ## 📋 系统要求
 
@@ -23,6 +41,7 @@
 ## 📥 安装
 
 从 [Releases](../../releases) 页面下载最新版本：
+
 - Windows: 运行 `.exe` 安装包
 - macOS (Apple Silicon): 打开 `.dmg` 文件并拖入 Applications
 - macOS (Intel): 需要从源码构建，参见下方说明
@@ -55,28 +74,32 @@ macOS Intel 用户需要修改 `electron-builder.json` 中的 `mac.target.arch` 
 ## 🚀 快速开始
 
 ### 1. 配置服务器
+
 - 打开应用 → "服务器"标签
 - 选择协议（VLESS 或 Trojan）
 - 填写服务器信息
 - 点击"保存配置"
 
 ### 2. 连接代理
+
 - 返回"首页"
 - 点击"启用代理"
 - 等待连接成功
 
 ### 3. 选择代理模式
+
 默认是TUN模式，全部流量都被代理软件拦截，至于是否需要真正走代理软件请求，取决于选择的代理模式：
+
 - **全局模式**：所有流量通过代理
 - **智能模式**：自动分流（推荐）
 - **直连模式**：不使用代理
-这种模式体验更佳，所有应用都可以实现代理，不需要手动配置，比如终端环境等。
-如果不希望使用TUN模式，可以进入设置页面手动选择"系统代理模式"。
+  这种模式体验更佳，所有应用都可以实现代理，不需要手动配置，比如终端环境等。
+  如果不希望使用TUN模式，可以进入设置页面手动选择"系统代理模式"。
 
 <img width="1469" height="933" alt="image" src="https://github.com/user-attachments/assets/3d4e8183-27c3-41b8-b95c-18cc4005b497" />
 
-
 ### 4. 自定义规则
+
 手动配置某些域名规则的代理模式：代理、直连、阻止，支持通配符方式。
 这是促进我研发本项目的主要驱动力之一，市面上的一些代理软件在规则配置和执行方面要么太复杂，要么压根不生效。
 
