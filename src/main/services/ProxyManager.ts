@@ -668,15 +668,17 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         {
           // 国内直连 DNS
           tag: 'dns-domestic',
-          type: 'udp',
-          server: userDnsConfig.domesticDns,
+          // @ts-expect-error: Legacy format
+          address: userDnsConfig.domesticDns,
+          address_resolver: 'dns-local',
           detour: 'direct'
         },
         {
           // 远程 DNS：通过代理查询，用于解析国外域名（支持修改）
           tag: 'dns-remote',
-          type: 'udp',
-          server: userDnsConfig.foreignDns,
+          // @ts-expect-error: Legacy format
+          address: userDnsConfig.foreignDns,
+          address_resolver: 'dns-local',
           detour: 'proxy',
         },
       ],
