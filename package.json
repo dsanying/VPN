@@ -5,6 +5,7 @@
   "description": "FlowZ - 简洁现代的跨平台代理客户端",
   "main": "dist/main/main/index.js",
   "scripts": {
+    "prepare": "husky",
     "dev": "node scripts/dev.js",
     "dev:main": "cross-env NODE_ENV=development tsc -p tsconfig.main.json && electron .",
     "dev:renderer": "vite",
@@ -26,7 +27,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "release:tag": "node scripts/push-release.js",
     "release:tag:update": "node scripts/push-release.js -y -u",
-    "release:prepare": "npm run build && npm run package:all"
+    "release:prepare": "npm run build && npm run package:all",
+    "prepare": "husky"
   },
   "keywords": [
     "electron",
@@ -57,7 +59,9 @@
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "fast-check": "^4.4.0",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
+    "lint-staged": "^16.2.7",
     "nodemon": "^3.1.11",
     "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
@@ -94,5 +98,10 @@
     "tailwind-merge": "^2.5.4",
     "zod": "^4.1.12",
     "zustand": "^4.5.5"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx,json,css}": [
+      "prettier --write"
+    ]
   }
 }
