@@ -657,13 +657,17 @@ app.whenReady().then(async () => {
           return;
         }
 
-        logManager.addLog('info', `Starting speed test for ${config.servers.length} servers`, 'Main');
+        logManager.addLog(
+          'info',
+          `Starting speed test for ${config.servers.length} servers`,
+          'Main'
+        );
 
         const net = require('net');
         const dgram = require('dgram');
         const results = new Map<string, number | null>();
 
-        const testServer = (server: typeof config.servers[0]): Promise<void> => {
+        const testServer = (server: (typeof config.servers)[0]): Promise<void> => {
           return new Promise((resolve) => {
             const startTime = Date.now();
             const protocol = server.protocol?.toLowerCase();
@@ -756,10 +760,10 @@ app.whenReady().then(async () => {
       // 检查是否启用了启动时自动连接
       if (config.autoConnect && config.selectedServerId) {
         logManager.addLog('info', '启动时自动连接已启用，正在连接...', 'Main');
-        
+
         if (proxyManager) {
           await proxyManager.start(config);
-          
+
           // 系统代理模式：设置系统代理
           const modeType = (config.proxyModeType || 'systemProxy').toLowerCase();
           if (modeType === 'systemproxy') {
@@ -769,7 +773,7 @@ app.whenReady().then(async () => {
               config.socksPort || 65534
             );
           }
-          
+
           logManager.addLog('info', '启动时自动连接成功', 'Main');
           // 更新托盘菜单状态
           updateTrayMenuState(true);
@@ -823,10 +827,10 @@ app.whenReady().then(async () => {
       const config = await configManager.loadConfig();
       if (config.autoUpdateSubscriptionOnStart) {
         logManager.addLog('info', '启动时自动更新订阅已启用，正在更新...', 'Main');
-        
+
         if (!config.subscriptions || config.subscriptions.length === 0) {
-           logManager.addLog('info', '没有可更新的订阅', 'Main');
-           return;
+          logManager.addLog('info', '没有可更新的订阅', 'Main');
+          return;
         }
 
         let updatedCount = 0;
@@ -835,12 +839,15 @@ app.whenReady().then(async () => {
         for (const subscription of config.subscriptions) {
           if (!subscription.autoUpdate) continue;
           try {
-            const result = await subscriptionService.fetchSubscription(subscription.url, subscription.id);
+            const result = await subscriptionService.fetchSubscription(
+              subscription.url,
+              subscription.id
+            );
             const fetchedServers = result.servers;
 
-            const oldServers = config.servers.filter(s => s.subscriptionId === subscription.id);
-            const oldServersMap = new Map<string, typeof config.servers[0]>();
-            oldServers.forEach(s => {
+            const oldServers = config.servers.filter((s) => s.subscriptionId === subscription.id);
+            const oldServersMap = new Map<string, (typeof config.servers)[0]>();
+            oldServers.forEach((s) => {
               oldServersMap.set(`${s.name}-${s.protocol}-${s.address}-${s.port}`, s);
             });
 
@@ -849,19 +856,24 @@ app.whenReady().then(async () => {
               const key = `${newServer.name}-${newServer.protocol}-${newServer.address}-${newServer.port}`;
               if (oldServersMap.has(key)) {
                 const old = oldServersMap.get(key)!;
-                newServersToKeep.push({ ...newServer, id: old.id, createdAt: old.createdAt, updatedAt: new Date().toISOString() });
+                newServersToKeep.push({
+                  ...newServer,
+                  id: old.id,
+                  createdAt: old.createdAt,
+                  updatedAt: new Date().toISOString(),
+                });
                 oldServersMap.delete(key);
               } else {
                 newServersToKeep.push(newServer);
               }
             }
 
-            const deletedIds = new Set(Array.from(oldServersMap.values()).map(s => s.id));
+            const deletedIds = new Set(Array.from(oldServersMap.values()).map((s) => s.id));
             if (config.selectedServerId && deletedIds.has(config.selectedServerId)) {
               config.selectedServerId = null;
             }
 
-            const otherServers = config.servers.filter(s => s.subscriptionId !== subscription.id);
+            const otherServers = config.servers.filter((s) => s.subscriptionId !== subscription.id);
             config.servers = [...otherServers, ...newServersToKeep];
             subscription.lastUpdated = new Date().toISOString();
             if (result.userInfo) subscription.userInfo = result.userInfo;
@@ -874,8 +886,12 @@ app.whenReady().then(async () => {
         }
 
         await configManager.saveConfig(config);
-        logManager.addLog('info', `启动时自动更新订阅完成。成功：${updatedCount}，失败：${failedCount}`, 'Main');
-        
+        logManager.addLog(
+          'info',
+          `启动时自动更新订阅完成。成功：${updatedCount}，失败：${failedCount}`,
+          'Main'
+        );
+
         // 广播配置变更事件以更新 UI
         ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       }
@@ -904,7 +920,11 @@ app.whenReady().then(async () => {
         updateTrayMenuState(true);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logManager.addLog('error', `Failed to restart proxy after config change: ${errorMessage}`, 'Main');
+        logManager.addLog(
+          'error',
+          `Failed to restart proxy after config change: ${errorMessage}`,
+          'Main'
+        );
         // 重启失败，更新托盘状态为停止
         updateTrayMenuState(false, true);
       }
