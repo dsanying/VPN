@@ -669,14 +669,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           // 国内直连 DNS
           tag: 'dns-domestic',
           type: 'udp',
-          address: userDnsConfig.domesticDns,
+          server: userDnsConfig.domesticDns,
           detour: 'direct'
         },
         {
           // 远程 DNS：通过代理查询，用于解析国外域名（支持修改）
           tag: 'dns-remote',
           type: 'udp',
-          address: userDnsConfig.foreignDns,
+          server: userDnsConfig.foreignDns,
           detour: 'proxy',
         },
       ],
