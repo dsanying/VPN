@@ -668,7 +668,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         {
           // 国内直连 DNS
           tag: 'dns-domestic',
-          // @ts-expect-error: Legacy format
           address: userDnsConfig.domesticDns,
           address_resolver: 'dns-local',
           detour: 'direct'
@@ -676,7 +675,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         {
           // 远程 DNS：通过代理查询，用于解析国外域名（支持修改）
           tag: 'dns-remote',
-          // @ts-expect-error: Legacy format
           address: userDnsConfig.foreignDns,
           address_resolver: 'dns-local',
           detour: 'proxy',
