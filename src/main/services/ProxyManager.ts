@@ -1495,7 +1495,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             }
           }
         }
-      } catch (error) {
+      } catch {
         // 忽略检查错误
       }
     }
@@ -2477,7 +2477,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           // 忽略系统日志查询失败
         }
       }
-    } catch (error) {
+    } catch {
       // 忽略诊断错误
     }
 
@@ -3077,7 +3077,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
                 `networksetup -setsocksfirewallproxy "${service}" ${host} ${config.socksPort}`
               );
             }
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -3130,7 +3130,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             await runCommand(`networksetup -setwebproxystate "${service}" off`);
             await runCommand(`networksetup -setsecurewebproxystate "${service}" off`);
             await runCommand(`networksetup -setsocksfirewallproxystate "${service}" off`);
-          } catch (e) {
+          } catch {
             // Ignore
           }
         }

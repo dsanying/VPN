@@ -80,7 +80,6 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'anytls') {
       form.reset(getDefaultValues());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverConfig]);
 
   const handleSubmit = async (values: AnyTlsFormValues) => {

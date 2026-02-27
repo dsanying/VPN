@@ -168,7 +168,7 @@ export function ServerList({
       } else {
         toast.error(response.error || '生成分享链接失败');
       }
-    } catch (_error) {
+    } catch {
       toast.error('复制失败');
     }
   };

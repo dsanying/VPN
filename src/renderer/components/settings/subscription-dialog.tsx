@@ -65,7 +65,7 @@ export function SubscriptionDialog({
         autoUpdate,
       });
       onOpenChange(false);
-    } catch (error) {
+    } catch {
       // Error is handled by api wrapper
     } finally {
       setIsSaving(false);

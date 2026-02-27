@@ -74,7 +74,7 @@ export class SubscriptionService {
       if (!decodedContent.includes('://')) {
         try {
           decodedContent = Buffer.from(decodedContent, 'base64').toString('utf-8');
-        } catch (e) {
+        } catch {
           this.logManager.addLog('warn', `尝试 Base64 解码失败，可能原本就是明文`, 'Subscription');
         }
       }

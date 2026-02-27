@@ -159,7 +159,7 @@ export class CoreUpdateService {
         if (corePath.includes(app.getPath('temp')) && corePath !== tempPath) {
           fs.unlinkSync(corePath);
         }
-      } catch (e) {
+      } catch {
         // 忽略清理错误
       }
 
@@ -217,7 +217,7 @@ export class CoreUpdateService {
             require('child_process').execSync('taskkill /F /IM sing-box.exe', { stdio: 'ignore' });
             // 杀进程后多等一会儿
             await new Promise((resolve) => setTimeout(resolve, 1000));
-          } catch (e) {
+          } catch {
             // 忽略错误（可能进程不存在）
           }
         }
@@ -263,7 +263,7 @@ export class CoreUpdateService {
             } else {
               reject(new Error(`GitHub API Error: ${res.statusCode}`));
             }
-          } catch (e) {
+          } catch {
             reject(new Error('Failed to parse GitHub response'));
           }
         });
@@ -457,7 +457,7 @@ export class CoreUpdateService {
           fs.chmodSync(currentPath, 0o755);
         }
         this.logManager.addLog('info', '已从备份恢复核心', 'CoreUpdateService');
-      } catch (e) {
+      } catch {
         this.logManager.addLog('error', '恢复备份失败', 'CoreUpdateService');
       }
     }

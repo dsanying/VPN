@@ -47,7 +47,7 @@ export function getUserDataPath(): string {
       // 通过 HOME 环境变量获取
       const appName = app.getName() || 'FlowZ';
       // 提取用户名
-      const match = homeDir.match(/^\/Users\/([^\/]+)/);
+      const match = homeDir.match(/^\/Users\/([^/]+)/);
       if (match) {
         userDataPath = path.join('/Users', match[1], 'Library/Application Support', appName);
       }
