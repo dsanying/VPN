@@ -38,7 +38,7 @@ export function registerRulesHandlers(configManager: ConfigManager): void {
       }
       config.customRules.push(newRule);
       await configManager.saveConfig(config);
-      
+
       // 广播和触发事件
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);

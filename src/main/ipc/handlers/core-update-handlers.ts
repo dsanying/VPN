@@ -4,7 +4,6 @@ import { LogManager } from '../../services/LogManager';
 
 let coreUpdateService: CoreUpdateService | null = null;
 
-
 export function setCoreUpdateService(service: CoreUpdateService, _logger: LogManager) {
   coreUpdateService = service;
 }

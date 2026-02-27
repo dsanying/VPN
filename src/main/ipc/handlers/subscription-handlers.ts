@@ -14,9 +14,15 @@ export function registerSubscriptionHandlers(
   configManager: ConfigManager
 ): void {
   // 添加订阅
-  registerIpcHandler<{ subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'> }, SubscriptionConfig>(
+  registerIpcHandler<
+    { subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'> },
+    SubscriptionConfig
+  >(
     IPC_CHANNELS.SUBSCRIPTION_ADD,
-    async (_event: IpcMainInvokeEvent, args: { subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'> }) => {
+    async (
+      _event: IpcMainInvokeEvent,
+      args: { subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'> }
+    ) => {
       const config = await configManager.loadConfig();
       if (!config.subscriptions) {
         config.subscriptions = [];
@@ -73,9 +79,9 @@ export function registerSubscriptionHandlers(
 
       // 如果当前选中的节点被删除了，清除选中状态
       if (config.selectedServerId) {
-        const stillExists = config.servers.some(s => s.id === config.selectedServerId);
+        const stillExists = config.servers.some((s) => s.id === config.selectedServerId);
         if (!stillExists) {
-            config.selectedServerId = null;
+          config.selectedServerId = null;
         }
       }
 
@@ -96,7 +102,10 @@ export function registerSubscriptionHandlers(
       }
 
       try {
-        const result = await subscriptionService.fetchSubscription(subscription.url, subscription.id);
+        const result = await subscriptionService.fetchSubscription(
+          subscription.url,
+          subscription.id
+        );
         const fetchedServers = result.servers;
 
         let added = 0;
@@ -104,10 +113,10 @@ export function registerSubscriptionHandlers(
         let deleted = 0;
 
         // 获取原来的该订阅下的节点
-        const oldServers = config.servers.filter(s => s.subscriptionId === subscription.id);
+        const oldServers = config.servers.filter((s) => s.subscriptionId === subscription.id);
         const oldServersMap = new Map<string, ServerConfig>();
 
-        oldServers.forEach(s => {
+        oldServers.forEach((s) => {
           const key = `${s.name}-${s.protocol}-${s.address}-${s.port}`;
           oldServersMap.set(key, s);
         });
@@ -122,7 +131,7 @@ export function registerSubscriptionHandlers(
               ...newServer,
               id: oldServer.id,
               createdAt: oldServer.createdAt,
-              updatedAt: new Date().toISOString()
+              updatedAt: new Date().toISOString(),
             };
             newServersToKeep.push(mergedServer);
             oldServersMap.delete(key);
@@ -134,13 +143,13 @@ export function registerSubscriptionHandlers(
         }
 
         deleted = oldServersMap.size;
-        const deletedIds = new Set(Array.from(oldServersMap.values()).map(s => s.id));
+        const deletedIds = new Set(Array.from(oldServersMap.values()).map((s) => s.id));
 
         if (config.selectedServerId && deletedIds.has(config.selectedServerId)) {
           config.selectedServerId = null;
         }
 
-        const otherServers = config.servers.filter(s => s.subscriptionId !== subscription.id);
+        const otherServers = config.servers.filter((s) => s.subscriptionId !== subscription.id);
         config.servers = [...otherServers, ...newServersToKeep];
 
         // 更新订阅的最后更新时间和流量信息
@@ -164,7 +173,7 @@ export function registerSubscriptionHandlers(
           addedServers: 0,
           updatedServers: 0,
           deletedServers: 0,
-          error: error.message
+          error: error.message,
         };
       }
     }
@@ -185,12 +194,15 @@ export function registerSubscriptionHandlers(
       for (const subscription of config.subscriptions) {
         if (!subscription.autoUpdate) continue;
         try {
-          const result = await subscriptionService.fetchSubscription(subscription.url, subscription.id);
+          const result = await subscriptionService.fetchSubscription(
+            subscription.url,
+            subscription.id
+          );
           const fetchedServers = result.servers;
 
-          const oldServers = config.servers.filter(s => s.subscriptionId === subscription.id);
+          const oldServers = config.servers.filter((s) => s.subscriptionId === subscription.id);
           const oldServersMap = new Map<string, ServerConfig>();
-          oldServers.forEach(s => {
+          oldServers.forEach((s) => {
             oldServersMap.set(`${s.name}-${s.protocol}-${s.address}-${s.port}`, s);
           });
 
@@ -199,19 +211,24 @@ export function registerSubscriptionHandlers(
             const key = `${newServer.name}-${newServer.protocol}-${newServer.address}-${newServer.port}`;
             if (oldServersMap.has(key)) {
               const old = oldServersMap.get(key)!;
-              newServersToKeep.push({ ...newServer, id: old.id, createdAt: old.createdAt, updatedAt: new Date().toISOString() });
+              newServersToKeep.push({
+                ...newServer,
+                id: old.id,
+                createdAt: old.createdAt,
+                updatedAt: new Date().toISOString(),
+              });
               oldServersMap.delete(key);
             } else {
               newServersToKeep.push(newServer);
             }
           }
 
-          const deletedIds = new Set(Array.from(oldServersMap.values()).map(s => s.id));
+          const deletedIds = new Set(Array.from(oldServersMap.values()).map((s) => s.id));
           if (config.selectedServerId && deletedIds.has(config.selectedServerId)) {
             config.selectedServerId = null;
           }
 
-          const otherServers = config.servers.filter(s => s.subscriptionId !== subscription.id);
+          const otherServers = config.servers.filter((s) => s.subscriptionId !== subscription.id);
           config.servers = [...otherServers, ...newServersToKeep];
           subscription.lastUpdated = new Date().toISOString();
           if (result.userInfo) subscription.userInfo = result.userInfo;

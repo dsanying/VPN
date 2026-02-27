@@ -27,7 +27,7 @@ export function registerLogHandlers(logManager: LogManager, proxyManager?: Proxy
   registerIpcHandler<void, void>(IPC_CHANNELS.LOGS_CLEAR, async (_event: IpcMainInvokeEvent) => {
     // 清空应用日志（内存和文件）
     logManager.clearLogs();
-    
+
     // 同时清空 sing-box 日志文件
     if (proxyManager) {
       await proxyManager.clearSingBoxLogFile();

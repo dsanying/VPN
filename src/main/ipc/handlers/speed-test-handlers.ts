@@ -48,7 +48,7 @@ export function registerSpeedTestHandlers(configManager: ConfigManager): void {
 
           // 连接成功，记录耗时
           results[server.id] = Date.now() - start;
-        } catch (error) {
+        } catch {
           // 连接失败或超时，记录为 -1
           results[server.id] = -1;
         }
