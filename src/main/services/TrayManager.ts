@@ -252,9 +252,8 @@ export class TrayManager implements ITrayManager {
         const name = server.name || server.address;
         const protocol = (server.protocol || '').toUpperCase();
         const latency = this.speedTestResults.get(server.id);
-        const latencyStr = latency !== undefined
-          ? (latency !== null ? ` [${latency}ms]` : ' [超时]')
-          : '';
+        const latencyStr =
+          latency !== undefined ? (latency !== null ? ` [${latency}ms]` : ' [超时]') : '';
         let label = `${name}（${protocol}）${latencyStr}`;
 
         if (label.length > maxLabelLength) {
@@ -448,11 +447,11 @@ export class TrayManager implements ITrayManager {
       // 或者直接修改 index.ts 中的逻辑。
       // 为了解耦，我们通过 mainWindow 发送一个特殊的事件
       this.mainWindow.webContents.send('lightweight-mode-active');
-      
+
       // 实际上，最简单的办法是：
       // 我们在 index.ts 中增加一个导出方法 forceCloseWindow()，或者
       // 我们在 window 对象上附加一个属性。
-      
+
       // 但由于架构限制，我们这里采用一种变通方法：
       // 我们使用 destroy() 来强制关闭，但这会跳过 beforeunload 等事件。
       // 对于轻量模式，我们确实希望彻底释放资源。
@@ -581,7 +580,7 @@ export class TrayManager implements ITrayManager {
     this.updateTrayMenu(this.isProxyRunning);
 
     const resultList = servers
-      .map(s => ({
+      .map((s) => ({
         name: s.name || s.address,
         protocol: (s.protocol || '').toUpperCase(),
         latency: results.get(s.id) ?? null,

@@ -87,17 +87,23 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
   useEffect(() => {
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'shadowsocks') {
       const hasShadowTls = !!serverConfig.shadowTlsSettings;
-      
+
       let method = serverConfig.shadowsocksSettings?.method?.toLowerCase() || 'aes-256-gcm';
       // Normalize common alias
       if (method === 'chacha20-poly1305') {
         method = 'chacha20-ietf-poly1305';
       }
-      
-      // Attempt to find exact match in COMMON_METHODS to prevent blank selection
-      const matchedMethod = COMMON_METHODS.find(m => m.toLowerCase() === method.trim()) || method.trim();
 
-      console.log('--- SS FORM DBG ---', { original: serverConfig.shadowsocksSettings?.method, lowered: method, matchedMethod, length: matchedMethod.length });
+      // Attempt to find exact match in COMMON_METHODS to prevent blank selection
+      const matchedMethod =
+        COMMON_METHODS.find((m) => m.toLowerCase() === method.trim()) || method.trim();
+
+      console.log('--- SS FORM DBG ---', {
+        original: serverConfig.shadowsocksSettings?.method,
+        lowered: method,
+        matchedMethod,
+        length: matchedMethod.length,
+      });
 
       form.reset({
         address: serverConfig.address || '',
@@ -306,7 +312,11 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                   <FormItem>
                     <FormLabel>Shadow-TLS 密码</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Shadow-TLS v3 密码（与 SS 密码不同）" {...field} />
+                      <Input
+                        type="password"
+                        placeholder="Shadow-TLS v3 密码（与 SS 密码不同）"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -328,7 +338,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="shadowTlsPort"

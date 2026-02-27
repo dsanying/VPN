@@ -123,9 +123,9 @@ export function AboutSettings() {
     try {
       setCheckingUpdate(true);
       toast.info('正在检查更新...');
-      
+
       const response = await checkForUpdates();
-      
+
       if (!response || !response.success) {
         toast.error('检查更新失败', {
           description: response?.error || '无法连接到更新服务器',
@@ -168,9 +168,9 @@ export function AboutSettings() {
     try {
       setCheckingCoreUpdate(true);
       toast.info('正在检查核心更新...');
-      
+
       const response = await checkCoreUpdate();
-      
+
       if (!response || !response.success) {
         toast.error('检查核心更新失败', {
           description: response?.error || '无法连接到更新服务器',
@@ -192,7 +192,7 @@ export function AboutSettings() {
           duration: 15000,
         });
       } else if (data.error) {
-         toast.error('检查核心更新失败', { description: data.error });
+        toast.error('检查核心更新失败', { description: data.error });
       } else {
         toast.success('核心已是最新版本', { description: `当前版本: ${data.currentVersion}` });
       }
@@ -200,7 +200,7 @@ export function AboutSettings() {
       console.error('Failed to check for core updates:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast.error('检查核心更新失败', {
-        description: errorMessage || '未知错误'
+        description: errorMessage || '未知错误',
       });
     } finally {
       setCheckingCoreUpdate(false);
@@ -210,10 +210,12 @@ export function AboutSettings() {
   const handleUpdateCore = async (downloadUrl: string, version: string) => {
     try {
       setUpdatingCore(true);
-      toast.info(`正在更新核心至 ${version}...`, { description: '请勿关闭应用，代理服务可能会暂时中断' });
-      
+      toast.info(`正在更新核心至 ${version}...`, {
+        description: '请勿关闭应用，代理服务可能会暂时中断',
+      });
+
       const response = await updateCore(downloadUrl);
-      
+
       if (response && response.success && response.data) {
         toast.success('核心更新成功', { description: '新核心已生效' });
         // 重新加载版本信息
@@ -222,7 +224,9 @@ export function AboutSettings() {
         toast.error('核心更新失败', { description: response?.error || '未知错误' });
       }
     } catch (error) {
-      toast.error('核心更新失败', { description: error instanceof Error ? error.message : String(error) });
+      toast.error('核心更新失败', {
+        description: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setUpdatingCore(false);
     }
@@ -268,13 +272,15 @@ export function AboutSettings() {
             <h4 className="text-sm font-medium text-muted-foreground">sing-box 版本</h4>
             <div className="flex items-center gap-4">
               <p className="text-lg font-semibold">{versionInfo?.singBoxVersion || 'Unknown'}</p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleCheckCoreUpdate} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCheckCoreUpdate}
                 disabled={checkingCoreUpdate || updatingCore}
               >
-                {(checkingCoreUpdate || updatingCore) && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                {(checkingCoreUpdate || updatingCore) && (
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                )}
                 {updatingCore ? '更新中...' : checkingCoreUpdate ? '检查中...' : '检查更新'}
               </Button>
             </div>

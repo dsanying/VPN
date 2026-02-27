@@ -54,20 +54,23 @@ function App() {
 
   // Listen to speed test results
   useEffect(() => {
-    const unsubscribe = ipcClient.on<Array<{ name: string; protocol: string; latency: number | null }>>(
-      'speedTestResult',
-      (results) => {
-        const message = results
-          .map((r) => (r.latency !== null ? `${r.name}（${r.protocol}）: ${r.latency}ms` : `${r.name}（${r.protocol}）: 超时`))
-          .join('\n');
+    const unsubscribe = ipcClient.on<
+      Array<{ name: string; protocol: string; latency: number | null }>
+    >('speedTestResult', (results) => {
+      const message = results
+        .map((r) =>
+          r.latency !== null
+            ? `${r.name}（${r.protocol}）: ${r.latency}ms`
+            : `${r.name}（${r.protocol}）: 超时`
+        )
+        .join('\n');
 
-        toast.info('测速结果', {
-          description: message,
-          duration: 10000,
-          style: { whiteSpace: 'pre-line' },
-        });
-      }
-    );
+      toast.info('测速结果', {
+        description: message,
+        duration: 10000,
+        style: { whiteSpace: 'pre-line' },
+      });
+    });
 
     return () => unsubscribe();
   }, []);

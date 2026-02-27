@@ -31,8 +31,20 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Plus, Edit, Trash2, Server, ChevronDown, Link, Copy, Activity,
-  LayoutGrid, List, Search, ArrowUpDown, CheckSquare, Square,
+  Plus,
+  Edit,
+  Trash2,
+  Server,
+  ChevronDown,
+  Link,
+  Copy,
+  Activity,
+  LayoutGrid,
+  List,
+  Search,
+  ArrowUpDown,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { ImportUrlDialog } from './import-url-dialog';
 import { generateShareUrl } from '@/bridge/api-wrapper';
@@ -77,7 +89,7 @@ export function ServerList({
   // 记住用户的视图偏好
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('flowz_server_view_mode');
-    return (saved === 'card' || saved === 'list') ? saved : 'card';
+    return saved === 'card' || saved === 'list' ? saved : 'card';
   });
 
   useEffect(() => {
@@ -129,7 +141,11 @@ export function ServerList({
 
   const handleDelete = (serverId: string) => {
     onDeleteServer(serverId);
-    setSelectedIds((prev) => { const s = new Set(prev); s.delete(serverId); return s; });
+    setSelectedIds((prev) => {
+      const s = new Set(prev);
+      s.delete(serverId);
+      return s;
+    });
   };
 
   const handleBatchDelete = () => {
@@ -161,7 +177,11 @@ export function ServerList({
     e.stopPropagation();
     setSelectedIds((prev) => {
       const s = new Set(prev);
-      if (s.has(id)) { s.delete(id); } else { s.add(id); }
+      if (s.has(id)) {
+        s.delete(id);
+      } else {
+        s.add(id);
+      }
       return s;
     });
   };
@@ -185,7 +205,7 @@ export function ServerList({
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.address.toLowerCase().includes(q) ||
-          s.protocol.toLowerCase().includes(q),
+          s.protocol.toLowerCase().includes(q)
       );
     }
 
@@ -229,7 +249,9 @@ export function ServerList({
   const renderActions = (server: ServerConfigWithId, stopPropagation = true) => (
     <div className="flex items-center gap-1 flex-shrink-0">
       {latencyMap[server.id] !== undefined && (
-        <span className={`text-xs font-medium mr-1 px-1.5 py-0.5 rounded ${getLatencyColor(latencyMap[server.id])} ${getLatencyBg(latencyMap[server.id])}`}>
+        <span
+          className={`text-xs font-medium mr-1 px-1.5 py-0.5 rounded ${getLatencyColor(latencyMap[server.id])} ${getLatencyBg(latencyMap[server.id])}`}
+        >
           {latencyMap[server.id] === -1 ? '超时' : `${latencyMap[server.id]} ms`}
         </span>
       )}
@@ -262,7 +284,9 @@ export function ServerList({
             size="sm"
             className="h-7 w-7 p-0"
             disabled={!!server.subscriptionId}
-            onClick={(e) => { if (stopPropagation) e.stopPropagation(); }}
+            onClick={(e) => {
+              if (stopPropagation) e.stopPropagation();
+            }}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
@@ -277,7 +301,10 @@ export function ServerList({
           <AlertDialogFooter>
             <AlertDialogCancel onClick={(e) => e.stopPropagation()}>取消</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.stopPropagation(); handleDelete(server.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(server.id);
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               删除
@@ -289,7 +316,7 @@ export function ServerList({
   );
 
   const deletableSelected = Array.from(selectedIds).filter(
-    (id) => !servers.find((s) => s.id === id)?.subscriptionId,
+    (id) => !servers.find((s) => s.id === id)?.subscriptionId
   );
 
   return (
@@ -392,7 +419,9 @@ export function ServerList({
           <SelectContent>
             <SelectItem value="all">全部协议</SelectItem>
             {ALL_PROTOCOLS.map((p) => (
-              <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+              <SelectItem key={p} value={p}>
+                {p.toUpperCase()}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -405,7 +434,14 @@ export function ServerList({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {([['name', '名称'], ['protocol', '协议'], ['latency', '延迟'], ['address', '地址']] as [SortKey, string][]).map(([key, label]) => (
+            {(
+              [
+                ['name', '名称'],
+                ['protocol', '协议'],
+                ['latency', '延迟'],
+                ['address', '地址'],
+              ] as [SortKey, string][]
+            ).map(([key, label]) => (
               <DropdownMenuItem
                 key={key}
                 onClick={() => {
@@ -421,7 +457,12 @@ export function ServerList({
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => { setSortKey('name'); setSortOrder('asc'); }}>
+            <DropdownMenuItem
+              onClick={() => {
+                setSortKey('name');
+                setSortOrder('asc');
+              }}
+            >
               重置排序
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -436,9 +477,11 @@ export function ServerList({
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
               onClick={toggleSelectAll}
             >
-              {selectedIds.size === filteredServers.length && filteredServers.length > 0
-                ? <CheckSquare className="h-4 w-4" />
-                : <Square className="h-4 w-4" />}
+              {selectedIds.size === filteredServers.length && filteredServers.length > 0 ? (
+                <CheckSquare className="h-4 w-4" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
               全选
             </button>
             <span className="text-sm text-muted-foreground">
@@ -462,7 +505,8 @@ export function ServerList({
                 <AlertDialogHeader>
                   <AlertDialogTitle>批量删除</AlertDialogTitle>
                   <AlertDialogDescription>
-                    确定删除已选中的 {deletableSelected.length} 个手动添加的节点吗？订阅节点不会被删除。此操作无法撤销。
+                    确定删除已选中的 {deletableSelected.length}{' '}
+                    个手动添加的节点吗？订阅节点不会被删除。此操作无法撤销。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -487,7 +531,9 @@ export function ServerList({
             <Server className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-2">
               {servers.length === 0
-                ? showAddButton ? '暂无服务器配置' : '暂无节点'
+                ? showAddButton
+                  ? '暂无服务器配置'
+                  : '暂无节点'
                 : '没有匹配的节点'}
             </h3>
             <p className="text-sm text-muted-foreground mb-4 text-center">
@@ -526,7 +572,11 @@ export function ServerList({
                   ? 'ring-2 ring-primary bg-primary/5'
                   : 'hover:bg-muted/50'
               } ${isSelecting && selectedIds.has(server.id) ? 'ring-2 ring-blue-400 bg-blue-50/10' : ''}`}
-              onClick={() => isSelecting ? toggleSelect(server.id, { stopPropagation: () => {} } as any) : onSelectServer(server.id)}
+              onClick={() =>
+                isSelecting
+                  ? toggleSelect(server.id, { stopPropagation: () => {} } as any)
+                  : onSelectServer(server.id)
+              }
             >
               {/* 批量选择 checkbox */}
               {isSelecting && (
@@ -536,7 +586,11 @@ export function ServerList({
                     onCheckedChange={() => {
                       setSelectedIds((prev) => {
                         const s = new Set(prev);
-                        if (s.has(server.id)) { s.delete(server.id); } else { s.add(server.id); }
+                        if (s.has(server.id)) {
+                          s.delete(server.id);
+                        } else {
+                          s.add(server.id);
+                        }
                         return s;
                       });
                     }}
@@ -554,14 +608,23 @@ export function ServerList({
                   {!isSelecting && renderActions(server)}
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1">
-                  <Badge className={`text-xs h-4 px-1 border ${getProtocolBadgeVariant(server.protocol)}`}>
+                  <Badge
+                    className={`text-xs h-4 px-1 border ${getProtocolBadgeVariant(server.protocol)}`}
+                  >
                     {server.protocol.toUpperCase()}
                   </Badge>
                   {selectedServerId === server.id && (
-                    <Badge variant="outline" className="text-xs h-4 px-1">当前选中</Badge>
+                    <Badge variant="outline" className="text-xs h-4 px-1">
+                      当前选中
+                    </Badge>
                   )}
                   {server.shadowTlsSettings && (
-                    <Badge variant="outline" className="text-xs h-4 px-1 text-teal-600 border-teal-300/50">+ST</Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-xs h-4 px-1 text-teal-600 border-teal-300/50"
+                    >
+                      +ST
+                    </Badge>
                   )}
                 </div>
               </CardHeader>
@@ -591,7 +654,15 @@ export function ServerList({
               } ${isSelecting && selectedIds.has(server.id) ? 'bg-blue-50/10' : ''}`}
               onClick={() => {
                 if (isSelecting) {
-                  setSelectedIds((prev) => { const s = new Set(prev); if (s.has(server.id)) { s.delete(server.id); } else { s.add(server.id); } return s; });
+                  setSelectedIds((prev) => {
+                    const s = new Set(prev);
+                    if (s.has(server.id)) {
+                      s.delete(server.id);
+                    } else {
+                      s.add(server.id);
+                    }
+                    return s;
+                  });
                 } else {
                   onSelectServer(server.id);
                 }
@@ -602,7 +673,15 @@ export function ServerList({
                 <Checkbox
                   checked={selectedIds.has(server.id)}
                   onCheckedChange={() => {
-                    setSelectedIds((prev) => { const s = new Set(prev); if (s.has(server.id)) { s.delete(server.id); } else { s.add(server.id); } return s; });
+                    setSelectedIds((prev) => {
+                      const s = new Set(prev);
+                      if (s.has(server.id)) {
+                        s.delete(server.id);
+                      } else {
+                        s.add(server.id);
+                      }
+                      return s;
+                    });
                   }}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -610,28 +689,41 @@ export function ServerList({
 
               {/* 选中指示器 */}
               {!isSelecting && (
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  selectedServerId === server.id ? 'bg-primary' : 'bg-transparent'
-                }`} />
+                <div
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    selectedServerId === server.id ? 'bg-primary' : 'bg-transparent'
+                  }`}
+                />
               )}
 
               {/* 名称 + 地址 */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium truncate">{server.name}</span>
-                  <Badge className={`text-[10px] h-4 px-1 flex-shrink-0 border ${getProtocolBadgeVariant(server.protocol)}`}>
+                  <Badge
+                    className={`text-[10px] h-4 px-1 flex-shrink-0 border ${getProtocolBadgeVariant(server.protocol)}`}
+                  >
                     {server.protocol.toUpperCase()}
                   </Badge>
                   {server.shadowTlsSettings && (
-                    <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0 text-teal-600 border-teal-300/50">+ST</Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] h-4 px-1 flex-shrink-0 text-teal-600 border-teal-300/50"
+                    >
+                      +ST
+                    </Badge>
                   )}
                   {selectedServerId === server.id && (
-                    <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">当前</Badge>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">
+                      当前
+                    </Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {server.address}:{server.port}
-                  {server.network && server.network !== 'tcp' && <span className="ml-2">{server.network}</span>}
+                  {server.network && server.network !== 'tcp' && (
+                    <span className="ml-2">{server.network}</span>
+                  )}
                 </p>
               </div>
 

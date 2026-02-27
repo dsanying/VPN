@@ -77,16 +77,16 @@ export interface ShadowsocksSettings {
 // AnyTLS 协议设置
 export interface AnyTlsSettings {
   idleSessionCheckInterval?: string; // e.g. '30s'
-  idleSessionTimeout?: string;       // e.g. '30s'
-  minIdleSession?: number;           // default 0
+  idleSessionTimeout?: string; // e.g. '30s'
+  minIdleSession?: number; // default 0
 }
 
 // Shadow-TLS 插件设置（套在 SS/其他协议外层，版本固定 v3）
 export interface ShadowTlsSettings {
-  password: string;       // Shadow-TLS v3 密码
-  sni: string;            // 伪装的目标域名
-  fingerprint?: string;   // uTLS 指纹，默认 chrome
-  port?: number;          // Shadow-TLS 监听/转发的真实端口 (可选)
+  password: string; // Shadow-TLS v3 密码
+  sni: string; // 伪装的目标域名
+  fingerprint?: string; // uTLS 指纹，默认 chrome
+  port?: number; // Shadow-TLS 监听/转发的真实端口 (可选)
 }
 
 // ============================================================================
@@ -102,10 +102,10 @@ export interface SubscriptionConfig {
   createdAt: string;
   // 订阅流量/到期信息（从 Subscription-UserInfo header 解析）
   userInfo?: {
-    upload?: number;   // 已上传字节
+    upload?: number; // 已上传字节
     download?: number; // 已下载字节
-    total?: number;    // 总流量字节
-    expire?: number;   // 到期时间（Unix timestamp）
+    total?: number; // 总流量字节
+    expire?: number; // 到期时间（Unix timestamp）
   };
 }
 
@@ -194,8 +194,8 @@ export interface TunModeConfig {
 
 // DNS 配置
 export interface DnsConfig {
-  domesticDns: string;   // 国内 DNS，默认 https://doh.pub/dns-query
-  foreignDns: string;    // 海外 DNS，默认 https://dns.google/dns-query
+  domesticDns: string; // 国内 DNS，默认 https://doh.pub/dns-query
+  foreignDns: string; // 海外 DNS，默认 https://dns.google/dns-query
   enableFakeIp: boolean; // 是否启用 FakeIP（TUN 模式）
 }
 
@@ -203,12 +203,11 @@ export interface DnsConfig {
 export interface CustomRuleSet {
   id: string;
   name: string;
-  url: string;           // 规则集 URL（.srs 或 .json）
+  url: string; // 规则集 URL（.srs 或 .json）
   action: 'proxy' | 'direct' | 'block';
   enabled: boolean;
   addedAt: string;
 }
-
 
 // ============================================================================
 // 用户配置

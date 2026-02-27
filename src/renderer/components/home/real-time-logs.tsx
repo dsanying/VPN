@@ -49,7 +49,9 @@ export function RealTimeLogs() {
 
   // 获取滚动元素
   const getScrollElement = useCallback(() => {
-    return scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    return scrollAreaRef.current?.querySelector(
+      '[data-radix-scroll-area-viewport]'
+    ) as HTMLElement | null;
   }, []);
 
   // 检查是否在底部
@@ -146,10 +148,7 @@ export function RealTimeLogs() {
         </div>
       </CardHeader>
       <CardContent>
-        <ScrollArea
-          ref={scrollAreaRef}
-          className="h-64 w-full rounded border bg-muted/30 p-3"
-        >
+        <ScrollArea ref={scrollAreaRef} className="h-64 w-full rounded border bg-muted/30 p-3">
           {logs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               {connectionStatus?.proxyCore?.running ? '等待日志输出...' : '请先启动代理服务'}

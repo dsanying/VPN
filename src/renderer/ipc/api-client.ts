@@ -412,13 +412,13 @@ export interface UpdateInfo {
  */
 export interface UpdateProgress {
   status:
-  | 'idle'
-  | 'checking'
-  | 'no-update'
-  | 'update-available'
-  | 'downloading'
-  | 'downloaded'
-  | 'error';
+    | 'idle'
+    | 'checking'
+    | 'no-update'
+    | 'update-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error';
   percentage: number;
   message: string;
   error?: string;
@@ -513,7 +513,9 @@ export const subscriptionApi = {
   /**
    * 添加订阅
    */
-  async add(subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'>): Promise<SubscriptionConfig> {
+  async add(
+    subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'>
+  ): Promise<SubscriptionConfig> {
     return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_ADD, { subscription });
   },
 
@@ -534,15 +536,15 @@ export const subscriptionApi = {
   /**
    * 触发订阅节点更新
    */
-  async updateServers(subscriptionId: string): Promise<{ 
-    success: boolean; 
-    addedServers: number; 
-    updatedServers: number; 
-    deletedServers: number; 
+  async updateServers(subscriptionId: string): Promise<{
+    success: boolean;
+    addedServers: number;
+    updatedServers: number;
+    deletedServers: number;
     error?: string;
   }> {
     return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_UPDATE_SERVERS, { subscriptionId });
-  }
+  },
 };
 
 /**

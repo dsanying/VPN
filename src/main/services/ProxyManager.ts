@@ -29,10 +29,10 @@ const PRIVATE_IP_CIDRS = [
   '224.0.0.0/4',
   '240.0.0.0/4',
   // IPv6 私有地址
-  '::1/128',           // loopback
-  'fc00::/7',          // unique local address (ULA)
-  'fe80::/10',         // link-local
-  'ff00::/8',          // multicast
+  '::1/128', // loopback
+  'fc00::/7', // unique local address (ULA)
+  'fe80::/10', // link-local
+  'ff00::/8', // multicast
 ];
 
 /**
@@ -496,8 +496,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 系统代理模式下检查 pid（直接启动的进程 PID）
     // 注意：TUN 模式下 this.pid 是 osascript/PowerShell 的 PID，不是 sing-box 的
     const isTunMode = this.currentConfig?.proxyModeType === 'tun';
-    const activePid = isTunMode ? this.singboxPid : (this.singboxPid || this.pid);
-    
+    const activePid = isTunMode ? this.singboxPid : this.singboxPid || this.pid;
+
     // 验证进程是否真正存活
     const isRunning = activePid !== null && this.isProcessAlive(activePid);
 
@@ -532,7 +532,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       const { exec } = require('child_process');
       const util = require('util');
       const execAsync = util.promisify(exec);
-      
+
       const { stdout } = await execAsync(`"${this.singboxPath}" version`);
       // 输出示例: sing-box version 1.8.0 ...
       const match = stdout.match(/version\s+(\S+)/);
@@ -610,7 +610,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     const isTunMode = config.proxyModeType?.toLowerCase() !== 'systemproxy';
     const isMacTunMode = process.platform === 'darwin' && isTunMode;
     const isWindowsTunMode = process.platform === 'win32' && isTunMode;
-    
+
     if (isMacTunMode || isWindowsTunMode) {
       logConfig.output = this.getLogFilePath();
     }
@@ -646,12 +646,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
   private generateDnsConfig(config: UserConfig, selectedServer: ServerConfig): SingBoxDnsConfig {
     const proxyMode = (config.proxyMode || 'smart').toLowerCase();
-    
+
     // 获取用户 DNS 配置，不存在则使用默认值
     const userDnsConfig = config.dnsConfig || {
       domesticDns: 'https://doh.pub/dns-query',
       foreignDns: 'https://dns.google/dns-query',
-      enableFakeIp: false
+      enableFakeIp: false,
     };
 
     const isTunMode = config.proxyModeType?.toLowerCase() !== 'systemproxy';
@@ -670,7 +670,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           tag: 'dns-domestic',
           address: userDnsConfig.domesticDns,
           address_resolver: 'dns-local',
-          detour: 'direct'
+          detour: 'direct',
         },
         {
           // 远程 DNS：通过代理查询，用于解析国外域名（支持修改）
@@ -708,32 +708,30 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 智能分流/全局代理模式下的 DNS 规则
     if (proxyMode === 'smart' || proxyMode === 'global') {
-       if (proxyMode === 'smart') {
-         // 国内域名走国内 DNS
-         dnsRules.push({
-           rule_set: 'geosite-cn',
-           server: 'dns-domestic',
-         } as SingBoxDnsRule);
+      if (proxyMode === 'smart') {
+        // 国内域名走国内 DNS
+        dnsRules.push({
+          rule_set: 'geosite-cn',
+          server: 'dns-domestic',
+        } as SingBoxDnsRule);
 
-         // 国外域名走远程 DNS，如果开启 FakeIP，走 fakeip 服务器进行劫持
-         dnsRules.push({
-           rule_set: 'geosite-geolocation-!cn',
-           server: enableFakeIp ? 'fakeip' : 'dns-remote',
-         } as SingBoxDnsRule);
-       } else {
-         // Global 模式
-         dnsRules.push({
-           query_type: ['A', 'AAAA'], 
-           server: enableFakeIp ? 'fakeip' : 'dns-remote'
-         } as SingBoxDnsRule);
-       }
+        // 国外域名走远程 DNS，如果开启 FakeIP，走 fakeip 服务器进行劫持
+        dnsRules.push({
+          rule_set: 'geosite-geolocation-!cn',
+          server: enableFakeIp ? 'fakeip' : 'dns-remote',
+        } as SingBoxDnsRule);
+      } else {
+        // Global 模式
+        dnsRules.push({
+          query_type: ['A', 'AAAA'],
+          server: enableFakeIp ? 'fakeip' : 'dns-remote',
+        } as SingBoxDnsRule);
+      }
     }
 
     dnsConfig.rules = dnsRules;
     return dnsConfig;
   }
-
-
 
   /**
    * 生成 Inbound 配置（sing-box 1.12.x 格式）
@@ -780,7 +778,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         mtu: config.tunConfig?.mtu || 1400,
         auto_route: config.tunConfig?.autoRoute ?? true,
         // macOS 上不使用 strict_route，避免网络完全不通
-        strict_route: process.platform === 'darwin' ? false : (config.tunConfig?.strictRoute ?? true),
+        strict_route:
+          process.platform === 'darwin' ? false : (config.tunConfig?.strictRoute ?? true),
         // 关键修复：Windows 和 macOS 使用 gvisor stack
         // 原因：Windows 的 system stack 在处理流量嗅探时存在竞态条件，导致 TLS 握手超时
         // gvisor 是用户态网络栈，绕过内核 TUN 实现，消除竞态条件
@@ -823,7 +822,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     let currentServer = server;
     while (currentServer.detour) {
       if (visitedIds.has(currentServer.detour)) {
-        console.warn(`[ProxyManager] Detected proxy chain loop: ${currentServer.name} -> ${currentServer.detour}`);
+        console.warn(
+          `[ProxyManager] Detected proxy chain loop: ${currentServer.name} -> ${currentServer.detour}`
+        );
         break;
       }
 
@@ -852,13 +853,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     if (config) {
       // 1. 生成主选节点的 Outbound 及其前置节点
       const mainChain = this.getDetourChain(selectedServer, config.servers);
-      
+
       // 添加前置节点
       for (const detourServer of mainChain.reverse()) {
         const detourOutbound = this.generateProxyOutbound(detourServer);
         detourOutbound.tag = `proxy-${detourServer.id}`;
         // 避免重复添加
-        if (!outbounds.some(o => o.tag === detourOutbound.tag)) {
+        if (!outbounds.some((o) => o.tag === detourOutbound.tag)) {
           outbounds.push(detourOutbound);
         }
       }
@@ -886,7 +887,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           if (targetId === selectedServer.id) continue;
 
           // 查找目标服务器配置
-          const targetServer = config.servers.find(s => s.id === targetId);
+          const targetServer = config.servers.find((s) => s.id === targetId);
           if (!targetServer) continue;
 
           // 获取目标节点的前置链
@@ -897,7 +898,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             const detourOutbound = this.generateProxyOutbound(detourServer);
             detourOutbound.tag = `proxy-${detourServer.id}`;
             // 避免重复添加
-            if (!outbounds.some(o => o.tag === detourOutbound.tag)) {
+            if (!outbounds.some((o) => o.tag === detourOutbound.tag)) {
               outbounds.push(detourOutbound);
             }
           }
@@ -908,9 +909,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           if (targetServer.detour) {
             targetOutbound.detour = `proxy-${targetServer.detour}`;
           }
-          
+
           // 避免重复添加
-          if (!outbounds.some(o => o.tag === targetOutbound.tag)) {
+          if (!outbounds.some((o) => o.tag === targetOutbound.tag)) {
             outbounds.push(targetOutbound);
           }
         }
@@ -965,7 +966,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         // 主 outbound (原本的 shadowsocks) 必须作为应用的路由目标
         // 所以我们保留它为 proxy (shadowsocks)，但将其 detour 指向新增的 shadowtls outbound
         ob.detour = stlsTag;
-        
+
         // 当配置了 detour 后，sing-box 通常期望主 outbound 的 server/port 被忽略
         // 但为了规范，我们可以保留 shadowsocks 的原参数或统一指向实际伪装的地址
         // 在 ShadowTLS 架构中，外层负责 TLS 握手连接真实服务器地址，内层 SS 则是被保护的流量
@@ -1051,7 +1052,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // Shadowsocks 特定配置
     if (protocol === 'shadowsocks') {
       if (!server.shadowsocksSettings) {
-         throw new Error(`Shadowsocks server ${server.name} missing settings`);
+        throw new Error(`Shadowsocks server ${server.name} missing settings`);
       }
       outbound.method = server.shadowsocksSettings.method;
       outbound.password = server.shadowsocksSettings.password;
@@ -1100,7 +1101,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
 
     // 传输层配置（不适用于 hysteria2 和 anytls）
-    if (protocol !== 'hysteria2' && protocol !== 'anytls' && server.network && server.network !== 'tcp') {
+    if (
+      protocol !== 'hysteria2' &&
+      protocol !== 'anytls' &&
+      server.network &&
+      server.network !== 'tcp'
+    ) {
       outbound.transport = this.generateTransportConfig(server);
     }
 
@@ -1169,9 +1175,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 这样用户可以覆盖任何默认的分流行为
     // 仅在非直连模式下生效
     if (proxyMode !== 'direct') {
-      const { rules: customRules, ruleSets: customRuleSets } = this.generateCustomRules(config.customRules || [], config.customRuleSets || [], config.selectedServerId || undefined);
+      const { rules: customRules, ruleSets: customRuleSets } = this.generateCustomRules(
+        config.customRules || [],
+        config.customRuleSets || [],
+        config.selectedServerId || undefined
+      );
       rules.push(...customRules);
-      
+
       if (customRuleSets.length > 0) {
         if (!routeConfig.rule_set) {
           routeConfig.rule_set = [];
@@ -1194,7 +1204,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       rules.push({
         protocol: 'udp',
         port: 443,
-        action: 'reject', 
+        action: 'reject',
       });
 
       // 显式添加 Google 规则，确保其走代理 (防止被 IP 规则误判)
@@ -1264,9 +1274,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           tag: `geosite-${category}`,
           type: 'remote',
           format: 'binary',
-          url: category === 'category-ai'
-            ? 'https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-ai-!cn.srs'
-            : `https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-${category}.srs`,
+          url:
+            category === 'category-ai'
+              ? 'https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-ai-!cn.srs'
+              : `https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-${category}.srs`,
           download_detour: proxyMode !== 'direct' ? 'proxy' : undefined,
         } as any); // Type cast as necessary if SingBoxRuleSet interface doesn't match perfectly or update interface
       }
@@ -1298,7 +1309,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     customRules: import('../../shared/types').DomainRule[],
     customRuleSets: import('../../shared/types').CustomRuleSet[] = [],
     selectedServerId?: string
-  ): { rules: SingBoxRouteRule[], ruleSets: SingBoxRuleSet[] } {
+  ): { rules: SingBoxRouteRule[]; ruleSets: SingBoxRuleSet[] } {
     const rules: SingBoxRouteRule[] = [];
     const ruleSets: SingBoxRuleSet[] = [];
 
@@ -1315,7 +1326,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       for (const d of rule.domains) {
         if (d.startsWith('geosite:')) {
           const category = d.slice(8);
-           geositeTags.push(`geosite-${category}`);
+          geositeTags.push(`geosite-${category}`);
         } else {
           domainSuffix.push(d.startsWith('*.') ? d.slice(2) : d);
         }
@@ -1353,14 +1364,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         type: 'remote',
         format: 'binary',
         url: ruleSet.url,
-        download_detour: 'proxy' // 默认通过代理下载自定义规则集
+        download_detour: 'proxy', // 默认通过代理下载自定义规则集
       } as any);
 
       const singboxRule: SingBoxRouteRule = {
         action: 'route',
         rule_set: [tag],
       };
-      
+
       // 此处的 CustomRuleSet 只包含 action 而无 targetServerId，不过统一走 applyRuleAction 判断
       this.applyRuleAction(singboxRule, ruleSet.action, undefined, selectedServerId);
       rules.push(singboxRule);
@@ -1378,8 +1389,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     targetServerId?: string,
     selectedServerId?: string
   ): void {
-     // 设置出站
-     if (action === 'proxy') {
+    // 设置出站
+    if (action === 'proxy') {
       // 如果指定了目标服务器，且不是主节点，则路由到特定的 outbound tag
       if (targetServerId && selectedServerId !== targetServerId) {
         singboxRule.outbound = `proxy-${targetServerId}`;
@@ -1475,7 +1486,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
                   fsSync.unlinkSync(filePath);
                   this.logToManager('info', `已删除需要重新创建的文件: ${filePath}`);
                 } catch {
-                  this.logToManager('warn', `无法修复文件权限: ${filePath}，请手动删除或运行: sudo chown ${currentUser} "${filePath}"`);
+                  this.logToManager(
+                    'warn',
+                    `无法修复文件权限: ${filePath}，请手动删除或运行: sudo chown ${currentUser} "${filePath}"`
+                  );
                 }
               }
             }
@@ -1545,7 +1559,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             "$pidFile = '" + pidFileEsc + "'",
             "$singboxPath = '" + singboxPathEsc + "'",
             "$configPath = '" + configPathEsc + "'",
-            "try {",
+            'try {',
             "  'Starting sing-box...' | Out-File -FilePath $logFile -Encoding UTF8",
             "  'SingboxPath: ' + $singboxPath | Out-File -FilePath $logFile -Append -Encoding UTF8",
             "  'ConfigPath: ' + $configPath | Out-File -FilePath $logFile -Append -Encoding UTF8",
@@ -1553,19 +1567,19 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             "  if (-not (Test-Path $configPath)) { 'ERROR: config not found' | Out-File -FilePath $logFile -Append -Encoding UTF8; exit 1 }",
             "  'Starting with UAC...' | Out-File -FilePath $logFile -Append -Encoding UTF8",
             "  $process = Start-Process -FilePath $singboxPath -ArgumentList 'run','-c',$configPath -Verb RunAs -PassThru -WindowStyle Hidden",
-            "  if ($process -and $process.Id) {",
+            '  if ($process -and $process.Id) {',
             "    'Process started PID: ' + $process.Id | Out-File -FilePath $logFile -Append -Encoding UTF8",
-            "    $process.Id | Out-File -FilePath $pidFile -Encoding ASCII -NoNewline",
-            "    exit 0",
-            "  } else {",
+            '    $process.Id | Out-File -FilePath $pidFile -Encoding ASCII -NoNewline',
+            '    exit 0',
+            '  } else {',
             "    'ERROR: Start-Process returned null' | Out-File -FilePath $logFile -Append -Encoding UTF8",
-            "    exit 1",
-            "  }",
-            "} catch {",
+            '    exit 1',
+            '  }',
+            '} catch {',
             "  'ERROR: ' + $_.Exception.Message | Out-File -FilePath $logFile -Append -Encoding UTF8",
-            "  exit 1",
-            "}"
-          ].join("; ");
+            '  exit 1',
+            '}',
+          ].join('; ');
 
           args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript];
           this.logToManager('info', 'TUN 模式需要管理员权限，正在请求 UAC 授权...');
@@ -1923,15 +1937,18 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     return new Promise((resolve) => {
       // 直接使用 PowerShell 以管理员权限执行 taskkill
       // sing-box 以 UAC 启动，必须用 UAC 权限才能终止
-      const psScript = "Start-Process -FilePath 'taskkill' -ArgumentList '/F','/PID','" + pidToKill.toString() + "' -Verb RunAs -Wait -WindowStyle Hidden";
+      const psScript =
+        "Start-Process -FilePath 'taskkill' -ArgumentList '/F','/PID','" +
+        pidToKill.toString() +
+        "' -Verb RunAs -Wait -WindowStyle Hidden";
 
-      const killProcess = spawn('powershell.exe', [
-        '-NoProfile',
-        '-ExecutionPolicy', 'Bypass',
-        '-Command', psScript
-      ], {
-        windowsHide: true,
-      });
+      const killProcess = spawn(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript],
+        {
+          windowsHide: true,
+        }
+      );
 
       killProcess.stderr?.on('data', (data) => {
         this.logToManager('warn', `taskkill stderr: ${data.toString()}`);
@@ -2037,7 +2054,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   /**
    * macOS: 清理残留的 sing-box 进程
    * 优化：排除当前正在管理的进程，避免误杀
-   * 
+   *
    * 注意：TUN 模式下 sing-box 以 root 权限运行，必须用 osascript 请求管理员权限才能终止
    */
   private async killOrphanedProcessesMac(): Promise<void> {
@@ -2069,7 +2086,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           return;
         }
 
-        this.logToManager('warn', `发现 ${pidList.length} 个残留的 sing-box 进程，正在清理: ${pidList.join(', ')}`);
+        this.logToManager(
+          'warn',
+          `发现 ${pidList.length} 个残留的 sing-box 进程，正在清理: ${pidList.join(', ')}`
+        );
 
         // TUN 模式下 sing-box 以 root 权限运行，必须用 osascript 请求管理员权限终止
         const killCmd = pidList.map((p) => `kill -9 ${p}`).join('; ');
@@ -2134,53 +2154,59 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   private async killOrphanedProcessesWindows(): Promise<void> {
     return new Promise((resolve) => {
       const { execSync } = require('child_process');
-      
+
       try {
         // 使用 wmic 获取所有 sing-box.exe 进程的 PID
-        const result = execSync('wmic process where "name=\'sing-box.exe\'" get ProcessId /format:list', {
-          encoding: 'utf-8',
-          windowsHide: true,
-          stdio: ['ignore', 'pipe', 'ignore']
-        });
-        
+        const result = execSync(
+          'wmic process where "name=\'sing-box.exe\'" get ProcessId /format:list',
+          {
+            encoding: 'utf-8',
+            windowsHide: true,
+            stdio: ['ignore', 'pipe', 'ignore'],
+          }
+        );
+
         // 解析 PID 列表
         const pidMatches = result.match(/ProcessId=(\d+)/g);
         if (!pidMatches || pidMatches.length === 0) {
           resolve();
           return;
         }
-        
+
         let pidList = pidMatches
           .map((m: string) => parseInt(m.replace('ProcessId=', ''), 10))
           .filter((p: number) => !isNaN(p) && p > 0);
-        
+
         // 排除当前正在管理的进程
         const currentPid = this.singboxPid || this.pid;
         if (currentPid) {
           pidList = pidList.filter((p: number) => p !== currentPid);
         }
-        
+
         if (pidList.length === 0) {
           resolve();
           return;
         }
-        
-        this.logToManager('warn', `发现 ${pidList.length} 个残留的 sing-box 进程，正在清理: ${pidList.join(', ')}`);
-        
+
+        this.logToManager(
+          'warn',
+          `发现 ${pidList.length} 个残留的 sing-box 进程，正在清理: ${pidList.join(', ')}`
+        );
+
         // 逐个终止进程
         for (const pid of pidList) {
           try {
             execSync(`taskkill /F /PID ${pid}`, {
               windowsHide: true,
-              stdio: 'ignore'
+              stdio: 'ignore',
             });
           } catch {
             // 忽略单个进程终止失败
           }
         }
-        
+
         this.logToManager('info', '残留进程已清理');
-        
+
         // 等待一小段时间让系统清理
         setTimeout(resolve, 500);
       } catch {
@@ -2192,29 +2218,29 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
   /**
    * 检查进程是否存活
-   * 
+   *
    * 统一使用系统命令检测进程，避免 Node.js process.kill(pid, 0) 在检测
    * 特权进程时的不可靠性（macOS/Windows TUN 模式下 sing-box 以管理员权限运行）
    */
   private isProcessAlive(pid: number): boolean {
     try {
       const { execSync } = require('child_process');
-      
+
       if (process.platform === 'win32') {
         // Windows: 使用 tasklist 检测进程
         // /FI "PID eq xxx" 过滤指定 PID，/NH 不显示表头
-        const result = execSync(`tasklist /FI "PID eq ${pid}" /NH`, { 
+        const result = execSync(`tasklist /FI "PID eq ${pid}" /NH`, {
           encoding: 'utf-8',
           windowsHide: true,
-          stdio: ['ignore', 'pipe', 'ignore']
+          stdio: ['ignore', 'pipe', 'ignore'],
         });
         // 如果进程存在，输出会包含进程信息；不存在则输出 "INFO: No tasks..."
         return !result.includes('No tasks') && result.includes(String(pid));
       } else {
         // macOS/Linux: 使用 ps 检测进程
-        const result = execSync(`ps -p ${pid} -o pid=`, { 
+        const result = execSync(`ps -p ${pid} -o pid=`, {
           encoding: 'utf-8',
-          stdio: ['ignore', 'pipe', 'ignore']
+          stdio: ['ignore', 'pipe', 'ignore'],
         });
         return result.trim() === String(pid);
       }
@@ -2262,7 +2288,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 系统代理模式下检查 pid（直接启动的进程 PID）
     // 注意：TUN 模式下 this.pid 是 osascript/PowerShell 的 PID，不是 sing-box 的
     const isTunMode = this.currentConfig?.proxyModeType === 'tun';
-    const activePid = isTunMode ? this.singboxPid : (this.singboxPid || this.pid);
+    const activePid = isTunMode ? this.singboxPid : this.singboxPid || this.pid;
 
     if (!activePid) {
       return;
@@ -2271,7 +2297,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     if (!this.isProcessAlive(activePid)) {
       // 尝试获取更多退出信息
       const exitInfo = this.getProcessExitInfo();
-      this.logToManager('error', `检测到 sing-box 进程 (PID: ${activePid}) 已意外退出${exitInfo ? `，${exitInfo}` : ''}`);
+      this.logToManager(
+        'error',
+        `检测到 sing-box 进程 (PID: ${activePid}) 已意外退出${exitInfo ? `，${exitInfo}` : ''}`
+      );
 
       // 清理资源（但不停止健康检查，因为可能要重启）
       this.singboxProcess = null;
@@ -2407,27 +2436,31 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    */
   private getProcessExitInfo(): string {
     const info: string[] = [];
-    
+
     try {
       const fsSync = require('fs');
       const logFilePath = this.getLogFilePath();
-      
+
       // 读取 sing-box 日志文件的最后几行
       if (fsSync.existsSync(logFilePath)) {
         const logContent = fsSync.readFileSync(logFilePath, 'utf-8');
         const lines = logContent.trim().split('\n');
         const lastLines = lines.slice(-10); // 最后 10 行
-        
+
         // 查找错误或警告信息
         for (const line of lastLines) {
           const lowerLine = line.toLowerCase();
-          if (lowerLine.includes('error') || lowerLine.includes('fatal') || 
-              lowerLine.includes('panic') || lowerLine.includes('failed')) {
+          if (
+            lowerLine.includes('error') ||
+            lowerLine.includes('fatal') ||
+            lowerLine.includes('panic') ||
+            lowerLine.includes('failed')
+          ) {
             info.push(`日志: ${line.substring(0, 200)}`);
           }
         }
       }
-      
+
       // macOS: 尝试从系统日志获取信息
       if (process.platform === 'darwin') {
         const { execSync } = require('child_process');
@@ -2447,13 +2480,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     } catch (error) {
       // 忽略诊断错误
     }
-    
+
     return info.length > 0 ? info.join('; ') : '';
   }
 
   /**
    * 等待 PID 文件被写入（macOS/Windows TUN 模式）
-   * 
+   *
    * 重要：在调用此方法前，必须先删除旧的 PID 文件，否则可能读到旧的 PID
    */
   private async waitForPidFile(): Promise<void> {
@@ -2509,15 +2542,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    */
   private async copyRuleSetsToUserData(): Promise<void> {
     const rulesDir = path.join(getUserDataPath(), 'rules');
-    
+
     // 确保目录存在
     try {
       if (!require('fs').existsSync(rulesDir)) {
         require('fs').mkdirSync(rulesDir, { recursive: true });
       }
     } catch (error) {
-       this.logToManager('error', `创建规则目录失败: ${error}`);
-       return;
+      this.logToManager('error', `创建规则目录失败: ${error}`);
+      return;
     }
 
     const filesToCopy = [
@@ -2527,11 +2560,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     ];
 
     const fs = require('fs/promises');
-    
+
     for (const file of filesToCopy) {
       try {
         const destPath = path.join(rulesDir, file.dest);
-        
+
         // 检查源文件是否存在
         if (!require('fs').existsSync(file.src)) {
           this.logToManager('warn', `源规则文件不存在: ${file.src}`);
@@ -2994,24 +3027,29 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   private async setSystemProxy(config: UserConfig): Promise<void> {
     const port = config.httpPort || 2080;
     const host = '127.0.0.1';
-    
+
     this.logToManager('info', `正在设置系统代理 (${host}:${port})...`);
 
     if (process.platform === 'win32') {
       try {
         const { exec } = require('child_process');
-        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
-          exec(cmd, (error: any) => {
-            if (error) reject(error);
-            else resolve(null);
+        const runCommand = (cmd: string) =>
+          new Promise((resolve, reject) => {
+            exec(cmd, (error: any) => {
+              if (error) reject(error);
+              else resolve(null);
+            });
           });
-        });
 
         // 启用代理
-        await runCommand(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 1 /f`);
+        await runCommand(
+          `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 1 /f`
+        );
         // 设置代理服务器
-        await runCommand(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /t REG_SZ /d "${host}:${port}" /f`);
-        
+        await runCommand(
+          `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /t REG_SZ /d "${host}:${port}" /f`
+        );
+
         this.logToManager('info', 'Windows 系统代理已设置');
       } catch (error) {
         this.logToManager('error', `设置 Windows 系统代理失败: ${error}`);
@@ -3019,26 +3057,29 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     } else if (process.platform === 'darwin') {
       try {
         const { exec } = require('child_process');
-        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
+        const runCommand = (cmd: string) =>
+          new Promise((resolve, reject) => {
             exec(cmd, (error: any) => {
-                if (error) reject(error);
-                else resolve(null);
+              if (error) reject(error);
+              else resolve(null);
             });
-        });
+          });
 
         const services = ['Wi-Fi', 'Ethernet', 'Thunderbolt Bridge'];
-        
+
         for (const service of services) {
-            try {
-                await runCommand(`networksetup -setwebproxy "${service}" ${host} ${port}`);
-                await runCommand(`networksetup -setsecurewebproxy "${service}" ${host} ${port}`);
-                await runCommand(`networksetup -setsocksfirewallproxy "${service}" ${host} ${port}`);
-                if (config.socksPort) {
-                     await runCommand(`networksetup -setsocksfirewallproxy "${service}" ${host} ${config.socksPort}`);
-                }
-            } catch (e) {
-                // ignore
+          try {
+            await runCommand(`networksetup -setwebproxy "${service}" ${host} ${port}`);
+            await runCommand(`networksetup -setsecurewebproxy "${service}" ${host} ${port}`);
+            await runCommand(`networksetup -setsocksfirewallproxy "${service}" ${host} ${port}`);
+            if (config.socksPort) {
+              await runCommand(
+                `networksetup -setsocksfirewallproxy "${service}" ${host} ${config.socksPort}`
+              );
             }
+          } catch (e) {
+            // ignore
+          }
         }
         this.logToManager('info', 'macOS 系统代理已设置');
       } catch (error) {
@@ -3056,38 +3097,42 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     if (process.platform === 'win32') {
       try {
         const { exec } = require('child_process');
-        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
-          exec(cmd, (error: any) => {
-            if (error) reject(error);
-            else resolve(null);
+        const runCommand = (cmd: string) =>
+          new Promise((resolve, reject) => {
+            exec(cmd, (error: any) => {
+              if (error) reject(error);
+              else resolve(null);
+            });
           });
-        });
 
         // 禁用代理
-        await runCommand(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`);
+        await runCommand(
+          `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`
+        );
         this.logToManager('info', 'Windows 系统代理已取消');
       } catch (error) {
-         this.logToManager('error', `取消 Windows 系统代理失败: ${error}`);
+        this.logToManager('error', `取消 Windows 系统代理失败: ${error}`);
       }
     } else if (process.platform === 'darwin') {
       try {
         const { exec } = require('child_process');
-        const runCommand = (cmd: string) => new Promise((resolve, reject) => {
+        const runCommand = (cmd: string) =>
+          new Promise((resolve, reject) => {
             exec(cmd, (error: any) => {
-                if (error) reject(error);
-                else resolve(null);
+              if (error) reject(error);
+              else resolve(null);
             });
-        });
+          });
 
         const services = ['Wi-Fi', 'Ethernet', 'Thunderbolt Bridge'];
         for (const service of services) {
-            try {
-                await runCommand(`networksetup -setwebproxystate "${service}" off`);
-                await runCommand(`networksetup -setsecurewebproxystate "${service}" off`);
-                await runCommand(`networksetup -setsocksfirewallproxystate "${service}" off`);
-            } catch (e) {
-                // Ignore
-            }
+          try {
+            await runCommand(`networksetup -setwebproxystate "${service}" off`);
+            await runCommand(`networksetup -setsecurewebproxystate "${service}" off`);
+            await runCommand(`networksetup -setsocksfirewallproxystate "${service}" off`);
+          } catch (e) {
+            // Ignore
+          }
         }
         this.logToManager('info', 'macOS 系统代理已取消');
       } catch (error) {

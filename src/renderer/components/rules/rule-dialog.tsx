@@ -37,17 +37,19 @@ import type { DomainRule, RuleAction } from '../../../shared/types';
 const domainRegex = /^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
 const ipCidrRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
 
-const ruleFormSchema = z.object({
-  domains: z.string().optional(),
-  ipCidr: z.string().optional(),
-  action: z.enum(['proxy', 'direct', 'block']),
-  enabled: z.boolean(),
-  bypassFakeIP: z.boolean(),
-  targetServerId: z.string().optional(),
-}).refine((data) => data.domains || data.ipCidr, {
-  message: "域名和 IP CIDR 不能同时为空",
-  path: ["domains"],
-});
+const ruleFormSchema = z
+  .object({
+    domains: z.string().optional(),
+    ipCidr: z.string().optional(),
+    action: z.enum(['proxy', 'direct', 'block']),
+    enabled: z.boolean(),
+    bypassFakeIP: z.boolean(),
+    targetServerId: z.string().optional(),
+  })
+  .refine((data) => data.domains || data.ipCidr, {
+    message: '域名和 IP CIDR 不能同时为空',
+    path: ['domains'],
+  });
 
 type RuleFormValues = z.infer<typeof ruleFormSchema>;
 
@@ -142,7 +144,8 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
         return;
       }
 
-      const targetServerId = values.targetServerId === 'default' ? undefined : values.targetServerId;
+      const targetServerId =
+        values.targetServerId === 'default' ? undefined : values.targetServerId;
 
       if (mode === 'add') {
         const newRule: DomainRule = {
@@ -190,47 +193,45 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="domains"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>域名</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder={`google.com\ngithub.com\nopenai.com`}
-                        className="min-h-[100px] font-mono text-sm"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      每行输入一个域名，会自动匹配该域名及其所有子域名
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="domains"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>域名</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder={`google.com\ngithub.com\nopenai.com`}
+                      className="min-h-[100px] font-mono text-sm"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    每行输入一个域名，会自动匹配该域名及其所有子域名
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              <FormField
-                control={form.control}
-                name="ipCidr"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>IP CIDR (可选)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder={`192.168.1.0/24\n10.0.0.0/8`}
-                        className="min-h-[80px] font-mono text-sm"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      每行输入一个 IP CIDR 网段
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="ipCidr"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>IP CIDR (可选)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder={`192.168.1.0/24\n10.0.0.0/8`}
+                      className="min-h-[80px] font-mono text-sm"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>每行输入一个 IP CIDR 网段</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -313,7 +314,8 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
                   <div className="space-y-1 leading-none">
                     <FormLabel>绕过 FakeIP</FormLabel>
                     <FormDescription>
-                      默认无需开启，不理解请保持关闭。仅用于解决 Cloudflare Tunnel 等应用的 QUIC 协议兼容性问题。
+                      默认无需开启，不理解请保持关闭。仅用于解决 Cloudflare Tunnel 等应用的 QUIC
+                      协议兼容性问题。
                     </FormDescription>
                   </div>
                 </FormItem>
@@ -330,9 +332,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
                 取消
               </Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {mode === 'add' ? '添加' : '保存'}
               </Button>
             </DialogFooter>

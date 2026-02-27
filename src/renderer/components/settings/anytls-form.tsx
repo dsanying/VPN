@@ -80,7 +80,7 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'anytls') {
       form.reset(getDefaultValues());
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverConfig]);
 
   const handleSubmit = async (values: AnyTlsFormValues) => {
@@ -196,7 +196,9 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
                   <FormControl>
                     <Input placeholder="example.com" {...field} />
                   </FormControl>
-                  <FormDescription>TLS Server Name Indication，留空则使用服务器地址</FormDescription>
+                  <FormDescription>
+                    TLS Server Name Indication，留空则使用服务器地址
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

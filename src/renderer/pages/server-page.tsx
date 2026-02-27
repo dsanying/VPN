@@ -94,7 +94,12 @@ export function ServerPage() {
       if (editingServer) {
         updatedServers = servers.map((s) =>
           s.id === editingServer.id
-            ? { ...serverData, id: editingServer.id, createdAt: editingServer.createdAt, updatedAt: now }
+            ? {
+                ...serverData,
+                id: editingServer.id,
+                createdAt: editingServer.createdAt,
+                updatedAt: now,
+              }
             : s
         );
       } else {
@@ -212,7 +217,12 @@ export function ServerPage() {
 
           {/* 右侧操作按钮（显示当前 Tab 对应的操作） */}
           <div className="flex gap-2 flex-shrink-0">
-            <Button size="sm" variant="outline" onClick={handleAddSubscription} className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAddSubscription}
+              className="flex items-center gap-1.5"
+            >
               <Plus className="h-4 w-4" />
               添加订阅
             </Button>
@@ -248,9 +258,8 @@ export function ServerPage() {
                       {sub.url}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      最后更新：{sub.lastUpdated
-                        ? new Date(sub.lastUpdated).toLocaleString('zh-CN')
-                        : '从未'}
+                      最后更新：
+                      {sub.lastUpdated ? new Date(sub.lastUpdated).toLocaleString('zh-CN') : '从未'}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
@@ -282,7 +291,8 @@ export function ServerPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>删除订阅</AlertDialogTitle>
                           <AlertDialogDescription>
-                            确定要删除订阅 "{sub.name}" 吗？这同时会删除该订阅下所有 {subServers.length} 个节点。此操作无法撤销。
+                            确定要删除订阅 "{sub.name}" 吗？这同时会删除该订阅下所有{' '}
+                            {subServers.length} 个节点。此操作无法撤销。
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

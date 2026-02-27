@@ -130,7 +130,10 @@ export function ServerConfigDialog({
 
           <div className="space-y-2">
             <Label>前置代理 (Proxy Chain)</Label>
-            <Select value={detour || 'direct'} onValueChange={(v) => setDetour(v === 'direct' ? undefined : v)}>
+            <Select
+              value={detour || 'direct'}
+              onValueChange={(v) => setDetour(v === 'direct' ? undefined : v)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="直连 (Direct)" />
               </SelectTrigger>
@@ -145,7 +148,9 @@ export function ServerConfigDialog({
                   ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">选择通过另一个代理服务器连接此节点（链式代理）</p>
+            <p className="text-sm text-muted-foreground">
+              选择通过另一个代理服务器连接此节点（链式代理）
+            </p>
           </div>
 
           <div className="border-t pt-6">

@@ -40,14 +40,16 @@ export class SpeedTestService {
     // 分批并发测试，避免资源耗尽
     for (let i = 0; i < servers.length; i += this.MAX_CONCURRENT) {
       const batch = servers.slice(i, i + this.MAX_CONCURRENT);
-      const batchResults = await Promise.all(
-        batch.map((server) => this.testServer(server))
-      );
+      const batchResults = await Promise.all(batch.map((server) => this.testServer(server)));
 
       batchResults.forEach((result) => {
         results.set(result.serverId, result.latency);
         if (result.error) {
-          this.logManager.addLog('warn', `测速失败 ${result.serverId}: ${result.error}`, 'SpeedTest');
+          this.logManager.addLog(
+            'warn',
+            `测速失败 ${result.serverId}: ${result.error}`,
+            'SpeedTest'
+          );
         }
       });
     }
@@ -117,7 +119,7 @@ export class SpeedTestService {
     if (protocol === 'vless') {
       outbound.uuid = server.uuid;
       outbound.flow = server.flow || '';
-      
+
       if (server.network) {
         outbound.transport = {
           type: server.network,
@@ -147,7 +149,7 @@ export class SpeedTestService {
       }
     } else if (protocol === 'hysteria2') {
       outbound.password = server.password;
-      
+
       if (server.hysteria2Settings?.obfs) {
         outbound.obfs = {
           type: server.hysteria2Settings.obfs.type,

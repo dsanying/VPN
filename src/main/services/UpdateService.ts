@@ -368,13 +368,17 @@ open "${installerPath}"
    */
   private updateProgressWindow(percentage: number, message: string): void {
     if (this.progressWindow && !this.progressWindow.isDestroyed()) {
-      this.progressWindow.webContents.executeJavaScript(`
+      this.progressWindow.webContents
+        .executeJavaScript(
+          `
         document.getElementById('progress-bar').style.width = '${percentage}%';
         document.getElementById('progress-text').textContent = '${message}';
         document.getElementById('progress-percent').textContent = '${percentage}%';
-      `).catch(() => {
-        // 忽略执行错误
-      });
+      `
+        )
+        .catch(() => {
+          // 忽略执行错误
+        });
     }
   }
 
@@ -498,7 +502,11 @@ open "${installerPath}"
         fs.unlinkSync(filePath);
       }
 
-      await this.downloadFileWithProgressWindow(updateInfo.downloadUrl, filePath, updateInfo.fileSize);
+      await this.downloadFileWithProgressWindow(
+        updateInfo.downloadUrl,
+        filePath,
+        updateInfo.fileSize
+      );
 
       this.logManager.addLog('info', `更新下载完成: ${filePath}`, 'UpdateService');
       this.updateProgressWindow(100, '下载完成');
@@ -532,7 +540,11 @@ open "${installerPath}"
   /**
    * 带进度窗口的文件下载
    */
-  private async downloadFileWithProgressWindow(url: string, destPath: string, totalSize: number): Promise<void> {
+  private async downloadFileWithProgressWindow(
+    url: string,
+    destPath: string,
+    totalSize: number
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const file = fs.createWriteStream(destPath);
       let downloadedBytes = 0;
@@ -639,18 +651,14 @@ open "${installerPath}"
 
     if (platform === 'win32') {
       // Windows: 查找 .exe 安装包
-      const winAsset = assets.find(
-        (a: any) => a.name.endsWith('.exe') && a.name.includes('win')
-      );
+      const winAsset = assets.find((a: any) => a.name.endsWith('.exe') && a.name.includes('win'));
       return winAsset || null;
     } else if (platform === 'darwin') {
       // macOS: 优先选择对应架构的 dmg
       const archPattern = arch === 'arm64' ? 'mac-arm64' : 'mac-x64';
 
       // 优先匹配精确架构
-      let asset = assets.find(
-        (a: any) => a.name.includes(archPattern) && a.name.endsWith('.dmg')
-      );
+      let asset = assets.find((a: any) => a.name.includes(archPattern) && a.name.endsWith('.dmg'));
 
       // 如果没找到，尝试通用 dmg
       if (!asset) {

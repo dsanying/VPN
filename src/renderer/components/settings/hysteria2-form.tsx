@@ -89,12 +89,13 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
       hysteria2Settings: {
         upMbps: values.upMbps || undefined,
         downMbps: values.downMbps || undefined,
-        obfs: values.obfsEnabled && values.obfsPassword
-          ? {
-              type: 'salamander',
-              password: values.obfsPassword,
-            }
-          : undefined,
+        obfs:
+          values.obfsEnabled && values.obfsPassword
+            ? {
+                type: 'salamander',
+                password: values.obfsPassword,
+              }
+            : undefined,
       },
     };
 

@@ -22,7 +22,12 @@ interface SubscriptionDialogProps {
   onSave: (subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'>) => Promise<void>;
 }
 
-export function SubscriptionDialog({ open, onOpenChange, subscription, onSave }: SubscriptionDialogProps) {
+export function SubscriptionDialog({
+  open,
+  onOpenChange,
+  subscription,
+  onSave,
+}: SubscriptionDialogProps) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(false);
@@ -57,11 +62,11 @@ export function SubscriptionDialog({ open, onOpenChange, subscription, onSave }:
       await onSave({
         name: name.trim(),
         url: url.trim(),
-        autoUpdate
+        autoUpdate,
       });
       onOpenChange(false);
     } catch (error) {
-       // Error is handled by api wrapper
+      // Error is handled by api wrapper
     } finally {
       setIsSaving(false);
     }
@@ -120,26 +125,28 @@ export function SubscriptionDialog({ open, onOpenChange, subscription, onSave }:
 
           {/* 流量和到期信息展示 */}
           {isEditing && subscription?.userInfo && (
-             <div className="bg-muted/50 rounded-lg p-3 text-sm flex flex-col gap-1.5 border">
-               <div className="flex items-center text-muted-foreground gap-1.5 mb-1">
-                 <Activity className="h-4 w-4" />
-                 <span className="font-medium text-foreground">套餐信息</span>
-               </div>
-               <div className="flex justify-between">
-                 <span>已用流量:</span>
-                 <span className="font-medium">
-                   {formatBytes((subscription.userInfo.upload || 0) + (subscription.userInfo.download || 0))}
-                 </span>
-               </div>
-               <div className="flex justify-between">
-                 <span>总流量:</span>
-                 <span className="font-medium">{formatBytes(subscription.userInfo.total)}</span>
-               </div>
-               <div className="flex justify-between">
-                 <span>到期时间:</span>
-                 <span className="font-medium">{formatDate(subscription.userInfo.expire)}</span>
-               </div>
-             </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-sm flex flex-col gap-1.5 border">
+              <div className="flex items-center text-muted-foreground gap-1.5 mb-1">
+                <Activity className="h-4 w-4" />
+                <span className="font-medium text-foreground">套餐信息</span>
+              </div>
+              <div className="flex justify-between">
+                <span>已用流量:</span>
+                <span className="font-medium">
+                  {formatBytes(
+                    (subscription.userInfo.upload || 0) + (subscription.userInfo.download || 0)
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>总流量:</span>
+                <span className="font-medium">{formatBytes(subscription.userInfo.total)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>到期时间:</span>
+                <span className="font-medium">{formatDate(subscription.userInfo.expire)}</span>
+              </div>
+            </div>
           )}
 
           <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
@@ -149,11 +156,7 @@ export function SubscriptionDialog({ open, onOpenChange, subscription, onSave }:
                 开启后，FlowZ 启动时会自动尝试更新订阅节点
               </div>
             </div>
-            <Switch
-              id="sub-auto-update"
-              checked={autoUpdate}
-              onCheckedChange={setAutoUpdate}
-            />
+            <Switch id="sub-auto-update" checked={autoUpdate} onCheckedChange={setAutoUpdate} />
           </div>
         </div>
         <DialogFooter>

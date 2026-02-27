@@ -46,7 +46,7 @@ export class SubscriptionService {
    */
   async fetchSubscription(
     url: string,
-    subscriptionId: string,
+    subscriptionId: string
   ): Promise<{ servers: ServerConfig[]; userInfo?: SubscriptionConfig['userInfo'] }> {
     try {
       this.logManager.addLog('info', `正在拉取订阅: ${url}`, 'Subscription');

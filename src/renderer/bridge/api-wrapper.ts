@@ -411,9 +411,7 @@ export async function addSubscription(
   }
 }
 
-export async function updateSubscription(
-  subscription: any
-): Promise<ApiResponse<void>> {
+export async function updateSubscription(subscription: any): Promise<ApiResponse<void>> {
   try {
     await api.subscription.update(subscription);
     ErrorHandler.showSuccess('订阅配置已更新');
@@ -424,9 +422,7 @@ export async function updateSubscription(
   }
 }
 
-export async function deleteSubscription(
-  subscriptionId: string
-): Promise<ApiResponse<void>> {
+export async function deleteSubscription(subscriptionId: string): Promise<ApiResponse<void>> {
   try {
     await api.subscription.delete(subscriptionId);
     ErrorHandler.showSuccess('订阅已删除');
@@ -437,17 +433,19 @@ export async function deleteSubscription(
   }
 }
 
-export async function updateSubscriptionServers(
-  subscriptionId: string
-): Promise<ApiResponse<{ 
-    addedServers: number; 
-    updatedServers: number; 
-    deletedServers: number; 
-}>> {
+export async function updateSubscriptionServers(subscriptionId: string): Promise<
+  ApiResponse<{
+    addedServers: number;
+    updatedServers: number;
+    deletedServers: number;
+  }>
+> {
   try {
     const result = await api.subscription.updateServers(subscriptionId);
     if (result.success) {
-      ErrorHandler.showSuccess(`订阅更新成功：新增 ${result.addedServers}，更新 ${result.updatedServers}，删除 ${result.deletedServers}`);
+      ErrorHandler.showSuccess(
+        `订阅更新成功：新增 ${result.addedServers}，更新 ${result.updatedServers}，删除 ${result.deletedServers}`
+      );
       return { success: true, data: result };
     } else {
       ErrorHandler.showError(`订阅更新失败: ${result.error}`);

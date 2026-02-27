@@ -102,7 +102,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       );
 
       if (isTunMode) {
-        console.log('[StartProxy] TUN mode detected, sing-box will request admin privileges when needed');
+        console.log(
+          '[StartProxy] TUN mode detected, sing-box will request admin privileges when needed'
+        );
       }
 
       await api.proxy.start(currentConfig);

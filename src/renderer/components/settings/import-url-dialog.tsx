@@ -95,7 +95,14 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
   };
 
   const isValidUrl = (url: string) => {
-    return url.startsWith('vless://') || url.startsWith('trojan://') || url.startsWith('hysteria2://') || url.startsWith('hy2://') || url.startsWith('ss://') || url.startsWith('anytls://');
+    return (
+      url.startsWith('vless://') ||
+      url.startsWith('trojan://') ||
+      url.startsWith('hysteria2://') ||
+      url.startsWith('hy2://') ||
+      url.startsWith('ss://') ||
+      url.startsWith('anytls://')
+    );
   };
 
   return (
@@ -106,7 +113,9 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
             <Link className="h-5 w-5" />
             从URL导入服务器
           </DialogTitle>
-          <DialogDescription>支持导入 vless://、trojan://、hysteria2://、hy2://、ss:// 和 anytls:// 协议链接</DialogDescription>
+          <DialogDescription>
+            支持导入 vless://、trojan://、hysteria2://、hy2://、ss:// 和 anytls:// 协议链接
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -194,7 +203,9 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                     <>
                       <div className="col-span-2">
                         <span className="text-muted-foreground">加密方法:</span>
-                        <span className="ml-2">{parsedConfig.shadowsocksSettings?.method || 'N/A'}</span>
+                        <span className="ml-2">
+                          {parsedConfig.shadowsocksSettings?.method || 'N/A'}
+                        </span>
                       </div>
                       <div className="col-span-2">
                         <span className="text-muted-foreground">密码:</span>

@@ -66,7 +66,7 @@ export function AdvancedSettings() {
         {/* DNS 设置区域 */}
         <div className="space-y-4">
           <h4 className="text-sm font-medium mb-2">DNS 设置</h4>
-          
+
           <div className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="domesticDns">国内 DNS (直连)</Label>
@@ -76,7 +76,11 @@ export function AdvancedSettings() {
                 onChange={(e) => {
                   const updatedConfig = { ...config };
                   if (!updatedConfig.dnsConfig) {
-                    updatedConfig.dnsConfig = { domesticDns: '', foreignDns: '', enableFakeIp: false };
+                    updatedConfig.dnsConfig = {
+                      domesticDns: '',
+                      foreignDns: '',
+                      enableFakeIp: false,
+                    };
                   }
                   updatedConfig.dnsConfig.domesticDns = e.target.value;
                   saveConfig(updatedConfig);
@@ -84,7 +88,9 @@ export function AdvancedSettings() {
                 className="max-w-md"
                 placeholder="例如: https://doh.pub/dns-query 或 223.5.5.5"
               />
-              <p className="text-xs text-muted-foreground">用于解析国内域名，建议使用国内 DoH 或 UDP DNS</p>
+              <p className="text-xs text-muted-foreground">
+                用于解析国内域名，建议使用国内 DoH 或 UDP DNS
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -95,7 +101,11 @@ export function AdvancedSettings() {
                 onChange={(e) => {
                   const updatedConfig = { ...config };
                   if (!updatedConfig.dnsConfig) {
-                    updatedConfig.dnsConfig = { domesticDns: '', foreignDns: '', enableFakeIp: false };
+                    updatedConfig.dnsConfig = {
+                      domesticDns: '',
+                      foreignDns: '',
+                      enableFakeIp: false,
+                    };
                   }
                   updatedConfig.dnsConfig.foreignDns = e.target.value;
                   saveConfig(updatedConfig);
@@ -103,7 +113,9 @@ export function AdvancedSettings() {
                 className="max-w-md"
                 placeholder="例如: https://dns.google/dns-query 或 8.8.8.8"
               />
-              <p className="text-xs text-muted-foreground">用于解析海外域名，防止 DNS 污染 (将通过代理发送)</p>
+              <p className="text-xs text-muted-foreground">
+                用于解析海外域名，防止 DNS 污染 (将通过代理发送)
+              </p>
             </div>
 
             <div className="flex items-center space-x-2 pt-2">
@@ -115,7 +127,11 @@ export function AdvancedSettings() {
                 onChange={(e) => {
                   const updatedConfig = { ...config };
                   if (!updatedConfig.dnsConfig) {
-                    updatedConfig.dnsConfig = { domesticDns: 'https://doh.pub/dns-query', foreignDns: 'https://dns.google/dns-query', enableFakeIp: false };
+                    updatedConfig.dnsConfig = {
+                      domesticDns: 'https://doh.pub/dns-query',
+                      foreignDns: 'https://dns.google/dns-query',
+                      enableFakeIp: false,
+                    };
                   }
                   updatedConfig.dnsConfig.enableFakeIp = e.target.checked;
                   saveConfig(updatedConfig);
@@ -125,7 +141,9 @@ export function AdvancedSettings() {
                 启用 FakeIP (仅 TUN 模式有效)
               </Label>
             </div>
-            <p className="text-xs text-muted-foreground ml-6">能显著降低首次连接延迟，但可能导致某些依赖真实 IP 的应用异常</p>
+            <p className="text-xs text-muted-foreground ml-6">
+              能显著降低首次连接延迟，但可能导致某些依赖真实 IP 的应用异常
+            </p>
           </div>
         </div>
 

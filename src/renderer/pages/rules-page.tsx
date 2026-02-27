@@ -94,7 +94,10 @@ export function RulesPage() {
                         ) : (
                           <span title={rule.domains.join('\n')}>
                             {rule.domains.slice(0, 3).join(', ')}
-                            <span className="text-muted-foreground"> +{rule.domains.length - 3}</span>
+                            <span className="text-muted-foreground">
+                              {' '}
+                              +{rule.domains.length - 3}
+                            </span>
                           </span>
                         )}
                       </div>
@@ -109,7 +112,10 @@ export function RulesPage() {
                               : '阻止'}
                         </Badge>
                         {rule.bypassFakeIP && (
-                          <Badge variant="outline" className="text-xs text-muted-foreground whitespace-nowrap">
+                          <Badge
+                            variant="outline"
+                            className="text-xs text-muted-foreground whitespace-nowrap"
+                          >
                             真实DNS
                           </Badge>
                         )}
@@ -143,7 +149,10 @@ export function RulesPage() {
           <p>• 每条规则支持多个域名，每行一个</p>
           <p>• 规则按优先级从上到下匹配</p>
           <p>• 自定义规则优先级高于全局代理模式和智能分流</p>
-          <p>• <strong>绕过 FakeIP</strong>：使用真实 DNS 解析，适用于 QUIC/UDP 协议（如 Cloudflare Tunnel）</p>
+          <p>
+            • <strong>绕过 FakeIP</strong>：使用真实 DNS 解析，适用于 QUIC/UDP 协议（如 Cloudflare
+            Tunnel）
+          </p>
         </CardContent>
       </Card>
 

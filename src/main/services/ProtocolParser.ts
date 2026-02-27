@@ -62,12 +62,12 @@ export class ProtocolParser implements IProtocolParser {
     try {
       const urlObj = new URL(url);
       let protocolStr = urlObj.protocol.replace(':', '');
-      
+
       // hy2 是 hysteria2 的别名
       if (protocolStr === 'hy2') {
         protocolStr = 'hysteria2';
       }
-      
+
       // ss 是 shadowsocks 的别名
       if (protocolStr === 'ss') {
         protocolStr = 'shadowsocks';
@@ -253,7 +253,7 @@ export class ProtocolParser implements IProtocolParser {
 
     // 解析 TLS 配置
     const tlsSettings: TlsSettings = {};
-    
+
     const sni = params.get('sni') || params.get('peer');
     if (sni) {
       tlsSettings.serverName = sni;
@@ -352,20 +352,20 @@ export class ProtocolParser implements IProtocolParser {
     // 2. SIP002 格式: ss://method:password@server:port?plugin=xxx#remarks
     const userInfo = urlObj.username;
     const userPassword = urlObj.password;
-    
+
     if (userInfo) {
       try {
         let method = '';
         let password = '';
-        
+
         // 首先尝试 Base64 解码（传统格式）
         try {
           const decodedUserInfo = decodeURIComponent(userInfo);
           const decoded = Buffer.from(decodedUserInfo, 'base64').toString('utf-8');
-          
+
           // 检查解码结果是否是可打印的 ASCII 字符（避免乱码）
           const isPrintable = /^[\x20-\x7E]+$/.test(decoded);
-          
+
           if (isPrintable && decoded.includes(':')) {
             // Base64 解码成功，使用解码后的结果
             const colonIndex = decoded.indexOf(':');
@@ -390,7 +390,7 @@ export class ProtocolParser implements IProtocolParser {
             throw new Error('无法解析加密方法和密码：既不是 Base64 编码，也不是明文格式');
           }
         }
-        
+
         // 验证 method 和 password 是否存在
         if (!method) {
           throw new Error('加密方法为空');
@@ -398,7 +398,7 @@ export class ProtocolParser implements IProtocolParser {
         if (!password) {
           throw new Error('密码为空');
         }
-        
+
         if (config.shadowsocksSettings) {
           config.shadowsocksSettings.method = method;
           config.shadowsocksSettings.password = password;
@@ -413,38 +413,38 @@ export class ProtocolParser implements IProtocolParser {
 
     // 解析查询参数
     const params = new URLSearchParams(urlObj.search);
-    
+
     // 插件
     const plugin = params.get('plugin');
     if (plugin && config.shadowsocksSettings) {
       const pluginParts = plugin.split(';');
       const pluginName = pluginParts[0];
       config.shadowsocksSettings.plugin = pluginName;
-      
+
       if (pluginParts.length > 1) {
         config.shadowsocksSettings.pluginOptions = pluginParts.slice(1).join(';');
       }
 
-    // 提取 Shadow-TLS 插件配置 (基于 Shadow-TLS v3 常用参数)
+      // 提取 Shadow-TLS 插件配置 (基于 Shadow-TLS v3 常用参数)
       if (pluginName.includes('shadow-tls')) {
-         const shadowTlsPassword = params.get('shadow-tls-password');
-         const shadowTlsSni = params.get('shadow-tls-sni');
-         const shadowTlsFingerprint = params.get('shadow-tls-fp'); // 可选
-         
-         if (shadowTlsPassword && shadowTlsSni) {
-             config.shadowTlsSettings = {
-                 password: shadowTlsPassword,
-                 sni: shadowTlsSni,
-                 fingerprint: shadowTlsFingerprint || 'chrome'
-             };
-             const tlsPort = params.get('shadow-tls-port');
-             if (tlsPort) {
-               config.shadowTlsSettings.port = parseInt(tlsPort);
-             }
-         }
+        const shadowTlsPassword = params.get('shadow-tls-password');
+        const shadowTlsSni = params.get('shadow-tls-sni');
+        const shadowTlsFingerprint = params.get('shadow-tls-fp'); // 可选
+
+        if (shadowTlsPassword && shadowTlsSni) {
+          config.shadowTlsSettings = {
+            password: shadowTlsPassword,
+            sni: shadowTlsSni,
+            fingerprint: shadowTlsFingerprint || 'chrome',
+          };
+          const tlsPort = params.get('shadow-tls-port');
+          if (tlsPort) {
+            config.shadowTlsSettings.port = parseInt(tlsPort);
+          }
+        }
       }
     }
-    
+
     // 支持直接以 shadow-tls 查询参数传递 JSON 配置 (Base64 编码)
     const shadowTlsParam = params.get('shadow-tls');
     if (shadowTlsParam) {
@@ -452,17 +452,17 @@ export class ProtocolParser implements IProtocolParser {
         const decodedParam = Buffer.from(shadowTlsParam, 'base64').toString('utf-8');
         const stlsConfig = JSON.parse(decodedParam);
         if (stlsConfig.password && stlsConfig.host) {
-            config.shadowTlsSettings = {
-                password: stlsConfig.password,
-                sni: stlsConfig.host,
-                fingerprint: 'chrome' // 默认值，由于 JSON 中可能没有 fingerprint
-            };
-            if (stlsConfig.port) {
-                config.shadowTlsSettings.port = parseInt(stlsConfig.port);
-            }
-            if (stlsConfig.version && stlsConfig.version.toString() === '3') {
-                // version 3 is expected
-            }
+          config.shadowTlsSettings = {
+            password: stlsConfig.password,
+            sni: stlsConfig.host,
+            fingerprint: 'chrome', // 默认值，由于 JSON 中可能没有 fingerprint
+          };
+          if (stlsConfig.port) {
+            config.shadowTlsSettings.port = parseInt(stlsConfig.port);
+          }
+          if (stlsConfig.version && stlsConfig.version.toString() === '3') {
+            // version 3 is expected
+          }
         }
       } catch (e) {
         console.error('Failed to parse shadow-tls Base64 JSON parameter:', e);
@@ -670,7 +670,6 @@ export class ProtocolParser implements IProtocolParser {
     return `anytls://${password}@${config.address}:${config.port}${queryPart}#${name}`;
   }
 
-
   /**
    * 生成 VLESS URL
    */
@@ -776,19 +775,19 @@ export class ProtocolParser implements IProtocolParser {
     // 标准 SS URL 使用 Base64 编码 userInfo
     // 但很多客户端也支持明文，这里遵循 SIP002 标准使用 Base64
     const userInfoBase64 = Buffer.from(userInfo).toString('base64');
-    
+
     // 在 URL 中必须安全编码
     // 注意：ss:// 后面通常直接跟 base64，不带 user:pass 这种格式，而是整个 userinfo 部分 base64
     // 格式: ss://BASE64(method:password)@hostname:port
-    
+
     // 处理 plugin 参数
     const params = new URLSearchParams();
     if (plugin) {
-       let pluginStr = plugin;
-       if (pluginOptions) {
-         pluginStr += `;${pluginOptions}`;
-       }
-       params.set('plugin', pluginStr);
+      let pluginStr = plugin;
+      if (pluginOptions) {
+        pluginStr += `;${pluginOptions}`;
+      }
+      params.set('plugin', pluginStr);
     }
 
     if (config.shadowTlsSettings) {
@@ -801,11 +800,11 @@ export class ProtocolParser implements IProtocolParser {
         params.set('shadow-tls-port', config.shadowTlsSettings.port.toString());
       }
     }
-    
+
     const name = encodeURIComponent(config.name || `${config.address}:${config.port}`);
     const queryString = params.toString();
     const queryPart = queryString ? `?${queryString}` : '';
-    
+
     // 为了兼容性，使用 ss://user:pass@host:port 格式（非 SIP002 严格，但更通用）
     // 或者 ss://base64@host:port
     // 这里使用 base64 格式，兼容性更好
