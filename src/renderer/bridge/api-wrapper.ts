@@ -396,6 +396,70 @@ export async function getCoreVersion(): Promise<ApiResponse<string>> {
 }
 
 /**
+ * Subscription Management APIs
+ */
+export async function addSubscription(
+  subscription: Omit<ServerConfig['subscriptionId'] extends string ? any : any, any> // avoid type error here if we didn't import SubscriptionConfig
+): Promise<ApiResponse<any>> {
+  try {
+    const newSub = await api.subscription.add(subscription);
+    ErrorHandler.showSuccess('订阅已添加');
+    return { success: true, data: newSub };
+  } catch (error: any) {
+    ErrorHandler.handleApiError(error, '添加订阅');
+    return { success: false, error: error?.message };
+  }
+}
+
+export async function updateSubscription(
+  subscription: any
+): Promise<ApiResponse<void>> {
+  try {
+    await api.subscription.update(subscription);
+    ErrorHandler.showSuccess('订阅配置已更新');
+    return { success: true };
+  } catch (error: any) {
+    ErrorHandler.handleApiError(error, '更新订阅配置');
+    return { success: false, error: error?.message };
+  }
+}
+
+export async function deleteSubscription(
+  subscriptionId: string
+): Promise<ApiResponse<void>> {
+  try {
+    await api.subscription.delete(subscriptionId);
+    ErrorHandler.showSuccess('订阅已删除');
+    return { success: true };
+  } catch (error: any) {
+    ErrorHandler.handleApiError(error, '删除订阅');
+    return { success: false, error: error?.message };
+  }
+}
+
+export async function updateSubscriptionServers(
+  subscriptionId: string
+): Promise<ApiResponse<{ 
+    addedServers: number; 
+    updatedServers: number; 
+    deletedServers: number; 
+}>> {
+  try {
+    const result = await api.subscription.updateServers(subscriptionId);
+    if (result.success) {
+      ErrorHandler.showSuccess(`订阅更新成功：新增 ${result.addedServers}，更新 ${result.updatedServers}，删除 ${result.deletedServers}`);
+      return { success: true, data: result };
+    } else {
+      ErrorHandler.showError(`订阅更新失败: ${result.error}`);
+      return { success: false, error: result.error };
+    }
+  } catch (error: any) {
+    ErrorHandler.handleApiError(error, '更新订阅节点');
+    return { success: false, error: error?.message };
+  }
+}
+
+/**
  * Event listener functions
  */
 export function addEventListener(event: string, listener: (...args: any[]) => void): void {

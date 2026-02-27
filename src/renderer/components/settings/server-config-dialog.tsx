@@ -19,6 +19,7 @@ import { VlessForm } from './vless-form';
 import { TrojanForm } from './trojan-form';
 import { Hysteria2Form } from './hysteria2-form';
 import { SsForm } from './ss-form';
+import { AnyTlsForm } from './anytls-form';
 import type { ServerConfig, ProtocolType } from '@/bridge/types';
 
 type ServerConfigWithId = ServerConfig;
@@ -94,7 +95,7 @@ export function ServerConfigDialog({
           <DialogDescription>
             {isEditing
               ? '修改服务器配置信息。保存后不会自动重启代理服务。'
-              : '添加新的代理服务器配置。支持 VLESS、Trojan 和 Shadowsocks 协议。'}
+              : '添加新的代理服务器配置。支持 VLESS、Trojan、Hysteria2、Shadowsocks、AnyTLS 协议。'}
           </DialogDescription>
         </DialogHeader>
 
@@ -121,6 +122,7 @@ export function ServerConfigDialog({
                 <SelectItem value="trojan">Trojan</SelectItem>
                 <SelectItem value="hysteria2">Hysteria2</SelectItem>
                 <SelectItem value="shadowsocks">Shadowsocks</SelectItem>
+                <SelectItem value="anytls">AnyTLS</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">选择您的代理服务器协议类型</p>
@@ -185,6 +187,17 @@ export function ServerConfigDialog({
                 key={currentServerConfig?.id || 'new'}
                 serverConfig={
                   currentServerConfig?.protocol?.toLowerCase() === 'shadowsocks'
+                    ? currentServerConfig
+                    : undefined
+                }
+                onSubmit={handleSave}
+              />
+            )}
+            {selectedProtocol === 'anytls' && (
+              <AnyTlsForm
+                key={currentServerConfig?.id || 'new'}
+                serverConfig={
+                  currentServerConfig?.protocol?.toLowerCase() === 'anytls'
                     ? currentServerConfig
                     : undefined
                 }

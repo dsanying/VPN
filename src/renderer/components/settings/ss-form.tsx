@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, Shield } from 'lucide-react';
 import type { ServerConfig } from '@/bridge/types';
 
 const ssFormSchema = z.object({
@@ -31,6 +32,11 @@ const ssFormSchema = z.object({
   plugin: z.string().optional(),
   pluginOptions: z.string().optional(),
   remarks: z.string().optional(),
+  // Shadow-TLS v3
+  enableShadowTls: z.boolean(),
+  shadowTlsPassword: z.string().optional(),
+  shadowTlsSni: z.string().optional(),
+  shadowTlsFingerprint: z.string().optional(),
 });
 
 type SsFormValues = z.infer<typeof ssFormSchema>;
@@ -69,12 +75,17 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
       plugin: '',
       pluginOptions: '',
       remarks: '',
+      enableShadowTls: false,
+      shadowTlsPassword: '',
+      shadowTlsSni: '',
+      shadowTlsFingerprint: 'chrome',
     },
   });
 
   useEffect(() => {
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'shadowsocks') {
-      const formData = {
+      const hasShadowTls = !!serverConfig.shadowTlsSettings;
+      form.reset({
         address: serverConfig.address || '',
         port: serverConfig.port || 8388,
         method: serverConfig.shadowsocksSettings?.method || 'aes-256-gcm',
@@ -82,13 +93,18 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
         plugin: serverConfig.shadowsocksSettings?.plugin || '',
         pluginOptions: serverConfig.shadowsocksSettings?.pluginOptions || '',
         remarks: serverConfig.name || '',
-      };
-      form.reset(formData);
+        enableShadowTls: hasShadowTls,
+        shadowTlsPassword: serverConfig.shadowTlsSettings?.password || '',
+        shadowTlsSni: serverConfig.shadowTlsSettings?.sni || '',
+        shadowTlsFingerprint: serverConfig.shadowTlsSettings?.fingerprint || 'chrome',
+      });
     }
   }, [serverConfig, form]);
 
+  const enableShadowTls = form.watch('enableShadowTls');
+
   const handleSubmit = async (values: SsFormValues) => {
-    const serverConfig = {
+    const config: any = {
       protocol: 'shadowsocks' as const,
       address: values.address,
       port: values.port,
@@ -101,7 +117,15 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
       },
     };
 
-    await onSubmit(serverConfig);
+    if (values.enableShadowTls && values.shadowTlsPassword && values.shadowTlsSni) {
+      config.shadowTlsSettings = {
+        password: values.shadowTlsPassword,
+        sni: values.shadowTlsSni,
+        fingerprint: values.shadowTlsFingerprint || 'chrome',
+      };
+    }
+
+    await onSubmit(config);
   };
 
   return (
@@ -228,6 +252,89 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
               </FormItem>
             )}
           />
+        </div>
+
+        {/* Shadow-TLS v3 */}
+        <div className="border rounded-lg p-4 space-y-4">
+          <FormField
+            control={form.control}
+            name="enableShadowTls"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                <FormControl>
+                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="flex items-center gap-1.5 cursor-pointer">
+                    <Shield className="h-4 w-4 text-muted-foreground" />
+                    启用 Shadow-TLS v3
+                  </FormLabel>
+                  <FormDescription>在 Shadowsocks 外层套上 TLS 伪装隧道</FormDescription>
+                </div>
+              </FormItem>
+            )}
+          />
+
+          {enableShadowTls && (
+            <div className="space-y-4 pt-2 border-t">
+              <FormField
+                control={form.control}
+                name="shadowTlsPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Shadow-TLS 密码</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Shadow-TLS v3 密码（与 SS 密码不同）" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="shadowTlsSni"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>伪装域名（SNI）</FormLabel>
+                    <FormControl>
+                      <Input placeholder="www.microsoft.com" {...field} />
+                    </FormControl>
+                    <FormDescription>Shadow-TLS 伪装目标域名，需与服务端一致</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="shadowTlsFingerprint"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>TLS 指纹</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="chrome">Chrome</SelectItem>
+                        <SelectItem value="firefox">Firefox</SelectItem>
+                        <SelectItem value="safari">Safari</SelectItem>
+                        <SelectItem value="edge">Edge</SelectItem>
+                        <SelectItem value="ios">iOS</SelectItem>
+                        <SelectItem value="android">Android</SelectItem>
+                        <SelectItem value="random">随机</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>uTLS 客户端指纹伪装</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex gap-4">

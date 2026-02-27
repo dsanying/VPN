@@ -7,14 +7,21 @@ import * as fs from 'fs/promises';
  * 根据平台和架构返回对应的资源文件路径
  */
 export class ResourceManager {
-  private readonly isDev: boolean;
+  private _isDev?: boolean;
   private readonly platform: string;
   private readonly arch: string;
 
   constructor() {
-    this.isDev = !app.isPackaged;
     this.platform = process.platform;
     this.arch = process.arch;
+  }
+
+  private get isDev(): boolean {
+    if (this._isDev === undefined) {
+      // Use optional chaining just in case app is undefined during an early evaluation
+      this._isDev = !(app?.isPackaged ?? true);
+    }
+    return this._isDev;
   }
 
   /**

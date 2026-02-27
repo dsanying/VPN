@@ -3,7 +3,29 @@ import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 import { ServerList } from '@/components/settings/server-list';
 import { ServerConfigDialog } from '@/components/settings/server-config-dialog';
-import type { ServerConfig } from '@/bridge/types';
+import { SubscriptionDialog } from '@/components/settings/subscription-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Plus, RefreshCw, Rss, Server } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import type { ServerConfig, SubscriptionConfig } from '@/bridge/types';
+import {
+  addSubscription,
+  updateSubscription,
+  deleteSubscription,
+  updateSubscriptionServers,
+} from '@/bridge/api-wrapper';
 
 type ServerConfigWithId = ServerConfig;
 
@@ -11,11 +33,23 @@ export function ServerPage() {
   const config = useAppStore((state) => state.config);
   const saveConfig = useAppStore((state) => state.saveConfig);
   const deleteServer = useAppStore((state) => state.deleteServer);
+  const loadConfig = useAppStore((state) => state.loadConfig);
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<ServerConfigWithId | undefined>();
 
+  const [isSubDialogOpen, setIsSubDialogOpen] = useState(false);
+  const [editingSub, setEditingSub] = useState<SubscriptionConfig | undefined>();
+  const [updatingSubId, setUpdatingSubId] = useState<string | null>(null);
+
   const servers = config?.servers || [];
+  const subscriptions = config?.subscriptions || [];
   const selectedServerId = config?.selectedServerId;
+
+  // 手动添加的节点（无 subscriptionId）
+  const manualServers = servers.filter((s) => !s.subscriptionId);
+
+  // ================= 服务器操作 =================
 
   const handleAddServer = () => {
     setEditingServer(undefined);
@@ -40,14 +74,8 @@ export function ServerPage() {
 
   const handleSelectServer = async (serverId: string) => {
     if (!config) return;
-
     try {
-      const updatedConfig = {
-        ...config,
-        selectedServerId: serverId,
-      };
-
-      await saveConfig(updatedConfig);
+      await saveConfig({ ...config, selectedServerId: serverId });
       toast.success('服务器已选择');
     } catch (error) {
       toast.error('选择失败', {
@@ -64,19 +92,12 @@ export function ServerPage() {
       let updatedServers: ServerConfigWithId[];
 
       if (editingServer) {
-        // Update existing server
         updatedServers = servers.map((s) =>
           s.id === editingServer.id
-            ? {
-                ...serverData,
-                id: editingServer.id,
-                createdAt: editingServer.createdAt,
-                updatedAt: now,
-              }
+            ? { ...serverData, id: editingServer.id, createdAt: editingServer.createdAt, updatedAt: now }
             : s
         );
       } else {
-        // Add new server
         const newServer: ServerConfigWithId = {
           ...serverData,
           id: crypto.randomUUID(),
@@ -86,21 +107,11 @@ export function ServerPage() {
         updatedServers = [...servers, newServer];
       }
 
-      if (!config) {
-        throw new Error('配置未加载');
-      }
-
-      const updatedConfig = {
-        ...config,
-        servers: updatedServers,
-      };
-
-      await saveConfig(updatedConfig);
+      if (!config) throw new Error('配置未加载');
+      await saveConfig({ ...config, servers: updatedServers });
 
       const action = editingServer ? '更新' : '添加';
-      toast.success(`服务器配置已${action}`, {
-        description: `${serverData.name} 配置已成功保存`,
-      });
+      toast.success(`服务器配置已${action}`, { description: `${serverData.name} 配置已成功保存` });
     } catch (error) {
       toast.error('保存失败', {
         description: error instanceof Error ? error.message : '保存服务器配置时发生错误',
@@ -109,32 +120,202 @@ export function ServerPage() {
     }
   };
 
-  const loadConfig = useAppStore((state) => state.loadConfig);
-
   const handleImportSuccess = async () => {
-    // 导入成功后刷新配置
     await loadConfig();
     toast.success('服务器导入成功');
+  };
+
+  // ================= 订阅操作 =================
+
+  const handleAddSubscription = () => {
+    setEditingSub(undefined);
+    setIsSubDialogOpen(true);
+  };
+
+  const handleEditSubscription = (sub: SubscriptionConfig) => {
+    setEditingSub(sub);
+    setIsSubDialogOpen(true);
+  };
+
+  const handleDeleteSubscription = async (subId: string) => {
+    const res = await deleteSubscription(subId);
+    if (res.success) await loadConfig();
+  };
+
+  const handleUpdateSubscriptionServers = async (subId: string) => {
+    setUpdatingSubId(subId);
+    try {
+      const res = await updateSubscriptionServers(subId);
+      if (res.success) await loadConfig();
+    } finally {
+      setUpdatingSubId(null);
+    }
+  };
+
+  const handleSaveSubscription = async (subData: Omit<SubscriptionConfig, 'id' | 'createdAt'>) => {
+    if (editingSub) {
+      const updatedSub: SubscriptionConfig = {
+        ...subData,
+        id: editingSub.id,
+        createdAt: editingSub.createdAt,
+        lastUpdated: editingSub.lastUpdated,
+      };
+      const res = await updateSubscription(updatedSub);
+      if (res.success) await loadConfig();
+    } else {
+      const res = await addSubscription(subData);
+      if (res.success && res.data) {
+        await handleUpdateSubscriptionServers(res.data.id);
+      }
+    }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">服务器配置</h2>
-        <p className="text-muted-foreground mt-1">
-          管理您的代理服务器配置，支持 VLESS、Trojan 和 Shadowsocks 协议
-        </p>
+        <h2 className="text-2xl font-bold">节点与订阅</h2>
+        <p className="text-muted-foreground mt-1">管理您的代理服务器和订阅地址</p>
       </div>
 
-      <ServerList
-        servers={servers}
-        selectedServerId={selectedServerId ?? undefined}
-        onAddServer={handleAddServer}
-        onEditServer={handleEditServer}
-        onDeleteServer={handleDeleteServer}
-        onSelectServer={handleSelectServer}
-        onImportSuccess={handleImportSuccess}
-      />
+      <Tabs defaultValue="manual">
+        {/* Tab 栏：自建节点 + 每个订阅 + 订阅管理 */}
+        <div className="flex items-center justify-between gap-4">
+          <TabsList className="flex-shrink-0 overflow-x-auto">
+            {/* 自建节点 Tab */}
+            <TabsTrigger value="manual" className="flex items-center gap-1.5">
+              <Server className="h-3.5 w-3.5" />
+              自建节点
+              {manualServers.length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                  {manualServers.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+
+            {/* 每个订阅一个 Tab */}
+            {subscriptions.map((sub) => {
+              const subServers = servers.filter((s) => s.subscriptionId === sub.id);
+              const isUpdating = updatingSubId === sub.id;
+              return (
+                <TabsTrigger key={sub.id} value={sub.id} className="flex items-center gap-1.5">
+                  <Rss className="h-3.5 w-3.5" />
+                  {sub.name}
+                  {subServers.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                      {isUpdating ? '…' : subServers.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          {/* 右侧操作按钮（显示当前 Tab 对应的操作） */}
+          <div className="flex gap-2 flex-shrink-0">
+            <Button size="sm" variant="outline" onClick={handleAddSubscription} className="flex items-center gap-1.5">
+              <Plus className="h-4 w-4" />
+              添加订阅
+            </Button>
+          </div>
+        </div>
+
+        {/* 自建节点内容 */}
+        <TabsContent value="manual">
+          <ServerList
+            servers={manualServers}
+            subscriptions={subscriptions}
+            selectedServerId={selectedServerId ?? undefined}
+            onAddServer={handleAddServer}
+            onEditServer={handleEditServer}
+            onDeleteServer={handleDeleteServer}
+            onSelectServer={handleSelectServer}
+            onImportSuccess={handleImportSuccess}
+          />
+        </TabsContent>
+
+        {/* 各订阅节点内容 */}
+        {subscriptions.map((sub) => {
+          const subServers = servers.filter((s) => s.subscriptionId === sub.id);
+          const isUpdating = updatingSubId === sub.id;
+          return (
+            <TabsContent key={sub.id} value={sub.id}>
+              <div className="space-y-4">
+                {/* 订阅信息栏 */}
+                <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{sub.name}</p>
+                    <p className="text-xs text-muted-foreground truncate max-w-xs" title={sub.url}>
+                      {sub.url}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      最后更新：{sub.lastUpdated
+                        ? new Date(sub.lastUpdated).toLocaleString('zh-CN')
+                        : '从未'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEditSubscription(sub)}
+                      disabled={isUpdating}
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleUpdateSubscriptionServers(sub.id)}
+                      disabled={isUpdating}
+                      className="flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+                      {isUpdating ? '更新中...' : '更新节点'}
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="destructive" disabled={isUpdating}>
+                          删除订阅
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>删除订阅</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            确定要删除订阅 "{sub.name}" 吗？这同时会删除该订阅下所有 {subServers.length} 个节点。此操作无法撤销。
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>取消</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteSubscription(sub.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            删除
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+
+                {/* 节点列表 */}
+                <ServerList
+                  servers={subServers}
+                  subscriptions={subscriptions}
+                  showAddButton={false}
+                  selectedServerId={selectedServerId ?? undefined}
+                  onAddServer={() => {}}
+                  onEditServer={handleEditServer}
+                  onDeleteServer={handleDeleteServer}
+                  onSelectServer={handleSelectServer}
+                  onImportSuccess={handleImportSuccess}
+                />
+              </div>
+            </TabsContent>
+          );
+        })}
+      </Tabs>
 
       <ServerConfigDialog
         open={isDialogOpen}
@@ -142,6 +323,13 @@ export function ServerPage() {
         server={editingServer}
         servers={servers}
         onSave={handleSaveServer}
+      />
+
+      <SubscriptionDialog
+        open={isSubDialogOpen}
+        onOpenChange={setIsSubDialogOpen}
+        subscription={editingSub}
+        onSave={handleSaveSubscription}
       />
     </div>
   );

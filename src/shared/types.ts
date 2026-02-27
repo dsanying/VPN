@@ -9,7 +9,7 @@
 
 export type ProxyMode = 'global' | 'smart' | 'direct';
 export type ProxyModeType = 'systemProxy' | 'tun';
-export type Protocol = 'vless' | 'trojan' | 'hysteria2' | 'shadowsocks';
+export type Protocol = 'vless' | 'trojan' | 'hysteria2' | 'shadowsocks' | 'anytls';
 export type Network = 'tcp' | 'ws' | 'grpc' | 'http';
 export type Hysteria2Network = 'tcp' | 'udp';
 export type Security = 'none' | 'tls' | 'reality';
@@ -74,6 +74,40 @@ export interface ShadowsocksSettings {
   pluginOptions?: string;
 }
 
+// AnyTLS 协议设置
+export interface AnyTlsSettings {
+  idleSessionCheckInterval?: string; // e.g. '30s'
+  idleSessionTimeout?: string;       // e.g. '30s'
+  minIdleSession?: number;           // default 0
+}
+
+// Shadow-TLS 插件设置（套在 SS/其他协议外层，版本固定 v3）
+export interface ShadowTlsSettings {
+  password: string;       // Shadow-TLS v3 密码
+  sni: string;            // 伪装的目标域名
+  fingerprint?: string;   // uTLS 指纹，默认 chrome
+}
+
+// ============================================================================
+// 订阅配置
+// ============================================================================
+
+export interface SubscriptionConfig {
+  id: string;
+  name: string;
+  url: string;
+  autoUpdate: boolean;
+  lastUpdated?: string;
+  createdAt: string;
+  // 订阅流量/到期信息（从 Subscription-UserInfo header 解析）
+  userInfo?: {
+    upload?: number;   // 已上传字节
+    download?: number; // 已下载字节
+    total?: number;    // 总流量字节
+    expire?: number;   // 到期时间（Unix timestamp）
+  };
+}
+
 export interface ServerConfig {
   id: string;
   name: string;
@@ -83,6 +117,9 @@ export interface ServerConfig {
 
   // 代理链（前置代理）ID
   detour?: string;
+
+  // 关联的订阅ID
+  subscriptionId?: string;
 
   // VLESS 特定
   uuid?: string;
@@ -95,8 +132,14 @@ export interface ServerConfig {
   // Hysteria2 特定
   hysteria2Settings?: Hysteria2Settings;
 
+  // AnyTLS 特定
+  anyTlsSettings?: AnyTlsSettings;
+
   // Shadowsocks 特定
   shadowsocksSettings?: ShadowsocksSettings;
+
+  // Shadow-TLS 插件（可附加在任意协议上，常用于 SS2022）
+  shadowTlsSettings?: ShadowTlsSettings;
 
   // 传输层配置
   network?: Network;
@@ -148,11 +191,32 @@ export interface TunModeConfig {
   inet6Address?: string;
 }
 
+// DNS 配置
+export interface DnsConfig {
+  domesticDns: string;   // 国内 DNS，默认 https://doh.pub/dns-query
+  foreignDns: string;    // 海外 DNS，默认 https://dns.google/dns-query
+  enableFakeIp: boolean; // 是否启用 FakeIP（TUN 模式）
+}
+
+// 自定义规则集（从 URL 导入）
+export interface CustomRuleSet {
+  id: string;
+  name: string;
+  url: string;           // 规则集 URL（.srs 或 .json）
+  action: 'proxy' | 'direct' | 'block';
+  enabled: boolean;
+  addedAt: string;
+}
+
+
 // ============================================================================
 // 用户配置
 // ============================================================================
 
 export interface UserConfig {
+  // 订阅配置
+  subscriptions?: SubscriptionConfig[];
+
   // 服务器配置
   servers: ServerConfig[];
   selectedServerId: string | null;
@@ -173,6 +237,13 @@ export interface UserConfig {
   minimizeToTray: boolean;
   autoCheckUpdate: boolean;
   autoLightweightMode: boolean;
+  autoUpdateSubscriptionOnStart: boolean; // 启动时自动更新订阅
+
+  // DNS 配置
+  dnsConfig?: DnsConfig;
+
+  // 自定义规则集
+  customRuleSets?: CustomRuleSet[];
 
   // 端口配置
   socksPort: number;

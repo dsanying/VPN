@@ -15,6 +15,7 @@ import type {
   DomainRule,
   AutoStartStatus,
   ConnectionStateInfo,
+  SubscriptionConfig,
 } from '../../shared/types';
 
 /**
@@ -506,6 +507,45 @@ export const coreUpdateApi = {
 };
 
 /**
+ * 订阅管理 API
+ */
+export const subscriptionApi = {
+  /**
+   * 添加订阅
+   */
+  async add(subscription: Omit<SubscriptionConfig, 'id' | 'createdAt'>): Promise<SubscriptionConfig> {
+    return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_ADD, { subscription });
+  },
+
+  /**
+   * 更新订阅配置
+   */
+  async update(subscription: SubscriptionConfig): Promise<void> {
+    return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_UPDATE, { subscription });
+  },
+
+  /**
+   * 根据 ID 删除订阅
+   */
+  async delete(subscriptionId: string): Promise<void> {
+    return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_DELETE, { subscriptionId });
+  },
+
+  /**
+   * 触发订阅节点更新
+   */
+  async updateServers(subscriptionId: string): Promise<{ 
+    success: boolean; 
+    addedServers: number; 
+    updatedServers: number; 
+    deletedServers: number; 
+    error?: string;
+  }> {
+    return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_UPDATE_SERVERS, { subscriptionId });
+  }
+};
+
+/**
  * 统一的 API 客户端
  */
 export const api = {
@@ -522,6 +562,7 @@ export const api = {
   admin: adminApi,
   update: updateApi,
   coreUpdate: coreUpdateApi,
+  subscription: subscriptionApi,
 };
 
 /**

@@ -28,6 +28,13 @@ export const IPC_CHANNELS = {
   SERVER_GET_ALL: 'server:getAll',
   SERVER_SPEED_TEST: 'server:speedTest',
 
+  // 订阅管理
+  SUBSCRIPTION_ADD: 'subscription:add',
+  SUBSCRIPTION_UPDATE: 'subscription:update',
+  SUBSCRIPTION_DELETE: 'subscription:delete',
+  SUBSCRIPTION_UPDATE_SERVERS: 'subscription:updateServers',
+  SUBSCRIPTION_UPDATE_ALL: 'subscription:updateAll',
+  
   // 路由规则管理
   RULES_GET_ALL: 'rules:getAll',
   RULES_ADD: 'rules:add',

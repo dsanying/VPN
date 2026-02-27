@@ -147,6 +147,26 @@ export class ConfigManager implements IConfigManager {
       throw new Error('Config is null or undefined');
     }
 
+    // 验证 subscriptions 数组 (兼容旧配置)
+    if (config.subscriptions) {
+      if (!Array.isArray(config.subscriptions)) {
+        throw new Error('subscriptions must be an array');
+      }
+      for (const sub of config.subscriptions) {
+        if (!sub.id || typeof sub.id !== 'string') {
+          throw new Error('Subscription id is required and must be a string');
+        }
+        if (!sub.name || typeof sub.name !== 'string') {
+          throw new Error('Subscription name is required and must be a string');
+        }
+        if (!sub.url || typeof sub.url !== 'string') {
+          throw new Error('Subscription url is required and must be a string');
+        }
+      }
+    } else {
+        config.subscriptions = [];
+    }
+
     // 验证 servers 数组
     if (!Array.isArray(config.servers)) {
       throw new Error('servers must be an array');
@@ -327,6 +347,7 @@ export class ConfigManager implements IConfigManager {
    */
   private createDefaultConfig(): UserConfig {
     return {
+      subscriptions: [],
       servers: [],
       selectedServerId: null,
       proxyMode: 'global',
@@ -343,9 +364,21 @@ export class ConfigManager implements IConfigManager {
       minimizeToTray: true,
       autoCheckUpdate: true, // 默认启用启动时自动检查更新
       autoLightweightMode: false, // 默认不启用自动轻量模式
+      autoUpdateSubscriptionOnStart: false, // 默认不启用启动时更新订阅
+
+      // 默认 DNS 配置
+      dnsConfig: {
+        domesticDns: 'https://doh.pub/dns-query',
+        foreignDns: 'https://dns.google/dns-query',
+        enableFakeIp: false,
+      },
+
+      customRuleSets: [], // 默认空
+
       socksPort: 65534,
       httpPort: 65533,
       logLevel: 'info',
     };
   }
 }
+

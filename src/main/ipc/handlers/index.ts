@@ -14,4 +14,5 @@ export * from './rules-handlers';
 export * from './autostart-handlers';
 export * from './speed-test-handlers';
 export * from './core-update-handlers';
+export * from './subscription-handlers';
 

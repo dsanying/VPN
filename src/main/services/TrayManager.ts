@@ -530,7 +530,7 @@ export class TrayManager implements ITrayManager {
       this.onCheckUpdate();
     } else {
       // 默认行为：打开 GitHub releases 页面
-      shell.openExternal('https://github.com/zhangjh/FlowZ/releases');
+      shell.openExternal('https://github.com/dododook/FlowZ/releases');
     }
   }
 

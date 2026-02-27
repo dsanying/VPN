@@ -6,3 +6,4 @@ export { ProxyModeSettings } from './proxy-mode-settings';
 export { ServerList } from './server-list';
 export { ServerConfigDialog } from './server-config-dialog';
 export { ImportUrlDialog } from './import-url-dialog';
+export { SubscriptionDialog } from './subscription-dialog';

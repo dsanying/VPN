@@ -47,7 +47,7 @@ export function registerVersionHandlers(coreUpdateService?: CoreUpdateService): 
         buildDate: new Date().toISOString().split('T')[0],
         singBoxVersion: currentSingBoxVersion,
         copyright: `© ${new Date().getFullYear()} FlowZ. All rights reserved.`,
-        repositoryUrl: 'https://github.com/zhangjh/FlowZ',
+        repositoryUrl: 'https://github.com/dododook/FlowZ',
       };
     }
   );

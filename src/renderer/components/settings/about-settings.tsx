@@ -229,7 +229,7 @@ export function AboutSettings() {
   };
 
   const handleOpenGitHub = async () => {
-    const url = versionInfo?.repositoryUrl || 'https://github.com/zhangjh/FlowZ';
+    const url = versionInfo?.repositoryUrl || 'https://github.com/dododook/FlowZ';
     await openExternal(url);
   };
 

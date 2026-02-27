@@ -349,9 +349,6 @@ export function ConnectionTopology() {
       // Let's check relationships
       // links array has { source: ID, target: ID }
       
-      const toCheck = [hovered.id];
-      const itemsToCheckType = hovered.type === 'node' ? 'node' : 'link';
-
       // Simple iterative expansion
       // We want to highlight the FULL PATH that flow through this element.
       
@@ -501,17 +498,13 @@ export function ConnectionTopology() {
       
       // Refined Algorithm:
       // Start with Direct Links connected to Hovered Item.
-      const initialLinks = links.filter((l, i) => {
-          if (hovered.type === 'link') return i === parseInt(hovered.id.split('-')[1]);
-          return l.source === hovered.id || l.target === hovered.id;
-      });
       
       // Expand Upstream and Downstream
-      const finalLinks = new Set<Link>(initialLinks);
       
       // Perform fixed iterations (2 passes is enough for depth 3 graph)
+      // Perform fixed iterations (2 passes is enough for depth 3 graph)
       for (let pass = 0; pass < 2; pass++) {
-          links.forEach(l => {
+          links.forEach(() => {
               // If this link connects to any link in finalLinks (node sharing), check validity of flow.
               // We only care about matching Node IDs.
               
@@ -556,8 +549,8 @@ export function ConnectionTopology() {
               if (hovered.type === 'node') focusNodes = [hovered.id];
               else {
                   const idx = parseInt(hovered.id.split('-')[1]);
-                  const l = links[idx];
-                  if (l) focusNodes = [l.source, l.target];
+                  const hL = links[idx];
+                  if (hL) focusNodes = [hL.source, hL.target];
               }
               
               // Upstream: Reachable by traversing links "target -> source"
@@ -565,11 +558,9 @@ export function ConnectionTopology() {
               let changed = true;
               while (changed) {
                   changed = false;
-                  links.forEach(l => {
-                      if (upstreamNodes.has(l.target) && !upstreamNodes.has(l.source)) {
-                           // Critical check: Only add if this link contributes to the flow?
-                           // In this graph, all links target->source are valid upstream flows.
-                           upstreamNodes.add(l.source);
+                  links.forEach(tmpl => {
+                      if (upstreamNodes.has(tmpl.target) && !upstreamNodes.has(tmpl.source)) {
+                           upstreamNodes.add(tmpl.source);
                            changed = true;
                       }
                   });
@@ -580,48 +571,24 @@ export function ConnectionTopology() {
               changed = true;
               while (changed) {
                   changed = false;
-                  links.forEach(l => {
-                      if (downstreamNodes.has(l.source) && !downstreamNodes.has(l.target)) {
-                           downstreamNodes.add(l.target);
+                  links.forEach(tmpl => {
+                      if (downstreamNodes.has(tmpl.source) && !downstreamNodes.has(tmpl.target)) {
+                           downstreamNodes.add(tmpl.target);
                            changed = true;
                       }
                   });
               }
               
-              // Final Highlight Set: nodes in Upstream U Downstream.
-              // Links: Connect two nodes that are (One Upstream && One Downstream?? No)
-              // Links where l.target is in Upstream AND l.source is in Upstream... wait.
-              
-              // Upstream set includes Middle and Source.
-              // Link Source->Mid has source in Upstream, target in Upstream.
-              
-              // NOTE: This "Flood Fill" logic works perfectly for lines.
-              // BUT: If I hover "Proxy" (Outbound).
-              // Upstream: "Proxy", "Google", "Source".
-              // Downstream: "Proxy".
-              // Union: "Source", "Google", "Proxy".
-              // Links connecting these: "Source->Google", "Google->Proxy".
-              // Links EXPCLUDED: "Google->Direct" (Direct is not in Union).
-              
-              // THIS IS IT!
-              
-              // What if I hover "Google" (Middle)?
-              // Upstream: "Google", "Source".
-              // Downstream: "Google", "Proxy", "Direct".
-              // Union: All of them.
-              // Links: All connected. Correct.
-              
               const allNodes = new Set([...upstreamNodes, ...downstreamNodes]);
               allNodes.forEach(id => set.add(id));
               
-              links.forEach((l, i) => {
-                  if (allNodes.has(l.source) && allNodes.has(l.target)) {
+              links.forEach((tmpl, i) => {
+                  if (allNodes.has(tmpl.source) && allNodes.has(tmpl.target)) {
                       set.add(`link-${i}`);
                   }
               });
           });
-          
-      } // end pass loop (removed loop, logic is non-iterative now mostly)
+      }
       
       return set;
   }, [hovered, links, nodes]);

@@ -16,6 +16,7 @@ import type {
   HttpSettings,
   Hysteria2Settings,
   Hysteria2Network,
+  AnyTlsSettings,
 } from '../../shared/types';
 
 export interface IProtocolParser {
@@ -40,7 +41,14 @@ export class ProtocolParser implements IProtocolParser {
    * 检查 URL 是否为支持的协议
    */
   isSupported(url: string): boolean {
-    return url.startsWith('vless://') || url.startsWith('trojan://') || url.startsWith('hysteria2://') || url.startsWith('hy2://') || url.startsWith('ss://');
+    return (
+      url.startsWith('vless://') ||
+      url.startsWith('trojan://') ||
+      url.startsWith('hysteria2://') ||
+      url.startsWith('hy2://') ||
+      url.startsWith('ss://') ||
+      url.startsWith('anytls://')
+    );
   }
 
   /**
@@ -75,6 +83,8 @@ export class ProtocolParser implements IProtocolParser {
         return this.parseHysteria2(urlObj);
       } else if (protocol === 'shadowsocks') {
         return this.parseShadowsocks(urlObj);
+      } else if (protocol === 'anytls') {
+        return this.parseAnyTls(urlObj);
       }
 
       throw new Error(`不支持的协议: ${protocol}`);
@@ -261,6 +271,61 @@ export class ProtocolParser implements IProtocolParser {
 
     if (Object.keys(tlsSettings).length > 0) {
       config.tlsSettings = tlsSettings;
+    }
+
+    return config;
+  }
+
+  /**
+   * 解析 AnyTLS URL
+   * 格式: anytls://password@address:port?security=tls&sni=...&fp=chrome&pbk=...&sid=...#name
+   */
+  private parseAnyTls(url: URL): ServerConfig {
+    const password = decodeURIComponent(url.username);
+    const address = url.hostname;
+    const port = parseInt(url.port) || 443;
+    const params = new URLSearchParams(url.search);
+    const name = decodeURIComponent(url.hash.slice(1)) || `${address}:${port}`;
+
+    if (!password) {
+      throw new Error('AnyTLS URL 缺少密码');
+    }
+
+    const config: ServerConfig = {
+      id: randomUUID(),
+      name,
+      protocol: 'anytls',
+      address,
+      port,
+      password,
+    };
+
+    // AnyTLS 会话参数
+    const anyTlsSettings: AnyTlsSettings = {};
+    const idleCheckInterval = params.get('idle_session_check_interval');
+    const idleTimeout = params.get('idle_session_timeout');
+    const minIdle = params.get('min_idle_session');
+    if (idleCheckInterval) anyTlsSettings.idleSessionCheckInterval = idleCheckInterval;
+    if (idleTimeout) anyTlsSettings.idleSessionTimeout = idleTimeout;
+    if (minIdle) anyTlsSettings.minIdleSession = parseInt(minIdle);
+    if (Object.keys(anyTlsSettings).length > 0) {
+      config.anyTlsSettings = anyTlsSettings;
+    }
+
+    // 安全配置
+    const security = params.get('security') as Security | null;
+    if (security) {
+      config.security = security;
+      if (security === 'tls' || security === 'reality') {
+        config.tlsSettings = this.parseTlsSettings(params);
+      }
+      if (security === 'reality') {
+        config.realitySettings = this.parseRealitySettings(params);
+      }
+    } else {
+      // AnyTLS 默认就是 TLS
+      config.security = 'tls';
+      config.tlsSettings = this.parseTlsSettings(params);
     }
 
     return config;
@@ -514,13 +579,9 @@ export class ProtocolParser implements IProtocolParser {
     return settings;
   }
 
-  /**
-   * 将服务器配置生成为分享 URL
-   */
   generateUrl(config: ServerConfig): string {
-    // 统一转换为小写进行比较，因为存储的协议值可能是大写或小写
     const protocol = config.protocol?.toLowerCase();
-    
+
     if (protocol === 'vless') {
       return this.generateVlessUrl(config);
     } else if (protocol === 'trojan') {
@@ -529,9 +590,41 @@ export class ProtocolParser implements IProtocolParser {
       return this.generateHysteria2Url(config);
     } else if (protocol === 'shadowsocks') {
       return this.generateShadowsocksUrl(config);
+    } else if (protocol === 'anytls') {
+      return this.generateAnyTlsUrl(config);
     }
     throw new Error(`不支持的协议: ${config.protocol}`);
   }
+
+  /**
+   * 生成 AnyTLS URL
+   */
+  private generateAnyTlsUrl(config: ServerConfig): string {
+    const params = new URLSearchParams();
+
+    // 安全配置
+    this.appendSecurityParams(params, config);
+
+    // AnyTLS 会话参数
+    if (config.anyTlsSettings) {
+      if (config.anyTlsSettings.idleSessionCheckInterval) {
+        params.set('idle_session_check_interval', config.anyTlsSettings.idleSessionCheckInterval);
+      }
+      if (config.anyTlsSettings.idleSessionTimeout) {
+        params.set('idle_session_timeout', config.anyTlsSettings.idleSessionTimeout);
+      }
+      if (config.anyTlsSettings.minIdleSession !== undefined) {
+        params.set('min_idle_session', String(config.anyTlsSettings.minIdleSession));
+      }
+    }
+
+    const name = encodeURIComponent(config.name || `${config.address}:${config.port}`);
+    const password = encodeURIComponent(config.password || '');
+    const queryString = params.toString();
+    const queryPart = queryString ? `?${queryString}` : '';
+    return `anytls://${password}@${config.address}:${config.port}${queryPart}#${name}`;
+  }
+
 
   /**
    * 生成 VLESS URL

@@ -7,6 +7,7 @@ import { TrayManager } from './services/TrayManager';
 import { ProxyManager } from './services/ProxyManager';
 import { createSystemProxyManager } from './services/SystemProxyManager';
 import { resourceManager } from './services/ResourceManager';
+import { SubscriptionService } from './services/SubscriptionService';
 import {
   registerConfigHandlers,
   registerServerHandlers,
@@ -18,6 +19,7 @@ import {
   registerRulesHandlers,
   registerAutoStartHandlers,
   registerSpeedTestHandlers,
+  registerSubscriptionHandlers,
   setUpdateService,
   setTrayStateCallback,
   registerCoreUpdateHandlers,
@@ -48,6 +50,7 @@ let proxyManager: ProxyManager | null = null;
 const systemProxyManager = createSystemProxyManager();
 const updateService = new UpdateService(logManager);
 const coreUpdateService = new CoreUpdateService(logManager);
+const subscriptionService = new SubscriptionService(protocolParser, logManager);
 
 // 全局异常捕获 - 主进程
 process.on('uncaughtException', (error: Error) => {
@@ -471,6 +474,9 @@ app.whenReady().then(async () => {
 
   // 注册自启动处理器
   registerAutoStartHandlers();
+  
+  // 注册订阅处理器
+  registerSubscriptionHandlers(subscriptionService, configManager);
 
   // 同步自启动状态
   const autoStartManager = createAutoStartManager();
@@ -792,14 +798,80 @@ app.whenReady().then(async () => {
         } else if (result.error) {
           logManager.addLog('warn', `自动检查更新失败: ${result.error}`, 'Main');
         } else {
-          logManager.addLog('info', '当前已是最新版本', 'Main');
+          logManager.addLog('info', '当前已经是最新版本', 'Main');
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logManager.addLog('warn', `自动检查更新时出错: ${errorMessage}`, 'Main');
+      logManager.addLog('error', `自动检查更新异常: ${error}`, 'Main');
     }
   }, 5000);
+
+  // 启动后自动更新订阅（延迟 8 秒，避免干扰启动）
+  setTimeout(async () => {
+    try {
+      const config = await configManager.loadConfig();
+      if (config.autoUpdateSubscriptionOnStart) {
+        logManager.addLog('info', '启动时自动更新订阅已启用，正在更新...', 'Main');
+        
+        if (!config.subscriptions || config.subscriptions.length === 0) {
+           logManager.addLog('info', '没有可更新的订阅', 'Main');
+           return;
+        }
+
+        let updatedCount = 0;
+        let failedCount = 0;
+
+        for (const subscription of config.subscriptions) {
+          if (!subscription.autoUpdate) continue;
+          try {
+            const result = await subscriptionService.fetchSubscription(subscription.url, subscription.id);
+            const fetchedServers = result.servers;
+
+            const oldServers = config.servers.filter(s => s.subscriptionId === subscription.id);
+            const oldServersMap = new Map<string, typeof config.servers[0]>();
+            oldServers.forEach(s => {
+              oldServersMap.set(`${s.name}-${s.protocol}-${s.address}-${s.port}`, s);
+            });
+
+            const newServersToKeep = [];
+            for (const newServer of fetchedServers) {
+              const key = `${newServer.name}-${newServer.protocol}-${newServer.address}-${newServer.port}`;
+              if (oldServersMap.has(key)) {
+                const old = oldServersMap.get(key)!;
+                newServersToKeep.push({ ...newServer, id: old.id, createdAt: old.createdAt, updatedAt: new Date().toISOString() });
+                oldServersMap.delete(key);
+              } else {
+                newServersToKeep.push(newServer);
+              }
+            }
+
+            const deletedIds = new Set(Array.from(oldServersMap.values()).map(s => s.id));
+            if (config.selectedServerId && deletedIds.has(config.selectedServerId)) {
+              config.selectedServerId = null;
+            }
+
+            const otherServers = config.servers.filter(s => s.subscriptionId !== subscription.id);
+            config.servers = [...otherServers, ...newServersToKeep];
+            subscription.lastUpdated = new Date().toISOString();
+            if (result.userInfo) subscription.userInfo = result.userInfo;
+
+            updatedCount++;
+          } catch (e: any) {
+            logManager.addLog('warn', `更新订阅 [${subscription.name}] 失败: ${e.message}`, 'Main');
+            failedCount++;
+          }
+        }
+
+        await configManager.saveConfig(config);
+        logManager.addLog('info', `启动时自动更新订阅完成。成功：${updatedCount}，失败：${failedCount}`, 'Main');
+        
+        // 广播配置变更事件以更新 UI
+        ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
+      }
+    } catch (error) {
+      logManager.addLog('error', `启动时自动更新订阅异常: ${error}`, 'Main');
+    }
+  }, 8000);
 
   // 监听配置变更事件，更新托盘菜单并自动重启代理
   mainEventEmitter.on(MAIN_EVENTS.CONFIG_CHANGED, async () => {

@@ -142,6 +142,12 @@ interface SingBoxOutbound {
     password: string;
   };
   network?: string;
+  // ShadowTLS specific
+  version?: number;
+  // AnyTLS specific
+  idle_session_check_interval?: string;
+  idle_session_timeout?: string;
+  min_idle_session?: number;
   // TLS
   tls?: {
     enabled: boolean;
@@ -638,45 +644,57 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
   }
 
-  /**
-   * 生成 DNS 配置（sing-box 1.12.x 格式）
-   * 统一使用 FakeIP 模式：DNS 查询直接返回虚假 IP，由 sniff 识别真实域名后路由
-   * 这避免了 DNS 污染和超时问题，TUN 和系统代理模式都使用相同的逻辑
-   */
   private generateDnsConfig(config: UserConfig, selectedServer: ServerConfig): SingBoxDnsConfig {
     const proxyMode = (config.proxyMode || 'smart').toLowerCase();
+    
+    // 获取用户 DNS 配置，不存在则使用默认值
+    const userDnsConfig = config.dnsConfig || {
+      domesticDns: 'https://doh.pub/dns-query',
+      foreignDns: 'https://dns.google/dns-query',
+      enableFakeIp: false
+    };
+
+    const isTunMode = config.proxyModeType?.toLowerCase() !== 'systemproxy';
+    // 只有在 TUN 模式下才可以用 FakeIP
+    const enableFakeIp = isTunMode && userDnsConfig.enableFakeIp;
 
     const dnsConfig: SingBoxDnsConfig = {
       servers: [
         {
-          // 本地/系统 DNS：使用操作系统当前的 DNS 配置
-          // 用于解析代理服务器地址、Fail-safe 解析以及直连域名的真实 IP 解析
+          // 本地/系统 DNS：使用操作系统当前的 DNS 配置或用户指定的国内 DNS
           tag: 'dns-local',
           type: 'local',
         },
         {
-          // 远程 DNS：通过代理查询，用于解析国外域名
-          tag: 'dns-remote',
+          // 国内直连 DNS
+          tag: 'dns-domestic',
           type: 'udp',
-          server: '8.8.8.8',
-          detour: 'proxy',
+          address: userDnsConfig.domesticDns,
+          detour: 'direct'
         },
         {
-          // FakeIP 服务器：返回虚假 IP，由 sniff 识别真实域名
-          tag: 'fakeip',
-          type: 'fakeip',
-          inet4_range: '198.18.0.0/15',
-          inet6_range: 'fc00::/18',
+          // 远程 DNS：通过代理查询，用于解析国外域名（支持修改）
+          tag: 'dns-remote',
+          type: 'udp',
+          address: userDnsConfig.foreignDns,
+          detour: 'proxy',
         },
       ],
       rules: [],
-      // 默认使用本地 DNS，规则未匹配的通过 local 解析 (Fail-safe)
-      // 但实际上我们会有规则覆盖大部分情况
-      final: 'dns-local',
-      // Google 等服务可能解析到 IPv6 但代理不支持，导致连接拒绝
-      // 恢复为 prefer_ipv4，避免 IPv6 环境下完全断网
+      // 默认使用国内 DNS 解析
+      final: 'dns-domestic',
       strategy: 'prefer_ipv4',
     };
+
+    if (enableFakeIp) {
+      dnsConfig.servers.push({
+        // FakeIP 服务器：返回虚假 IP，由 sniff 识别真实域名
+        tag: 'fakeip',
+        type: 'fakeip',
+        inet4_range: '198.18.0.0/15',
+        inet6_range: 'fc00::/18',
+      });
+    }
 
     const dnsRules: SingBoxDnsRule[] = [];
 
@@ -688,78 +706,34 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       } as SingBoxDnsRule);
     }
 
-    // 绕过 FakeIP 的域名：使用本地 DNS 解析真实 IP
-    const bypassFakeIPDomains = this.collectBypassFakeIPDomains(config.customRules || []);
-    if (bypassFakeIPDomains.length > 0) {
-      dnsRules.push({
-        domain_suffix: bypassFakeIPDomains,
-        server: 'dns-local',
-      } as SingBoxDnsRule);
-    }
-
     // 智能分流/全局代理模式下的 DNS 规则
     if (proxyMode === 'smart' || proxyMode === 'global') {
-      // 0. 显式 Google 域名走远程 DNS (防止各种 DNS 污染)
-      dnsRules.push({
-        domain_keyword: ['google', 'gmail', 'youtube'],
-        server: 'dns-remote',
-      } as SingBoxDnsRule);
-
-      // 1. geosite-cn 走本地 DNS
-      dnsRules.push({
-        rule_set: 'geosite-cn',
-        server: 'dns-local',
-      } as SingBoxDnsRule);
-
-      // 2. 其他域名 (国外域名) 走远程 DNS (Real IP)
-      // 改用 Real IP 而不是 FakeIP，以解决 Google 等服务在某些网络环境下的 QUIC/UDP 问题
-      // 同时也避免了 Sniff 失败导致的连接问题
-      if (proxyMode === 'smart') {
+       if (proxyMode === 'smart') {
+         // 国内域名走国内 DNS
          dnsRules.push({
-            rule_set: 'geosite-geolocation-!cn',
-            server: 'dns-remote',
+           rule_set: 'geosite-cn',
+           server: 'dns-domestic',
          } as SingBoxDnsRule);
-         
-         // 兜底：如果没有匹配到 geosite，也尝试走 remote（或者保留 final dns-local?）
-         // 为了更好的访问体验，未知的通常假设为国外
-         // 但为了避免国内小众域名误杀，也可以让 final 走 local，或者加一个 fallback
-      } else {
-        // Global 模式：除明确排除的（代理服务器等）外，全部走 Remote
-        dnsRules.push({
-          query_type: ['A', 'AAAA'], 
-          server: 'dns-remote'
-        } as SingBoxDnsRule);
-      }
+
+         // 国外域名走远程 DNS，如果开启 FakeIP，走 fakeip 服务器进行劫持
+         dnsRules.push({
+           rule_set: 'geosite-geolocation-!cn',
+           server: enableFakeIp ? 'fakeip' : 'dns-remote',
+         } as SingBoxDnsRule);
+       } else {
+         // Global 模式
+         dnsRules.push({
+           query_type: ['A', 'AAAA'], 
+           server: enableFakeIp ? 'fakeip' : 'dns-remote'
+         } as SingBoxDnsRule);
+       }
     }
-    
-    // 如果是直连模式，全部走默认的 final: dns-local
 
     dnsConfig.rules = dnsRules;
-
     return dnsConfig;
   }
 
-  /**
-   * 收集需要绕过 FakeIP 的域名列表
-   * 这些域名将使用本地 DNS 解析真实 IP，而不是返回 FakeIP
-   */
-  private collectBypassFakeIPDomains(
-    customRules: import('../../shared/types').DomainRule[]
-  ): string[] {
-    const domains: string[] = [];
 
-    for (const rule of customRules) {
-      if (!rule.enabled || !rule.bypassFakeIP || rule.domains.length === 0) continue;
-
-      // 统一处理域名格式，移除可能的 *. 前缀
-      for (const domain of rule.domains) {
-        const normalizedDomain = domain.startsWith('*.') ? domain.slice(2) : domain;
-        domains.push(normalizedDomain);
-      }
-    }
-
-    return domains;
-  }
 
   /**
    * 生成 Inbound 配置（sing-box 1.12.x 格式）
@@ -958,6 +932,53 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       tag: 'block',
     });
 
+    // Shadow-TLS 后处理：如果主节点或任意辅助节点使用了 Shadow-TLS，
+    // 为每个使用 Shadow-TLS 的节点插入内层 SS outbound
+    const stlsOutbounds: SingBoxOutbound[] = [];
+    for (const ob of outbounds) {
+      // 根据 tag 找到对应的 ServerConfig
+      const srv =
+        ob.tag === 'proxy'
+          ? selectedServer
+          : config?.servers.find((s) => `proxy-${s.id}` === ob.tag);
+      if (srv?.shadowTlsSettings) {
+        // 插入内层 SS outbound（server 127.0.0.1，实际由 shadow-tls 转发）
+        const innerTag = `ss-inner-${srv.id}`;
+        const innerOutbound: SingBoxOutbound = {
+          type: 'shadowsocks',
+          tag: innerTag,
+          server: '127.0.0.1',
+          server_port: srv.port,
+          password: srv.shadowsocksSettings?.password || '',
+          method: srv.shadowsocksSettings?.method || 'aes-256-gcm',
+        };
+        stlsOutbounds.push(innerOutbound);
+
+        // 修改主 outbound 为 shadowtls
+        ob.type = 'shadowtls';
+        ob.server = srv.address;
+        ob.server_port = srv.port;
+        ob.version = 3;
+        ob.password = srv.shadowTlsSettings.password;
+        ob.detour = innerTag;
+        ob.tls = {
+          enabled: true,
+          server_name: srv.shadowTlsSettings.sni || srv.address,
+          utls: {
+            enabled: true,
+            fingerprint: srv.shadowTlsSettings.fingerprint || 'chrome',
+          },
+        };
+        // 清除不适用于 shadowtls 的字段
+        delete ob.method;
+        delete ob.uuid;
+        delete ob.flow;
+        delete ob.transport;
+        delete ob.domain_resolver;
+      }
+    }
+    outbounds.push(...stlsOutbounds);
+
     return outbounds;
   }
 
@@ -1017,6 +1038,22 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       }
     }
 
+    // AnyTLS 特定配置
+    if (protocol === 'anytls') {
+      outbound.password = server.password;
+      // AnyTLS 的 TLS 永远开启，这里不需要额外处理，类型检查结尾部分统一生成
+      // AnyTLS 会话参数
+      if (server.anyTlsSettings?.idleSessionCheckInterval) {
+        outbound.idle_session_check_interval = server.anyTlsSettings.idleSessionCheckInterval;
+      }
+      if (server.anyTlsSettings?.idleSessionTimeout) {
+        outbound.idle_session_timeout = server.anyTlsSettings.idleSessionTimeout;
+      }
+      if (server.anyTlsSettings?.minIdleSession !== undefined) {
+        outbound.min_idle_session = server.anyTlsSettings.minIdleSession;
+      }
+    }
+
     // Shadowsocks 特定配置
     if (protocol === 'shadowsocks') {
       if (!server.shadowsocksSettings) {
@@ -1068,8 +1105,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       };
     }
 
-    // 传输层配置（不适用于 hysteria2）
-    if (protocol !== 'hysteria2' && server.network && server.network !== 'tcp') {
+    // 传输层配置（不适用于 hysteria2 和 anytls）
+    if (protocol !== 'hysteria2' && protocol !== 'anytls' && server.network && server.network !== 'tcp') {
       outbound.transport = this.generateTransportConfig(server);
     }
 
@@ -1107,6 +1144,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 使用小写比较代理模式
     const proxyMode = (config.proxyMode || 'smart').toLowerCase();
 
+    // 先初始化整个 RouteConfig，随后再根据模式填充 rule_set 和 rules
+    const routeConfig: SingBoxRouteConfig = {
+      rules,
+      default_domain_resolver: 'dns-local',
+      auto_detect_interface: true,
+      final: proxyMode === 'direct' ? 'direct' : 'proxy',
+    };
+
     // 获取当前选中的服务器，用于排除代理服务器域名
     const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
 
@@ -1128,11 +1173,17 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 自定义规则（优先级最高，必须放在智能分流规则之前）
     // 这样用户可以覆盖任何默认的分流行为
-    // 自定义规则（优先级最高，必须放在智能分流规则之前）
     // 仅在非直连模式下生效
     if (proxyMode !== 'direct') {
-      const customRules = this.generateCustomRules(config.customRules || []);
+      const { rules: customRules, ruleSets: customRuleSets } = this.generateCustomRules(config.customRules || [], config.customRuleSets || [], config.selectedServerId || undefined);
       rules.push(...customRules);
+      
+      if (customRuleSets.length > 0) {
+        if (!routeConfig.rule_set) {
+          routeConfig.rule_set = [];
+        }
+        routeConfig.rule_set.push(...customRuleSets);
+      }
     }
 
     // 私有 IP 段直连（内网地址不应该走代理）
@@ -1179,19 +1230,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       });
     }
 
-    // 始终添加 rule_set 配置（除非是直连模式）
-    // 统一使用 dns-local 作为默认解析器
-    const routeConfig: SingBoxRouteConfig = {
-      rules,
-      default_domain_resolver: 'dns-local',
-      auto_detect_interface: true,
-      final: proxyMode === 'direct' ? 'direct' : 'proxy',
-    };
-
     // 添加 rule_set（除非是直连模式）
     // 直连模式下不需要 rule_set，因为全部走 direct
     if (proxyMode !== 'direct') {
-      routeConfig.rule_set = [
+      if (!routeConfig.rule_set) {
+        routeConfig.rule_set = [];
+      }
+      routeConfig.rule_set.push(
         {
           tag: 'geosite-cn',
           type: 'local',
@@ -1209,8 +1254,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           type: 'local',
           format: 'binary',
           path: path.join(getUserDataPath(), 'rules', 'geoip-cn.srs'),
-        },
-      ];
+        }
+      );
     }
 
     // 添加自定义规则所需的 Geosite rule_set
@@ -1255,15 +1300,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     return categories;
   }
 
-  /**
-   * 生成自定义路由规则
-   * 所有域名统一使用 domain_suffix 匹配，即匹配该域名及其所有子域名
-   */
   private generateCustomRules(
-    customRules: import('../../shared/types').DomainRule[]
-  ): SingBoxRouteRule[] {
+    customRules: import('../../shared/types').DomainRule[],
+    customRuleSets: import('../../shared/types').CustomRuleSet[] = [],
+    selectedServerId?: string
+  ): { rules: SingBoxRouteRule[], ruleSets: SingBoxRuleSet[] } {
     const rules: SingBoxRouteRule[] = [];
+    const ruleSets: SingBoxRuleSet[] = [];
 
+    // 处理旧的 DomainRule (纯文本域名/geosite类)
     for (const rule of customRules) {
       if (!rule.enabled || rule.domains.length === 0) continue;
 
@@ -1288,7 +1333,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           action: 'route',
           domain_suffix: domainSuffix,
         };
-        this.applyRuleAction(singboxRule, rule, this.currentConfig?.selectedServerId || undefined);
+        this.applyRuleAction(singboxRule, rule.action, rule.targetServerId, selectedServerId);
         rules.push(singboxRule);
       }
 
@@ -1298,12 +1343,36 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           action: 'route',
           rule_set: geositeTags,
         };
-        this.applyRuleAction(singboxRule, rule, this.currentConfig?.selectedServerId || undefined);
+        this.applyRuleAction(singboxRule, rule.action, rule.targetServerId, selectedServerId);
         rules.push(singboxRule);
       }
     }
 
-    return rules;
+    // 处理新的 Remote RuleSet
+    let ruleSetIndex = 1;
+    for (const ruleSet of customRuleSets) {
+      if (!ruleSet.enabled || !ruleSet.url) continue;
+
+      const tag = `custom-ruleset-${ruleSetIndex++}`;
+      ruleSets.push({
+        tag,
+        type: 'remote',
+        format: 'binary',
+        url: ruleSet.url,
+        download_detour: 'proxy' // 默认通过代理下载自定义规则集
+      } as any);
+
+      const singboxRule: SingBoxRouteRule = {
+        action: 'route',
+        rule_set: [tag],
+      };
+      
+      // 此处的 CustomRuleSet 只包含 action 而无 targetServerId，不过统一走 applyRuleAction 判断
+      this.applyRuleAction(singboxRule, ruleSet.action, undefined, selectedServerId);
+      rules.push(singboxRule);
+    }
+
+    return { rules, ruleSets };
   }
 
   /**
@@ -1311,21 +1380,25 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    */
   private applyRuleAction(
     singboxRule: SingBoxRouteRule,
-    rule: import('../../shared/types').DomainRule,
+    action: string,
+    targetServerId?: string,
     selectedServerId?: string
   ): void {
      // 设置出站
-     if (rule.action === 'proxy') {
+     if (action === 'proxy') {
       // 如果指定了目标服务器，且不是主节点，则路由到特定的 outbound tag
-      if (rule.targetServerId && selectedServerId !== rule.targetServerId) {
-        singboxRule.outbound = `proxy-${rule.targetServerId}`;
+      if (targetServerId && selectedServerId !== targetServerId) {
+        singboxRule.outbound = `proxy-${targetServerId}`;
       } else {
         singboxRule.outbound = 'proxy';
       }
-    } else if (rule.action === 'direct') {
+    } else if (action === 'direct') {
       singboxRule.outbound = 'direct';
-    } else if (rule.action === 'block') {
+    } else if (action === 'block') {
       singboxRule.outbound = 'block';
+    } else {
+      // 如果没有指定，默认 proxy
+      singboxRule.outbound = 'proxy';
     }
   }
 

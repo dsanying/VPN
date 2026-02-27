@@ -11,7 +11,7 @@ import { LogManager } from './LogManager';
 import type { UpdateInfo, UpdateCheckResult, UpdateProgress } from '../../shared/types/update';
 import { getUserDataPath } from '../utils/paths';
 
-const GITHUB_OWNER = 'zhangjh';
+const GITHUB_OWNER = 'dododook';
 const GITHUB_REPO = 'FlowZ';
 
 export class UpdateService {
