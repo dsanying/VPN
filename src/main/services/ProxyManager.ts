@@ -59,7 +59,7 @@ interface SingBoxLogConfig {
 
 interface SingBoxDnsServer {
   tag: string;
-  type: string;
+  type?: string;
   server?: string;
   detour?: string;
   // DoH 专用字段
