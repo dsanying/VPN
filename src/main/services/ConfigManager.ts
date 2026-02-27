@@ -164,7 +164,7 @@ export class ConfigManager implements IConfigManager {
         }
       }
     } else {
-        config.subscriptions = [];
+      config.subscriptions = [];
     }
 
     // 验证 servers 数组
@@ -180,8 +180,11 @@ export class ConfigManager implements IConfigManager {
       if (!server.name || typeof server.name !== 'string') {
         throw new Error('Server name is required and must be a string');
       }
-      const protocolLower = server.protocol?.toLowerCase();      // 验证必填字段
-      if (!server.protocol || !['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls'].includes(server.protocol)) {
+      const protocolLower = server.protocol?.toLowerCase(); // 验证必填字段
+      if (
+        !server.protocol ||
+        !['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls'].includes(server.protocol)
+      ) {
         throw new Error('Server protocol must be vless, trojan, hysteria2, shadowsocks, or anytls');
       }
       if (!server.address || typeof server.address !== 'string') {
@@ -222,10 +225,16 @@ export class ConfigManager implements IConfigManager {
         if (!server.shadowsocksSettings) {
           throw new Error('Shadowsocks server requires shadowsocksSettings');
         }
-        if (!server.shadowsocksSettings.method || typeof server.shadowsocksSettings.method !== 'string') {
+        if (
+          !server.shadowsocksSettings.method ||
+          typeof server.shadowsocksSettings.method !== 'string'
+        ) {
           throw new Error('Shadowsocks server requires encryption method');
         }
-        if (!server.shadowsocksSettings.password || typeof server.shadowsocksSettings.password !== 'string') {
+        if (
+          !server.shadowsocksSettings.password ||
+          typeof server.shadowsocksSettings.password !== 'string'
+        ) {
           throw new Error('Shadowsocks server requires password');
         }
       }
@@ -320,7 +329,10 @@ export class ConfigManager implements IConfigManager {
     }
 
     // autoLightweightMode 是可选字段，兼容旧配置
-    if (config.autoLightweightMode !== undefined && typeof config.autoLightweightMode !== 'boolean') {
+    if (
+      config.autoLightweightMode !== undefined &&
+      typeof config.autoLightweightMode !== 'boolean'
+    ) {
       throw new Error('autoLightweightMode must be a boolean');
     }
     // 如果未定义，设置默认值
@@ -381,4 +393,3 @@ export class ConfigManager implements IConfigManager {
     };
   }
 }
-
