@@ -9,7 +9,7 @@ https://t.me/flowzfork
 ---
 
 简洁现代的跨平台代理客户端，基于 sing-box 核心。  
-支持 VLESS、Trojan、Shadowsocks、Hysteria2 协议。  
+支持 VLESS、Trojan、Shadowsocks、Hysteria2、Anytls、Shadows-tls 协议。  
 
 主打：
 
@@ -22,9 +22,10 @@ https://t.me/flowzfork
 
 ## ✨ 功能特性
 
-- ✅ 支持 VLESS、Trojan、Hysteria2、Shadowsocks协议。
+- ✅ 支持 VLESS、Trojan、Hysteria2、Shadowsocks、Anytls、Shadows-tls协议。
 - ✅ 强大的路由规则系统（支持 geosite / geoip 规则集）
 - ✅ 多种代理模式（全局 / 智能 / 直连）
+- ✅ 支持订阅链接(需要支持 singbox，可 Substore 转换)
 - ✅ TUN 透明代理模式（支持 System / gVisor / Mixed 堆栈）
 - ✅ 系统级代理自动接管
 - ✅ 实时流量统计与测速
