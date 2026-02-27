@@ -161,7 +161,7 @@ export function ServerList({
     e.stopPropagation();
     setSelectedIds((prev) => {
       const s = new Set(prev);
-      s.has(id) ? s.delete(id) : s.add(id);
+      if (s.has(id)) { s.delete(id); } else { s.add(id); }
       return s;
     });
   };
@@ -536,7 +536,7 @@ export function ServerList({
                     onCheckedChange={() => {
                       setSelectedIds((prev) => {
                         const s = new Set(prev);
-                        s.has(server.id) ? s.delete(server.id) : s.add(server.id);
+                        if (s.has(server.id)) { s.delete(server.id); } else { s.add(server.id); }
                         return s;
                       });
                     }}
@@ -589,17 +589,20 @@ export function ServerList({
               className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
                 selectedServerId === server.id ? 'bg-primary/5' : 'hover:bg-muted/50'
               } ${isSelecting && selectedIds.has(server.id) ? 'bg-blue-50/10' : ''}`}
-              onClick={() => isSelecting
-                ? setSelectedIds((prev) => { const s = new Set(prev); s.has(server.id) ? s.delete(server.id) : s.add(server.id); return s; })
-                : onSelectServer(server.id)
-              }
+              onClick={() => {
+                if (isSelecting) {
+                  setSelectedIds((prev) => { const s = new Set(prev); if (s.has(server.id)) { s.delete(server.id); } else { s.add(server.id); } return s; });
+                } else {
+                  onSelectServer(server.id);
+                }
+              }}
             >
               {/* 批量选择 */}
               {isSelecting && (
                 <Checkbox
                   checked={selectedIds.has(server.id)}
                   onCheckedChange={() => {
-                    setSelectedIds((prev) => { const s = new Set(prev); s.has(server.id) ? s.delete(server.id) : s.add(server.id); return s; });
+                    setSelectedIds((prev) => { const s = new Set(prev); if (s.has(server.id)) { s.delete(server.id); } else { s.add(server.id); } return s; });
                   }}
                   onClick={(e) => e.stopPropagation()}
                 />

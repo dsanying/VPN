@@ -48,3 +48,6 @@ Desktop.ini
 *.tmp
 *.temp
 
+# Local test files (may contain private config)
+test-*.json
+

@@ -2,6 +2,7 @@ const js = require('@eslint/js');
 const typescript = require('@typescript-eslint/eslint-plugin');
 const typescriptParser = require('@typescript-eslint/parser');
 const prettier = require('eslint-plugin-prettier');
+const reactHooks = require('eslint-plugin-react-hooks');
 const globals = require('globals');
 
 module.exports = [
@@ -25,6 +26,7 @@ module.exports = [
     plugins: {
       '@typescript-eslint': typescript,
       prettier: prettier,
+      'react-hooks': reactHooks,
     },
     rules: {
       ...typescript.configs.recommended.rules,

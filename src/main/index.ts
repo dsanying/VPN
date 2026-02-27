@@ -27,7 +27,8 @@ import {
 } from './ipc/handlers';
 import { createAutoStartManager } from './services/AutoStartManager';
 import { UpdateService } from './services/UpdateService';
-import { CoreUpdateService } from './services/CoreUpdateService';import { ipcEventEmitter } from './ipc/ipc-events';
+import { CoreUpdateService } from './services/CoreUpdateService';
+import { ipcEventEmitter } from './ipc/ipc-events';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
 import { initUserDataPath } from './utils/paths';
 
@@ -242,17 +243,21 @@ function createWindow() {
       if (config.autoLightweightMode) {
         // logManager.addLog('debug', 'Window blurred, starting inactivity timer', 'Main');
         if (inactivityTimer) clearTimeout(inactivityTimer);
-        
+
         inactivityTimer = setTimeout(() => {
-          logManager.addLog('info', 'Inactivity timeout reached, entering lightweight mode', 'Main');
+          logManager.addLog(
+            'info',
+            'Inactivity timeout reached, entering lightweight mode',
+            'Main'
+          );
           if (trayManager) {
             trayManager.enterLightweightMode();
           }
           inactivityTimer = null;
         }, INACTIVITY_TIMEOUT);
       }
-    } catch (error) {
-       // ignore
+    } catch {
+      // ignore
     }
   });
 
@@ -436,8 +441,13 @@ app.whenReady().then(async () => {
         logManager.addLog('info', 'System proxy disabled after error', 'Main');
       }
     } catch (cleanupError) {
-      const errorMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-      logManager.addLog('warn', `Failed to disable system proxy after error: ${errorMessage}`, 'Main');
+      const errorMessage =
+        cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      logManager.addLog(
+        'warn',
+        `Failed to disable system proxy after error: ${errorMessage}`,
+        'Main'
+      );
     }
   });
 
@@ -453,7 +463,8 @@ app.whenReady().then(async () => {
         logManager.addLog('info', 'System proxy disabled on stop', 'Main');
       }
     } catch (cleanupError) {
-      const errorMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      const errorMessage =
+        cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
       logManager.addLog('warn', `Failed to disable system proxy on stop: ${errorMessage}`, 'Main');
     }
   });
@@ -467,14 +478,14 @@ app.whenReady().then(async () => {
   registerAdminHandlers();
 
   registerRulesHandlers(configManager);
-  
+
   // 注册核心更新处理器
   setCoreUpdateService(coreUpdateService, logManager);
   registerCoreUpdateHandlers();
 
   // 注册自启动处理器
   registerAutoStartHandlers();
-  
+
   // 注册订阅处理器
   registerSubscriptionHandlers(subscriptionService, configManager);
 
