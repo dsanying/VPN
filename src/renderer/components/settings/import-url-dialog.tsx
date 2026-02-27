@@ -95,7 +95,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
   };
 
   const isValidUrl = (url: string) => {
-    return url.startsWith('vless://') || url.startsWith('trojan://') || url.startsWith('hysteria2://') || url.startsWith('hy2://') || url.startsWith('ss://');
+    return url.startsWith('vless://') || url.startsWith('trojan://') || url.startsWith('hysteria2://') || url.startsWith('hy2://') || url.startsWith('ss://') || url.startsWith('anytls://');
   };
 
   return (
@@ -106,7 +106,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
             <Link className="h-5 w-5" />
             从URL导入服务器
           </DialogTitle>
-          <DialogDescription>支持导入 vless://、trojan://、hysteria2://、hy2:// 和 ss:// 协议链接</DialogDescription>
+          <DialogDescription>支持导入 vless://、trojan://、hysteria2://、hy2://、ss:// 和 anytls:// 协议链接</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -119,7 +119,8 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                 placeholder="vless://uuid@server:port?encryption=none&security=tls&type=ws&host=example.com&path=/path#name
 或 trojan://password@server:port?security=tls&type=ws#name
 或 hysteria2://password@server:port?sni=example.com#name
-或 ss://base64(method:password)@server:port#name"
+或 ss://base64(method:password)@server:port#name
+或 anytls://password@server:port?security=tls&sni=example.com#name"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 className="min-h-[80px] resize-none"
@@ -134,7 +135,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
             </div>
             {url.trim() && !isValidUrl(url.trim()) && (
               <p className="text-sm text-destructive">
-                请输入有效的 vless://、trojan://、hysteria2://、hy2:// 或 ss:// 协议链接
+                请输入有效的 vless://、trojan://、hysteria2://、hy2://、ss:// 或 anytls:// 协议链接
               </p>
             )}
           </div>

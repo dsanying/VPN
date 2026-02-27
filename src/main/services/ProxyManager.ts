@@ -942,39 +942,33 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           ? selectedServer
           : config?.servers.find((s) => `proxy-${s.id}` === ob.tag);
       if (srv?.shadowTlsSettings) {
-        // 插入内层 SS outbound（server 127.0.0.1，实际由 shadow-tls 转发）
-        const innerTag = `ss-inner-${srv.id}`;
-        const innerOutbound: SingBoxOutbound = {
-          type: 'shadowsocks',
-          tag: innerTag,
-          server: '127.0.0.1',
-          server_port: srv.port,
-          password: srv.shadowsocksSettings?.password || '',
-          method: srv.shadowsocksSettings?.method || 'aes-256-gcm',
-        };
-        stlsOutbounds.push(innerOutbound);
-
-        // 修改主 outbound 为 shadowtls
-        ob.type = 'shadowtls';
-        ob.server = srv.address;
-        ob.server_port = srv.port;
-        ob.version = 3;
-        ob.password = srv.shadowTlsSettings.password;
-        ob.detour = innerTag;
-        ob.tls = {
-          enabled: true,
-          server_name: srv.shadowTlsSettings.sni || srv.address,
-          utls: {
+        // 创建独立的外层 ShadowTLS outbound
+        const stlsTag = `stls-out-${srv.id}`;
+        const stlsOutbound: SingBoxOutbound = {
+          type: 'shadowtls',
+          tag: stlsTag,
+          server: srv.address,
+          server_port: srv.shadowTlsSettings.port || srv.port,
+          version: 3,
+          password: srv.shadowTlsSettings.password,
+          tls: {
             enabled: true,
-            fingerprint: srv.shadowTlsSettings.fingerprint || 'chrome',
+            server_name: srv.shadowTlsSettings.sni || srv.address,
+            utls: {
+              enabled: true,
+              fingerprint: srv.shadowTlsSettings.fingerprint || 'chrome',
+            },
           },
         };
-        // 清除不适用于 shadowtls 的字段
-        delete ob.method;
-        delete ob.uuid;
-        delete ob.flow;
-        delete ob.transport;
-        delete ob.domain_resolver;
+        stlsOutbounds.push(stlsOutbound);
+
+        // 主 outbound (原本的 shadowsocks) 必须作为应用的路由目标
+        // 所以我们保留它为 proxy (shadowsocks)，但将其 detour 指向新增的 shadowtls outbound
+        ob.detour = stlsTag;
+        
+        // 当配置了 detour 后，sing-box 通常期望主 outbound 的 server/port 被忽略
+        // 但为了规范，我们可以保留 shadowsocks 的原参数或统一指向实际伪装的地址
+        // 在 ShadowTLS 架构中，外层负责 TLS 握手连接真实服务器地址，内层 SS 则是被保护的流量
       }
     }
     outbounds.push(...stlsOutbounds);

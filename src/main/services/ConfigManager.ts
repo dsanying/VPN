@@ -180,9 +180,9 @@ export class ConfigManager implements IConfigManager {
       if (!server.name || typeof server.name !== 'string') {
         throw new Error('Server name is required and must be a string');
       }
-      const protocolLower = server.protocol?.toLowerCase();
-      if (!protocolLower || !['vless', 'trojan', 'hysteria2', 'shadowsocks'].includes(protocolLower)) {
-        throw new Error('Server protocol must be vless, trojan, hysteria2, or shadowsocks');
+      const protocolLower = server.protocol?.toLowerCase();      // 验证必填字段
+      if (!server.protocol || !['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls'].includes(server.protocol)) {
+        throw new Error('Server protocol must be vless, trojan, hysteria2, shadowsocks, or anytls');
       }
       if (!server.address || typeof server.address !== 'string') {
         throw new Error('Server address is required and must be a string');

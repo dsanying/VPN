@@ -86,6 +86,7 @@ export interface ShadowTlsSettings {
   password: string;       // Shadow-TLS v3 密码
   sni: string;            // 伪装的目标域名
   fingerprint?: string;   // uTLS 指纹，默认 chrome
+  port?: number;          // Shadow-TLS 监听/转发的真实端口 (可选)
 }
 
 // ============================================================================

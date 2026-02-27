@@ -37,6 +37,7 @@ const ssFormSchema = z.object({
   shadowTlsPassword: z.string().optional(),
   shadowTlsSni: z.string().optional(),
   shadowTlsFingerprint: z.string().optional(),
+  shadowTlsPort: z.number().optional(),
 });
 
 type SsFormValues = z.infer<typeof ssFormSchema>;
@@ -79,16 +80,29 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
       shadowTlsPassword: '',
       shadowTlsSni: '',
       shadowTlsFingerprint: 'chrome',
+      shadowTlsPort: undefined,
     },
   });
 
   useEffect(() => {
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'shadowsocks') {
       const hasShadowTls = !!serverConfig.shadowTlsSettings;
+      
+      let method = serverConfig.shadowsocksSettings?.method?.toLowerCase() || 'aes-256-gcm';
+      // Normalize common alias
+      if (method === 'chacha20-poly1305') {
+        method = 'chacha20-ietf-poly1305';
+      }
+      
+      // Attempt to find exact match in COMMON_METHODS to prevent blank selection
+      const matchedMethod = COMMON_METHODS.find(m => m.toLowerCase() === method.trim()) || method.trim();
+
+      console.log('--- SS FORM DBG ---', { original: serverConfig.shadowsocksSettings?.method, lowered: method, matchedMethod, length: matchedMethod.length });
+
       form.reset({
         address: serverConfig.address || '',
         port: serverConfig.port || 8388,
-        method: serverConfig.shadowsocksSettings?.method || 'aes-256-gcm',
+        method: matchedMethod,
         password: serverConfig.shadowsocksSettings?.password || '',
         plugin: serverConfig.shadowsocksSettings?.plugin || '',
         pluginOptions: serverConfig.shadowsocksSettings?.pluginOptions || '',
@@ -97,6 +111,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
         shadowTlsPassword: serverConfig.shadowTlsSettings?.password || '',
         shadowTlsSni: serverConfig.shadowTlsSettings?.sni || '',
         shadowTlsFingerprint: serverConfig.shadowTlsSettings?.fingerprint || 'chrome',
+        shadowTlsPort: serverConfig.shadowTlsSettings?.port || undefined,
       });
     }
   }, [serverConfig, form]);
@@ -122,6 +137,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
         password: values.shadowTlsPassword,
         sni: values.shadowTlsSni,
         fingerprint: values.shadowTlsFingerprint || 'chrome',
+        port: values.shadowTlsPort || undefined,
       };
     }
 
@@ -194,11 +210,17 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {COMMON_METHODS.map((method) => (
-                    <SelectItem key={method} value={method}>
-                      {method}
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const sortedMethods = [...COMMON_METHODS];
+                    if (field.value && !COMMON_METHODS.includes(field.value)) {
+                      sortedMethods.unshift(field.value);
+                    }
+                    return sortedMethods.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {method}
+                      </SelectItem>
+                    ));
+                  })()}
                 </SelectContent>
               </Select>
               <FormDescription>Shadowsocks 加密算法</FormDescription>
@@ -291,20 +313,46 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="shadowTlsSni"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>伪装域名（SNI）</FormLabel>
-                    <FormControl>
-                      <Input placeholder="www.microsoft.com" {...field} />
-                    </FormControl>
-                    <FormDescription>Shadow-TLS 伪装目标域名，需与服务端一致</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="shadowTlsSni"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>伪装域名（SNI）</FormLabel>
+                      <FormControl>
+                        <Input placeholder="www.microsoft.com" {...field} />
+                      </FormControl>
+                      <FormDescription>Shadow-TLS 伪装目标域名</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="shadowTlsPort"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>真实端口 (可选)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="例如: 8443 (留空默认使用原端口)"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.onChange(val ? parseInt(val) : undefined);
+                          }}
+                        />
+                      </FormControl>
+                      <FormDescription>Shadow-TLS 实际监听的端口</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}

@@ -71,7 +71,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
         address: serverConfig.address || '',
         port: serverConfig.port || 443,
         uuid: serverConfig.uuid || '',
-        encryption: serverConfig.encryption || 'none',
+        encryption: serverConfig.encryption?.toLowerCase() || 'none',
         flow: serverConfig.flow || '',
         network: normalizeNetwork(serverConfig.network),
         security: normalizeSecurity(serverConfig.security),

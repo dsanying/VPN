@@ -418,9 +418,54 @@ export class ProtocolParser implements IProtocolParser {
     const plugin = params.get('plugin');
     if (plugin && config.shadowsocksSettings) {
       const pluginParts = plugin.split(';');
-      config.shadowsocksSettings.plugin = pluginParts[0];
+      const pluginName = pluginParts[0];
+      config.shadowsocksSettings.plugin = pluginName;
+      
       if (pluginParts.length > 1) {
         config.shadowsocksSettings.pluginOptions = pluginParts.slice(1).join(';');
+      }
+
+    // 提取 Shadow-TLS 插件配置 (基于 Shadow-TLS v3 常用参数)
+      if (pluginName.includes('shadow-tls')) {
+         const shadowTlsPassword = params.get('shadow-tls-password');
+         const shadowTlsSni = params.get('shadow-tls-sni');
+         const shadowTlsFingerprint = params.get('shadow-tls-fp'); // 可选
+         
+         if (shadowTlsPassword && shadowTlsSni) {
+             config.shadowTlsSettings = {
+                 password: shadowTlsPassword,
+                 sni: shadowTlsSni,
+                 fingerprint: shadowTlsFingerprint || 'chrome'
+             };
+             const tlsPort = params.get('shadow-tls-port');
+             if (tlsPort) {
+               config.shadowTlsSettings.port = parseInt(tlsPort);
+             }
+         }
+      }
+    }
+    
+    // 支持直接以 shadow-tls 查询参数传递 JSON 配置 (Base64 编码)
+    const shadowTlsParam = params.get('shadow-tls');
+    if (shadowTlsParam) {
+      try {
+        const decodedParam = Buffer.from(shadowTlsParam, 'base64').toString('utf-8');
+        const stlsConfig = JSON.parse(decodedParam);
+        if (stlsConfig.password && stlsConfig.host) {
+            config.shadowTlsSettings = {
+                password: stlsConfig.password,
+                sni: stlsConfig.host,
+                fingerprint: 'chrome' // 默认值，由于 JSON 中可能没有 fingerprint
+            };
+            if (stlsConfig.port) {
+                config.shadowTlsSettings.port = parseInt(stlsConfig.port);
+            }
+            if (stlsConfig.version && stlsConfig.version.toString() === '3') {
+                // version 3 is expected
+            }
+        }
+      } catch (e) {
+        console.error('Failed to parse shadow-tls Base64 JSON parameter:', e);
       }
     }
 
@@ -744,6 +789,17 @@ export class ProtocolParser implements IProtocolParser {
          pluginStr += `;${pluginOptions}`;
        }
        params.set('plugin', pluginStr);
+    }
+
+    if (config.shadowTlsSettings) {
+      params.set('shadow-tls-password', config.shadowTlsSettings.password);
+      params.set('shadow-tls-sni', config.shadowTlsSettings.sni);
+      if (config.shadowTlsSettings.fingerprint) {
+        params.set('shadow-tls-fp', config.shadowTlsSettings.fingerprint);
+      }
+      if (config.shadowTlsSettings.port) {
+        params.set('shadow-tls-port', config.shadowTlsSettings.port.toString());
+      }
     }
     
     const name = encodeURIComponent(config.name || `${config.address}:${config.port}`);
