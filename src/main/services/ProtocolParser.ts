@@ -97,12 +97,22 @@ export class ProtocolParser implements IProtocolParser {
   }
 
   /**
+   * 移除 IPv6 地址两端的中括号（如果存在）
+   */
+  private stripIpv6Brackets(hostname: string): string {
+    if (hostname.startsWith('[') && hostname.endsWith(']')) {
+      return hostname.slice(1, -1);
+    }
+    return hostname;
+  }
+
+  /**
    * 解析 VLESS URL
    * 格式: vless://uuid@address:port?encryption=none&security=tls&type=ws&host=example.com&path=/path#name
    */
   private parseVless(url: URL): ServerConfig {
     const uuid = url.username;
-    const address = url.hostname;
+    const address = this.stripIpv6Brackets(url.hostname);
     const port = parseInt(url.port) || 443;
     const params = new URLSearchParams(url.search);
     const name = decodeURIComponent(url.hash.slice(1)) || `${address}:${port}`;
@@ -150,7 +160,7 @@ export class ProtocolParser implements IProtocolParser {
    */
   private parseTrojan(url: URL): ServerConfig {
     const password = decodeURIComponent(url.username);
-    const address = url.hostname;
+    const address = this.stripIpv6Brackets(url.hostname);
     const port = parseInt(url.port) || 443;
     const params = new URLSearchParams(url.search);
     const name = decodeURIComponent(url.hash.slice(1)) || `${address}:${port}`;
@@ -197,7 +207,7 @@ export class ProtocolParser implements IProtocolParser {
    */
   private parseHysteria2(url: URL): ServerConfig {
     const password = decodeURIComponent(url.username);
-    const address = url.hostname;
+    const address = this.stripIpv6Brackets(url.hostname);
     const port = parseInt(url.port) || 443;
     const params = new URLSearchParams(url.search);
     const name = decodeURIComponent(url.hash.slice(1)) || `${address}:${port}`;
@@ -282,7 +292,7 @@ export class ProtocolParser implements IProtocolParser {
    */
   private parseAnyTls(url: URL): ServerConfig {
     const password = decodeURIComponent(url.username);
-    const address = url.hostname;
+    const address = this.stripIpv6Brackets(url.hostname);
     const port = parseInt(url.port) || 443;
     const params = new URLSearchParams(url.search);
     const name = decodeURIComponent(url.hash.slice(1)) || `${address}:${port}`;
@@ -339,7 +349,7 @@ export class ProtocolParser implements IProtocolParser {
       id: randomUUID(),
       protocol: 'shadowsocks',
       name: decodeURIComponent(urlObj.hash.slice(1)) || 'Shadowsocks',
-      address: urlObj.hostname,
+      address: this.stripIpv6Brackets(urlObj.hostname),
       port: parseInt(urlObj.port, 10),
       shadowsocksSettings: {
         method: '',

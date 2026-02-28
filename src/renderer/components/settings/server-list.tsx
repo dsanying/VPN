@@ -111,9 +111,12 @@ export function ServerList({
     setLatencyMap({});
     try {
       toast.info('开始测速...');
-      const results = await api.server.speedTest();
+      const serverIdsToTest = servers.map((s) => s.id);
+      const results = await api.server.speedTest(serverIdsToTest);
       setLatencyMap(results);
       toast.success('测速完成');
+      setSortKey('latency');
+      setSortOrder('asc');
     } catch (error) {
       toast.error('测速失败', {
         description: error instanceof Error ? error.message : String(error),
@@ -224,8 +227,10 @@ export function ServerList({
       } else if (sortKey === 'address') {
         cmp = a.address.localeCompare(b.address);
       } else if (sortKey === 'latency') {
-        const la = latencyMap[a.id] ?? Infinity;
-        const lb = latencyMap[b.id] ?? Infinity;
+        const getVal = (v: number | undefined) =>
+          v === undefined ? Infinity : v === -1 ? Infinity - 1 : v;
+        const la = getVal(latencyMap[a.id]);
+        const lb = getVal(latencyMap[b.id]);
         cmp = la - lb;
       }
       return sortOrder === 'asc' ? cmp : -cmp;

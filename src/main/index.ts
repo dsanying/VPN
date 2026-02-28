@@ -28,6 +28,7 @@ import {
 import { createAutoStartManager } from './services/AutoStartManager';
 import { UpdateService } from './services/UpdateService';
 import { CoreUpdateService } from './services/CoreUpdateService';
+import { SpeedTestService } from './services/SpeedTestService';
 import { ipcEventEmitter } from './ipc/ipc-events';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
 import { initUserDataPath } from './utils/paths';
@@ -52,6 +53,7 @@ const systemProxyManager = createSystemProxyManager();
 const updateService = new UpdateService(logManager);
 const coreUpdateService = new CoreUpdateService(logManager);
 const subscriptionService = new SubscriptionService(protocolParser, logManager);
+const speedTestService = new SpeedTestService(logManager);
 
 // 全局异常捕获 - 主进程
 process.on('uncaughtException', (error: Error) => {
@@ -502,7 +504,7 @@ app.whenReady().then(async () => {
   registerUpdateHandlers();
 
   // 注册测速处理器
-  registerSpeedTestHandlers(configManager);
+  registerSpeedTestHandlers(configManager, speedTestService);
 
   // 设置托盘状态更新回调
   setTrayStateCallback((isRunning: boolean, hasError?: boolean) => {

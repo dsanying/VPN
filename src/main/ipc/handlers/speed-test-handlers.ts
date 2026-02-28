@@ -3,58 +3,36 @@
  */
 
 import { IpcMainInvokeEvent } from 'electron';
-import * as net from 'net';
 import { IPC_CHANNELS } from '../../../shared/ipc-channels';
 import { registerIpcHandler } from '../ipc-handler';
 import { ConfigManager } from '../../services/ConfigManager';
 
+import { SpeedTestService } from '../../services/SpeedTestService';
+
 /**
  * 注册测速相关的 IPC 处理器
  */
-export function registerSpeedTestHandlers(configManager: ConfigManager): void {
+export function registerSpeedTestHandlers(
+  configManager: ConfigManager,
+  speedTestService: SpeedTestService
+): void {
   // 服务器测速
-  registerIpcHandler<void, Record<string, number>>(
+  registerIpcHandler<{ serverIds?: string[] }, Record<string, number>>(
     IPC_CHANNELS.SERVER_SPEED_TEST,
-    async (_event: IpcMainInvokeEvent) => {
+    async (_event: IpcMainInvokeEvent, args?: { serverIds?: string[] }) => {
       const config = await configManager.loadConfig();
       const results: Record<string, number> = {};
 
-      const testPromises = config.servers.map(async (server) => {
-        const start = Date.now();
-        try {
-          await new Promise<void>((resolve, reject) => {
-            const socket = new net.Socket();
-            const timeout = 5000; // 5秒超时
+      const serversToTest = args?.serverIds
+        ? config.servers.filter((s) => args.serverIds!.includes(s.id))
+        : config.servers;
 
-            socket.setTimeout(timeout);
+      const rawResults = await speedTestService.testAllServers(serversToTest);
 
-            socket.on('connect', () => {
-              socket.destroy();
-              resolve();
-            });
+      for (const [id, latency] of rawResults.entries()) {
+        results[id] = latency === null ? -1 : latency;
+      }
 
-            socket.on('timeout', () => {
-              socket.destroy();
-              reject(new Error('Timeout'));
-            });
-
-            socket.on('error', (err) => {
-              socket.destroy();
-              reject(err);
-            });
-
-            socket.connect(server.port, server.address);
-          });
-
-          // 连接成功，记录耗时
-          results[server.id] = Date.now() - start;
-        } catch {
-          // 连接失败或超时，记录为 -1
-          results[server.id] = -1;
-        }
-      });
-
-      await Promise.all(testPromises);
       return results;
     }
   );

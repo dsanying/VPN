@@ -213,7 +213,9 @@ export function ConnectionStatusCard() {
                 <SelectContent>
                   {servers.map((server) => (
                     <SelectItem key={server.id} value={server.id}>
-                      {server.name} ({server.protocol})
+                      <span className="truncate max-w-[200px] md:max-w-[260px] inline-block align-bottom">
+                        {server.name} ({server.protocol})
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -233,7 +235,9 @@ export function ConnectionStatusCard() {
                   <SelectContent>
                     {servers.map((server) => (
                       <SelectItem key={server.id} value={server.id}>
-                        {server.name} ({server.protocol})
+                        <span className="truncate max-w-[200px] md:max-w-[260px] inline-block align-bottom">
+                          {server.name} ({server.protocol})
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>

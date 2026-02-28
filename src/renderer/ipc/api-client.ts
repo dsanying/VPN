@@ -183,10 +183,10 @@ export const serverApi = {
   },
 
   /**
-   * 测试所有服务器延迟
+   * 测试指定服务器延迟，不传则测试所有服务器
    */
-  async speedTest(): Promise<Record<string, number>> {
-    return ipcClient.invoke(IPC_CHANNELS.SERVER_SPEED_TEST);
+  async speedTest(serverIds?: string[]): Promise<Record<string, number>> {
+    return ipcClient.invoke(IPC_CHANNELS.SERVER_SPEED_TEST, { serverIds });
   },
 };
 

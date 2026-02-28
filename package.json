@@ -1,6 +1,6 @@
 {
   "name": "flowz",
-  "version": "3.2.7",
+  "version": "3.2.8",
   "singboxVersion": "1.12.13",
   "description": "FlowZ - 简洁现代的跨平台代理客户端",
   "main": "dist/main/main/index.js",
@@ -27,8 +27,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
     "release:tag": "node scripts/push-release.js",
     "release:tag:update": "node scripts/push-release.js -y -u",
-    "release:prepare": "npm run build && npm run package:all",
-    "prepare": "husky"
+    "release:prepare": "npm run build && npm run package:all"
   },
   "keywords": [
     "electron",

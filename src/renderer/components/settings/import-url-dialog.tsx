@@ -167,10 +167,13 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                       {parsedConfig.protocol}
                     </Badge>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">地址:</span>
-                    <span className="ml-2 font-mono">
-                      {parsedConfig.address}:{parsedConfig.port}
+                  <div className="flex flex-col md:flex-row md:items-baseline relative pr-2">
+                    <span className="text-muted-foreground whitespace-nowrap">地址:</span>
+                    <span className="md:ml-2 font-mono break-all line-clamp-2 md:line-clamp-none">
+                      {parsedConfig.address.includes(':')
+                        ? `[${parsedConfig.address}]`
+                        : parsedConfig.address}
+                      :{parsedConfig.port}
                     </span>
                   </div>
                   <div>
