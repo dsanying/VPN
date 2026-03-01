@@ -1,13 +1,5 @@
 # FlowZ
 
-本软件 fork 自原作者项目：  
-https://github.com/zhangjh/FlowZ  
-
-如有需要可关注：  
-https://t.me/flowzfork  
-
----
-
 简洁现代的跨平台代理客户端，基于 sing-box 核心。  
 支持 VLESS、Trojan、Shadowsocks、Hysteria2、Anytls、Shadows-tls 协议。  
 
