@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 export function AdvancedSettings() {
   const config = useAppStore((state) => state.config);
   const saveConfig = useAppStore((state) => state.saveConfig);
+  const { t } = useTranslation();
 
   const [socksPort, setSocksPort] = useState(config?.socksPort?.toString() || '65534');
   const [httpPort, setHttpPort] = useState(config?.httpPort?.toString() || '65533');
@@ -22,17 +24,17 @@ export function AdvancedSettings() {
 
     // Validate ports
     if (isNaN(socksPortNum) || socksPortNum < 1024 || socksPortNum > 65535) {
-      toast.error('SOCKS 端口必须在 1024-65535 之间');
+      toast.error(t('advanced.socksPortRange', 'SOCKS 端口必须在 1024-65535 之间'));
       return;
     }
 
     if (isNaN(httpPortNum) || httpPortNum < 1024 || httpPortNum > 65535) {
-      toast.error('HTTP 端口必须在 1024-65535 之间');
+      toast.error(t('advanced.httpPortRange', 'HTTP 端口必须在 1024-65535 之间'));
       return;
     }
 
     if (socksPortNum === httpPortNum) {
-      toast.error('SOCKS 和 HTTP 端口不能相同');
+      toast.error(t('advanced.portsSame', 'SOCKS 和 HTTP 端口不能相同'));
       return;
     }
 
@@ -44,9 +46,9 @@ export function AdvancedSettings() {
         httpPort: httpPortNum,
       };
       await saveConfig(updatedConfig);
-      toast.success('端口设置已保存，重启代理后生效');
+      toast.success(t('advanced.portsSaved', '端口设置已保存，重启代理后生效'));
     } catch {
-      toast.error('保存端口设置失败');
+      toast.error(t('advanced.portsSaveFail', '保存端口设置失败'));
     } finally {
       setIsLoading(false);
     }
@@ -56,20 +58,25 @@ export function AdvancedSettings() {
     return null;
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(t('advanced.copied', '已复制到剪贴板'));
+  };
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>高级</CardTitle>
-        <CardDescription>高级配置选项与 DNS 设置</CardDescription>
+        <CardTitle>{t('advanced.title', '高级')}</CardTitle>
+        <CardDescription>{t('advanced.description', '高级配置选项与 DNS 设置')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* DNS 设置区域 */}
         <div className="space-y-4">
-          <h4 className="text-sm font-medium mb-2">DNS 设置</h4>
+          <h4 className="text-sm font-medium mb-2">{t('advanced.dnsSettings', 'DNS 设置')}</h4>
 
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="domesticDns">国内 DNS (直连)</Label>
+              <Label htmlFor="domesticDns">{t('advanced.domesticDns', '国内 DNS (直连)')}</Label>
               <Input
                 id="domesticDns"
                 value={config.dnsConfig?.domesticDns || 'https://doh.pub/dns-query'}
@@ -86,15 +93,18 @@ export function AdvancedSettings() {
                   saveConfig(updatedConfig);
                 }}
                 className="max-w-md"
-                placeholder="例如: https://doh.pub/dns-query 或 223.5.5.5"
+                placeholder={t(
+                  'advanced.domesticDnsPlaceholder',
+                  '例如: https://doh.pub/dns-query 或 223.5.5.5'
+                )}
               />
               <p className="text-xs text-muted-foreground">
-                用于解析国内域名，建议使用国内 DoH 或 UDP DNS
+                {t('advanced.domesticDnsDesc', '用于解析国内域名，建议使用国内 DoH 或 UDP DNS')}
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="foreignDns">海外 DNS (代理)</Label>
+              <Label htmlFor="foreignDns">{t('advanced.foreignDns', '海外 DNS (代理)')}</Label>
               <Input
                 id="foreignDns"
                 value={config.dnsConfig?.foreignDns || 'https://dns.google/dns-query'}
@@ -111,10 +121,13 @@ export function AdvancedSettings() {
                   saveConfig(updatedConfig);
                 }}
                 className="max-w-md"
-                placeholder="例如: https://dns.google/dns-query 或 8.8.8.8"
+                placeholder={t(
+                  'advanced.foreignDnsPlaceholder',
+                  '例如: https://dns.google/dns-query 或 8.8.8.8'
+                )}
               />
               <p className="text-xs text-muted-foreground">
-                用于解析海外域名，防止 DNS 污染 (将通过代理发送)
+                {t('advanced.foreignDnsDesc', '用于解析海外域名，防止 DNS 污染 (将通过代理发送)')}
               </p>
             </div>
 
@@ -138,20 +151,23 @@ export function AdvancedSettings() {
                 }}
               />
               <Label htmlFor="enableFakeIp" className="font-normal">
-                启用 FakeIP (仅 TUN 模式有效)
+                {t('advanced.enableFakeIp', '启用 FakeIP (仅 TUN 模式有效)')}
               </Label>
             </div>
             <p className="text-xs text-muted-foreground ml-6">
-              能显著降低首次连接延迟，但可能导致某些依赖真实 IP 的应用异常
+              {t(
+                'advanced.fakeIpDesc',
+                '能显著降低首次连接延迟，但可能导致某些依赖真实 IP 的应用异常'
+              )}
             </p>
           </div>
         </div>
 
         {/* 端口设置区域 */}
         <div className="space-y-4 pt-4 border-t">
-          <h4 className="text-sm font-medium mb-2">端口设置</h4>
+          <h4 className="text-sm font-medium mb-2">{t('advanced.portSettings', '端口设置')}</h4>
           <div className="space-y-2">
-            <Label htmlFor="socksPort">本地 SOCKS 端口</Label>
+            <Label htmlFor="socksPort">{t('advanced.socksPort', '本地 SOCKS 端口')}</Label>
             <div className="flex gap-2">
               <Input
                 id="socksPort"
@@ -163,11 +179,11 @@ export function AdvancedSettings() {
                 className="max-w-[200px]"
               />
             </div>
-            <p className="text-xs text-muted-foreground">默认: 65534</p>
+            <p className="text-xs text-muted-foreground">{t('advanced.default', '默认')}: 65534</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="httpPort">本地 HTTP 端口</Label>
+            <Label htmlFor="httpPort">{t('advanced.httpPort', '本地 HTTP 端口')}</Label>
             <div className="flex gap-2">
               <Input
                 id="httpPort"
@@ -179,19 +195,23 @@ export function AdvancedSettings() {
                 className="max-w-[200px]"
               />
             </div>
-            <p className="text-xs text-muted-foreground">默认: 65533</p>
+            <p className="text-xs text-muted-foreground">{t('advanced.default', '默认')}: 65533</p>
           </div>
 
           <Button onClick={handleSavePorts} disabled={isLoading}>
-            {isLoading ? '保存中...' : '保存端口设置'}
+            {isLoading
+              ? t('advanced.saving', '保存中...')
+              : t('advanced.savePortSettings', '保存端口设置')}
           </Button>
         </div>
 
         <div className="space-y-4 pt-4 border-t">
           <div>
-            <h4 className="text-sm font-medium mb-2">终端代理设置</h4>
+            <h4 className="text-sm font-medium mb-2">
+              {t('advanced.terminalProxy', '终端代理设置')}
+            </h4>
             <p className="text-xs text-muted-foreground mb-3">
-              复制以下命令到终端中设置代理（需要先启动代理）
+              {t('advanced.terminalProxyDesc', '复制以下命令到终端中设置代理（需要先启动代理）')}
             </p>
 
             <div className="space-y-3">
@@ -205,14 +225,9 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `set http_proxy=http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() => copyToClipboard(`set http_proxy=http://127.0.0.1:${httpPort}`)}
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -222,14 +237,11 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `set https_proxy=http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`set https_proxy=http://127.0.0.1:${httpPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                 </div>
@@ -242,36 +254,30 @@ export function AdvancedSettings() {
                 <div className="mt-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <code className="flex-1 px-2 py-1 text-xs bg-muted rounded font-mono">
-                      $env:http_proxy="http://127.0.0.1:{httpPort}"
+                      $env:http_proxy=&quot;http://127.0.0.1:{httpPort}&quot;
                     </code>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `$env:http_proxy="http://127.0.0.1:${httpPort}"`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`$env:http_proxy="http://127.0.0.1:${httpPort}"`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 px-2 py-1 text-xs bg-muted rounded font-mono">
-                      $env:https_proxy="http://127.0.0.1:{httpPort}"
+                      $env:https_proxy=&quot;http://127.0.0.1:{httpPort}&quot;
                     </code>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `$env:https_proxy="http://127.0.0.1:${httpPort}"`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`$env:https_proxy="http://127.0.0.1:${httpPort}"`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                 </div>
@@ -289,14 +295,11 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `export http_proxy=http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`export http_proxy=http://127.0.0.1:${httpPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -306,21 +309,20 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `export https_proxy=http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`export https_proxy=http://127.0.0.1:${httpPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-muted-foreground">Git 代理设置</Label>
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t('advanced.gitProxy', 'Git 代理设置')}
+                </Label>
                 <div className="mt-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <code className="flex-1 px-2 py-1 text-xs bg-muted rounded font-mono">
@@ -329,14 +331,13 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
+                      onClick={() =>
+                        copyToClipboard(
                           `git config --global http.proxy http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                        )
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -346,21 +347,22 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
+                      onClick={() =>
+                        copyToClipboard(
                           `git config --global https.proxy http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                        )
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label className="text-xs font-medium text-muted-foreground">npm 代理设置</Label>
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t('advanced.npmProxy', 'npm 代理设置')}
+                </Label>
                 <div className="mt-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <code className="flex-1 px-2 py-1 text-xs bg-muted rounded font-mono">
@@ -369,14 +371,11 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `npm config set proxy http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`npm config set proxy http://127.0.0.1:${httpPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -386,14 +385,11 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `npm config set https-proxy http://127.0.0.1:${httpPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`npm config set https-proxy http://127.0.0.1:${httpPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                 </div>
@@ -401,7 +397,7 @@ export function AdvancedSettings() {
 
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">
-                  SOCKS5 代理设置（通用）
+                  {t('advanced.socks5Proxy', 'SOCKS5 代理设置（通用）')}
                 </Label>
                 <div className="mt-1 space-y-1">
                   <div className="flex items-center gap-2">
@@ -411,31 +407,25 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `set ALL_PROXY=socks5://127.0.0.1:${socksPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`set ALL_PROXY=socks5://127.0.0.1:${socksPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 px-2 py-1 text-xs bg-muted rounded font-mono">
-                      $env:ALL_PROXY="socks5://127.0.0.1:{socksPort}"
+                      $env:ALL_PROXY=&quot;socks5://127.0.0.1:{socksPort}&quot;
                     </code>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `$env:ALL_PROXY="socks5://127.0.0.1:${socksPort}"`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`$env:ALL_PROXY="socks5://127.0.0.1:${socksPort}"`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -445,14 +435,11 @@ export function AdvancedSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `export ALL_PROXY=socks5://127.0.0.1:${socksPort}`
-                        );
-                        toast.success('已复制到剪贴板');
-                      }}
+                      onClick={() =>
+                        copyToClipboard(`export ALL_PROXY=socks5://127.0.0.1:${socksPort}`)
+                      }
                     >
-                      复制
+                      {t('advanced.copy', '复制')}
                     </Button>
                   </div>
                 </div>
@@ -461,14 +448,30 @@ export function AdvancedSettings() {
 
             <div className="mt-4 p-3 bg-muted/50 rounded-lg">
               <p className="text-xs text-muted-foreground">
-                <strong>提示：</strong>
+                <strong>{t('advanced.tip', '提示：')}</strong>
               </p>
               <ul className="text-xs text-muted-foreground mt-1 space-y-1">
-                <li>• 终端代理设置仅在当前会话有效</li>
-                <li>• 要永久设置，请将命令添加到 ~/.bashrc 或 ~/.zshrc 文件中</li>
-                <li>• HTTP 代理端口：{httpPort}（推荐，兼容性最好）</li>
-                <li>• SOCKS5 代理端口：{socksPort}（部分工具支持）</li>
-                <li>• 取消代理：删除或注释相关环境变量</li>
+                <li>• {t('advanced.tipSessionOnly', '终端代理设置仅在当前会话有效')}</li>
+                <li>
+                  •{' '}
+                  {t(
+                    'advanced.tipPermanent',
+                    '要永久设置，请将命令添加到 ~/.bashrc 或 ~/.zshrc 文件中'
+                  )}
+                </li>
+                <li>
+                  •{' '}
+                  {t('advanced.tipHttpPort', 'HTTP 代理端口：{{port}}（推荐，兼容性最好）', {
+                    port: httpPort,
+                  })}
+                </li>
+                <li>
+                  •{' '}
+                  {t('advanced.tipSocksPort', 'SOCKS5 代理端口：{{port}}（部分工具支持）', {
+                    port: socksPort,
+                  })}
+                </li>
+                <li>• {t('advanced.tipDisable', '取消代理：删除或注释相关环境变量')}</li>
               </ul>
             </div>
           </div>

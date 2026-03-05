@@ -21,6 +21,7 @@ import { Hysteria2Form } from './hysteria2-form';
 import { SsForm } from './ss-form';
 import { AnyTlsForm } from './anytls-form';
 import type { ServerConfig, ProtocolType } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
 type ServerConfigWithId = ServerConfig;
 
@@ -45,6 +46,7 @@ export function ServerConfigDialog({
   const [selectedProtocol, setSelectedProtocol] = useState<ProtocolType>('vless');
   const [currentServerConfig, setCurrentServerConfig] = useState<any>(null);
   const [detour, setDetour] = useState<string | undefined>(undefined);
+  const { t } = useTranslation();
 
   const isEditing = !!server;
 
@@ -67,7 +69,7 @@ export function ServerConfigDialog({
 
   const handleSave = async (protocolConfig: any) => {
     if (!serverName.trim()) {
-      throw new Error('服务器名称不能为空');
+      throw new Error(t('servers.errorNameEmpty', '服务器名称不能为空'));
     }
 
     const serverConfig = {
@@ -91,28 +93,37 @@ export function ServerConfigDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? '编辑服务器配置' : '添加服务器配置'}</DialogTitle>
+          <DialogTitle>
+            {isEditing
+              ? t('servers.editConfig', '编辑服务器配置')
+              : t('servers.addConfig', '添加服务器配置')}
+          </DialogTitle>
           <DialogDescription>
             {isEditing
-              ? '修改服务器配置信息。保存后不会自动重启代理服务。'
-              : '添加新的代理服务器配置。支持 VLESS、Trojan、Hysteria2、Shadowsocks、AnyTLS 协议。'}
+              ? t('servers.editConfigDesc', '修改服务器配置信息。保存后不会自动重启代理服务。')
+              : t(
+                  'servers.addConfigDesc',
+                  '添加新的代理服务器配置。支持 VLESS、Trojan、Hysteria2、Shadowsocks、AnyTLS 协议。'
+                )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="serverName">服务器名称</Label>
+            <Label htmlFor="serverName">{t('servers.serverName', '服务器名称')}</Label>
             <Input
               id="serverName"
-              placeholder="例如：香港节点1"
+              placeholder={t('servers.serverNamePlaceholder', '例如：香港节点1')}
               value={serverName}
               onChange={(e) => setServerName(e.target.value)}
             />
-            <p className="text-sm text-muted-foreground">为此服务器配置设置一个便于识别的名称</p>
+            <p className="text-sm text-muted-foreground">
+              {t('servers.serverNameTip', '为此服务器配置设置一个便于识别的名称')}
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label>协议类型</Label>
+            <Label>{t('servers.protocolType', '协议类型')}</Label>
             <Select value={selectedProtocol} onValueChange={handleProtocolChange}>
               <SelectTrigger>
                 <SelectValue />
@@ -125,20 +136,22 @@ export function ServerConfigDialog({
                 <SelectItem value="anytls">AnyTLS</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">选择您的代理服务器协议类型</p>
+            <p className="text-sm text-muted-foreground">
+              {t('servers.protocolTypeTip', '选择您的代理服务器协议类型')}
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label>前置代理 (Proxy Chain)</Label>
+            <Label>{t('servers.proxyChain', '前置代理 (Proxy Chain)')}</Label>
             <Select
               value={detour || 'direct'}
               onValueChange={(v) => setDetour(v === 'direct' ? undefined : v)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="直连 (Direct)" />
+                <SelectValue placeholder={t('servers.direct', '直连 (Direct)')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="direct">直连 (Direct)</SelectItem>
+                <SelectItem value="direct">{t('servers.direct', '直连 (Direct)')}</SelectItem>
                 {servers
                   .filter((s) => s.id !== server?.id) // Prevent self-selection
                   .map((s) => (
@@ -149,7 +162,7 @@ export function ServerConfigDialog({
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
-              选择通过另一个代理服务器连接此节点（链式代理）
+              {t('servers.proxyChainTip', '选择通过另一个代理服务器连接此节点（链式代理）')}
             </p>
           </div>
 

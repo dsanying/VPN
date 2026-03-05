@@ -4,10 +4,12 @@ import { Label } from '@/components/ui/label';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { api } from '@/ipc';
+import { useTranslation } from 'react-i18next';
 
 export function GeneralSettings() {
   const config = useAppStore((state) => state.config);
   const saveConfig = useAppStore((state) => state.saveConfig);
+  const { t } = useTranslation();
 
   const handleToggle = async (
     field:
@@ -32,9 +34,11 @@ export function GeneralSettings() {
       };
 
       await saveConfig(updatedConfig);
-      toast.success('设置已保存');
+      await saveConfig(updatedConfig);
+      toast.success(t('settings.general.successUpdate', '设置已保存'));
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '保存设置失败';
+      const errorMessage =
+        error instanceof Error ? error.message : t('settings.general.failUpdate', '保存设置失败');
       toast.error(errorMessage);
     }
   };
@@ -46,8 +50,10 @@ export function GeneralSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>常规</CardTitle>
-        <CardDescription>应用程序启动和行为设置</CardDescription>
+        <CardTitle>{t('settings.general.title', '常规')}</CardTitle>
+        <CardDescription>
+          {t('settings.general.description', '应用程序启动和行为设置')}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center space-x-2">
@@ -60,7 +66,7 @@ export function GeneralSettings() {
             htmlFor="autoStart"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
           >
-            开机自动启动
+            {t('settings.general.autoStartTitle', '开机自动启动')}
           </Label>
         </div>
 
@@ -74,7 +80,7 @@ export function GeneralSettings() {
             htmlFor="autoConnect"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
           >
-            启动时自动连接
+            {t('settings.general.autoConnect', '启动时自动连接')}
           </Label>
         </div>
 
@@ -88,7 +94,7 @@ export function GeneralSettings() {
             htmlFor="minimizeToTray"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
           >
-            最小化到系统托盘
+            {t('settings.general.minimizeToTrayTitle', '最小化到系统托盘')}
           </Label>
         </div>
 
@@ -102,7 +108,7 @@ export function GeneralSettings() {
             htmlFor="autoLightweightMode"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
           >
-            自动进入轻量模式 (10分钟无操作)
+            {t('settings.general.autoLightweightMode', '自动进入轻量模式 (10分钟无操作)')}
           </Label>
         </div>
 
@@ -116,7 +122,7 @@ export function GeneralSettings() {
             htmlFor="autoCheckUpdate"
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
           >
-            启动时自动检查更新
+            {t('settings.general.autoCheckUpdate', '启动时自动检查更新')}
           </Label>
         </div>
       </CardContent>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Network } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Connection {
   id: string;
@@ -45,6 +46,7 @@ const NODE_GAP = 12; // Slightly tighter gap for sleeker look? Or larger for mor
 // Actually user said "fat", often meaning the ribbons are very tall. Reducing height helps.
 
 export function ConnectionTopology() {
+  const { t } = useTranslation();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [hovered, setHovered] = useState<{ type: 'node' | 'link'; id: string } | null>(null);
@@ -93,7 +95,7 @@ export function ConnectionTopology() {
         // Only show error if we have no connections to show?
         // Or just fail silently but log?
         // Let's set error state to maybe show a friendly message if persistent.
-        setError('无法连接到 API，请确保代理已启动');
+        setError(t('home.topologyError', '无法连接到 API，请确保代理已启动'));
       } finally {
         setLoading(false);
       }
@@ -687,7 +689,7 @@ export function ConnectionTopology() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Network className="h-5 w-5" />
-          连接拓扑
+          {t('home.topologyTitle', '连接拓扑')}
         </CardTitle>
       </CardHeader>
       <CardContent className="overflow-hidden">
@@ -700,14 +702,14 @@ export function ConnectionTopology() {
         >
           {loading && connections.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground h-full">
-              加载中...
+              {t('home.topologyLoading', '加载中...')}
             </div>
           )}
 
           {!loading && connections.length === 0 && !error && (
             <div className="absolute inset-0 text-muted-foreground text-sm flex flex-col items-center justify-center gap-2 h-full">
               <Network className="h-8 w-8 opacity-50" />
-              <span>暂无活动连接</span>
+              <span>{t('home.topologyEmpty', '暂无活动连接')}</span>
             </div>
           )}
 

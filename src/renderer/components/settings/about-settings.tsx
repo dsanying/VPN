@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { ExternalLink, Loader2, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   getVersionInfo,
   checkForUpdates,
@@ -34,6 +35,7 @@ export function AboutSettings() {
   const [updatingCore, setUpdatingCore] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const progressUnsubscribeRef = useRef<(() => void) | null>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     loadVersionInfo();
@@ -54,7 +56,7 @@ export function AboutSettings() {
       }
     } catch (error) {
       console.error('Failed to load version info:', error);
-      toast.error('无法加载版本信息');
+      toast.error(t('about.loadVersionFail', '无法加载版本信息'));
     } finally {
       setLoading(false);
     }
@@ -73,10 +75,10 @@ export function AboutSettings() {
         setDownloadProgress(100);
       } else if (progress.status === 'error') {
         setDownloading(false);
-        toast.error('下载失败', {
+        toast.error(t('about.downloadFail', '下载失败'), {
           description: progress.error || progress.message,
           action: {
-            label: '手动下载',
+            label: t('about.manualDownload', '手动下载'),
             onClick: () => openExternal(updateInfo.downloadUrl),
           },
         });
@@ -93,28 +95,27 @@ export function AboutSettings() {
       }
 
       if (downloadResult.success && downloadResult.data) {
-        toast.info('下载完成，正在安装...');
+        toast.info(t('about.downloadComplete', '下载完成，正在安装...'));
         setDownloading(false);
         await installUpdate(downloadResult.data);
       } else {
         setDownloading(false);
-        toast.error('下载失败', {
+        toast.error(t('about.downloadFail', '下载失败'), {
           description: downloadResult.error,
           action: {
-            label: '手动下载',
+            label: t('about.manualDownload', '手动下载'),
             onClick: () => openExternal(updateInfo.downloadUrl),
           },
         });
       }
     } catch (error) {
-      // 取消订阅
       if (progressUnsubscribeRef.current) {
         progressUnsubscribeRef.current();
         progressUnsubscribeRef.current = null;
       }
       setDownloading(false);
-      toast.error('下载失败', {
-        description: error instanceof Error ? error.message : '未知错误',
+      toast.error(t('about.downloadFail', '下载失败'), {
+        description: error instanceof Error ? error.message : t('about.unknownError', '未知错误'),
       });
     }
   };
@@ -122,42 +123,48 @@ export function AboutSettings() {
   const handleCheckUpdate = async () => {
     try {
       setCheckingUpdate(true);
-      toast.info('正在检查更新...');
+      toast.info(t('about.checkingUpdate', '正在检查更新...'));
 
       const response = await checkForUpdates();
 
       if (!response || !response.success) {
-        toast.error('检查更新失败', {
-          description: response?.error || '无法连接到更新服务器',
+        toast.error(t('about.checkUpdateFail', '检查更新失败'), {
+          description: response?.error || t('about.cannotConnectServer', '无法连接到更新服务器'),
         });
         return;
       }
 
       const data = response.data;
       if (!data) {
-        toast.error('检查更新失败', {
-          description: '返回数据格式错误',
+        toast.error(t('about.checkUpdateFail', '检查更新失败'), {
+          description: t('about.invalidData', '返回数据格式错误'),
         });
         return;
       }
 
       if (data.hasUpdate && data.updateInfo) {
         const updateInfo = data.updateInfo;
-        toast.success(`发现新版本 ${updateInfo.version}`, {
-          description: '点击下载并安装',
-          action: {
-            label: '立即更新',
-            onClick: () => handleDownloadAndInstall(updateInfo),
-          },
-          duration: 15000,
-        });
+        toast.success(
+          t('about.foundUpdate', '发现新版本 {{version}}', { version: updateInfo.version }),
+          {
+            description: t('about.clickToInstall', '点击下载并安装'),
+            action: {
+              label: t('about.updateNow', '立即更新'),
+              onClick: () => handleDownloadAndInstall(updateInfo),
+            },
+            duration: 15000,
+          }
+        );
       } else {
-        toast.success('当前已是最新版本');
+        toast.success(t('about.alreadyLatest', '当前已是最新版本'));
       }
     } catch (error) {
       console.error('Failed to check for updates:', error);
-      toast.error('检查更新失败', {
-        description: error instanceof Error ? error.message : '网络错误或服务器不可用',
+      toast.error(t('about.checkUpdateFail', '检查更新失败'), {
+        description:
+          error instanceof Error
+            ? error.message
+            : t('about.networkError', '网络错误或服务器不可用'),
       });
     } finally {
       setCheckingUpdate(false);
@@ -167,13 +174,13 @@ export function AboutSettings() {
   const handleCheckCoreUpdate = async () => {
     try {
       setCheckingCoreUpdate(true);
-      toast.info('正在检查核心更新...');
+      toast.info(t('about.checkingCoreUpdate', '正在检查核心更新...'));
 
       const response = await checkCoreUpdate();
 
       if (!response || !response.success) {
-        toast.error('检查核心更新失败', {
-          description: response?.error || '无法连接到更新服务器',
+        toast.error(t('about.checkCoreUpdateFail', '检查核心更新失败'), {
+          description: response?.error || t('about.cannotConnectServer', '无法连接到更新服务器'),
         });
         return;
       }
@@ -183,24 +190,33 @@ export function AboutSettings() {
       if (!data) return;
 
       if (data.hasUpdate && data.latestVersion && data.downloadUrl) {
-        toast.success(`发现新核心版本 ${data.latestVersion}`, {
-          description: '点击立即更新',
-          action: {
-            label: '立即更新',
-            onClick: () => handleUpdateCore(data.downloadUrl!, data.latestVersion!),
-          },
-          duration: 15000,
-        });
+        toast.success(
+          t('about.foundCoreUpdate', '发现新核心版本 {{version}}', { version: data.latestVersion }),
+          {
+            description: t('about.clickToUpdate', '点击立即更新'),
+            action: {
+              label: t('about.updateNow', '立即更新'),
+              onClick: () => handleUpdateCore(data.downloadUrl!, data.latestVersion!),
+            },
+            duration: 15000,
+          }
+        );
       } else if (data.error) {
-        toast.error('检查核心更新失败', { description: data.error });
+        toast.error(t('about.checkCoreUpdateFail', '检查核心更新失败'), {
+          description: data.error,
+        });
       } else {
-        toast.success('核心已是最新版本', { description: `当前版本: ${data.currentVersion}` });
+        toast.success(t('about.coreAlreadyLatest', '核心已是最新版本'), {
+          description: t('about.currentVersion', '当前版本: {{version}}', {
+            version: data.currentVersion,
+          }),
+        });
       }
     } catch (error) {
       console.error('Failed to check for core updates:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      toast.error('检查核心更新失败', {
-        description: errorMessage || '未知错误',
+      toast.error(t('about.checkCoreUpdateFail', '检查核心更新失败'), {
+        description: errorMessage || t('about.unknownError', '未知错误'),
       });
     } finally {
       setCheckingCoreUpdate(false);
@@ -210,21 +226,24 @@ export function AboutSettings() {
   const handleUpdateCore = async (downloadUrl: string, version: string) => {
     try {
       setUpdatingCore(true);
-      toast.info(`正在更新核心至 ${version}...`, {
-        description: '请勿关闭应用，代理服务可能会暂时中断',
+      toast.info(t('about.updatingCore', '正在更新核心至 {{version}}...', { version }), {
+        description: t('about.doNotClose', '请勿关闭应用，代理服务可能会暂时中断'),
       });
 
       const response = await updateCore(downloadUrl);
 
       if (response && response.success && response.data) {
-        toast.success('核心更新成功', { description: '新核心已生效' });
-        // 重新加载版本信息
+        toast.success(t('about.coreUpdateSuccess', '核心更新成功'), {
+          description: t('about.newCoreActive', '新核心已生效'),
+        });
         loadVersionInfo();
       } else {
-        toast.error('核心更新失败', { description: response?.error || '未知错误' });
+        toast.error(t('about.coreUpdateFail', '核心更新失败'), {
+          description: response?.error || t('about.unknownError', '未知错误'),
+        });
       }
     } catch (error) {
-      toast.error('核心更新失败', {
+      toast.error(t('about.coreUpdateFail', '核心更新失败'), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -241,8 +260,8 @@ export function AboutSettings() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>关于</CardTitle>
-          <CardDescription>应用程序信息</CardDescription>
+          <CardTitle>{t('about.title', '关于')}</CardTitle>
+          <CardDescription>{t('about.description', '应用程序信息')}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -254,13 +273,15 @@ export function AboutSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>关于</CardTitle>
-        <CardDescription>应用程序信息</CardDescription>
+        <CardTitle>{t('about.title', '关于')}</CardTitle>
+        <CardDescription>{t('about.description', '应用程序信息')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-4">
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground">应用版本</h4>
+            <h4 className="text-sm font-medium text-muted-foreground">
+              {t('about.appVersion', '应用版本')}
+            </h4>
             <p className="text-lg font-semibold">
               {versionInfo?.appName || 'FlowZ'} v{versionInfo?.appVersion || '1.0.0'}
             </p>
@@ -269,7 +290,9 @@ export function AboutSettings() {
           <Separator />
 
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground">sing-box 版本</h4>
+            <h4 className="text-sm font-medium text-muted-foreground">
+              sing-box {t('about.version', '版本')}
+            </h4>
             <div className="flex items-center gap-4">
               <p className="text-lg font-semibold">{versionInfo?.singBoxVersion || 'Unknown'}</p>
               <Button
@@ -281,7 +304,11 @@ export function AboutSettings() {
                 {(checkingCoreUpdate || updatingCore) && (
                   <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                 )}
-                {updatingCore ? '更新中...' : checkingCoreUpdate ? '检查中...' : '检查更新'}
+                {updatingCore
+                  ? t('about.updating', '更新中...')
+                  : checkingCoreUpdate
+                    ? t('about.checking', '检查中...')
+                    : t('about.checkUpdate', '检查更新')}
               </Button>
             </div>
           </div>
@@ -293,7 +320,9 @@ export function AboutSettings() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Download className="h-4 w-4 animate-bounce text-primary" />
-                  <span className="text-sm font-medium">正在下载更新... {downloadProgress}%</span>
+                  <span className="text-sm font-medium">
+                    {t('about.downloading', '正在下载更新...')} {downloadProgress}%
+                  </span>
                 </div>
                 <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
                   <div
@@ -309,7 +338,9 @@ export function AboutSettings() {
                 className="w-full sm:w-auto"
               >
                 {checkingUpdate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {checkingUpdate ? '检查中...' : '检查更新'}
+                {checkingUpdate
+                  ? t('about.checking', '检查中...')
+                  : t('about.checkUpdate', '检查更新')}
               </Button>
             )}
           </div>
@@ -317,7 +348,9 @@ export function AboutSettings() {
           <Separator />
 
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground">开源项目</h4>
+            <h4 className="text-sm font-medium text-muted-foreground">
+              {t('about.openSource', '开源项目')}
+            </h4>
             <Button variant="outline" onClick={handleOpenGitHub} className="w-full sm:w-auto">
               <ExternalLink className="mr-2 h-4 w-4" />
               GitHub
@@ -328,7 +361,7 @@ export function AboutSettings() {
 
           <div className="text-xs text-muted-foreground space-y-1">
             <p>{versionInfo?.copyright || '© 2025 FlowZ. All rights reserved.'}</p>
-            <p>基于 sing-box 构建的跨平台客户端代理应用</p>
+            <p>{t('about.builtWith', '基于 sing-box 构建的跨平台客户端代理应用')}</p>
           </div>
         </div>
       </CardContent>

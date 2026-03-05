@@ -40,29 +40,32 @@ let inactivityTimer: NodeJS.Timeout | null = null;
 // 10 分钟无操作自动进入轻量模式
 const INACTIVITY_TIMEOUT = 10 * 60 * 1000;
 
-// 在导入任何使用路径的服务之前，初始化用户数据路径
-// 这确保无论以何种权限运行，都使用正确的路径
-initUserDataPath();
-
-// 初始化服务
-const configManager = new ConfigManager();
-const protocolParser = new ProtocolParser();
-const logManager = new LogManager();
+// Initialize service references
+let configManager: ConfigManager;
+let protocolParser: ProtocolParser;
+let logManager: LogManager;
 let proxyManager: ProxyManager | null = null;
-const systemProxyManager = createSystemProxyManager();
-const updateService = new UpdateService(logManager);
-const coreUpdateService = new CoreUpdateService(logManager);
-const subscriptionService = new SubscriptionService(protocolParser, logManager);
-const speedTestService = new SpeedTestService(logManager);
+let systemProxyManager: ReturnType<typeof createSystemProxyManager>;
+let updateService: UpdateService;
+let coreUpdateService: CoreUpdateService;
+let subscriptionService: SubscriptionService;
+let speedTestService: SpeedTestService;
 
 // 全局异常捕获 - 主进程
 process.on('uncaughtException', (error: Error) => {
   console.error('Uncaught Exception:', error);
-  logManager.addLog('fatal', `未捕获的异常: ${error.message}\n${error.stack}`, 'Main');
+  if (logManager) {
+    logManager.addLog('fatal', `未捕获的异常: ${error.message}\n${error.stack}`, 'Main');
+  }
 
   // 在开发环境显示错误对话框
   if (isDevelopment) {
-    dialog.showErrorBox('未捕获的异常', `${error.message}\n\n${error.stack}`);
+    const electronApp = require('electron').app;
+    if (electronApp?.isReady()) {
+      dialog.showErrorBox('未捕获的异常', `${error.message}\n\n${error.stack}`);
+    } else {
+      console.error(`App not ready. Uncaught Exception: ${error.stack}`);
+    }
   }
 
   // 不退出应用，尝试继续运行
@@ -72,32 +75,22 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   const errorMessage = reason instanceof Error ? reason.message : String(reason);
   const errorStack = reason instanceof Error ? reason.stack : '';
-  logManager.addLog('error', `未处理的 Promise 拒绝: ${errorMessage}\n${errorStack}`, 'Main');
+  if (logManager) {
+    logManager.addLog('error', `未处理的 Promise 拒绝: ${errorMessage}\n${errorStack}`, 'Main');
+  }
 
   // 在开发环境显示错误对话框
   if (isDevelopment && reason instanceof Error) {
-    dialog.showErrorBox('未处理的 Promise 拒绝', `${errorMessage}\n\n${errorStack}`);
+    const electronApp = require('electron').app;
+    if (electronApp?.isReady()) {
+      dialog.showErrorBox('未处理的 Promise 拒绝', `${errorMessage}\n\n${errorStack}`);
+    } else {
+      console.error(`App not ready. Unhandled Rejection: ${errorStack}`);
+    }
   }
 });
 
-// 开发环境启用热重载
-if (isDevelopment) {
-  try {
-    // __dirname 在打包后是 dist/main/main/，需要往上3层到项目根目录
-    const projectRoot = path.join(__dirname, '../../..');
-    const electronPath =
-      process.platform === 'win32'
-        ? path.join(projectRoot, 'node_modules/.bin/electron.cmd')
-        : path.join(projectRoot, 'node_modules/.bin/electron');
-
-    require('electron-reload')(__dirname, {
-      electron: electronPath,
-      hardResetMethod: 'exit',
-    });
-  } catch (err) {
-    console.error('Failed to load electron-reload:', err);
-  }
-}
+// 开发环境启用热重载 (moved and unmounted since it causes app undefined bug in electron)
 
 /**
  * 显示主窗口
@@ -169,7 +162,8 @@ function createWindow() {
     title: 'FlowZ',
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成
-    backgroundColor: '#ffffff',
+    backgroundColor: '#00000000',
+    transparent: true,
     autoHideMenuBar: true, // 自动隐藏菜单栏
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -181,6 +175,8 @@ function createWindow() {
     // macOS 特定配置
     ...(process.platform === 'darwin' && {
       titleBarStyle: 'hiddenInset',
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
     }),
   });
 
@@ -378,6 +374,19 @@ async function updateTrayMenuState(isProxyRunning: boolean, hasError?: boolean):
 }
 
 app.whenReady().then(async () => {
+  // 在导入任何使用路径的服务之前，初始化用户数据路径
+  // 这确保无论以何种权限运行，都使用正确的路径
+  initUserDataPath();
+
+  // 初始化服务
+  configManager = new ConfigManager();
+  protocolParser = new ProtocolParser();
+  logManager = new LogManager();
+  systemProxyManager = createSystemProxyManager();
+  updateService = new UpdateService(logManager);
+  coreUpdateService = new CoreUpdateService(logManager);
+  subscriptionService = new SubscriptionService(protocolParser, logManager);
+  speedTestService = new SpeedTestService(logManager);
   // 记录应用启动日志
   logManager.addLog('info', 'Application started', 'Main');
 

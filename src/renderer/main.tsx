@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import './i18n'; // 导入 i18n 配置
 import { ThemeProvider } from '@/components/theme-provider';
 
 // 全局错误处理 - 渲染进程

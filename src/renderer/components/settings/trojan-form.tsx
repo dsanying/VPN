@@ -23,18 +23,24 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import type { ServerConfig } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
-const trojanFormSchema = z.object({
-  address: z.string().min(1, '服务器地址不能为空'),
-  port: z.number().min(1, '端口必须大于 0').max(65535, '端口必须小于 65536'),
-  password: z.string().min(1, '密码不能为空'),
-  network: z.enum(['Tcp', 'Ws', 'H2']),
-  security: z.enum(['None', 'Tls']),
-  tlsServerName: z.string().optional(),
-  tlsAllowInsecure: z.boolean(),
-});
+// Use a function to get schema with translations
+const getTrojanFormSchema = (t: any) =>
+  z.object({
+    address: z.string().min(1, t('servers.errorAddressEmpty', '服务器地址不能为空')),
+    port: z
+      .number()
+      .min(1, t('servers.errorPortMin', '端口必须大于 0'))
+      .max(65535, t('servers.errorPortMax', '端口必须小于 65536')),
+    password: z.string().min(1, t('servers.errorPassword', '密码不能为空')),
+    network: z.enum(['Tcp', 'Ws', 'H2']),
+    security: z.enum(['None', 'Tls']),
+    tlsServerName: z.string().optional(),
+    tlsAllowInsecure: z.boolean(),
+  });
 
-type TrojanFormValues = z.infer<typeof trojanFormSchema>;
+type TrojanFormValues = z.infer<ReturnType<typeof getTrojanFormSchema>>;
 
 interface TrojanFormProps {
   serverConfig?: ServerConfig;
@@ -42,6 +48,9 @@ interface TrojanFormProps {
 }
 
 export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
+  const { t } = useTranslation();
+  const trojanFormSchema = getTrojanFormSchema(t);
+
   const form = useForm<TrojanFormValues>({
     resolver: zodResolver(trojanFormSchema),
     defaultValues: {
@@ -114,11 +123,13 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>服务器地址</FormLabel>
+              <FormLabel>{t('servers.serverAddress', '服务器地址')}</FormLabel>
               <FormControl>
                 <Input placeholder="example.com" {...field} />
               </FormControl>
-              <FormDescription>服务器的域名或 IP 地址</FormDescription>
+              <FormDescription>
+                {t('servers.serverAddressTip', '服务器的域名或 IP 地址')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -129,7 +140,7 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
           name="port"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>端口</FormLabel>
+              <FormLabel>{t('servers.port', '端口')}</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -138,7 +149,7 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
                   onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                 />
               </FormControl>
-              <FormDescription>服务器端口号（1-65535）</FormDescription>
+              <FormDescription>{t('servers.portTip', '服务器端口号（1-65535）')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -149,11 +160,17 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>密码 (Password)</FormLabel>
+              <FormLabel>{t('servers.passwordLabel', '密码 (Password)')}</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="输入 Trojan 密码" {...field} />
+                <Input
+                  type="password"
+                  placeholder={t('servers.inputTrojanPassword', '输入 Trojan 密码')}
+                  {...field}
+                />
               </FormControl>
-              <FormDescription>Trojan 服务器的认证密码</FormDescription>
+              <FormDescription>
+                {t('servers.trojanPasswordTip', 'Trojan 服务器的认证密码')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -164,11 +181,11 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
           name="network"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>传输协议</FormLabel>
+              <FormLabel>{t('servers.transportProtocol', '传输协议')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择传输协议" />
+                    <SelectValue placeholder={t('servers.selectTransport', '选择传输协议')} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -177,7 +194,9 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
                   <SelectItem value="H2">HTTP/2</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription>底层传输协议类型</FormDescription>
+              <FormDescription>
+                {t('servers.transportProtocolTip', '底层传输协议类型')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -188,19 +207,21 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
           name="security"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>传输层加密</FormLabel>
+              <FormLabel>{t('servers.transportSecurity', '传输层加密')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择传输层加密" />
+                    <SelectValue placeholder={t('servers.selectSecurity', '选择传输层加密')} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="None">无</SelectItem>
+                  <SelectItem value="None">{t('servers.none', '无')}</SelectItem>
                   <SelectItem value="Tls">TLS</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription>传输层安全协议</FormDescription>
+              <FormDescription>
+                {t('servers.transportSecurityTip', '传输层安全协议')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -213,11 +234,13 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
               name="tlsServerName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>TLS 服务器名称（可选）</FormLabel>
+                  <FormLabel>{t('servers.tlsServerName', 'TLS 服务器名称（可选）')}</FormLabel>
                   <FormControl>
                     <Input placeholder="example.com" {...field} />
                   </FormControl>
-                  <FormDescription>用于 TLS SNI，留空则使用服务器地址</FormDescription>
+                  <FormDescription>
+                    {t('servers.tlsSniTip', '用于 TLS SNI，留空则使用服务器地址')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -232,8 +255,10 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
                     <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>允许不安全的连接</FormLabel>
-                    <FormDescription>跳过 TLS 证书验证（不推荐，仅用于测试）</FormDescription>
+                    <FormLabel>{t('servers.allowInsecure', '允许不安全的连接')}</FormLabel>
+                    <FormDescription>
+                      {t('servers.allowInsecureTip', '跳过 TLS 证书验证（不推荐，仅用于测试）')}
+                    </FormDescription>
                   </div>
                 </FormItem>
               )}
@@ -244,7 +269,7 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
         <div className="flex gap-4">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            保存配置
+            {t('servers.saveConfig', '保存配置')}
           </Button>
           <Button
             type="button"
@@ -252,7 +277,7 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
             onClick={() => form.reset()}
             disabled={form.formState.isSubmitting}
           >
-            重置
+            {t('servers.reset', '重置')}
           </Button>
         </div>
       </form>

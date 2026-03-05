@@ -4,6 +4,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/app-store';
 import { Loader2, Play, Square } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ProxyMode } from '@/bridge/types';
 
 export function ProxyModeSelector() {
@@ -13,6 +14,7 @@ export function ProxyModeSelector() {
   const isLoading = useAppStore((state) => state.isLoading);
   const startProxy = useAppStore((state) => state.startProxy);
   const stopProxy = useAppStore((state) => state.stopProxy);
+  const { t } = useTranslation();
 
   const currentMode = config?.proxyMode || 'smart';
 
@@ -69,7 +71,7 @@ export function ProxyModeSelector() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>代理模式</CardTitle>
+        <CardTitle>{t('home.proxyMode', '代理模式')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <RadioGroup
@@ -82,8 +84,10 @@ export function ProxyModeSelector() {
             <RadioGroupItem value="global" id="mode-global" />
             <Label htmlFor="mode-global" className="cursor-pointer">
               <div>
-                <div className="font-medium">全局代理</div>
-                <div className="text-xs text-muted-foreground">所有流量通过代理服务器</div>
+                <div className="font-medium">{t('home.globalProxy', '全局代理')}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t('home.globalProxyDesc', '所有流量通过代理服务器')}
+                </div>
               </div>
             </Label>
           </div>
@@ -92,8 +96,10 @@ export function ProxyModeSelector() {
             <RadioGroupItem value="smart" id="mode-smart" />
             <Label htmlFor="mode-smart" className="cursor-pointer">
               <div>
-                <div className="font-medium">智能分流</div>
-                <div className="text-xs text-muted-foreground">国内直连，国外走代理</div>
+                <div className="font-medium">{t('home.smartProxy', '智能分流')}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t('home.smartProxyDesc', '国内直连，国外走代理')}
+                </div>
               </div>
             </Label>
           </div>
@@ -102,8 +108,10 @@ export function ProxyModeSelector() {
             <RadioGroupItem value="direct" id="mode-direct" />
             <Label htmlFor="mode-direct" className="cursor-pointer">
               <div>
-                <div className="font-medium">直接连接</div>
-                <div className="text-xs text-muted-foreground">所有流量直接连接，不使用代理</div>
+                <div className="font-medium">{t('home.directConnection', '直接连接')}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t('home.directConnectionDesc', '所有流量直接连接，不使用代理')}
+                </div>
               </div>
             </Label>
           </div>
@@ -116,22 +124,30 @@ export function ProxyModeSelector() {
             className="w-full"
             size="lg"
             variant={isConnected ? 'outline' : 'default'}
-            title={!isServerConfigured ? '请先配置服务器' : hasError ? hasError : ''}
+            title={
+              !isServerConfigured
+                ? t('home.configureServerFirst', '请先配置服务器')
+                : hasError
+                  ? hasError
+                  : ''
+            }
           >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isConnected ? '断开中...' : '连接中...'}
+                {isConnected
+                  ? t('home.disconnecting', '断开中...')
+                  : t('home.connectingText', '连接中...')}
               </>
             ) : isConnected ? (
               <>
                 <Square className="mr-2 h-4 w-4" />
-                关闭代理
+                {t('home.stopProxy', '关闭代理')}
               </>
             ) : (
               <>
                 <Play className="mr-2 h-4 w-4" />
-                开启代理
+                {t('home.startProxy', '开启代理')}
               </>
             )}
           </Button>

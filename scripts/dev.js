@@ -43,13 +43,13 @@ async function startDev() {
 
   // 4. 启动 Electron
   console.log('⚡ 启动 Electron...\n');
+  const env = { ...process.env, NODE_ENV: 'development' };
+  delete env.ELECTRON_RUN_AS_NODE;
+
   const electron = spawn('npx', ['electron', '.'], {
     shell: true,
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      NODE_ENV: 'development',
-    },
+    env,
   });
 
   electron.on('close', () => {

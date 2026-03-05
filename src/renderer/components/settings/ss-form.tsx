@@ -23,24 +23,30 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Shield } from 'lucide-react';
 import type { ServerConfig } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
-const ssFormSchema = z.object({
-  address: z.string().min(1, '服务器地址不能为空'),
-  port: z.number().min(1, '端口必须大于 0').max(65535, '端口必须小于 65536'),
-  method: z.string().min(1, '加密方式不能为空'),
-  password: z.string().min(1, '密码不能为空'),
-  plugin: z.string().optional(),
-  pluginOptions: z.string().optional(),
-  remarks: z.string().optional(),
-  // Shadow-TLS v3
-  enableShadowTls: z.boolean(),
-  shadowTlsPassword: z.string().optional(),
-  shadowTlsSni: z.string().optional(),
-  shadowTlsFingerprint: z.string().optional(),
-  shadowTlsPort: z.number().optional(),
-});
+// Use a function to get schema with translations
+const getSsFormSchema = (t: any) =>
+  z.object({
+    address: z.string().min(1, t('servers.errorAddressEmpty', '服务器地址不能为空')),
+    port: z
+      .number()
+      .min(1, t('servers.errorPortMin', '端口必须大于 0'))
+      .max(65535, t('servers.errorPortMax', '端口必须小于 65536')),
+    method: z.string().min(1, t('servers.errorEncryptionMethod', '加密方式不能为空')),
+    password: z.string().min(1, t('servers.errorPassword', '密码不能为空')),
+    plugin: z.string().optional(),
+    pluginOptions: z.string().optional(),
+    remarks: z.string().optional(),
+    // Shadow-TLS v3
+    enableShadowTls: z.boolean(),
+    shadowTlsPassword: z.string().optional(),
+    shadowTlsSni: z.string().optional(),
+    shadowTlsFingerprint: z.string().optional(),
+    shadowTlsPort: z.number().optional(),
+  });
 
-type SsFormValues = z.infer<typeof ssFormSchema>;
+type SsFormValues = z.infer<ReturnType<typeof getSsFormSchema>>;
 
 interface SsFormProps {
   serverConfig?: ServerConfig;
@@ -66,6 +72,9 @@ const COMMON_METHODS = [
 ];
 
 export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
+  const { t } = useTranslation();
+  const ssFormSchema = getSsFormSchema(t);
+
   const form = useForm<SsFormValues>({
     resolver: zodResolver(ssFormSchema),
     defaultValues: {
@@ -158,11 +167,11 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
           name="remarks"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>备注 (可选)</FormLabel>
+              <FormLabel>{t('servers.remarks', '备注 (可选)')}</FormLabel>
               <FormControl>
-                <Input placeholder="香港节点 1" {...field} />
+                <Input placeholder={t('servers.remarksPlaceholder', '香港节点 1')} {...field} />
               </FormControl>
-              <FormDescription>服务器的别名</FormDescription>
+              <FormDescription>{t('servers.remarksTip', '服务器的别名')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -173,11 +182,13 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>服务器地址</FormLabel>
+              <FormLabel>{t('servers.serverAddress', '服务器地址')}</FormLabel>
               <FormControl>
                 <Input placeholder="example.com" {...field} />
               </FormControl>
-              <FormDescription>服务器的域名或 IP 地址</FormDescription>
+              <FormDescription>
+                {t('servers.serverAddressTip', '服务器的域名或 IP 地址')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -188,7 +199,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
           name="port"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>端口</FormLabel>
+              <FormLabel>{t('servers.port', '端口')}</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -197,7 +208,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                   onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                 />
               </FormControl>
-              <FormDescription>服务器端口号（1-65535）</FormDescription>
+              <FormDescription>{t('servers.portTip', '服务器端口号（1-65535）')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -208,11 +219,11 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
           name="method"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>加密方式</FormLabel>
+              <FormLabel>{t('servers.encryptionMethod', '加密方式')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择加密方式" />
+                    <SelectValue placeholder={t('servers.selectEncryption', '选择加密方式')} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -229,7 +240,9 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                   })()}
                 </SelectContent>
               </Select>
-              <FormDescription>Shadowsocks 加密算法</FormDescription>
+              <FormDescription>
+                {t('servers.ssEncryptionTip', 'Shadowsocks 加密算法')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -240,11 +253,15 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>密码</FormLabel>
+              <FormLabel>{t('servers.password', '密码')}</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="输入密码" {...field} />
+                <Input
+                  type="password"
+                  placeholder={t('servers.inputPassword', '输入密码')}
+                  {...field}
+                />
               </FormControl>
-              <FormDescription>Shadowsocks 密码</FormDescription>
+              <FormDescription>{t('servers.ssPasswordTip', 'Shadowsocks 密码')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -256,11 +273,11 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
             name="plugin"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>插件 (可选)</FormLabel>
+                <FormLabel>{t('servers.plugin', '插件 (可选)')}</FormLabel>
                 <FormControl>
                   <Input placeholder="obfs-local" {...field} />
                 </FormControl>
-                <FormDescription>SIP003 插件名称</FormDescription>
+                <FormDescription>{t('servers.pluginTip', 'SIP003 插件名称')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -271,11 +288,11 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
             name="pluginOptions"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>插件参数 (可选)</FormLabel>
+                <FormLabel>{t('servers.pluginOptions', '插件参数 (可选)')}</FormLabel>
                 <FormControl>
                   <Input placeholder="obfs=http;obfs-host=..." {...field} />
                 </FormControl>
-                <FormDescription>插件命令行参数</FormDescription>
+                <FormDescription>{t('servers.pluginOptionsTip', '插件命令行参数')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -295,9 +312,11 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                 <div className="space-y-1 leading-none">
                   <FormLabel className="flex items-center gap-1.5 cursor-pointer">
                     <Shield className="h-4 w-4 text-muted-foreground" />
-                    启用 Shadow-TLS v3
+                    {t('servers.enableShadowTls', '启用 Shadow-TLS v3')}
                   </FormLabel>
-                  <FormDescription>在 Shadowsocks 外层套上 TLS 伪装隧道</FormDescription>
+                  <FormDescription>
+                    {t('servers.enableShadowTlsTip', '在 Shadowsocks 外层套上 TLS 伪装隧道')}
+                  </FormDescription>
                 </div>
               </FormItem>
             )}
@@ -310,11 +329,14 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                 name="shadowTlsPassword"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Shadow-TLS 密码</FormLabel>
+                    <FormLabel>{t('servers.shadowTlsPassword', 'Shadow-TLS 密码')}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder="Shadow-TLS v3 密码（与 SS 密码不同）"
+                        placeholder={t(
+                          'servers.shadowTlsPasswordTip',
+                          'Shadow-TLS v3 密码（与 SS 密码不同）'
+                        )}
                         {...field}
                       />
                     </FormControl>
@@ -329,11 +351,13 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                   name="shadowTlsSni"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>伪装域名（SNI）</FormLabel>
+                      <FormLabel>{t('servers.shadowTlsSni', '伪装域名 (SNI)')}</FormLabel>
                       <FormControl>
                         <Input placeholder="www.microsoft.com" {...field} />
                       </FormControl>
-                      <FormDescription>Shadow-TLS 伪装目标域名</FormDescription>
+                      <FormDescription>
+                        {t('servers.shadowTlsSniTip', 'Shadow-TLS 伪装目标域名')}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -344,11 +368,14 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                   name="shadowTlsPort"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>真实端口 (可选)</FormLabel>
+                      <FormLabel>{t('servers.realPort', '真实端口 (可选)')}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          placeholder="例如: 8443 (留空默认使用原端口)"
+                          placeholder={t(
+                            'servers.realPortPlaceholder',
+                            '例如: 8443 (留空默认使用原端口)'
+                          )}
                           {...field}
                           value={field.value ?? ''}
                           onChange={(e) => {
@@ -357,7 +384,9 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                           }}
                         />
                       </FormControl>
-                      <FormDescription>Shadow-TLS 实际监听的端口</FormDescription>
+                      <FormDescription>
+                        {t('servers.realPortTip', 'Shadow-TLS 实际监听的端口')}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -369,11 +398,13 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                 name="shadowTlsFingerprint"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>TLS 指纹</FormLabel>
+                    <FormLabel>{t('servers.tlsFingerprint', 'TLS 指纹')}</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue
+                            placeholder={t('servers.selectFingerprint', '选择 TLS 指纹')}
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -383,10 +414,12 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
                         <SelectItem value="edge">Edge</SelectItem>
                         <SelectItem value="ios">iOS</SelectItem>
                         <SelectItem value="android">Android</SelectItem>
-                        <SelectItem value="random">随机</SelectItem>
+                        <SelectItem value="random">{t('servers.random', '随机')}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormDescription>uTLS 客户端指纹伪装</FormDescription>
+                    <FormDescription>
+                      {t('servers.tlsFingerprintTip', 'uTLS 客户端指纹伪装')}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -398,7 +431,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
         <div className="flex gap-4">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            保存配置
+            {t('servers.saveConfig', '保存配置')}
           </Button>
           <Button
             type="button"
@@ -406,7 +439,7 @@ export function SsForm({ serverConfig, onSubmit }: SsFormProps) {
             onClick={() => form.reset()}
             disabled={form.formState.isSubmitting}
           >
-            重置
+            {t('servers.reset', '重置')}
           </Button>
         </div>
       </form>

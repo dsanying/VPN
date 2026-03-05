@@ -1,5 +1,6 @@
 import { Home, Server, ListFilter, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   currentView: string;
@@ -7,21 +8,23 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'home', label: '首页', icon: Home },
-  { id: 'server', label: '服务器', icon: Server },
-  { id: 'rules', label: '规则', icon: ListFilter },
-  { id: 'settings', label: '设置', icon: Settings },
+  { id: 'home', icon: Home },
+  { id: 'server', icon: Server },
+  { id: 'rules', icon: ListFilter },
+  { id: 'settings', icon: Settings },
 ];
 
 const isMac = window.electron?.platform === 'darwin';
 
 export function Sidebar({ currentView, onViewChange }: SidebarProps) {
+  const { t } = useTranslation();
+
   return (
-    <div className="w-[200px] border-r bg-card h-full flex flex-col">
-      <div className={cn('p-4 border-b', isMac && 'pt-8 app-region-drag')}>
-        <h1 className="text-lg font-semibold">FlowZ</h1>
+    <div className="w-[180px] sidebar h-full flex flex-col relative z-20">
+      <div className={cn('p-4 border-b border-transparent', isMac && 'pt-[34px] app-region-drag')}>
+        <h1 className="text-sm font-bold pl-2 text-foreground/80">FlowZ</h1>
       </div>
-      <nav className="flex-1 p-2 app-region-no-drag">
+      <nav className="flex-1 pt-2 pb-2 app-region-no-drag space-y-0.5">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -29,14 +32,14 @@ export function Sidebar({ currentView, onViewChange }: SidebarProps) {
               key={item.id}
               onClick={() => onViewChange(item.id)}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                'w-[calc(100%-1rem)] mx-2 flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors mb-0.5',
                 currentView === item.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-accent hover:text-accent-foreground'
+                  ? 'bg-black/[0.06] text-foreground font-medium shadow-sm dark:bg-white/15 dark:text-foreground'
+                  : 'text-muted-foreground/80 hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/5 dark:hover:text-foreground'
               )}
             >
-              <Icon className="h-4 w-4" />
-              <span>{item.label}</span>
+              <Icon className="h-4 w-4 stroke-[2px]" />
+              <span>{t(`sidebar.${item.id}`)}</span>
             </button>
           );
         })}

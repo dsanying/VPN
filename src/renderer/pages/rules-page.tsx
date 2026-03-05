@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +21,7 @@ import type { DomainRule } from '@/bridge/types';
 export function RulesPage() {
   const config = useAppStore((state) => state.config);
   const updateCustomRule = useAppStore((state) => state.updateCustomRule);
+  const { t } = useTranslation();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<DomainRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<DomainRule | null>(null);
@@ -45,19 +47,21 @@ export function RulesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">自定义规则</h2>
-          <p className="text-muted-foreground mt-1">管理域名代理规则</p>
+          <h2 className="text-2xl font-bold">{t('rules.pageTitle', '自定义规则')}</h2>
+          <p className="text-muted-foreground mt-1">{t('rules.pageDesc', '管理域名代理规则')}</p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          添加规则
+          {t('rules.addRule', '添加规则')}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>域名规则列表</CardTitle>
-          <CardDescription>自定义规则优先级最高，将覆盖全局代理模式和智能分流规则</CardDescription>
+          <CardTitle>{t('rules.domainRules', '域名规则列表')}</CardTitle>
+          <CardDescription>
+            {t('rules.domainRulesDesc', '自定义规则优先级最高，将覆盖全局代理模式和智能分流规则')}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {customRules.length === 0 ? (
@@ -72,10 +76,12 @@ export function RulesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">启用</TableHead>
-                  <TableHead>域名</TableHead>
-                  <TableHead className="w-[160px]">策略</TableHead>
-                  <TableHead className="w-[120px] text-right">操作</TableHead>
+                  <TableHead className="w-[50px]">{t('rules.status', '启用')}</TableHead>
+                  <TableHead>{t('rules.domain', '域名')}</TableHead>
+                  <TableHead className="w-[160px]">{t('rules.policy', '策略')}</TableHead>
+                  <TableHead className="w-[120px] text-right">
+                    {t('rules.action', '操作')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -106,10 +112,10 @@ export function RulesPage() {
                       <div className="flex items-center gap-2">
                         <Badge variant={rule.action === 'proxy' ? 'default' : 'secondary'}>
                           {rule.action === 'proxy'
-                            ? '代理'
+                            ? t('rules.proxy', '代理')
                             : rule.action === 'direct'
-                              ? '直连'
-                              : '阻止'}
+                              ? t('rules.direct', '直连')
+                              : t('rules.block', '阻止')}
                         </Badge>
                         {rule.bypassFakeIP && (
                           <Badge
@@ -141,17 +147,20 @@ export function RulesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>规则说明</CardTitle>
+          <CardTitle>{t('rules.ruleGuideTitle', '规则说明')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• 输入域名会自动匹配该域名及其所有子域名</p>
-          <p>• 如 google.com 会匹配 google.com、www.google.com 等</p>
-          <p>• 每条规则支持多个域名，每行一个</p>
-          <p>• 规则按优先级从上到下匹配</p>
-          <p>• 自定义规则优先级高于全局代理模式和智能分流</p>
+          <p>{t('rules.ruleGuide1', '• 输入域名会自动匹配该域名及其所有子域名')}</p>
+          <p>{t('rules.ruleGuide2', '• 如 google.com 会匹配 google.com、www.google.com 等')}</p>
+          <p>{t('rules.ruleGuide3', '• 每条规则支持多个域名，每行一个')}</p>
+          <p>{t('rules.ruleGuide4', '• 规则按优先级从上到下匹配')}</p>
+          <p>{t('rules.ruleGuide5', '• 自定义规则优先级高于全局代理模式和智能分流')}</p>
           <p>
-            • <strong>绕过 FakeIP</strong>：使用真实 DNS 解析，适用于 QUIC/UDP 协议（如 Cloudflare
-            Tunnel）
+            • <strong>{t('rules.bypassFakeIP', '绕过 FakeIP')}</strong>：
+            {t(
+              'rules.bypassFakeIPDesc',
+              '使用真实 DNS 解析，适用于 QUIC/UDP 协议（如 Cloudflare Tunnel）'
+            )}
           </p>
         </CardContent>
       </Card>

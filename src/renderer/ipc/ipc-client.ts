@@ -18,7 +18,14 @@ interface ElectronIpcRenderer {
  */
 function getIpcRenderer(): ElectronIpcRenderer {
   if (!window.electron?.ipcRenderer) {
-    throw new Error('IPC Renderer is not available. Make sure preload script is loaded.');
+    console.warn('IPC Renderer is not available. Using mock for browser preview.');
+    return {
+      invoke: async () => ({ success: true, data: [] }),
+      on: () => {},
+      once: () => {},
+      off: () => {},
+      removeAllListeners: () => {},
+    };
   }
   return window.electron.ipcRenderer as ElectronIpcRenderer;
 }

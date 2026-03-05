@@ -22,28 +22,37 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import type { ServerConfig } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
-const vlessFormSchema = z.object({
-  address: z.string().min(1, '服务器地址不能为空'),
-  port: z.number().min(1, '端口必须大于 0').max(65535, '端口必须小于 65536'),
-  uuid: z
-    .string()
-    .min(1, 'UUID 不能为空')
-    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, 'UUID 格式不正确'),
-  encryption: z.string().optional(),
-  flow: z.string().optional(),
-  network: z.enum(['Tcp', 'Ws', 'H2']),
-  security: z.enum(['None', 'Tls', 'Reality']),
-  tlsServerName: z.string().optional(),
-  tlsAllowInsecure: z.boolean(),
-  tlsFingerprint: z.string().optional(),
-  realityPublicKey: z.string().optional(),
-  realityShortId: z.string().optional(),
-  wsPath: z.string().optional(),
-  wsHost: z.string().optional(),
-});
+// Use a function to get schema with translations
+const getVlessFormSchema = (t: any) =>
+  z.object({
+    address: z.string().min(1, t('servers.errorAddressEmpty', '服务器地址不能为空')),
+    port: z
+      .number()
+      .min(1, t('servers.errorPortMin', '端口必须大于 0'))
+      .max(65535, t('servers.errorPortMax', '端口必须小于 65536')),
+    uuid: z
+      .string()
+      .min(1, t('servers.errorUuidEmpty', 'UUID 不能为空'))
+      .regex(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        t('servers.errorUuidFormat', 'UUID 格式不正确')
+      ),
+    encryption: z.string().optional(),
+    flow: z.string().optional(),
+    network: z.enum(['Tcp', 'Ws', 'H2']),
+    security: z.enum(['None', 'Tls', 'Reality']),
+    tlsServerName: z.string().optional(),
+    tlsAllowInsecure: z.boolean(),
+    tlsFingerprint: z.string().optional(),
+    realityPublicKey: z.string().optional(),
+    realityShortId: z.string().optional(),
+    wsPath: z.string().optional(),
+    wsHost: z.string().optional(),
+  });
 
-type VlessFormValues = z.infer<typeof vlessFormSchema>;
+type VlessFormValues = z.infer<ReturnType<typeof getVlessFormSchema>>;
 
 interface VlessFormProps {
   serverConfig?: ServerConfig;
@@ -51,6 +60,9 @@ interface VlessFormProps {
 }
 
 export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
+  const { t } = useTranslation();
+  const vlessFormSchema = getVlessFormSchema(t);
+
   const normalizeNetwork = (n: string | undefined): 'Tcp' | 'Ws' | 'H2' => {
     const lower = (n || 'tcp').toLowerCase();
     if (lower === 'ws' || lower === 'websocket') return 'Ws';
@@ -159,11 +171,13 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>服务器地址</FormLabel>
+              <FormLabel>{t('servers.serverAddress', '服务器地址')}</FormLabel>
               <FormControl>
                 <Input placeholder="example.com" {...field} />
               </FormControl>
-              <FormDescription>服务器的域名或 IP 地址</FormDescription>
+              <FormDescription>
+                {t('servers.serverAddressTip', '服务器的域名或 IP 地址')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -174,7 +188,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
           name="port"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>端口</FormLabel>
+              <FormLabel>{t('servers.port', '端口')}</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -183,7 +197,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                   onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                 />
               </FormControl>
-              <FormDescription>服务器端口号（1-65535）</FormDescription>
+              <FormDescription>{t('servers.portTip', '服务器端口号（1-65535）')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -198,7 +212,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               <FormControl>
                 <Input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" {...field} />
               </FormControl>
-              <FormDescription>用户 ID，格式为标准 UUID</FormDescription>
+              <FormDescription>{t('servers.uuidTip', '用户 ID，格式为标准 UUID')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -209,18 +223,20 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
           name="encryption"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>加密方式</FormLabel>
+              <FormLabel>{t('servers.encryptionMethod', '加密方式')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择加密方式" />
+                    <SelectValue placeholder={t('servers.selectEncryption', '选择加密方式')} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="none">none</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription>VLESS 协议的加密方式（通常为 none）</FormDescription>
+              <FormDescription>
+                {t('servers.vlessEncryptionTip', 'VLESS 协议的加密方式（通常为 none）')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -231,11 +247,11 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
           name="network"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>传输协议</FormLabel>
+              <FormLabel>{t('servers.transportProtocol', '传输协议')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择传输协议" />
+                    <SelectValue placeholder={t('servers.selectTransport', '选择传输协议')} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -244,7 +260,9 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                   <SelectItem value="H2">HTTP/2</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription>底层传输协议类型</FormDescription>
+              <FormDescription>
+                {t('servers.transportProtocolTip', '底层传输协议类型')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -255,20 +273,22 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
           name="security"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>传输层加密</FormLabel>
+              <FormLabel>{t('servers.transportSecurity', '传输层加密')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择传输层加密" />
+                    <SelectValue placeholder={t('servers.selectSecurity', '选择传输层加密')} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="None">无</SelectItem>
+                  <SelectItem value="None">{t('servers.none', '无')}</SelectItem>
                   <SelectItem value="Tls">TLS</SelectItem>
                   <SelectItem value="Reality">Reality</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription>传输层安全协议</FormDescription>
+              <FormDescription>
+                {t('servers.transportSecurityTip', '传输层安全协议')}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -281,11 +301,13 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="tlsServerName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>TLS 服务器名称（可选）</FormLabel>
+                  <FormLabel>{t('servers.tlsServerName', 'TLS 服务器名称（可选）')}</FormLabel>
                   <FormControl>
                     <Input placeholder="example.com" {...field} />
                   </FormControl>
-                  <FormDescription>用于 TLS SNI，留空则使用服务器地址</FormDescription>
+                  <FormDescription>
+                    {t('servers.tlsSniTip', '用于 TLS SNI，留空则使用服务器地址')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -296,11 +318,13 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="tlsFingerprint"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>TLS 指纹</FormLabel>
+                  <FormLabel>{t('servers.tlsFingerprint', 'TLS 指纹')}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="选择 TLS 指纹" />
+                        <SelectValue
+                          placeholder={t('servers.selectFingerprint', '选择 TLS 指纹')}
+                        />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -310,10 +334,12 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                       <SelectItem value="edge">Edge</SelectItem>
                       <SelectItem value="ios">iOS</SelectItem>
                       <SelectItem value="android">Android</SelectItem>
-                      <SelectItem value="random">随机</SelectItem>
+                      <SelectItem value="random">{t('servers.random', '随机')}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormDescription>uTLS 客户端指纹伪装</FormDescription>
+                  <FormDescription>
+                    {t('servers.tlsFingerprintTip', 'uTLS 客户端指纹伪装')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -328,8 +354,10 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                     <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>允许不安全的连接</FormLabel>
-                    <FormDescription>跳过 TLS 证书验证（不推荐，仅用于测试）</FormDescription>
+                    <FormLabel>{t('servers.allowInsecure', '允许不安全的连接')}</FormLabel>
+                    <FormDescription>
+                      {t('servers.allowInsecureTip', '跳过 TLS 证书验证（不推荐，仅用于测试）')}
+                    </FormDescription>
                   </div>
                 </FormItem>
               )}
@@ -344,11 +372,13 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="tlsServerName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>目标网站（SNI）</FormLabel>
+                  <FormLabel>{t('servers.targetWebsite', '目标网站（SNI）')}</FormLabel>
                   <FormControl>
                     <Input placeholder="www.microsoft.com" {...field} />
                   </FormControl>
-                  <FormDescription>Reality 伪装的目标网站域名</FormDescription>
+                  <FormDescription>
+                    {t('servers.realityTargetTip', 'Reality 伪装的目标网站域名')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -361,9 +391,11 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                 <FormItem>
                   <FormLabel>Public Key</FormLabel>
                   <FormControl>
-                    <Input placeholder="服务端生成的公钥" {...field} />
+                    <Input placeholder={t('servers.inputPubKey', '服务端生成的公钥')} {...field} />
                   </FormControl>
-                  <FormDescription>Reality 公钥，由服务端生成</FormDescription>
+                  <FormDescription>
+                    {t('servers.pubKeyTip', 'Reality 公钥，由服务端生成')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -374,11 +406,16 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="realityShortId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Short ID（可选）</FormLabel>
+                  <FormLabel>{t('servers.shortId', 'Short ID（可选）')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="留空或填写服务端配置的值" {...field} />
+                    <Input
+                      placeholder={t('servers.inputShortId', '留空或填写服务端配置的值')}
+                      {...field}
+                    />
                   </FormControl>
-                  <FormDescription>Reality Short ID，需与服务端配置一致</FormDescription>
+                  <FormDescription>
+                    {t('servers.shortIdTip', 'Reality Short ID，需与服务端配置一致')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -389,11 +426,13 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="tlsFingerprint"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>TLS 指纹</FormLabel>
+                  <FormLabel>{t('servers.tlsFingerprint', 'TLS 指纹')}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="选择 TLS 指纹" />
+                        <SelectValue
+                          placeholder={t('servers.selectFingerprint', '选择 TLS 指纹')}
+                        />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -403,10 +442,12 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                       <SelectItem value="edge">Edge</SelectItem>
                       <SelectItem value="ios">iOS</SelectItem>
                       <SelectItem value="android">Android</SelectItem>
-                      <SelectItem value="random">随机</SelectItem>
+                      <SelectItem value="random">{t('servers.random', '随机')}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormDescription>uTLS 客户端指纹伪装</FormDescription>
+                  <FormDescription>
+                    {t('servers.tlsFingerprintTip', 'uTLS 客户端指纹伪装')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -417,22 +458,24 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="flow"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Flow（可选）</FormLabel>
+                  <FormLabel>{t('servers.flowControl', 'Flow（可选）')}</FormLabel>
                   <Select
                     onValueChange={(v) => field.onChange(v === '_none' ? '' : v)}
                     value={field.value || '_none'}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="选择 Flow 控制" />
+                        <SelectValue placeholder={t('servers.selectFlow', '选择 Flow 控制')} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="_none">无</SelectItem>
+                      <SelectItem value="_none">{t('servers.none', '无')}</SelectItem>
                       <SelectItem value="xtls-rprx-vision">xtls-rprx-vision</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormDescription>XTLS 流控，Reality 推荐使用 xtls-rprx-vision</FormDescription>
+                  <FormDescription>
+                    {t('servers.flowTip', 'XTLS 流控，Reality 推荐使用 xtls-rprx-vision')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -447,11 +490,11 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="wsPath"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>WebSocket 路径</FormLabel>
+                  <FormLabel>{t('servers.wsPath', 'WebSocket 路径')}</FormLabel>
                   <FormControl>
                     <Input placeholder="" {...field} />
                   </FormControl>
-                  <FormDescription>WebSocket 连接路径</FormDescription>
+                  <FormDescription>{t('servers.wsPathTip', 'WebSocket 连接路径')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -462,11 +505,13 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
               name="wsHost"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>WebSocket 主机头（可选）</FormLabel>
+                  <FormLabel>{t('servers.wsHost', 'WebSocket 主机头（可选）')}</FormLabel>
                   <FormControl>
                     <Input placeholder="example.com" {...field} />
                   </FormControl>
-                  <FormDescription>WebSocket 伪装域名，留空则使用服务器地址</FormDescription>
+                  <FormDescription>
+                    {t('servers.wsHostTip', 'WebSocket 伪装域名，留空则使用服务器地址')}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -477,7 +522,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
         <div className="flex gap-4">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            保存配置
+            {t('servers.saveConfig', '保存配置')}
           </Button>
           <Button
             type="button"
@@ -485,7 +530,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
             onClick={() => form.reset()}
             disabled={form.formState.isSubmitting}
           >
-            重置
+            {t('servers.reset', '重置')}
           </Button>
         </div>
       </form>
