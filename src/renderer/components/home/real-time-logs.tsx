@@ -5,8 +5,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore } from '@/store/app-store';
 import { Trash2, ArrowDown } from 'lucide-react';
 import { getLogs, clearLogs, addEventListener, removeEventListener } from '@/bridge/api-wrapper';
-import { useTranslation } from 'react-i18next';
 import type { LogEntry } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
 export function RealTimeLogs() {
   const { t } = useTranslation();
@@ -137,25 +137,25 @@ export function RealTimeLogs() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>{t('home.realtimeLog', '实时日志')}</CardTitle>
+          <CardTitle>{t('home.realTimeLogs')}</CardTitle>
           <Button
             variant="outline"
             size="sm"
             onClick={handleClearLogs}
-            disabled={!logs || logs.length === 0}
+            disabled={logs.length === 0}
           >
             <Trash2 className="h-4 w-4 mr-1" />
-            {t('home.clearLogs', '清空')}
+            {t('home.clear')}
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         <ScrollArea ref={scrollAreaRef} className="h-64 w-full rounded border bg-muted/30 p-3">
-          {!logs || logs.length === 0 ? (
+          {logs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               {connectionStatus?.proxyCore?.running
-                ? t('home.waitingLogs', '等待日志输出...')
-                : t('home.startProxyFirst', '请先启动代理服务')}
+                ? t('home.waitingForLogs')
+                : t('home.plsStartProxy')}
             </div>
           ) : (
             <div className="space-y-1 select-text cursor-text">
@@ -165,10 +165,10 @@ export function RealTimeLogs() {
                 return (
                   <div key={index} className="text-xs font-mono select-text">
                     <span className="text-muted-foreground">[{timestamp}]</span>
-                    <span className={`ml-2 font-semibold ${getLevelColor(log?.level || 'info')}`}>
-                      {log?.level?.toUpperCase() || 'INFO'}:
+                    <span className={`ml-2 font-semibold ${getLevelColor(log.level)}`}>
+                      {log.level.toUpperCase()}:
                     </span>
-                    <span className="ml-2">{log?.message || ''}</span>
+                    <span className="ml-2">{log.message}</span>
                   </div>
                 );
               })}
@@ -178,9 +178,7 @@ export function RealTimeLogs() {
 
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">
-            {isAutoScroll
-              ? t('home.autoScrollEnabled', '自动滚动已开启')
-              : t('home.autoScrollDisabled', '自动滚动已关闭（滚动到底部可开启）')}
+            {isAutoScroll ? t('home.autoScrollOn') : t('home.autoScrollOff')}
           </span>
           {!isAutoScroll && (
             <Button
@@ -196,7 +194,7 @@ export function RealTimeLogs() {
               className="text-xs h-7"
             >
               <ArrowDown className="h-3 w-3 mr-1" />
-              {t('home.scrollToBottom', '滚动到底部')}
+              {t('home.scrollToBottom')}
             </Button>
           )}
         </div>

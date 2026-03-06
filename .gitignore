@@ -51,3 +51,22 @@ Desktop.ini
 # Local test files (may contain private config)
 test-*.json
 
+# ── Sensitive runtime data (NEVER commit) ──────────────────────────────
+# User proxy configs & node lists (stored in OS userData dir at runtime,
+# but guard against any accidental copies landing in the repo)
+config.json
+singbox_config.json
+singbox_config.json.bak
+sing-box.exe.bak
+sing-box.bak
+cache.db
+singbox.log
+*.bak
+
+# Subscription cache
+subscriptions/
+subscription-cache/
+
+# Any local override configs
+local.config.*
+*.local.json

@@ -1,49 +1,130 @@
-import { Home, Server, ListFilter, Settings } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  Home,
+  Server,
+  ListFilter,
+  Settings,
+  ChevronLeft,
+  Sliders,
+  Palette,
+  Cpu,
+  Info,
+  Shield,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
   currentView: string;
   onViewChange: (view: string) => void;
+  settingsSection: string;
+  onSettingsSectionChange: (section: string) => void;
 }
 
-const navItems = [
+const mainNavItems = [
   { id: 'home', icon: Home },
   { id: 'server', icon: Server },
   { id: 'rules', icon: ListFilter },
-  { id: 'settings', icon: Settings },
+];
+
+const settingsNavItems = [
+  { id: 'general', icon: Sliders },
+  { id: 'proxyMode', icon: Shield },
+  { id: 'appearance', icon: Palette },
+  { id: 'advanced', icon: Cpu },
+  { id: 'about', icon: Info },
 ];
 
 const isMac = window.electron?.platform === 'darwin';
 
-export function Sidebar({ currentView, onViewChange }: SidebarProps) {
+export function Sidebar({
+  currentView,
+  onViewChange,
+  settingsSection,
+  onSettingsSectionChange,
+}: SidebarProps) {
   const { t } = useTranslation();
 
+  const isSettings = currentView === 'settings';
+
+  const renderNavItem = (
+    item: { id: string; icon: typeof Home },
+    onClick: () => void,
+    isActive: boolean
+  ) => {
+    const Icon = item.icon;
+    return (
+      <button key={item.id} onClick={onClick} className={`nav-item${isActive ? ' active' : ''}`}>
+        <span className="nav-item-indicator" />
+        <Icon
+          className="h-[15px] w-[15px] flex-shrink-0"
+          strokeWidth={isActive ? 2.2 : 1.8}
+          style={{ color: isActive ? 'var(--accent-blue)' : 'var(--ink-tertiary)' }}
+        />
+        <span style={{ fontSize: '13.5px' }}>
+          {isSettings ? t(`settings.nav.${item.id}`, item.id) : t(`sidebar.${item.id}`)}
+        </span>
+      </button>
+    );
+  };
+
   return (
-    <div className="w-[180px] sidebar h-full flex flex-col relative z-20">
-      <div className={cn('p-4 border-b border-transparent', isMac && 'pt-[34px] app-region-drag')}>
-        <h1 className="text-sm font-bold pl-2 text-foreground/80">FlowZ</h1>
-      </div>
-      <nav className="flex-1 pt-2 pb-2 app-region-no-drag space-y-0.5">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
+    <div className="w-[240px] sidebar h-full flex flex-col relative z-20 select-none">
+      {/* macOS traffic light spacer */}
+      {isMac ? (
+        <div className="h-[52px] flex-shrink-0 app-region-drag" />
+      ) : (
+        <div className="h-4 flex-shrink-0" />
+      )}
+
+      {isSettings ? (
+        /* ── Settings sub-navigation ── */
+        <>
+          {/* Back button */}
+          <div className="px-2 pb-2 app-region-no-drag">
             <button
-              key={item.id}
-              onClick={() => onViewChange(item.id)}
-              className={cn(
-                'w-[calc(100%-1rem)] mx-2 flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] transition-colors mb-0.5',
-                currentView === item.id
-                  ? 'bg-black/[0.06] text-foreground font-medium shadow-sm dark:bg-white/15 dark:text-foreground'
-                  : 'text-muted-foreground/80 hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/5 dark:hover:text-foreground'
-              )}
+              onClick={() => onViewChange('home')}
+              className="nav-item"
+              style={{ color: 'var(--ink-secondary)' }}
             >
-              <Icon className="h-4 w-4 stroke-[2px]" />
-              <span>{t(`sidebar.${item.id}`)}</span>
+              <ChevronLeft
+                className="h-4 w-4 flex-shrink-0"
+                style={{ color: 'var(--ink-secondary)' }}
+              />
+              <span style={{ fontSize: '13.5px', color: 'var(--ink-secondary)' }}>
+                {t('settings.nav.back', '返回应用')}
+              </span>
             </button>
-          );
-        })}
-      </nav>
+          </div>
+
+          {/* Settings sub-nav items */}
+          <nav className="flex-1 app-region-no-drag space-y-[2px] overflow-hidden">
+            {settingsNavItems.map((item) =>
+              renderNavItem(
+                item,
+                () => onSettingsSectionChange(item.id),
+                settingsSection === item.id
+              )
+            )}
+          </nav>
+        </>
+      ) : (
+        /* ── Main navigation ── */
+        <>
+          <nav className="flex-1 pb-2 app-region-no-drag space-y-[2px] overflow-hidden">
+            {mainNavItems.map((item) =>
+              renderNavItem(item, () => onViewChange(item.id), currentView === item.id)
+            )}
+          </nav>
+
+          {/* Settings pinned to bottom */}
+          <div className="pb-4 app-region-no-drag space-y-[2px]">
+            {renderNavItem(
+              { id: 'settings', icon: Settings },
+              () => onViewChange('settings'),
+              false
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

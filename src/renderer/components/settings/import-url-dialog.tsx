@@ -26,16 +26,16 @@ interface ImportUrlDialogProps {
 }
 
 export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportUrlDialogProps) {
+  const { t } = useTranslation();
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
   const [parsedConfig, setParsedConfig] = useState<ServerConfig | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const { t } = useTranslation();
 
   const handleParseUrl = async () => {
     if (!url.trim()) {
-      toast.error('请输入协议URL');
+      toast.error(t('importUrl.pleaseEnterUrl', 'Please enter a protocol URL'));
       return;
     }
 
@@ -45,21 +45,20 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
       if (response && response.success && response.data) {
         setParsedConfig(response.data as any);
 
-        // 自动生成服务器名称
         if (!name.trim()) {
           const protocol = response.data.protocol.toUpperCase();
           const address = response.data.address;
           setName(`${protocol} - ${address}`);
         }
 
-        toast.success(t('servers.parseUrlSuccess', 'URL解析成功'));
+        toast.success(t('importUrl.parseSuccess', 'URL parsed successfully'));
       } else {
-        toast.error(response?.error || t('servers.parseUrlFailed', 'URL解析失败'));
+        toast.error(response?.error || t('importUrl.parseFailed', 'URL parse failed'));
         setParsedConfig(null);
       }
     } catch (error) {
       console.error('Parse URL error:', error);
-      toast.error(t('servers.parseUrlFailed', 'URL解析失败'));
+      toast.error(t('importUrl.parseFailed', 'URL parse failed'));
       setParsedConfig(null);
     } finally {
       setIsParsing(false);
@@ -68,7 +67,9 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
 
   const handleImport = async () => {
     if (!parsedConfig || !name.trim()) {
-      toast.error(t('servers.errorImportPrerequisite', '请先解析URL并输入服务器名称'));
+      toast.error(
+        t('importUrl.parseFirstAndName', 'Please parse the URL and enter a server name first')
+      );
       return;
     }
 
@@ -79,11 +80,11 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
         onImportSuccess?.();
         handleClose();
       } else {
-        toast.error(response?.error || t('servers.importFailed', '导入服务器失败'));
+        toast.error(response?.error || t('importUrl.importFailed', 'Failed to import server'));
       }
     } catch (error) {
       console.error('Import server error:', error);
-      toast.error(t('servers.importFailed', '导入服务器失败'));
+      toast.error(t('importUrl.importFailed', 'Failed to import server'));
     } finally {
       setIsImporting(false);
     }
@@ -113,26 +114,25 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="h-5 w-5" />
-            {t('servers.importFromUrl', '从URL导入')}
+            {t('importUrl.title', 'Import Server from URL')}
           </DialogTitle>
           <DialogDescription>
             {t(
-              'servers.importUrlDesc',
-              '支持导入 vless://、trojan://、hysteria2://、hy2://、ss:// 和 anytls:// 协议链接'
+              'importUrl.desc',
+              'Supports vless://, trojan://, hysteria2://, hy2://, ss:// and anytls:// protocol links'
             )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* URL输入 */}
           <div className="space-y-2">
-            <Label htmlFor="protocol-url">{t('servers.protocolUrl', '协议URL')}</Label>
+            <Label htmlFor="protocol-url">{t('importUrl.urlLabel', 'Protocol URL')}</Label>
             <div className="flex gap-2">
               <Textarea
                 id="protocol-url"
                 placeholder={t(
-                  'servers.protocolUrlPlaceholder',
-                  'vless://uuid@server:port?encryption=none&security=tls&type=ws&host=example.com&path=/path#name\n或 trojan://password@server:port?security=tls&type=ws#name\n或 hysteria2://password@server:port?sni=example.com#name\n或 ss://base64(method:password)@server:port#name\n或 anytls://password@server:port?security=tls&sni=example.com#name'
+                  'importUrl.urlPlaceholder',
+                  'vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name'
                 )}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
@@ -146,43 +146,47 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                 {isParsing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  t('servers.parseBtn', '解析')
+                  t('importUrl.parse', 'Parse')
                 )}
               </Button>
             </div>
             {url.trim() && !isValidUrl(url.trim()) && (
               <p className="text-sm text-destructive">
                 {t(
-                  'servers.invalidUrlFormat',
-                  '请输入有效的 vless://、trojan://、hysteria2://、hy2://、ss:// 或 anytls:// 协议链接'
+                  'importUrl.invalidUrl',
+                  'Please enter a valid vless://, trojan://, hysteria2://, hy2://, ss:// or anytls:// link'
                 )}
               </p>
             )}
           </div>
 
-          {/* 解析结果 */}
           {parsedConfig && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Server className="h-4 w-4" />
-                  {t('servers.parseResult', '解析结果')}
+                  {t('importUrl.parseResult', 'Parse Result')}
                 </CardTitle>
                 <CardDescription>
-                  {t('servers.parseResultDesc', 'URL解析成功，请确认配置信息')}
+                  {t(
+                    'importUrl.parseResultDesc',
+                    'URL parsed successfully, please confirm the configuration'
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground">{t('servers.protocol', '协议')}:</span>
+                    <span className="text-muted-foreground">
+                      {t('importUrl.protocol', 'Protocol')}:
+                    </span>
                     <Badge variant="outline" className="ml-2">
                       {parsedConfig.protocol}
                     </Badge>
                   </div>
                   <div className="flex flex-col md:flex-row md:items-baseline relative pr-2">
                     <span className="text-muted-foreground whitespace-nowrap">
-                      {t('servers.address', '地址')}:
+                      {t('importUrl.address', 'Address')}:
                     </span>
                     <span className="md:ml-2 font-mono break-all line-clamp-2 md:line-clamp-none">
                       {parsedConfig.address.includes(':')
@@ -192,12 +196,14 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                     </span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">{t('servers.transport', '传输')}:</span>
+                    <span className="text-muted-foreground">
+                      {t('importUrl.transport', 'Transport')}:
+                    </span>
                     <span className="ml-2">{parsedConfig.network}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">
-                      {t('servers.encryption', '加密')}:
+                      {t('importUrl.encryption', 'Encryption')}:
                     </span>
                     <span className="ml-2">{parsedConfig.security}</span>
                   </div>
@@ -210,7 +216,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                   {parsedConfig.protocol === 'trojan' && (
                     <div className="col-span-2">
                       <span className="text-muted-foreground">
-                        {t('servers.password', '密码')}:
+                        {t('importUrl.password', 'Password')}:
                       </span>
                       <span className="ml-2">••••••••</span>
                     </div>
@@ -218,7 +224,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                   {parsedConfig.protocol === 'hysteria2' && (
                     <div className="col-span-2">
                       <span className="text-muted-foreground">
-                        {t('servers.password', '密码')}:
+                        {t('importUrl.password', 'Password')}:
                       </span>
                       <span className="ml-2">••••••••</span>
                     </div>
@@ -227,7 +233,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                     <>
                       <div className="col-span-2">
                         <span className="text-muted-foreground">
-                          {t('servers.ssMethod', '加密方法')}:
+                          {t('importUrl.encryptionMethod', 'Encryption Method')}:
                         </span>
                         <span className="ml-2">
                           {parsedConfig.shadowsocksSettings?.method || 'N/A'}
@@ -235,7 +241,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                       </div>
                       <div className="col-span-2">
                         <span className="text-muted-foreground">
-                          {t('servers.password', '密码')}:
+                          {t('importUrl.password', 'Password')}:
                         </span>
                         <span className="ml-2">••••••••</span>
                       </div>
@@ -244,7 +250,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                   {parsedConfig.wsSettings?.path && (
                     <div className="col-span-2">
                       <span className="text-muted-foreground">
-                        {t('servers.wsPath', 'WebSocket路径')}:
+                        {t('importUrl.wsPath', 'WebSocket Path')}:
                       </span>
                       <span className="ml-2 font-mono">{parsedConfig.wsSettings.path}</span>
                     </div>
@@ -252,7 +258,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                   {parsedConfig.tlsSettings?.serverName && (
                     <div className="col-span-2">
                       <span className="text-muted-foreground">
-                        {t('servers.tlsSni', 'TLS服务器名')}:
+                        {t('importUrl.tlsServer', 'TLS Server Name')}:
                       </span>
                       <span className="ml-2">{parsedConfig.tlsSettings.serverName}</span>
                     </div>
@@ -262,13 +268,12 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
             </Card>
           )}
 
-          {/* 服务器名称 */}
           {parsedConfig && (
             <div className="space-y-2">
-              <Label htmlFor="server-name">{t('servers.serverName', '服务器名称')}</Label>
+              <Label htmlFor="server-name">{t('importUrl.serverName', 'Server Name')}</Label>
               <Input
                 id="server-name"
-                placeholder={t('servers.inputServerName', '输入服务器名称')}
+                placeholder={t('importUrl.serverNamePlaceholder', 'Enter server name')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -278,16 +283,16 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
-            {t('servers.cancel', '取消')}
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleImport} disabled={!parsedConfig || !name.trim() || isImporting}>
             {isImporting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                {t('servers.importing', '导入中...')}
+                {t('importUrl.importing', 'Importing...')}
               </>
             ) : (
-              t('servers.importConfirm', '导入服务器')
+              t('importUrl.importServer', 'Import Server')
             )}
           </Button>
         </DialogFooter>

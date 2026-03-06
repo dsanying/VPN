@@ -4,7 +4,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,12 +15,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import type { ProxyModeType } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
 export function ProxyModeSettings() {
+  const { t } = useTranslation();
   const config = useAppStore((state) => state.config);
   const saveConfig = useAppStore((state) => state.saveConfig);
   const connectionStatus = useAppStore((state) => state.connectionStatus);
-  const { t } = useTranslation();
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingModeType, setPendingModeType] = useState<ProxyModeType | null>(null);
@@ -49,13 +49,11 @@ export function ProxyModeSettings() {
       };
 
       await saveConfig(updatedConfig);
-      toast.success(t('settings.proxyMode.successUpdate', '代理模式已更新'), {
-        description: isConnected
-          ? t('settings.proxyMode.reconnectToast', '请重新连接以应用新模式')
-          : undefined,
+      toast.success(t('settings.proxyMode.successUpdate'), {
+        description: isConnected ? t('settings.proxyMode.reconnectToast') : undefined,
       });
     } catch {
-      toast.error(t('settings.proxyMode.failUpdate', '保存设置失败'));
+      toast.error(t('settings.proxyMode.failUpdate'));
     }
   };
 
@@ -71,14 +69,12 @@ export function ProxyModeSettings() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.proxyMode.title', '代理模式')}</CardTitle>
-          <CardDescription>
-            {t('settings.proxyMode.description', '选择代理实现方式')}
-          </CardDescription>
+          <CardTitle>{t('settings.proxyMode.title')}</CardTitle>
+          <CardDescription>{t('settings.proxyMode.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-3">
-            <Label>{t('settings.proxyMode.implementationMode', '代理实现模式')}</Label>
+            <Label>{t('settings.proxyMode.implementationMode')}</Label>
             <RadioGroup
               value={config.proxyModeType}
               onValueChange={(value) => handleModeTypeChange(value as ProxyModeType)}
@@ -87,14 +83,9 @@ export function ProxyModeSettings() {
                 <RadioGroupItem value="systemProxy" id="system-proxy" />
                 <Label htmlFor="system-proxy" className="cursor-pointer font-normal">
                   <div>
-                    <div className="font-medium">
-                      {t('settings.proxyMode.systemProxyMode', '系统代理模式')}
-                    </div>
+                    <div className="font-medium">{t('settings.proxyMode.systemProxyMode')}</div>
                     <div className="text-sm text-muted-foreground">
-                      {t(
-                        'settings.proxyMode.systemProxyModeDesc',
-                        '通过配置系统HTTP/SOCKS代理转发流量（传统模式）'
-                      )}
+                      {t('settings.proxyMode.systemProxyModeDesc')}
                     </div>
                   </div>
                 </Label>
@@ -103,29 +94,23 @@ export function ProxyModeSettings() {
                 <RadioGroupItem value="tun" id="tun-mode" />
                 <Label htmlFor="tun-mode" className="cursor-pointer font-normal">
                   <div>
-                    <div className="font-medium">{t('settings.proxyMode.tunMode', 'TUN模式')}</div>
+                    <div className="font-medium">{t('settings.proxyMode.tunMode')}</div>
                     <div className="text-sm text-muted-foreground">
-                      {t(
-                        'settings.proxyMode.tunModeDesc',
-                        '通过虚拟网络接口实现透明代理（需要管理员权限）'
-                      )}
+                      {t('settings.proxyMode.tunModeDesc')}
                     </div>
                   </div>
                 </Label>
               </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground mt-2">
-              {t('settings.proxyMode.tunModeNote', 'TUN模式会自动配置虚拟网卡和DNS，无需手动设置')}
+              {t('settings.proxyMode.tunModeNote')}
             </p>
           </div>
 
           {isConnected && (
             <div className="p-3 bg-yellow-500/10 border border-yellow-500/50 rounded-lg">
               <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                {t(
-                  'settings.proxyMode.reconnectWarning',
-                  '⚠️ 当前已连接，切换代理模式需要重新连接'
-                )}
+                {t('settings.proxyMode.reconnectWarning')}
               </p>
             </div>
           )}
@@ -135,31 +120,26 @@ export function ProxyModeSettings() {
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('settings.proxyMode.confirmTitle', '确认切换代理模式')}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{t('settings.proxyMode.confirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t(
-                'settings.proxyMode.confirmDesc',
-                '切换代理模式将断开当前连接，您需要手动重新连接。'
-              )}
+              {t('settings.proxyMode.confirmDesc')}
               <br />
               <br />
-              {t('settings.proxyMode.confirmSwitch', '确定要切换到 ')}
+              {t('settings.proxyMode.confirmSwitch')}
               <strong>
                 {pendingModeType?.toLowerCase() === 'tun'
-                  ? t('settings.proxyMode.tunMode', 'TUN模式')
-                  : t('settings.proxyMode.systemProxyMode', '系统代理模式')}
+                  ? t('settings.proxyMode.tunMode')
+                  : t('settings.proxyMode.systemProxyMode')}
               </strong>
-              {t('settings.proxyMode.confirmQuestion', ' 吗？')}
+              {t('settings.proxyMode.confirmQuestion')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setPendingModeType(null)}>
-              {t('settings.proxyMode.cancel', '取消')}
+              {t('settings.proxyMode.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmModeChange}>
-              {t('settings.proxyMode.confirmBtn', '确认切换')}
+              {t('settings.proxyMode.confirmBtn')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

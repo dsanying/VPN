@@ -20,7 +20,7 @@ function getIpcRenderer(): ElectronIpcRenderer {
   if (!window.electron?.ipcRenderer) {
     console.warn('IPC Renderer is not available. Using mock for browser preview.');
     return {
-      invoke: async () => ({ success: true, data: [] }),
+      invoke: async <T>() => ({ success: true, data: [] }) as unknown as T,
       on: () => {},
       once: () => {},
       off: () => {},

@@ -25,15 +25,17 @@ import { Loader2 } from 'lucide-react';
 import type { ServerConfig } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
 
-// Use a function to get schema with translations
-const getAnyTlsFormSchema = (t: any) =>
+// 注意：zod schema 在组件外，我们需要在组件内使用 useTranslation 或者保留这里，并在渲染时翻译错误。
+// 为了简单起见，这里我们保持默认中文，并在下面使用 t() 覆盖，或者直接在 FormMessage 处处理（比较复杂）。
+// 更好的做法是将 schema 的构建移到组件内部，或者接受 t 函数。
+// 这里我们将 schema 的构建移到组件内部，以便使用 t()。
+// 所以我们移除外部定义的 schema。
+// 我们可以创建一个动态创建 schema 的函数
+const createAnyTlsSchema = (t: any) =>
   z.object({
-    address: z.string().min(1, t('servers.errorAddressEmpty', '服务器地址不能为空')),
-    port: z
-      .number()
-      .min(1, t('servers.errorPortMin', '端口必须大于 0'))
-      .max(65535, t('servers.errorPortMax', '端口必须小于 65536')),
-    password: z.string().min(1, t('servers.errorPassword', '密码不能为空')),
+    address: z.string().min(1, t('servers.addressRequired')),
+    port: z.number().min(1).max(65535),
+    password: z.string().min(1, t('servers.passwordRequired')),
     security: z.enum(['tls', 'reality']),
     tlsServerName: z.string().optional(),
     tlsFingerprint: z.string().optional(),
@@ -42,7 +44,7 @@ const getAnyTlsFormSchema = (t: any) =>
     realityShortId: z.string().optional(),
   });
 
-type AnyTlsFormValues = z.infer<ReturnType<typeof getAnyTlsFormSchema>>;
+type AnyTlsFormValues = z.infer<ReturnType<typeof createAnyTlsSchema>>;
 
 interface AnyTlsFormProps {
   serverConfig?: ServerConfig;
@@ -51,7 +53,7 @@ interface AnyTlsFormProps {
 
 export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
   const { t } = useTranslation();
-  const anyTlsFormSchema = getAnyTlsFormSchema(t);
+  const anyTlsFormSchema = createAnyTlsSchema(t);
 
   const getDefaultValues = (): AnyTlsFormValues => {
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'anytls') {
@@ -126,13 +128,11 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.serverAddress', '服务器地址')}</FormLabel>
+              <FormLabel>{t('servers.serverAddress')}</FormLabel>
               <FormControl>
                 <Input placeholder="example.com" {...field} />
               </FormControl>
-              <FormDescription>
-                {t('servers.serverAddressTip', '服务器的域名或 IP 地址')}
-              </FormDescription>
+              <FormDescription>{t('servers.serverAddressDesc')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -143,7 +143,7 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
           name="port"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.port', '端口')}</FormLabel>
+              <FormLabel>{t('servers.port')}</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -162,13 +162,9 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.password', '密码')}</FormLabel>
+              <FormLabel>{t('servers.password')}</FormLabel>
               <FormControl>
-                <Input
-                  type="password"
-                  placeholder={t('servers.inputAnyTlsPassword', '输入 AnyTLS 密码')}
-                  {...field}
-                />
+                <Input type="password" placeholder={t('servers.passwordPlaceholder')} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -180,11 +176,11 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
           name="security"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.securityType', '安全类型')}</FormLabel>
+              <FormLabel>{t('servers.securityType')}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder={t('servers.selectSecurity', '选择安全类型')} />
+                    <SelectValue />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -192,9 +188,7 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
                   <SelectItem value="reality">Reality</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription>
-                {t('servers.anyTlsSecurityTip', 'AnyTLS 必须使用 TLS，可选 Reality 增强伪装')}
-              </FormDescription>
+              <FormDescription>{t('servers.securityTypeDesc')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -208,12 +202,15 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
               name="tlsServerName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.sniOptional', 'SNI（可选）')}</FormLabel>
+                  <FormLabel>SNI ({t('servers.optional')})</FormLabel>
                   <FormControl>
                     <Input placeholder="example.com" {...field} />
                   </FormControl>
                   <FormDescription>
-                    {t('servers.tlsSniTipLong', 'TLS Server Name Indication，留空则使用服务器地址')}
+                    {t(
+                      'servers.sniDesc',
+                      'TLS Server Name Indication, leave blank to use server address'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -225,13 +222,11 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
               name="tlsFingerprint"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.tlsFingerprint', 'TLS 指纹')}</FormLabel>
+                  <FormLabel>{t('servers.fingerprint')}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          placeholder={t('servers.selectFingerprint', '选择 TLS 指纹')}
-                        />
+                        <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -241,12 +236,10 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
                       <SelectItem value="edge">Edge</SelectItem>
                       <SelectItem value="ios">iOS</SelectItem>
                       <SelectItem value="android">Android</SelectItem>
-                      <SelectItem value="random">{t('servers.random', '随机')}</SelectItem>
+                      <SelectItem value="random">{t('servers.random')}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormDescription>
-                    {t('servers.tlsFingerprintTip', 'uTLS 客户端指纹伪装')}
-                  </FormDescription>
+                  <FormDescription>{t('servers.fingerprintDesc')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -261,10 +254,8 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
                     <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                   <div className="space-y-1 leading-none">
-                    <FormLabel>{t('servers.allowInsecure', '允许不安全的连接')}</FormLabel>
-                    <FormDescription>
-                      {t('servers.allowInsecureTestTip', '跳过证书验证（仅用于测试）')}
-                    </FormDescription>
+                    <FormLabel>{t('servers.allowInsecure')}</FormLabel>
+                    <FormDescription>{t('servers.allowInsecureDesc')}</FormDescription>
                   </div>
                 </FormItem>
               )}
@@ -280,13 +271,11 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
               name="tlsServerName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.targetWebsite', '目标网站（SNI）')}</FormLabel>
+                  <FormLabel>{t('servers.realityTarget')}</FormLabel>
                   <FormControl>
                     <Input placeholder="www.microsoft.com" {...field} />
                   </FormControl>
-                  <FormDescription>
-                    {t('servers.realityTargetTip', 'Reality 伪装的目标网站域名')}
-                  </FormDescription>
+                  <FormDescription>{t('servers.realityTargetDesc')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -297,13 +286,11 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
               name="realityPublicKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.publicKey', 'Public Key')}</FormLabel>
+                  <FormLabel>Public Key</FormLabel>
                   <FormControl>
-                    <Input placeholder={t('servers.inputPubKey', '服务端生成的公钥')} {...field} />
+                    <Input placeholder={t('servers.publicKeyPlaceholder')} {...field} />
                   </FormControl>
-                  <FormDescription>
-                    {t('servers.realityPubKeyTip', 'Reality 公钥，由服务端生成')}
-                  </FormDescription>
+                  <FormDescription>{t('servers.publicKeyDesc')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -314,12 +301,9 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
               name="realityShortId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.shortId', 'Short ID（可选）')}</FormLabel>
+                  <FormLabel>{t('servers.shortId')}</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder={t('servers.inputShortId', '留空或填写服务端配置的值')}
-                      {...field}
-                    />
+                    <Input placeholder={t('servers.shortIdPlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -331,13 +315,11 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
               name="tlsFingerprint"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.tlsFingerprint', 'TLS 指纹')}</FormLabel>
+                  <FormLabel>{t('servers.fingerprint')}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue
-                          placeholder={t('servers.selectFingerprint', '选择 TLS 指纹')}
-                        />
+                        <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -347,7 +329,7 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
                       <SelectItem value="edge">Edge</SelectItem>
                       <SelectItem value="ios">iOS</SelectItem>
                       <SelectItem value="android">Android</SelectItem>
-                      <SelectItem value="random">{t('servers.random', '随机')}</SelectItem>
+                      <SelectItem value="random">{t('servers.random')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -360,7 +342,7 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
         <div className="flex gap-4">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('servers.saveConfig', '保存配置')}
+            {t('common.save')}
           </Button>
           <Button
             type="button"
@@ -368,7 +350,7 @@ export function AnyTlsForm({ serverConfig, onSubmit }: AnyTlsFormProps) {
             onClick={() => form.reset()}
             disabled={form.formState.isSubmitting}
           >
-            {t('servers.reset', '重置')}
+            {t('common.reset')}
           </Button>
         </div>
       </form>

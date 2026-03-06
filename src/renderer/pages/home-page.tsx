@@ -9,8 +9,8 @@ export function HomePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">{t('home.pageTitle', '首页')}</h2>
-        <p className="text-muted-foreground mt-1">{t('home.pageDesc', '连接状态和快速操作')}</p>
+        <h2 className="text-2xl font-bold">{t('home.pageTitle')}</h2>
+        <p className="text-muted-foreground mt-1">{t('home.pageDesc')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

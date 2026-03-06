@@ -48,7 +48,7 @@ const PRIVATE_IP_PATTERNS = [
 ];
 
 /**
- * sing-box 1.12.x 配置类型定义
+ * sing-box 1.12.x / 1.13.x 配置类型定义
  */
 
 interface SingBoxLogConfig {
@@ -61,11 +61,16 @@ interface SingBoxDnsServer {
   tag: string;
   type?: string;
   server?: string;
+  server_port?: number;
+  /** DoH path, e.g. "/dns-query" */
+  path?: string;
+  /** Bootstrap resolver tag: required when server is a domain name (sing-box 1.12+ new format) */
+  domain_resolver?: string;
   detour?: string;
-  // DoH 专用字段
+  // Legacy / compat fields (not emitted in new format)
   address?: string;
   address_resolver?: string;
-  // FakeIP 专用字段
+  // FakeIP specific
   inet4_range?: string;
   inet6_range?: string;
 }
@@ -544,7 +549,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /**
-   * 生成 sing-box 配置（sing-box 1.12.x 格式）
+   * 生成 sing-box 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
   generateSingBoxConfig(config: UserConfig): SingBoxConfig {
     const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
@@ -644,6 +649,55 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
   }
 
+  /**
+   * 解析 DNS 地址字符串，转为 sing-box 1.12+ 新格式的 server 对象。
+   *
+   * 重要：新格式的 DNS server 不支持 detour 字段（仅旧格式支持）。
+   * 国内/国外流量分流由 DNS rules 的 server 字段控制，
+   * DoH/DoT 服务器的 bootstrap IP 解析由 route.default_domain_resolver 负责。
+   *
+   * 支持的格式:
+   *   https://doh.pub/dns-query  → { type: "https", server: "doh.pub", path: "/dns-query" }
+   *   tls://dns.google           → { type: "tls",   server: "dns.google" }
+   *   8.8.8.8 / 8.8.8.8:53     → { type: "udp",   server: "8.8.8.8", server_port: 53 }
+   */
+  private parseDnsAddress(address: string, tag: string): SingBoxDnsServer {
+    if (address.startsWith('https://')) {
+      const url = new URL(address);
+      const server = url.hostname;
+      // 如果 server 是域名（非 IP），必须提供 domain_resolver 让 sing-box 知道如何解析它
+      const isIp = /^[\d.]+$|^[0-9a-fA-F:]+$/.test(server);
+      return {
+        tag,
+        type: 'https',
+        server,
+        server_port: url.port ? Number(url.port) : 443,
+        path: url.pathname || '/dns-query',
+        ...(isIp ? {} : { domain_resolver: 'dns-local' }),
+      } as SingBoxDnsServer;
+    } else if (address.startsWith('tls://')) {
+      const hostPort = address.slice(6);
+      const [host, port] = hostPort.split(':');
+      const isIp = /^[\d.]+$|^[0-9a-fA-F:]+$/.test(host);
+      return {
+        tag,
+        type: 'tls',
+        server: host,
+        server_port: port ? Number(port) : 853,
+        ...(isIp ? {} : { domain_resolver: 'dns-local' }),
+      } as SingBoxDnsServer;
+    } else {
+      // 普通 UDP DNS（通常是 IP，不需要 domain_resolver）
+      const [host, portStr] = address.split(':');
+      return {
+        tag,
+        type: 'udp',
+        server: host,
+        server_port: portStr ? Number(portStr) : 53,
+      } as SingBoxDnsServer;
+    }
+  }
+
   private generateDnsConfig(config: UserConfig, selectedServer: ServerConfig): SingBoxDnsConfig {
     const proxyMode = (config.proxyMode || 'smart').toLowerCase();
 
@@ -658,36 +712,27 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 只有在 TUN 模式下才可以用 FakeIP
     const enableFakeIp = isTunMode && userDnsConfig.enableFakeIp;
 
-    const dnsConfig: SingBoxDnsConfig = {
-      servers: [
-        {
-          // 本地/系统 DNS：使用操作系统当前的 DNS 配置或用户指定的国内 DNS
-          tag: 'dns-local',
-          type: 'local',
-        },
-        {
-          // 国内直连 DNS
-          tag: 'dns-domestic',
-          address: userDnsConfig.domesticDns,
-          address_resolver: 'dns-local',
-          detour: 'direct',
-        },
-        {
-          // 远程 DNS：通过代理查询，用于解析国外域名（支持修改）
-          tag: 'dns-remote',
-          address: userDnsConfig.foreignDns,
-          address_resolver: 'dns-local',
-          detour: 'proxy',
-        },
-      ],
-      rules: [],
-      // 默认使用国内 DNS 解析
-      final: 'dns-domestic',
-      strategy: 'prefer_ipv4',
-    };
+    // sing-box 1.13+ 新格式：每个 server 必须有显式 type 字段
+    const dnsServers: SingBoxDnsServer[] = [
+      {
+        // 本地/系统 DNS：直接使用操作系统当前的 DNS 配置
+        tag: 'dns-local',
+        type: 'local',
+      },
+      // 国内直连 DNS
+      this.parseDnsAddress(
+        userDnsConfig.domesticDns || 'https://doh.pub/dns-query',
+        'dns-domestic'
+      ),
+      // 远程 DNS（解析国外域名）
+      this.parseDnsAddress(
+        userDnsConfig.foreignDns || 'https://dns.google/dns-query',
+        'dns-remote'
+      ),
+    ];
 
     if (enableFakeIp) {
-      dnsConfig.servers.push({
+      dnsServers.push({
         // FakeIP 服务器：返回虚假 IP，由 sniff 识别真实域名
         tag: 'fakeip',
         type: 'fakeip',
@@ -695,6 +740,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         inet6_range: 'fc00::/18',
       });
     }
+
+    const dnsConfig: SingBoxDnsConfig = {
+      servers: dnsServers,
+      rules: [],
+      // 默认使用国内 DNS 解析
+      final: 'dns-domestic',
+      strategy: 'prefer_ipv4',
+    };
 
     const dnsRules: SingBoxDnsRule[] = [];
 
@@ -734,7 +787,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /**
-   * 生成 Inbound 配置（sing-box 1.12.x 格式）
+   * 生成 Inbound 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
   private generateInbounds(config: UserConfig): SingBoxInbound[] {
     const inbounds: SingBoxInbound[] = [];
@@ -843,7 +896,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /**
-   * 生成 Outbound 配置（sing-box 1.12.x 格式）
+   * 生成 Outbound 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    * 包含 proxy, direct, block 三个出站
    */
   private generateOutbounds(selectedServer: ServerConfig): SingBoxOutbound[] {
@@ -978,7 +1031,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /**
-   * 生成代理 Outbound 配置（sing-box 1.12.x 格式）
+   * 生成代理 Outbound 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
   private generateProxyOutbound(server: ServerConfig): SingBoxOutbound {
     // sing-box 要求协议类型必须是小写
@@ -1136,7 +1189,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /**
-   * 生成路由配置（sing-box 1.12.x 格式）
+   * 生成路由配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
   private generateRouteConfig(config: UserConfig): SingBoxRouteConfig {
     const rules: SingBoxRouteRule[] = [];

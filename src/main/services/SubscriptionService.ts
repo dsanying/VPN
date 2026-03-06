@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { ServerConfig, SubscriptionConfig } from '../../shared/types';
 import { ProtocolParser } from './ProtocolParser';
 import { LogManager } from './LogManager';
@@ -10,6 +11,37 @@ export interface SubscriptionUpdateResult {
   error?: string;
   userInfo?: SubscriptionConfig['userInfo'];
 }
+
+// ── Sing-box outbound types we support ──────────────────────────────────────
+type SingboxTls = {
+  enabled?: boolean;
+  server_name?: string;
+  insecure?: boolean;
+  alpn?: string[];
+  utls?: { enabled?: boolean; fingerprint?: string };
+  reality?: { enabled?: boolean; public_key?: string; short_id?: string };
+};
+type SingboxTransport = {
+  type?: string;
+  path?: string;
+  headers?: Record<string, string>;
+  service_name?: string;
+};
+type SingboxOutbound = {
+  type: string;
+  tag: string;
+  server?: string;
+  server_port?: number;
+  uuid?: string;
+  flow?: string;
+  password?: string;
+  method?: string;
+  plugin?: string;
+  plugin_opts?: string;
+  obfs?: { type?: string; password?: string };
+  tls?: SingboxTls;
+  transport?: SingboxTransport;
+};
 
 export class SubscriptionService {
   private protocolParser: ProtocolParser;
@@ -41,8 +73,120 @@ export class SubscriptionService {
   }
 
   /**
-   * Fetches and parses a subscription URL, returning a list of ServerConfig objects.
-   * Also returns userInfo if available in the response headers.
+   * 将 sing-box outbounds 数组转换为 ServerConfig 列表
+   * 支持: shadowsocks, vless, trojan, hysteria2
+   */
+  private parseSingboxOutbounds(
+    outbounds: SingboxOutbound[],
+    subscriptionId: string
+  ): ServerConfig[] {
+    const SUPPORTED = new Set(['shadowsocks', 'vless', 'trojan', 'hysteria2']);
+    const servers: ServerConfig[] = [];
+    const now = new Date().toISOString();
+
+    for (const ob of outbounds) {
+      if (!SUPPORTED.has(ob.type)) continue;
+      if (!ob.server || !ob.server_port) continue;
+
+      try {
+        const base: Partial<ServerConfig> = {
+          id: randomUUID(),
+          name: ob.tag || `${ob.server}:${ob.server_port}`,
+          address: ob.server,
+          port: ob.server_port,
+          subscriptionId,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        // TLS / Reality
+        if (ob.tls && ob.tls.enabled !== false) {
+          const hasReality = ob.tls.reality?.enabled && ob.tls.reality.public_key;
+          base.security = hasReality ? 'reality' : 'tls';
+          base.tlsSettings = {
+            serverName: ob.tls.server_name,
+            allowInsecure: ob.tls.insecure ?? false,
+            alpn: ob.tls.alpn,
+            fingerprint: ob.tls.utls?.fingerprint,
+          };
+          if (hasReality && ob.tls.reality) {
+            base.realitySettings = {
+              publicKey: ob.tls.reality.public_key!,
+              shortId: ob.tls.reality.short_id,
+            };
+          }
+        }
+
+        // Transport
+        if (ob.transport?.type) {
+          const t = ob.transport;
+          const netType = t.type as 'ws' | 'grpc' | 'http' | 'tcp';
+          base.network = netType;
+          if (netType === 'ws') {
+            base.wsSettings = { path: t.path, headers: t.headers };
+          } else if (netType === 'grpc') {
+            base.grpcSettings = { serviceName: t.service_name };
+          } else if (netType === 'http') {
+            base.httpSettings = { path: t.path };
+          }
+        }
+
+        // Protocol-specific
+        if (ob.type === 'shadowsocks') {
+          servers.push({
+            ...(base as ServerConfig),
+            protocol: 'shadowsocks',
+            shadowsocksSettings: {
+              method: ob.method ?? 'aes-256-gcm',
+              password: ob.password ?? '',
+              plugin: ob.plugin,
+              pluginOptions: ob.plugin_opts,
+            },
+          });
+        } else if (ob.type === 'vless') {
+          servers.push({
+            ...(base as ServerConfig),
+            protocol: 'vless',
+            uuid: ob.uuid ?? '',
+            flow: ob.flow,
+          });
+        } else if (ob.type === 'trojan') {
+          servers.push({
+            ...(base as ServerConfig),
+            protocol: 'trojan',
+            password: ob.password ?? '',
+          });
+        } else if (ob.type === 'hysteria2') {
+          const hy2: ServerConfig = {
+            ...(base as ServerConfig),
+            protocol: 'hysteria2',
+            password: ob.password ?? '',
+            security: 'tls',
+          };
+          if (ob.obfs?.type === 'salamander' && ob.obfs.password) {
+            hy2.hysteria2Settings = {
+              obfs: { type: 'salamander', password: ob.obfs.password },
+            };
+          }
+          servers.push(hy2);
+        }
+      } catch (e: any) {
+        this.logManager.addLog(
+          'warn',
+          `解析 sing-box outbound "${ob.tag}" 失败: ${e.message}`,
+          'Subscription'
+        );
+      }
+    }
+    return servers;
+  }
+
+  /**
+   * 拉取并解析订阅 URL，返回 ServerConfig 列表。
+   * 支持三种格式:
+   *   1. Sing-box JSON (带 outbounds 数组) — GlaDOS /singbox/ 等
+   *   2. 明文 URL 列表 (每行一个 vless:// / ss:// / trojan:// ...)
+   *   3. Base64 编码的 URL 列表
    */
   async fetchSubscription(
     url: string,
@@ -52,30 +196,49 @@ export class SubscriptionService {
       this.logManager.addLog('info', `正在拉取订阅: ${url}`, 'Subscription');
 
       const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'FlowZ-Client',
-        },
+        headers: { 'User-Agent': 'FlowZ-Client' },
       });
 
       if (!response.ok) {
         throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
       }
 
-      // 解析流量信息（来自 Subscription-UserInfo header）
       const userInfo = this.parseUserInfo(response.headers.get('subscription-userinfo'));
       if (userInfo) {
-        this.logManager.addLog('info', `订阅流量信息已获取`, 'Subscription');
+        this.logManager.addLog('info', '订阅流量信息已获取', 'Subscription');
       }
 
       const text = await response.text();
-      let decodedContent = text.trim();
+      const trimmed = text.trim();
 
-      // Try base64 decode if the content is not a plain URL list
+      // ── 1. Sing-box JSON format ──────────────────────────────────────
+      try {
+        const json = JSON.parse(trimmed);
+        if (json && Array.isArray(json.outbounds)) {
+          this.logManager.addLog(
+            'info',
+            '检测到 sing-box JSON 格式，解析 outbounds...',
+            'Subscription'
+          );
+          const servers = this.parseSingboxOutbounds(json.outbounds, subscriptionId);
+          this.logManager.addLog(
+            'info',
+            `成功从 sing-box 订阅解析了 ${servers.length} 个节点`,
+            'Subscription'
+          );
+          return { servers, userInfo };
+        }
+      } catch {
+        // Not JSON — fall through to URL list parsing
+      }
+
+      // ── 2. URL list (plain or Base64-encoded) ───────────────────────
+      let decodedContent = trimmed;
       if (!decodedContent.includes('://')) {
         try {
           decodedContent = Buffer.from(decodedContent, 'base64').toString('utf-8');
         } catch {
-          this.logManager.addLog('warn', `尝试 Base64 解码失败，可能原本就是明文`, 'Subscription');
+          this.logManager.addLog('warn', '尝试 Base64 解码失败，可能原本就是明文', 'Subscription');
         }
       }
 

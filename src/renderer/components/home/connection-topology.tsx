@@ -46,12 +46,12 @@ const NODE_GAP = 12; // Slightly tighter gap for sleeker look? Or larger for mor
 // Actually user said "fat", often meaning the ribbons are very tall. Reducing height helps.
 
 export function ConnectionTopology() {
-  const { t } = useTranslation();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [hovered, setHovered] = useState<{ type: 'node' | 'link'; id: string } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   // Responsive Container Logic
   const containerRef = useRef<HTMLDivElement>(null);
@@ -95,7 +95,7 @@ export function ConnectionTopology() {
         // Only show error if we have no connections to show?
         // Or just fail silently but log?
         // Let's set error state to maybe show a friendly message if persistent.
-        setError(t('home.topologyError', '无法连接到 API，请确保代理已启动'));
+        setError(t('home.topologyApiError'));
       } finally {
         setLoading(false);
       }
@@ -166,7 +166,7 @@ export function ConnectionTopology() {
         return acc;
       }, startValue);
 
-      sortedMiddle = [...top, ['Others', othersNode]];
+      sortedMiddle = [...top, [t('home.others'), othersNode]];
     }
 
     // --- 3. Layout Calculation (Responsive) ---
@@ -194,7 +194,7 @@ export function ConnectionTopology() {
     // Source Node
     const sourceNode: Node = {
       id: 'source',
-      name: 'My Device',
+      name: t('home.myDevice'),
       type: 'source',
       value: totalConnections,
       x: PADDING_X,
@@ -225,7 +225,7 @@ export function ConnectionTopology() {
         x: middleX,
         y: currentY,
         height: h,
-        color: name === 'Others' ? '#94a3b8' : '#10b981', // Slate-400 or Emerald-500
+        color: name === t('home.others') ? '#94a3b8' : '#10b981', // Slate-400 or Emerald-500
       };
       nodeList.push(node);
       midNodeParams.set(name, node);
@@ -614,8 +614,12 @@ export function ConnectionTopology() {
       return (
         <div className="bg-popover text-popover-foreground px-3 py-2 rounded-md shadow-lg border border-border text-xs z-50 animate-in fade-in zoom-in-95 duration-200">
           <div className="font-bold mb-1">{node.name}</div>
-          <div>Type: {node.type}</div>
-          <div>Connections: {node.value}</div>
+          <div>
+            {t('home.type')}: {node.type}
+          </div>
+          <div>
+            {t('home.connections')}: {node.value}
+          </div>
         </div>
       );
     }
@@ -638,10 +642,16 @@ export function ConnectionTopology() {
         return (
           <div className="bg-popover text-popover-foreground px-3 py-2 rounded-md shadow-lg border border-border text-xs z-50 animate-in fade-in zoom-in-95 duration-200 chat-bubble">
             <div className="font-bold mb-1">{mainNode.name}</div>
-            <div className="text-muted-foreground mb-1">Type: {mainNode.type}</div>
+            <div className="text-muted-foreground mb-1">
+              {t('home.type')}: {mainNode.type}
+            </div>
             <div className="border-t border-border my-1 pt-1 flex items-center justify-between gap-4">
-              <span className="text-muted-foreground">Flow</span>
-              <span>{link.value} connections</span>
+              <span className="text-muted-foreground">{t('home.flow')}</span>
+              <span>
+                {mainNode.value === 1
+                  ? t('home.connectionSingle', { count: link.value })
+                  : t('home.connectionPlural', { count: link.value })}
+              </span>
             </div>
           </div>
         );
@@ -652,13 +662,15 @@ export function ConnectionTopology() {
 
       return (
         <div className="bg-popover text-popover-foreground px-3 py-2 rounded-md shadow-lg border border-border text-xs z-50 animate-in fade-in zoom-in-95 duration-200 chat-bubble">
-          <div className="font-bold mb-1">Flow Detail</div>
+          <div className="font-bold mb-1">{t('home.flowDetail')}</div>
           <div className="flex items-center gap-1 mb-1">
             <span className="max-w-[100px] truncate">{sourceName}</span>
             <span>→</span>
             <span className="max-w-[100px] truncate">{targetName}</span>
           </div>
-          <div>Connections: {link.value}</div>
+          <div>
+            {t('home.connections')}: {link.value}
+          </div>
         </div>
       );
     }
@@ -689,7 +701,7 @@ export function ConnectionTopology() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Network className="h-5 w-5" />
-          {t('home.topologyTitle', '连接拓扑')}
+          {t('home.connectionTopology')}
         </CardTitle>
       </CardHeader>
       <CardContent className="overflow-hidden">
@@ -702,14 +714,14 @@ export function ConnectionTopology() {
         >
           {loading && connections.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground h-full">
-              {t('home.topologyLoading', '加载中...')}
+              {t('home.loading')}
             </div>
           )}
 
           {!loading && connections.length === 0 && !error && (
             <div className="absolute inset-0 text-muted-foreground text-sm flex flex-col items-center justify-center gap-2 h-full">
               <Network className="h-8 w-8 opacity-50" />
-              <span>{t('home.topologyEmpty', '暂无活动连接')}</span>
+              <span>{t('home.noActiveConnections')}</span>
             </div>
           )}
 

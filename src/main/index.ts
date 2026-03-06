@@ -153,7 +153,11 @@ function createWindow() {
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
 
+  const isMac = process.platform === 'darwin';
+
   // 创建主窗口
+  // 注意：transparent 仅在 macOS 上启用，Windows/Linux 上启用会导致
+  // 侧边栏透明且鼠标事件无法正常传递（Electron 已知问题）
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -162,8 +166,8 @@ function createWindow() {
     title: 'FlowZ',
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成
-    backgroundColor: '#00000000',
-    transparent: true,
+    backgroundColor: isMac ? '#00000000' : '#1e1e2e',
+    transparent: isMac,
     autoHideMenuBar: true, // 自动隐藏菜单栏
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -173,9 +177,9 @@ function createWindow() {
       devTools: isDevelopment, // 仅在开发环境启用开发者工具，生产环境禁用（除非特殊需求）
     },
     // macOS 特定配置
-    ...(process.platform === 'darwin' && {
+    ...(isMac && {
       titleBarStyle: 'hiddenInset',
-      vibrancy: 'under-window',
+      vibrancy: 'sidebar',
       visualEffectState: 'active',
     }),
   });

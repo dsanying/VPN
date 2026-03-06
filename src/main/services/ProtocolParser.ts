@@ -54,12 +54,49 @@ export class ProtocolParser implements IProtocolParser {
   /**
    * 解析协议 URL 为服务器配置
    */
+  /**
+   * 预处理 SS URL，将裸 IPv6 地址（无方括号）转换为标准格式
+   * 例: ss://user@2001:db8::1:8388?... → ss://user@[2001:db8::1]:8388?...
+   */
+  private preprocessSsUrl(raw: string): string {
+    const atIdx = raw.indexOf('@');
+    if (atIdx === -1) return raw;
+
+    const beforeAt = raw.substring(0, atIdx + 1);
+    const afterAt = raw.substring(atIdx + 1);
+
+    // Split off query string / fragment so we only work on the host:port part
+    const qIdx = afterAt.search(/[?#]/);
+    const hostPort = qIdx >= 0 ? afterAt.substring(0, qIdx) : afterAt;
+    const suffix = qIdx >= 0 ? afterAt.substring(qIdx) : '';
+
+    // If already bracketed, no action needed
+    if (hostPort.startsWith('[')) return raw;
+
+    // IPv6 addresses have multiple colons; find the last colon as port separator
+    const parts = hostPort.split(':');
+    if (parts.length >= 4) {
+      const lastColon = hostPort.lastIndexOf(':');
+      const potentialPort = hostPort.substring(lastColon + 1);
+      if (/^\d+$/.test(potentialPort)) {
+        const ipv6Addr = hostPort.substring(0, lastColon);
+        return `${beforeAt}[${ipv6Addr}]:${potentialPort}${suffix}`;
+      }
+    }
+    return raw;
+  }
+
   parseUrl(url: string): ServerConfig {
     if (!this.isSupported(url)) {
       throw new Error(`不支持的协议: ${url.split('://')[0]}`);
     }
 
     try {
+      // Preprocess SS URLs to handle bare IPv6 addresses
+      if (url.startsWith('ss://')) {
+        url = this.preprocessSsUrl(url);
+      }
+
       const urlObj = new URL(url);
       let protocolStr = urlObj.protocol.replace(':', '');
 
@@ -451,6 +488,25 @@ export class ProtocolParser implements IProtocolParser {
           if (tlsPort) {
             config.shadowTlsSettings.port = parseInt(tlsPort);
           }
+        }
+      }
+    }
+
+    // 支持直接以 shadow-tls-* 查询参数传递（无需 plugin 字段）
+    // 格式: ?shadow-tls-password=xxx&shadow-tls-sni=xxx&shadow-tls-fp=chrome&shadow-tls-port=xxx
+    if (!config.shadowTlsSettings) {
+      const stPassword = params.get('shadow-tls-password');
+      const stSni = params.get('shadow-tls-sni');
+      const stFp = params.get('shadow-tls-fp');
+      const stPort = params.get('shadow-tls-port');
+      if (stPassword && stSni) {
+        config.shadowTlsSettings = {
+          password: stPassword,
+          sni: stSni,
+          fingerprint: stFp || 'chrome',
+        };
+        if (stPort) {
+          config.shadowTlsSettings.port = parseInt(stPort);
         }
       }
     }

@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,24 +32,25 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Plus,
+  Edit,
   Trash2,
   Server,
   ChevronDown,
-  Link,
-  Activity,
   LayoutGrid,
   List,
   Search,
   ArrowUpDown,
   CheckSquare,
   Square,
-  Share2,
-  Edit2,
+  Copy,
+  Activity,
+  Link,
 } from 'lucide-react';
 import { ImportUrlDialog } from './import-url-dialog';
 import { generateShareUrl } from '@/bridge/api-wrapper';
 import { api } from '@/ipc/api-client';
 import type { ServerConfig } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
 type ServerConfigWithId = ServerConfig;
 type ViewMode = 'card' | 'list';
@@ -83,9 +83,9 @@ export function ServerList({
   onSelectServer,
   onImportSuccess,
 }: ServerListProps) {
-  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
   const [isTestingSpeed, setIsTestingSpeed] = useState(false);
+  const { t } = useTranslation();
 
   // 记住用户的视图偏好
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -106,22 +106,21 @@ export function ServerList({
   // 批量选择
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
-
-  const { t } = useTranslation();
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   const handleSpeedTest = async () => {
     setIsTestingSpeed(true);
     setLatencyMap({});
     try {
-      toast.info(t('servers.speedTestLoading', '开始测速...'));
+      toast.info(t('servers.speedTestStart'));
       const serverIdsToTest = servers.map((s) => s.id);
       const results = await api.server.speedTest(serverIdsToTest);
       setLatencyMap(results);
-      toast.success(t('servers.speedTestSuccess', '测速完成'));
+      toast.success(t('servers.speedTestDone'));
       setSortKey('latency');
       setSortOrder('asc');
     } catch (error) {
-      toast.error(t('servers.speedTestFail', '测速失败'), {
+      toast.error(t('servers.speedTestFail'), {
         description: error instanceof Error ? error.message : String(error),
       });
     } finally {
@@ -170,12 +169,12 @@ export function ServerList({
       const response = await generateShareUrl(server);
       if (response.success && response.data) {
         await navigator.clipboard.writeText(response.data);
-        toast.success(t('servers.shareLinkCopied', '分享链接已复制到剪贴板'));
+        toast.success(t('servers.shareUrlCopied'));
       } else {
-        toast.error(response.error || t('servers.generateShareLinkFailed', '生成分享链接失败'));
+        toast.error(response.error || t('servers.shareUrlFail'));
       }
     } catch {
-      toast.error(t('servers.copyFailed', '复制失败'));
+      toast.error(t('common.copyFail'));
     }
   };
 
@@ -260,24 +259,22 @@ export function ServerList({
         <span
           className={`text-xs font-medium mr-1 px-1.5 py-0.5 rounded ${getLatencyColor(latencyMap[server.id])} ${getLatencyBg(latencyMap[server.id])}`}
         >
-          {latencyMap[server.id] === -1
-            ? t('servers.timeout', '超时')
-            : `${latencyMap[server.id]} ms`}
+          {latencyMap[server.id] === -1 ? t('servers.timeout') : `${latencyMap[server.id]} ms`}
         </span>
       )}
       <Button
         variant="ghost"
         size="sm"
-        title={t('servers.copyShareLink', '复制分享链接')}
+        title={t('servers.copyShareUrl')}
         className="h-7 w-7 p-0"
         onClick={(e) => handleCopyShareUrl(server, e)}
       >
-        <Share2 className="h-3.5 w-3.5" />
+        <Copy className="h-3.5 w-3.5" />
       </Button>
       <Button
         variant="ghost"
         size="sm"
-        title={t('servers.edit', '编辑')}
+        title={t('common.edit')}
         className="h-7 w-7 p-0"
         disabled={!!server.subscriptionId}
         onClick={(e) => {
@@ -285,51 +282,45 @@ export function ServerList({
           onEditServer(server);
         }}
       >
-        <Edit2 className="h-3.5 w-3.5" />
+        <Edit className="h-3.5 w-3.5" />
       </Button>
-      <div onClick={(e) => e.stopPropagation()}>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              title={t('servers.delete', '删除')}
-              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={!!server.subscriptionId}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            disabled={!!server.subscriptionId}
+            onClick={(e) => {
+              if (stopPropagation) e.stopPropagation();
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('servers.deleteServerTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('servers.deleteServerDesc', { name: server.name })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(server.id);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t('servers.deleteServerConfig', '删除服务器配置')}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {t(
-                  'servers.deleteServerConfirm',
-                  '确定要删除服务器 "{{serverName}}" 吗？此操作无法撤销。',
-                  { serverName: server.name }
-                )}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
-                {t('servers.cancel', '取消')}
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(server.id);
-                }}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {t('servers.delete', '删除')}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 
@@ -342,10 +333,8 @@ export function ServerList({
       {/* 顶部工具栏 */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium">{t('servers.serverList', '服务器列表')}</h3>
-          <p className="text-sm text-muted-foreground">
-            {t('servers.serverListDesc', '管理您的代理服务器配置')}
-          </p>
+          <h3 className="text-lg font-medium">{t('servers.serverList')}</h3>
+          <p className="text-sm text-muted-foreground">{t('servers.serverListDesc')}</p>
         </div>
         <div className="flex gap-2 items-center">
           {/* 视图切换 */}
@@ -354,7 +343,7 @@ export function ServerList({
               variant={viewMode === 'card' ? 'secondary' : 'ghost'}
               size="sm"
               className="h-8 w-8 p-0 rounded-none border-0"
-              title={t('servers.cardView', '卡片视图')}
+              title={t('servers.viewCard')}
               onClick={() => setViewMode('card')}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -363,7 +352,7 @@ export function ServerList({
               variant={viewMode === 'list' ? 'secondary' : 'ghost'}
               size="sm"
               className="h-8 w-8 p-0 rounded-none border-0 border-l"
-              title={t('servers.listView', '列表视图')}
+              title={t('servers.viewList')}
               onClick={() => setViewMode('list')}
             >
               <List className="h-4 w-4" />
@@ -377,9 +366,7 @@ export function ServerList({
             disabled={isTestingSpeed}
           >
             <Activity className={`h-4 w-4 ${isTestingSpeed ? 'animate-pulse' : ''}`} />
-            {isTestingSpeed
-              ? t('servers.testingSpeed', '测速中...')
-              : t('servers.speedTest', '测速')}
+            {isTestingSpeed ? t('servers.speedTesting') : t('servers.speedTest')}
           </Button>
 
           {/* 批量选择按钮 */}
@@ -394,27 +381,27 @@ export function ServerList({
               }}
             >
               <CheckSquare className="h-4 w-4" />
-              {isSelecting ? t('servers.cancel', '取消') : t('servers.multiSelect', '多选')}
+              {isSelecting ? t('common.cancel') : t('servers.multiSelect')}
             </Button>
           )}
 
-          {showAddButton && !isSelecting && (
+          {showAddButton && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
-                  {t('servers.addServer', '添加服务器')}
+                  {t('servers.addServer')}
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onAddServer}>
                   <Plus className="h-4 w-4 mr-2" />
-                  {t('servers.addManually', '手动添加')}
+                  {t('servers.manualAdd')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setIsImportDialogOpen(true)}>
                   <Link className="h-4 w-4 mr-2" />
-                  {t('servers.importFromUrl', '从URL导入')}
+                  {t('servers.importFromUrl')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -424,11 +411,11 @@ export function ServerList({
 
       {/* 搜索 + 过滤 + 排序栏 */}
       <div className="flex flex-wrap gap-2">
-        <div className="flex-1 max-w-sm relative">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             className="pl-8 h-9"
-            placeholder={t('servers.searchPlaceholder', '搜索节点名称、地址...')}
+            placeholder={t('servers.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -436,10 +423,10 @@ export function ServerList({
 
         <Select value={filterProtocol} onValueChange={setFilterProtocol}>
           <SelectTrigger className="w-[130px] h-9">
-            <SelectValue placeholder={t('servers.protocol', '协议')} />
+            <SelectValue placeholder={t('servers.protocol')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t('servers.allProtocols', '全部协议')}</SelectItem>
+            <SelectItem value="all">{t('servers.allProtocols')}</SelectItem>
             {ALL_PROTOCOLS.map((p) => (
               <SelectItem key={p} value={p}>
                 {p.toUpperCase()}
@@ -452,16 +439,16 @@ export function ServerList({
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-9 flex items-center gap-1">
               <ArrowUpDown className="h-3.5 w-3.5" />
-              排序
+              {t('servers.sort')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {(
               [
-                ['name', '名称'],
-                ['protocol', '协议'],
-                ['latency', '延迟'],
-                ['address', '地址'],
+                ['name', t('servers.sortName')],
+                ['protocol', t('servers.sortProtocol')],
+                ['latency', t('servers.sortLatency')],
+                ['address', t('servers.sortAddress')],
               ] as [SortKey, string][]
             ).map(([key, label]) => (
               <DropdownMenuItem
@@ -485,7 +472,7 @@ export function ServerList({
                 setSortOrder('asc');
               }}
             >
-              重置排序
+              {t('servers.resetSort')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -504,10 +491,10 @@ export function ServerList({
               ) : (
                 <Square className="h-4 w-4" />
               )}
-              {t('servers.selectAll', '全选')}
+              {t('servers.selectAll')}
             </button>
             <span className="text-sm text-muted-foreground">
-              {t('servers.selectedCount', '已选 {{count}} / {{total}} 个', {
+              {t('servers.selectedCount', {
                 count: selectedIds.size,
                 total: filteredServers.length,
               })}
@@ -523,29 +510,23 @@ export function ServerList({
                   disabled={deletableSelected.length === 0}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  {t('servers.deleteCount', '删除 {{count}} 个', {
-                    count: deletableSelected.length,
-                  })}
+                  {t('servers.deleteCount', { count: deletableSelected.length })}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{t('servers.batchDeleteTitle', '批量删除')}</AlertDialogTitle>
+                  <AlertDialogTitle>{t('servers.batchDelete')}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    {t(
-                      'servers.batchDeleteConfirm',
-                      '确定删除已选中的 {{count}} 个手动添加的节点吗？订阅节点不会被删除。此操作无法撤销。',
-                      { count: deletableSelected.length }
-                    )}
+                    {t('servers.batchDeleteDesc', { count: deletableSelected.length })}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>{t('servers.cancel', '取消')}</AlertDialogCancel>
+                  <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleBatchDelete}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {t('servers.confirmDelete', '确认删除')}
+                    {t('servers.confirmDelete')}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -562,28 +543,22 @@ export function ServerList({
             <h3 className="text-lg font-medium mb-2">
               {servers.length === 0
                 ? showAddButton
-                  ? t('servers.noServerConfigured', '暂无服务器配置')
-                  : t('servers.noNodes', '暂无节点')
-                : t('servers.noServersFound', '没有匹配的节点')}
+                  ? t('servers.noServers')
+                  : t('servers.noNodes')
+                : t('servers.noMatchingNodes')}
             </h3>
             <p className="text-sm text-muted-foreground mb-4 text-center">
               {servers.length === 0
                 ? showAddButton
-                  ? t(
-                      'servers.noServerTip',
-                      '您还没有添加任何服务器配置。点击上方按钮添加您的第一个服务器。'
-                    )
-                  : t(
-                      'servers.noNodesTip',
-                      '该订阅暂无节点，请点击上方"更新节点"按钮拉取最新数据。'
-                    )
-                : t('servers.noMatchTip', '尝试修改搜索关键词或过滤条件。')}
+                  ? t('servers.noServersDesc')
+                  : t('servers.noSubNodesDesc')
+                : t('servers.noMatchingDesc')}
             </p>
             {servers.length === 0 && showAddButton && (
               <div className="flex gap-2">
                 <Button onClick={onAddServer} className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
-                  {t('servers.addManually', '手动添加')}
+                  {t('servers.manualAdd')}
                 </Button>
                 <Button
                   variant="outline"
@@ -591,7 +566,7 @@ export function ServerList({
                   className="flex items-center gap-2"
                 >
                   <Link className="h-4 w-4" />
-                  {t('servers.importFromUrl', '从URL导入')}
+                  {t('servers.importFromUrl')}
                 </Button>
               </div>
             )}
@@ -651,7 +626,7 @@ export function ServerList({
                   </Badge>
                   {selectedServerId === server.id && (
                     <Badge variant="outline" className="text-xs h-4 px-1">
-                      {t('servers.current', '当前')}
+                      {t('servers.current')}
                     </Badge>
                   )}
                   {server.shadowTlsSettings && (
@@ -668,16 +643,15 @@ export function ServerList({
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {server.protocol?.toLowerCase() === 'shadowsocks' ? (
                     <span>
-                      {t('servers.encryption', '加密:')}{' '}
-                      {server.shadowsocksSettings?.method || 'N/A'}
+                      {t('servers.encryption')}: {server.shadowsocksSettings?.method || 'N/A'}
                     </span>
                   ) : (
                     <>
                       <span>
-                        {t('servers.transport', '传输:')} {server.network || 'tcp'}
+                        {t('servers.transport')}: {server.network || 'tcp'}
                       </span>
                       <span>
-                        {t('servers.encryption', '加密:')} {server.security || 'none'}
+                        {t('servers.encryption')}: {server.security || 'none'}
                       </span>
                     </>
                   )}
@@ -758,7 +732,7 @@ export function ServerList({
                   )}
                   {selectedServerId === server.id && (
                     <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">
-                      {t('servers.current', '当前')}
+                      {t('servers.current')}
                     </Badge>
                   )}
                 </div>

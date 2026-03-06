@@ -9,53 +9,50 @@ import {
 } from '@/components/ui/select';
 import { useTheme } from '@/components/theme-provider';
 import { toast } from 'sonner';
+import i18n from '@/i18n';
 import { useTranslation } from 'react-i18next';
 
 export function AppearanceSettings() {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
-  const { t, i18n } = useTranslation();
 
   const handleThemeChange = (value: string) => {
     setTheme(value as 'light' | 'dark' | 'system');
-    toast.success(t('settings.appearance.themeUpdated', '主题已更新'));
+    toast.success(t('settings.appearance.title'));
   };
 
   const handleLanguageChange = (value: string) => {
     i18n.changeLanguage(value);
     localStorage.setItem('app-language', value);
-    toast.success(
-      t('settings.appearance.langUpdated', value === 'en-US' ? 'Language updated' : '语言已更新')
-    );
+    toast.success(value === 'zh-CN' ? '语言已切换为简体中文' : 'Language switched to English');
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('settings.appearance.title', '外观')}</CardTitle>
-        <CardDescription>
-          {t('settings.appearance.description', '自定义应用程序的外观')}
-        </CardDescription>
+        <CardTitle>{t('settings.appearance.title')}</CardTitle>
+        <CardDescription>{t('settings.appearance.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="theme">{t('settings.appearance.theme', '主题')}</Label>
+          <Label htmlFor="theme">{t('settings.appearance.theme')}</Label>
           <Select value={theme} onValueChange={handleThemeChange}>
             <SelectTrigger id="theme">
-              <SelectValue placeholder={t('settings.appearance.selectTheme', '选择主题')} />
+              <SelectValue placeholder={t('settings.appearance.selectTheme')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="light">{t('settings.appearance.light', '浅色')}</SelectItem>
-              <SelectItem value="dark">{t('settings.appearance.dark', '深色')}</SelectItem>
-              <SelectItem value="system">{t('settings.appearance.system', '跟随系统')}</SelectItem>
+              <SelectItem value="light">{t('settings.appearance.light')}</SelectItem>
+              <SelectItem value="dark">{t('settings.appearance.dark')}</SelectItem>
+              <SelectItem value="system">{t('settings.appearance.system')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="language">{t('settings.appearance.language', '语言')}</Label>
-          <Select value={i18n.language || 'zh-CN'} onValueChange={handleLanguageChange}>
+          <Label htmlFor="language">{t('settings.appearance.language')}</Label>
+          <Select value={i18n.language} onValueChange={handleLanguageChange}>
             <SelectTrigger id="language">
-              <SelectValue placeholder={t('settings.appearance.selectLanguage', '选择语言')} />
+              <SelectValue placeholder={t('settings.appearance.selectLanguage')} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="zh-CN">简体中文</SelectItem>

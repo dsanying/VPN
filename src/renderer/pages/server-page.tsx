@@ -19,23 +19,23 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import type { ServerConfig, SubscriptionConfig } from '@/bridge/types';
 import {
   addSubscription,
   updateSubscription,
   deleteSubscription,
   updateSubscriptionServers,
 } from '@/bridge/api-wrapper';
+import type { ServerConfig, SubscriptionConfig } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
 
 type ServerConfigWithId = ServerConfig;
 
 export function ServerPage() {
+  const { t } = useTranslation();
   const config = useAppStore((state) => state.config);
   const saveConfig = useAppStore((state) => state.saveConfig);
   const deleteServer = useAppStore((state) => state.deleteServer);
   const loadConfig = useAppStore((state) => state.loadConfig);
-  const { t } = useTranslation();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<ServerConfigWithId | undefined>();
@@ -66,13 +66,10 @@ export function ServerPage() {
   const handleDeleteServer = async (serverId: string) => {
     try {
       await deleteServer(serverId);
-      toast.success(t('servers.successDelete', '服务器已删除'));
+      toast.success(t('servers.deleteSuccess'));
     } catch (error) {
-      toast.error(t('servers.failDelete', '删除失败'), {
-        description:
-          error instanceof Error
-            ? error.message
-            : t('servers.failDeleteDesc', '删除服务器时发生错误'),
+      toast.error(t('servers.deleteFail'), {
+        description: error instanceof Error ? error.message : t('servers.deleteFailDesc'),
       });
     }
   };
@@ -81,13 +78,10 @@ export function ServerPage() {
     if (!config) return;
     try {
       await saveConfig({ ...config, selectedServerId: serverId });
-      toast.success(t('servers.successSelect', '服务器已选择'));
+      toast.success(t('servers.selectSuccess'));
     } catch (error) {
-      toast.error(t('servers.failSelect', '选择失败'), {
-        description:
-          error instanceof Error
-            ? error.message
-            : t('servers.failSelectDesc', '选择服务器时发生错误'),
+      toast.error(t('servers.selectFail'), {
+        description: error instanceof Error ? error.message : t('servers.selectFailDesc'),
       });
     }
   };
@@ -122,21 +116,22 @@ export function ServerPage() {
 
       if (!config) throw new Error('配置未加载');
       await saveConfig({ ...config, servers: updatedServers });
-      toast.success(t('servers.successSave', '服务器已保存'));
-      setIsDialogOpen(false);
-    } catch (error) {
-      toast.error(t('servers.failSave', '保存失败'), {
-        description:
-          error instanceof Error
-            ? error.message
-            : t('servers.failSaveDesc', '保存服务器时发生错误'),
+
+      const action = editingServer ? t('servers.actionUpdate') : t('servers.actionAdd');
+      toast.success(t('servers.saveSuccess', { action }), {
+        description: t('servers.saveSuccessDesc', { name: serverData.name }),
       });
+    } catch (error) {
+      toast.error(t('servers.saveFail'), {
+        description: error instanceof Error ? error.message : t('servers.saveFailDesc'),
+      });
+      throw error;
     }
   };
 
   const handleImportSuccess = async () => {
     await loadConfig();
-    toast.success(t('servers.importSuccess', '服务器导入成功'));
+    toast.success(t('servers.importSuccess'));
   };
 
   // ================= 订阅操作 =================
@@ -185,22 +180,20 @@ export function ServerPage() {
   };
 
   return (
-    <div className="space-y-6 h-[calc(100vh-80px)] flex flex-col">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">{t('servers.pageTitle', '节点与订阅')}</h2>
-        <p className="text-muted-foreground mt-1">
-          {t('servers.pageDesc', '管理您的代理服务器和订阅地址')}
-        </p>
+        <h2 className="text-2xl font-bold">{t('servers.pageTitle')}</h2>
+        <p className="text-muted-foreground mt-1">{t('servers.pageDesc')}</p>
       </div>
 
-      <Tabs defaultValue="nodes" className="flex-1 flex flex-col min-h-0">
+      <Tabs defaultValue="manual">
         {/* Tab 栏：自建节点 + 每个订阅 + 订阅管理 */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between gap-4">
           <TabsList className="flex-shrink-0 overflow-x-auto">
             {/* 自建节点 Tab */}
-            <TabsTrigger value="nodes" className="flex items-center gap-2">
-              <Server className="w-4 h-4" />
-              {t('servers.customNodes', '自建节点')}
+            <TabsTrigger value="manual" className="flex items-center gap-1.5">
+              <Server className="h-3.5 w-3.5" />
+              {t('servers.manualNodes')}
               {manualServers.length > 0 && (
                 <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
                   {manualServers.length}
@@ -226,17 +219,21 @@ export function ServerPage() {
             })}
           </TabsList>
 
-          {/* 右侧操作按钮（显示当前 Tab 对应的操作） */}
           <div className="flex gap-2 flex-shrink-0">
-            <Button onClick={handleAddSubscription} size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-2" />
-              {t('servers.addSubscription', '添加订阅')}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAddSubscription}
+              className="flex items-center gap-1.5"
+            >
+              <Plus className="h-4 w-4" />
+              {t('servers.addSubscription')}
             </Button>
           </div>
         </div>
 
         {/* 自建节点内容 */}
-        <TabsContent value="nodes">
+        <TabsContent value="manual">
           <ServerList
             servers={manualServers}
             subscriptions={subscriptions}
@@ -264,10 +261,10 @@ export function ServerPage() {
                       {sub.url}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {t('servers.lastUpdated', '最后更新：')}
+                      {t('servers.lastUpdated')}：
                       {sub.lastUpdated
-                        ? new Date(sub.lastUpdated).toLocaleString()
-                        : t('servers.never', '从未')}
+                        ? new Date(sub.lastUpdated).toLocaleString('zh-CN')
+                        : t('servers.never')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 ml-4 flex-shrink-0">
@@ -277,7 +274,7 @@ export function ServerPage() {
                       onClick={() => handleEditSubscription(sub)}
                       disabled={isUpdating}
                     >
-                      {t('servers.edit', '编辑')}
+                      {t('servers.edit')}
                     </Button>
                     <Button
                       size="sm"
@@ -287,36 +284,31 @@ export function ServerPage() {
                       className="flex items-center gap-1.5"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
-                      {isUpdating
-                        ? t('servers.updating', '更新中...')
-                        : t('servers.updateNodes', '更新节点')}
+                      {isUpdating ? t('servers.updating') : t('servers.updateNodes')}
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button size="sm" variant="destructive" disabled={isUpdating}>
-                          {t('servers.deleteSub', '删除订阅')}
+                          {t('servers.deleteSub')}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            {t('servers.deleteSubTitle', '删除订阅')}
-                          </AlertDialogTitle>
+                          <AlertDialogTitle>{t('servers.deleteSubTitle')}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            {t(
-                              'servers.deleteSubDesc',
-                              '确定要删除订阅 "{{name}}" 吗？这同时会删除该订阅下所有 {{count}} 个节点。此操作无法撤销。',
-                              { name: sub.name, count: subServers.length }
-                            )}
+                            {t('servers.deleteSubDesc', {
+                              name: sub.name,
+                              count: subServers.length,
+                            })}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>{t('servers.cancel', '取消')}</AlertDialogCancel>
+                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={() => handleDeleteSubscription(sub.id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            {t('servers.delete', '删除')}
+                            {t('common.delete')}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>

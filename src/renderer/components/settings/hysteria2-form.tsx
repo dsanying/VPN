@@ -18,15 +18,11 @@ import { Loader2 } from 'lucide-react';
 import type { ServerConfig } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
 
-// Use a function to get schema with translations
-const getHysteria2FormSchema = (t: any) =>
+const createHysteria2Schema = (t: any) =>
   z.object({
-    address: z.string().min(1, t('servers.errorAddressEmpty', '服务器地址不能为空')),
-    port: z
-      .number()
-      .min(1, t('servers.errorPortMin', '端口必须大于 0'))
-      .max(65535, t('servers.errorPortMax', '端口必须小于 65536')),
-    password: z.string().min(1, t('servers.errorPassword', '密码不能为空')),
+    address: z.string().min(1, t('servers.addressRequired')),
+    port: z.number().min(1).max(65535),
+    password: z.string().min(1, t('servers.passwordRequired')),
     // 带宽限制
     upMbps: z.number().optional(),
     downMbps: z.number().optional(),
@@ -38,7 +34,7 @@ const getHysteria2FormSchema = (t: any) =>
     tlsAllowInsecure: z.boolean(),
   });
 
-type Hysteria2FormValues = z.infer<ReturnType<typeof getHysteria2FormSchema>>;
+type Hysteria2FormValues = z.infer<ReturnType<typeof createHysteria2Schema>>;
 
 interface Hysteria2FormProps {
   serverConfig?: ServerConfig;
@@ -47,7 +43,7 @@ interface Hysteria2FormProps {
 
 export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
   const { t } = useTranslation();
-  const hysteria2FormSchema = getHysteria2FormSchema(t);
+  const hysteria2FormSchema = createHysteria2Schema(t);
 
   const form = useForm<Hysteria2FormValues>({
     resolver: zodResolver(hysteria2FormSchema),
@@ -121,13 +117,11 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.serverAddress', '服务器地址')}</FormLabel>
+              <FormLabel>{t('servers.serverAddress')}</FormLabel>
               <FormControl>
                 <Input placeholder="example.com" {...field} />
               </FormControl>
-              <FormDescription>
-                {t('servers.serverAddressTip', '服务器的域名或 IP 地址')}
-              </FormDescription>
+              <FormDescription>{t('servers.serverAddressDesc')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -138,7 +132,7 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
           name="port"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.port', '端口')}</FormLabel>
+              <FormLabel>{t('servers.port')}</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -147,7 +141,7 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
                   onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
                 />
               </FormControl>
-              <FormDescription>{t('servers.portTip', '服务器端口号（1-65535）')}</FormDescription>
+              <FormDescription>{t('servers.portDesc')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -158,17 +152,11 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.passwordLabel', '密码 (Password)')}</FormLabel>
+              <FormLabel>{t('servers.password')}</FormLabel>
               <FormControl>
-                <Input
-                  type="password"
-                  placeholder={t('servers.inputHysteria2Password', '输入 Hysteria2 密码')}
-                  {...field}
-                />
+                <Input type="password" placeholder={t('servers.passwordPlaceholder')} {...field} />
               </FormControl>
-              <FormDescription>
-                {t('servers.hysteria2PasswordTip', 'Hysteria2 服务器的认证密码')}
-              </FormDescription>
+              <FormDescription>{t('servers.passwordDesc')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -180,11 +168,11 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
             name="upMbps"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('servers.upMbps', '上行带宽 (Mbps)')}</FormLabel>
+                <FormLabel>{t('servers.upMbps')}</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
-                    placeholder={t('servers.optional', '可选')}
+                    placeholder={t('servers.optional')}
                     {...field}
                     value={field.value ?? ''}
                     onChange={(e) => {
@@ -193,7 +181,7 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
                     }}
                   />
                 </FormControl>
-                <FormDescription>{t('servers.bandwidthTip', '留空使用 BBR')}</FormDescription>
+                <FormDescription>{t('servers.bbrDesc')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -204,11 +192,11 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
             name="downMbps"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('servers.downMbps', '下行带宽 (Mbps)')}</FormLabel>
+                <FormLabel>{t('servers.downMbps')}</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
-                    placeholder={t('servers.optional', '可选')}
+                    placeholder={t('servers.optional')}
                     {...field}
                     value={field.value ?? ''}
                     onChange={(e) => {
@@ -217,7 +205,7 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
                     }}
                   />
                 </FormControl>
-                <FormDescription>{t('servers.bandwidthTip', '留空使用 BBR')}</FormDescription>
+                <FormDescription>{t('servers.bbrDesc')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -233,10 +221,8 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
                 <Checkbox checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
               <div className="space-y-1 leading-none">
-                <FormLabel>{t('servers.enableObfs', '启用 QUIC 流量混淆')}</FormLabel>
-                <FormDescription>
-                  {t('servers.obfsTip', '使用 Salamander 混淆器伪装 QUIC 流量')}
-                </FormDescription>
+                <FormLabel>{t('servers.obfsEnabled')}</FormLabel>
+                <FormDescription>{t('servers.obfsEnabledDesc')}</FormDescription>
               </div>
             </FormItem>
           )}
@@ -248,17 +234,15 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
             name="obfsPassword"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t('servers.obfsPassword', '混淆密码')}</FormLabel>
+                <FormLabel>{t('servers.obfsPassword')}</FormLabel>
                 <FormControl>
                   <Input
                     type="password"
-                    placeholder={t('servers.inputObfsPassword', '输入混淆密码')}
+                    placeholder={t('servers.obfsPasswordPlaceholder')}
                     {...field}
                   />
                 </FormControl>
-                <FormDescription>
-                  {t('servers.obfsPasswordTip', 'Salamander 混淆器密码，需与服务端一致')}
-                </FormDescription>
+                <FormDescription>{t('servers.obfsPasswordDesc')}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -270,13 +254,11 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
           name="tlsServerName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t('servers.tlsServerName', 'TLS 服务器名称（可选）')}</FormLabel>
+              <FormLabel>{t('servers.tlsServerName')}</FormLabel>
               <FormControl>
                 <Input placeholder="example.com" {...field} />
               </FormControl>
-              <FormDescription>
-                {t('servers.tlsSniTip', '用于 TLS SNI，留空则使用服务器地址')}
-              </FormDescription>
+              <FormDescription>{t('servers.tlsServerNameDesc')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -291,10 +273,8 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
                 <Checkbox checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
               <div className="space-y-1 leading-none">
-                <FormLabel>{t('servers.allowInsecure', '允许不安全的连接')}</FormLabel>
-                <FormDescription>
-                  {t('servers.allowInsecureTip', '跳过 TLS 证书验证（不推荐，仅用于测试）')}
-                </FormDescription>
+                <FormLabel>{t('servers.allowInsecure')}</FormLabel>
+                <FormDescription>{t('servers.allowInsecureDesc')}</FormDescription>
               </div>
             </FormItem>
           )}
@@ -303,7 +283,7 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
         <div className="flex gap-4">
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('servers.saveConfig', '保存配置')}
+            {t('common.save')}
           </Button>
           <Button
             type="button"
@@ -311,7 +291,7 @@ export function Hysteria2Form({ serverConfig, onSubmit }: Hysteria2FormProps) {
             onClick={() => form.reset()}
             disabled={form.formState.isSubmitting}
           >
-            {t('servers.reset', '重置')}
+            {t('common.reset')}
           </Button>
         </div>
       </form>

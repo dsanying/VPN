@@ -143,11 +143,33 @@ export class CoreUpdateService {
       }
 
       // 复制新核心到目标位置
-      await this.copyFileWithRetry(corePath, targetPath);
+      if (process.platform === 'win32') {
+        await this.copyFileElevatedWindows(corePath, targetPath);
+      } else {
+        await this.copyFileWithRetry(corePath, targetPath);
+      }
 
       // 设置执行权限 (macOS/Linux)
       if (process.platform !== 'win32') {
         fs.chmodSync(targetPath, 0o755);
+      }
+
+      // macOS: 清除下载隔离标记并重新 ad-hoc 签名
+      // 原因: macOS Gatekeeper 对新放入的未公证二进制会拦截执行 (SIGKILL)
+      // xattr -cr 清除 quarantine 标记, codesign --force -s - 重新 ad-hoc 签名使其被系统接受
+      if (process.platform === 'darwin') {
+        try {
+          const { execSync } = require('child_process');
+          execSync(`xattr -cr "${targetPath}"`, { stdio: 'pipe' });
+          execSync(`codesign --force --deep -s - "${targetPath}"`, { stdio: 'pipe' });
+          this.logManager.addLog('info', '已完成 macOS Gatekeeper 签名处理', 'CoreUpdateService');
+        } catch (signError: any) {
+          this.logManager.addLog(
+            'warn',
+            `macOS 签名处理失败 (可能需要手动运行 sudo codesign --force -s -): ${signError.message}`,
+            'CoreUpdateService'
+          );
+        }
       }
 
       this.logManager.addLog('info', '核心文件替换成功', 'CoreUpdateService');
@@ -433,6 +455,11 @@ export class CoreUpdateService {
   }
 
   private getBackupPath(): string {
+    // Windows: store backup in userData (user-writable), NOT in Program Files
+    // macOS/Linux: keep it alongside the binary (we have write access there)
+    if (process.platform === 'win32') {
+      return path.join(app.getPath('userData'), 'sing-box.exe.bak');
+    }
     return resourceManager.getSingBoxPath() + '.bak';
   }
 
@@ -441,8 +468,13 @@ export class CoreUpdateService {
     const backupPath = this.getBackupPath();
 
     if (fs.existsSync(currentPath)) {
-      fs.copyFileSync(currentPath, backupPath);
-      this.logManager.addLog('info', '已备份当前核心', 'CoreUpdateService');
+      if (process.platform === 'win32') {
+        // On Windows copy to userData dir (no UAC needed)
+        await this.copyFileElevatedWindows(currentPath, backupPath);
+      } else {
+        fs.copyFileSync(currentPath, backupPath);
+      }
+      this.logManager.addLog('info', `已备份当前核心到: ${backupPath}`, 'CoreUpdateService');
     }
   }
 
@@ -452,13 +484,69 @@ export class CoreUpdateService {
 
     if (fs.existsSync(backupPath)) {
       try {
-        fs.copyFileSync(backupPath, currentPath);
-        if (process.platform !== 'win32') {
+        if (process.platform === 'win32') {
+          await this.copyFileElevatedWindows(backupPath, currentPath);
+        } else {
+          fs.copyFileSync(backupPath, currentPath);
           fs.chmodSync(currentPath, 0o755);
         }
         this.logManager.addLog('info', '已从备份恢复核心', 'CoreUpdateService');
       } catch {
         this.logManager.addLog('error', '恢复备份失败', 'CoreUpdateService');
+      }
+    }
+  }
+
+  /**
+   * Windows 专用：通过 PowerShell 以管理员权限复制文件
+   * 解决将文件写入 C:\Program Files (UAC 保护目录) 时的 EPERM 问题
+   */
+  private async copyFileElevatedWindows(src: string, dest: string): Promise<void> {
+    const { execSync } = require('child_process') as typeof import('child_process');
+
+    // Escape single quotes in paths for PowerShell
+    const escapedSrc = src.replace(/'/g, "''");
+    const escapedDest = dest.replace(/'/g, "''");
+
+    // Ensure destination directory exists
+    const destDir = path.dirname(dest);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    try {
+      // First try a direct copy (works if app has write access)
+      fs.copyFileSync(src, dest);
+    } catch (directErr: any) {
+      if (directErr.code !== 'EPERM' && directErr.code !== 'EACCES') {
+        throw directErr;
+      }
+
+      this.logManager.addLog(
+        'info',
+        'Direct copy failed (EPERM), attempting elevated PowerShell copy...',
+        'CoreUpdateService'
+      );
+
+      // Fall back: use PowerShell with -Verb RunAs to elevate.
+      // We write a tiny ps1 script to temp so we don't have quoting nightmares.
+      const scriptPath = path.join(app.getPath('temp'), `flowz-copy-${Date.now()}.ps1`);
+      fs.writeFileSync(
+        scriptPath,
+        `Copy-Item -Path '${escapedSrc}' -Destination '${escapedDest}' -Force\n`
+      );
+
+      try {
+        execSync(`powershell -ExecutionPolicy Bypass -NonInteractive -File "${scriptPath}"`, {
+          stdio: 'pipe',
+          timeout: 30000,
+        });
+      } finally {
+        try {
+          fs.unlinkSync(scriptPath);
+        } catch {
+          /* ignore */
+        }
       }
     }
   }

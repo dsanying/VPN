@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,11 +16,12 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { RuleDialog } from '@/components/rules/rule-dialog';
 import { DeleteRuleDialog } from '@/components/rules/delete-rule-dialog';
 import type { DomainRule } from '@/bridge/types';
+import { useTranslation } from 'react-i18next';
 
 export function RulesPage() {
+  const { t } = useTranslation();
   const config = useAppStore((state) => state.config);
   const updateCustomRule = useAppStore((state) => state.updateCustomRule);
-  const { t } = useTranslation();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<DomainRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<DomainRule | null>(null);
@@ -47,41 +47,37 @@ export function RulesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">{t('rules.pageTitle', '自定义规则')}</h2>
-          <p className="text-muted-foreground mt-1">{t('rules.pageDesc', '管理域名代理规则')}</p>
+          <h2 className="text-2xl font-bold">{t('rules.customRules')}</h2>
+          <p className="text-muted-foreground mt-1">{t('rules.customRulesDesc')}</p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          {t('rules.addRule', '添加规则')}
+          {t('rules.addRule')}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>{t('rules.domainRules', '域名规则列表')}</CardTitle>
-          <CardDescription>
-            {t('rules.domainRulesDesc', '自定义规则优先级最高，将覆盖全局代理模式和智能分流规则')}
-          </CardDescription>
+          <CardTitle>{t('rules.ruleList')}</CardTitle>
+          <CardDescription>{t('rules.ruleListDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {customRules.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">暂无自定义规则</p>
+              <p className="text-muted-foreground mb-4">{t('rules.noRules')}</p>
               <Button variant="outline" onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                添加第一条规则
+                {t('rules.addFirstRule')}
               </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">{t('rules.status', '启用')}</TableHead>
-                  <TableHead>{t('rules.domain', '域名')}</TableHead>
-                  <TableHead className="w-[160px]">{t('rules.policy', '策略')}</TableHead>
-                  <TableHead className="w-[120px] text-right">
-                    {t('rules.action', '操作')}
-                  </TableHead>
+                  <TableHead className="w-[50px]">{t('rules.enable')}</TableHead>
+                  <TableHead>{t('rules.domain')}</TableHead>
+                  <TableHead className="w-[160px]">{t('rules.policy')}</TableHead>
+                  <TableHead className="w-[120px] text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -112,17 +108,17 @@ export function RulesPage() {
                       <div className="flex items-center gap-2">
                         <Badge variant={rule.action === 'proxy' ? 'default' : 'secondary'}>
                           {rule.action === 'proxy'
-                            ? t('rules.proxy', '代理')
+                            ? t('rules.proxy')
                             : rule.action === 'direct'
-                              ? t('rules.direct', '直连')
-                              : t('rules.block', '阻止')}
+                              ? t('rules.direct')
+                              : t('rules.block')}
                         </Badge>
                         {rule.bypassFakeIP && (
                           <Badge
                             variant="outline"
                             className="text-xs text-muted-foreground whitespace-nowrap"
                           >
-                            真实DNS
+                            {t('rules.realDns')}
                           </Badge>
                         )}
                       </div>
@@ -147,21 +143,15 @@ export function RulesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{t('rules.ruleGuideTitle', '规则说明')}</CardTitle>
+          <CardTitle>{t('rules.ruleInstructions')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>{t('rules.ruleGuide1', '• 输入域名会自动匹配该域名及其所有子域名')}</p>
-          <p>{t('rules.ruleGuide2', '• 如 google.com 会匹配 google.com、www.google.com 等')}</p>
-          <p>{t('rules.ruleGuide3', '• 每条规则支持多个域名，每行一个')}</p>
-          <p>{t('rules.ruleGuide4', '• 规则按优先级从上到下匹配')}</p>
-          <p>{t('rules.ruleGuide5', '• 自定义规则优先级高于全局代理模式和智能分流')}</p>
-          <p>
-            • <strong>{t('rules.bypassFakeIP', '绕过 FakeIP')}</strong>：
-            {t(
-              'rules.bypassFakeIPDesc',
-              '使用真实 DNS 解析，适用于 QUIC/UDP 协议（如 Cloudflare Tunnel）'
-            )}
-          </p>
+          <p>{t('rules.instruction1')}</p>
+          <p>{t('rules.instruction2')}</p>
+          <p>{t('rules.instruction3')}</p>
+          <p>{t('rules.instruction4')}</p>
+          <p>{t('rules.instruction5')}</p>
+          <p dangerouslySetInnerHTML={{ __html: t('rules.instruction6') }} />
         </CardContent>
       </Card>
 

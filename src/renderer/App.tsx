@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { MainLayout } from './components/layout/main-layout';
 import { useAppStore } from './store/app-store';
 import { useNativeEventListeners } from './hooks/use-native-events';
@@ -17,8 +17,26 @@ function App() {
   const loadConfig = useAppStore((state) => state.loadConfig);
   const refreshConnectionStatus = useAppStore((state) => state.refreshConnectionStatus);
 
+  // Settings sub-navigation state
+  const [settingsSection, setSettingsSection] = useState('general');
+
+  // When leaving settings, reset to general
+  const handleViewChange = (view: string) => {
+    setCurrentView(view);
+    if (view !== 'settings') {
+      setSettingsSection('general');
+    }
+  };
+
   // Listen to native events
   useNativeEventListeners();
+
+  // Add platform class to <html> so CSS can be platform-aware
+  // e.g. "platform-darwin" on macOS, "platform-win32" on Windows
+  useEffect(() => {
+    const platform = window.electron?.platform ?? 'unknown';
+    document.documentElement.classList.add(`platform-${platform}`);
+  }, []);
 
   // Load initial data
   useEffect(() => {
@@ -45,7 +63,7 @@ function App() {
     const unsubscribe = ipcClient.on<string>('navigate', (route) => {
       const view = routeMap[route];
       if (view) {
-        setCurrentView(view);
+        handleViewChange(view);
       }
     });
 
@@ -77,14 +95,16 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <MainLayout currentView={currentView} onViewChange={setCurrentView}>
+      <MainLayout
+        currentView={currentView}
+        onViewChange={handleViewChange}
+        settingsSection={settingsSection}
+        onSettingsSectionChange={setSettingsSection}
+      >
         {currentView === 'home' && <HomePage />}
-
         {currentView === 'server' && <ServerPage />}
-
         {currentView === 'rules' && <RulesPage />}
-
-        {currentView === 'settings' && <SettingsPage />}
+        {currentView === 'settings' && <SettingsPage activeSection={settingsSection} />}
       </MainLayout>
       <Toaster position="top-right" closeButton />
     </ErrorBoundary>

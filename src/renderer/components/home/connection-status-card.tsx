@@ -20,24 +20,22 @@ export function ConnectionStatusCard() {
   const isLoading = useAppStore((state) => state.isLoading);
   const saveConfig = useAppStore((state) => state.saveConfig);
   const setCurrentView = useAppStore((state) => state.setCurrentView);
-  const { t } = useTranslation();
 
   const servers = config?.servers || [];
   const selectedServerId = config?.selectedServerId;
   const selectedServer = servers.find((s) => s.id === selectedServerId);
+  const { t } = useTranslation();
 
   const getStatusInfo = () => {
     // Use proxyModeType from connectionStatus if available, otherwise fall back to config
     const proxyModeType = connectionStatus?.proxyModeType || config?.proxyModeType || 'systemProxy';
     const isTunMode = proxyModeType === 'tun';
-    const modeText = isTunMode
-      ? t('home.tunMode', 'TUN模式')
-      : t('home.systemProxyMode', '系统代理模式');
+    const modeText = isTunMode ? t('home.tunMode') : t('home.systemProxyMode');
 
     // Show error from store if present
     if (error) {
       return {
-        label: t('home.statusError', '错误'),
+        label: t('home.statusError'),
         variant: 'destructive' as const,
         description: error,
         mode: modeText,
@@ -46,9 +44,9 @@ export function ConnectionStatusCard() {
 
     if (!connectionStatus) {
       return {
-        label: t('home.statusUnknown', '未知'),
+        label: t('home.statusUnknown'),
         variant: 'secondary' as const,
-        description: t('home.fetchingStatus', '正在获取状态...'),
+        description: t('home.fetchingStatus'),
         mode: modeText,
       };
     }
@@ -61,17 +59,17 @@ export function ConnectionStatusCard() {
       let errorDescription = proxyCore.error;
 
       if (proxyCore.error.includes('权限不足') || proxyCore.error.includes('管理员权限')) {
-        errorDescription = t('home.tunNeedsAdmin', 'TUN模式需要管理员权限，请以管理员身份运行应用');
+        errorDescription = t('home.tunNeedsAdmin');
       } else if (proxyCore.error.includes('wintun') || proxyCore.error.includes('驱动')) {
-        errorDescription = t('home.tunDriverFail', 'TUN驱动加载失败，请检查wintun.dll是否存在');
+        errorDescription = t('home.tunDriverFail');
       } else if (proxyCore.error.includes('接口创建失败')) {
-        errorDescription = t('home.tunInterfaceFail', 'TUN接口创建失败，请检查系统网络设置');
+        errorDescription = t('home.tunInterfaceFail');
       } else if (proxyCore.error.includes('sing-box.exe')) {
-        errorDescription = t('home.singboxMissing', 'sing-box核心文件缺失或无法启动');
+        errorDescription = t('home.singboxMissing');
       }
 
       return {
-        label: t('home.statusError', '错误'),
+        label: t('home.statusError'),
         variant: 'destructive' as const,
         description: errorDescription,
         mode: modeText,
@@ -82,29 +80,29 @@ export function ConnectionStatusCard() {
     if (isTunMode) {
       if (proxyCore.running) {
         const uptime = proxyCore.uptime
-          ? t('home.uptime', '运行时间: {{min}} 分钟', { min: Math.floor(proxyCore.uptime / 60) })
+          ? t('home.uptime', { min: Math.floor(proxyCore.uptime / 60) })
           : '';
         return {
-          label: t('home.statusConnected', '已连接'),
+          label: t('home.statusConnected'),
           variant: 'default' as const,
-          description: `TUN模式已连接${uptime ? ' - ' + uptime : ''}`,
+          description: `${t('home.tunMode')}${t('home.statusConnected')}${uptime ? ' - ' + uptime : ''}`,
           mode: modeText,
         };
       }
 
       if (isLoading) {
         return {
-          label: t('home.statusConnecting', '连接中'),
+          label: t('home.statusConnecting'),
           variant: 'secondary' as const,
-          description: t('home.startingTun', '正在启动 TUN 模式...'),
+          description: t('home.startingTun'),
           mode: modeText,
         };
       }
 
       return {
-        label: t('home.statusDisconnected', '已断开'),
+        label: t('home.statusDisconnected'),
         variant: 'outline' as const,
-        description: t('home.tunNotEnabled', 'TUN模式未启用'),
+        description: t('home.tunNotEnabled'),
         mode: modeText,
       };
     }
@@ -112,39 +110,38 @@ export function ConnectionStatusCard() {
     // 系统代理模式下，需要检查代理核心和系统代理
     if (proxyCore.running && proxy.enabled) {
       const uptime = proxyCore.uptime
-        ? t('home.uptime', '运行时间: {{min}} 分钟', { min: Math.floor(proxyCore.uptime / 60) })
+        ? t('home.uptime', { min: Math.floor(proxyCore.uptime / 60) })
         : '';
       return {
-        label: t('home.statusConnected', '已连接'),
+        label: t('home.statusConnected'),
         variant: 'default' as const,
-        description:
-          t('home.systemProxyConnected', '系统代理已连接') + (uptime ? ' - ' + uptime : ''),
+        description: `${t('home.systemProxyConnected')}${uptime ? ' - ' + uptime : ''}`,
         mode: modeText,
       };
     }
 
     if (proxyCore.running && !proxy.enabled) {
       return {
-        label: t('home.statusConnecting', '连接中'),
+        label: t('home.statusConnecting'),
         variant: 'secondary' as const,
-        description: t('home.singboxRunningEnabling', 'sing-box 运行中，正在启用系统代理...'),
+        description: t('home.singboxRunningEnabling'),
         mode: modeText,
       };
     }
 
     if (isLoading) {
       return {
-        label: t('home.statusConnecting', '连接中'),
+        label: t('home.statusConnecting'),
         variant: 'secondary' as const,
-        description: t('home.startingSingbox', '正在启动 sing-box 进程...'),
+        description: t('home.startingSingbox'),
         mode: modeText,
       };
     }
 
     return {
-      label: t('home.statusDisconnected', '已断开'),
+      label: t('home.statusDisconnected'),
       variant: 'outline' as const,
-      description: t('home.proxyNotEnabled', '代理未启用'),
+      description: t('home.proxyNotEnabled'),
       mode: modeText,
     };
   };
@@ -159,11 +156,10 @@ export function ConnectionStatusCard() {
       };
 
       await saveConfig(updatedConfig);
-      toast.success(t('home.serverSwitched', '服务器已切换'));
+      toast.success(t('home.serverSwitched'));
     } catch (error) {
-      toast.error(t('home.switchFailed', '切换失败'), {
-        description:
-          error instanceof Error ? error.message : t('home.switchError', '切换服务器时发生错误'),
+      toast.error(t('home.switchFailed'), {
+        description: error instanceof Error ? error.message : t('home.switchError'),
       });
     }
   };
@@ -177,16 +173,16 @@ export function ConnectionStatusCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('home.connectionStatus', '连接状态')}</CardTitle>
+        <CardTitle>{t('home.connectionStatus')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{t('home.status', '状态')}</span>
+          <span className="text-sm text-muted-foreground">{t('home.status')}</span>
           <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{t('home.proxyMode', '代理模式')}</span>
+          <span className="text-sm text-muted-foreground">{t('home.proxyMode')}</span>
           <Badge variant="secondary">{statusInfo.mode}</Badge>
         </div>
 
@@ -194,9 +190,7 @@ export function ConnectionStatusCard() {
         {servers.length === 0 ? (
           <div className="space-y-3">
             <div className="p-4 border border-dashed border-muted-foreground/25 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground mb-3">
-                {t('home.noServerConfig', '暂无服务器配置')}
-              </p>
+              <p className="text-sm text-muted-foreground mb-3">{t('home.noServerConfig')}</p>
               <div className="flex justify-center">
                 <Button
                   variant="outline"
@@ -205,7 +199,7 @@ export function ConnectionStatusCard() {
                   className="flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" />
-                  {t('home.addServer', '添加服务器')}
+                  {t('home.addServer')}
                 </Button>
               </div>
             </div>
@@ -214,11 +208,11 @@ export function ConnectionStatusCard() {
           <div className="space-y-3">
             <div className="p-4 border border-yellow-500/50 bg-yellow-500/10 rounded-lg">
               <p className="text-sm text-yellow-600 dark:text-yellow-400 mb-3">
-                ⚠️ {t('home.selectServerHint', '请选择一个服务器以启用代理')}
+                ⚠️ {t('home.selectServerHint')}
               </p>
               <Select onValueChange={handleServerChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t('home.selectServer', '选择服务器')} />
+                  <SelectValue placeholder={t('home.selectServer')} />
                 </SelectTrigger>
                 <SelectContent>
                   {servers.map((server) => (
@@ -237,12 +231,10 @@ export function ConnectionStatusCard() {
             {/* 服务器切换 */}
             <div className="space-y-2">
               <div className="space-y-2">
-                <span className="text-sm text-muted-foreground">
-                  {t('home.currentServer', '当前服务器')}
-                </span>
+                <span className="text-sm text-muted-foreground">{t('home.currentServer')}</span>
                 <Select value={selectedServerId ?? undefined} onValueChange={handleServerChange}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('home.selectServer', '选择服务器')} />
+                    <SelectValue placeholder={t('home.selectServer')} />
                   </SelectTrigger>
                   <SelectContent>
                     {servers.map((server) => (
@@ -260,14 +252,14 @@ export function ConnectionStatusCard() {
             {/* 服务器详细信息 */}
             <div className="space-y-2 pt-2 border-t">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t('home.protocol', '协议')}</span>
+                <span className="text-sm text-muted-foreground">{t('home.protocol')}</span>
                 <Badge variant="outline" className="text-xs">
                   {selectedServer.protocol}
                 </Badge>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t('home.address', '地址')}</span>
+                <span className="text-sm text-muted-foreground">{t('home.address')}</span>
                 <span
                   className="text-sm font-medium truncate max-w-[150px]"
                   title={selectedServer.address}
@@ -277,7 +269,7 @@ export function ConnectionStatusCard() {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t('home.port', '端口')}</span>
+                <span className="text-sm text-muted-foreground">{t('home.port')}</span>
                 <span className="text-sm font-medium">{selectedServer.port}</span>
               </div>
             </div>
