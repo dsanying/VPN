@@ -17,7 +17,7 @@
 - ✅ 支持 VLESS、Trojan、Hysteria2、Shadowsocks、Anytls、Shadows-tls协议。
 - ✅ 强大的路由规则系统（支持 geosite / geoip 规则集）
 - ✅ 多种代理模式（全局 / 智能 / 直连）
-- ✅ 支持订阅链接(需要支持 singbox，可 Substore 转换)
+- ✅ 支持订阅链接
 - ✅ TUN 透明代理模式（支持 System / gVisor / Mixed 堆栈）
 - ✅ 系统级代理自动接管
 - ✅ 实时流量统计与测速
@@ -27,7 +27,7 @@
 - ✅ 现代化 UI（基于 shadcn/ui）
 - ✅ 支持连接拓扑展示功能
 - ✅ 跨平台支持（Windows / macOS）
-
+- ✅ 支持中英文语言切换
 ---
 
 ## 🖼 界面预览
