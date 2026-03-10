@@ -67,6 +67,34 @@ const ALL_PROTOCOLS = [
   'naive',
 ] as const;
 
+const getCountryCode = (name: string): string | null => {
+  const lowerName = name.toLowerCase();
+  if (/香港|hk|hong kong|🇭🇰/.test(lowerName)) return 'hk';
+  if (/台湾|tw|taiwan|🇹🇼|台北|新北/.test(lowerName)) return 'cn';
+  if (/日本|jp|japan|🇯🇵|东京|大阪/.test(lowerName)) return 'jp';
+  if (/新加坡|sg|singapore|🇸🇬|狮城/.test(lowerName)) return 'sg';
+  if (/美国|us|america|usa|🇺🇸|洛杉矶|硅谷|西雅图/.test(lowerName)) return 'us';
+  if (/韩国|kr|korea|🇰🇷|首尔/.test(lowerName)) return 'kr';
+  if (/英国|uk|gb|🇬🇧|伦敦/.test(lowerName)) return 'gb';
+  if (/德国|de|germany|🇩🇪|法兰克福/.test(lowerName)) return 'de';
+  if (/法国|fr|france|🇫🇷|巴黎/.test(lowerName)) return 'fr';
+  if (/澳洲|澳大利亚|au|australia|🇦🇺|悉尼/.test(lowerName)) return 'au';
+  if (/加拿大|ca|canada|🇨🇦|多伦多|温哥华/.test(lowerName)) return 'ca';
+  if (/印度|in|india|🇮🇳|孟买/.test(lowerName)) return 'in';
+  if (/俄罗斯|ru|russia|🇷🇺|莫斯科/.test(lowerName)) return 'ru';
+  if (/荷兰|nl|netherlands|🇳🇱|阿姆斯特丹/.test(lowerName)) return 'nl';
+  if (/土耳其|tr|turkey|🇹🇷|伊斯坦布尔/.test(lowerName)) return 'tr';
+  if (/阿根廷|ar|argentina|🇦🇷/.test(lowerName)) return 'ar';
+  if (/意大利|it|italy|🇮🇹|罗马|米兰/.test(lowerName)) return 'it';
+  if (/巴西|br|brazil|🇧🇷|圣保罗/.test(lowerName)) return 'br';
+  if (/西班牙|es|spain|🇪🇸|马德里/.test(lowerName)) return 'es';
+  if (/瑞士|ch|switzerland|🇨🇭|苏黎世/.test(lowerName)) return 'ch';
+  if (/瑞典|se|sweden|🇸🇪|斯德哥尔摩/.test(lowerName)) return 'se';
+  if (/印尼|印度尼西亚|id|indonesia|🇮🇩|雅加达/.test(lowerName)) return 'id';
+  if (/马来西亚|my|malaysia|🇲🇾|吉隆坡/.test(lowerName)) return 'my';
+  return null;
+};
+
 interface ServerListProps {
   servers: ServerConfigWithId[];
   subscriptions?: import('@/bridge/types').SubscriptionConfig[];
@@ -628,152 +656,192 @@ export function ServerList({
       ) : viewMode === 'card' ? (
         /* ========= 卡片视图 ========= */
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filteredServers.map((server) => (
-            <Card
-              key={server.id}
-              className={`cursor-pointer transition-colors relative ${
-                selectedServerId === server.id
-                  ? 'ring-2 ring-primary bg-primary/5'
-                  : 'hover:bg-muted/50'
-              } ${isSelecting && selectedIds.has(server.id) ? 'ring-2 ring-blue-400 bg-blue-50/10' : ''}`}
-              onClick={() =>
-                isSelecting
-                  ? toggleSelect(server.id, { stopPropagation: () => {} } as any)
-                  : onSelectServer(server.id)
-              }
-            >
-              {/* 批量选择 checkbox */}
-              {isSelecting && (
-                <div className="absolute top-2 left-2 z-10 pointer-events-none">
-                  <Checkbox checked={selectedIds.has(server.id)} />
-                </div>
-              )}
-              <CardHeader className={`pb-2 ${isSelecting ? 'pl-8' : ''}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <CardTitle className="text-sm truncate">{server.name}</CardTitle>
-                    <CardDescription className="text-xs mt-0.5">
-                      {server.address}:{server.port}
-                    </CardDescription>
+          {filteredServers.map((server) => {
+            const countryCode = getCountryCode(server.name);
+            return (
+              <Card
+                key={server.id}
+                className={`cursor-pointer transition-colors relative overflow-hidden ${
+                  selectedServerId === server.id
+                    ? 'ring-2 ring-primary bg-primary/5'
+                    : 'hover:bg-muted/50'
+                } ${isSelecting && selectedIds.has(server.id) ? 'ring-2 ring-blue-400 bg-blue-50/10' : ''}`}
+                onClick={() =>
+                  isSelecting
+                    ? toggleSelect(server.id, { stopPropagation: () => {} } as any)
+                    : onSelectServer(server.id)
+                }
+              >
+                {countryCode && (
+                  <div
+                    className="absolute -right-4 -bottom-4 z-0 h-28 w-28 opacity-[0.08] select-none pointer-events-none rounded-full overflow-hidden dark:opacity-[0.15]"
+                    style={{
+                      backgroundImage: `url('https://flagcdn.com/w160/${countryCode}.png')`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
+                      maskImage:
+                        'radial-gradient(circle at 60% 60%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 85%)',
+                      WebkitMaskImage:
+                        'radial-gradient(circle at 60% 60%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 85%)',
+                    }}
+                  />
+                )}
+                {/* 批量选择 checkbox */}
+                {isSelecting && (
+                  <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                    <Checkbox checked={selectedIds.has(server.id)} />
                   </div>
-                  {!isSelecting && renderActions(server)}
-                </div>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  <Badge
-                    className={`text-xs h-4 px-1 border ${getProtocolBadgeVariant(server.protocol)}`}
-                  >
-                    {server.protocol.toUpperCase()}
-                  </Badge>
-                  {selectedServerId === server.id && (
-                    <Badge variant="outline" className="text-xs h-4 px-1">
-                      {t('servers.current')}
-                    </Badge>
-                  )}
-                  {server.shadowTlsSettings && (
+                )}
+                <CardHeader className={`pb-2 ${isSelecting ? 'pl-8' : ''}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-sm truncate">{server.name}</CardTitle>
+                      <CardDescription className="text-xs mt-0.5">
+                        {server.address}:{server.port}
+                      </CardDescription>
+                    </div>
+                    {!isSelecting && renderActions(server)}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
                     <Badge
-                      variant="outline"
-                      className="text-xs h-4 px-1 text-teal-600 border-teal-300/50"
+                      className={`text-xs h-4 px-1 border ${getProtocolBadgeVariant(server.protocol)}`}
                     >
-                      +ST
+                      {server.protocol.toUpperCase()}
                     </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0 pb-3">
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  {server.protocol?.toLowerCase() === 'shadowsocks' ? (
-                    <span>
-                      {t('servers.encryption')}: {server.shadowsocksSettings?.method || 'N/A'}
-                    </span>
-                  ) : (
-                    <>
+                    {selectedServerId === server.id && (
+                      <Badge variant="outline" className="text-xs h-4 px-1">
+                        {t('servers.current')}
+                      </Badge>
+                    )}
+                    {server.shadowTlsSettings && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs h-4 px-1 text-teal-600 border-teal-300/50"
+                      >
+                        +ST
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 pb-3">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {server.protocol?.toLowerCase() === 'shadowsocks' ? (
                       <span>
-                        {t('servers.transport')}: {server.network || 'tcp'}
+                        {t('servers.encryption')}: {server.shadowsocksSettings?.method || 'N/A'}
                       </span>
-                      <span>
-                        {t('servers.encryption')}: {server.security || 'none'}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    ) : (
+                      <>
+                        <span>
+                          {t('servers.transport')}: {server.network || 'tcp'}
+                        </span>
+                        <span>
+                          {t('servers.encryption')}: {server.security || 'none'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         /* ========= 列表视图 ========= */
         <div className="rounded-md border divide-y">
-          {filteredServers.map((server) => (
-            <div
-              key={server.id}
-              className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
-                selectedServerId === server.id ? 'bg-primary/5' : 'hover:bg-muted/50'
-              } ${isSelecting && selectedIds.has(server.id) ? 'bg-blue-50/10' : ''}`}
-              onClick={() => {
-                if (isSelecting) {
-                  setSelectedIds((prev) => {
-                    const s = new Set(prev);
-                    if (s.has(server.id)) {
-                      s.delete(server.id);
-                    } else {
-                      s.add(server.id);
-                    }
-                    return s;
-                  });
-                } else {
-                  onSelectServer(server.id);
-                }
-              }}
-            >
-              {/* 批量选择 */}
-              {isSelecting && (
-                <Checkbox className="pointer-events-none" checked={selectedIds.has(server.id)} />
-              )}
+          {filteredServers.map((server) => {
+            const countryCode = getCountryCode(server.name);
+            return (
+              <div
+                key={server.id}
+                className={`relative overflow-hidden flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
+                  selectedServerId === server.id ? 'bg-primary/5' : 'hover:bg-muted/50'
+                } ${isSelecting && selectedIds.has(server.id) ? 'bg-blue-50/10' : ''}`}
+                onClick={() => {
+                  if (isSelecting) {
+                    setSelectedIds((prev) => {
+                      const s = new Set(prev);
+                      if (s.has(server.id)) {
+                        s.delete(server.id);
+                      } else {
+                        s.add(server.id);
+                      }
+                      return s;
+                    });
+                  } else {
+                    onSelectServer(server.id);
+                  }
+                }}
+              >
+                {/* 批量选择 */}
+                {isSelecting && (
+                  <Checkbox className="pointer-events-none" checked={selectedIds.has(server.id)} />
+                )}
 
-              {/* 选中指示器 */}
-              {!isSelecting && (
-                <div
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    selectedServerId === server.id ? 'bg-primary' : 'bg-transparent'
-                  }`}
-                />
-              )}
+                {/* 选中指示器 */}
+                {!isSelecting && (
+                  <div
+                    className={`relative z-10 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      selectedServerId === server.id ? 'bg-primary' : 'bg-transparent'
+                    }`}
+                  />
+                )}
 
-              {/* 名称 + 地址 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">{server.name}</span>
-                  <Badge
-                    className={`text-[10px] h-4 px-1 flex-shrink-0 border ${getProtocolBadgeVariant(server.protocol)}`}
-                  >
-                    {server.protocol.toUpperCase()}
-                  </Badge>
-                  {server.shadowTlsSettings && (
+                {/* 背景国旗 */}
+                {countryCode && (
+                  <div
+                    className="absolute right-12 top-1/2 -translate-y-1/2 z-0 h-24 w-24 opacity-[0.05] select-none pointer-events-none rounded-full overflow-hidden dark:opacity-[0.1]"
+                    style={{
+                      backgroundImage: `url('https://flagcdn.com/w80/${countryCode}.png')`,
+                      backgroundSize: 'contain',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
+                      maskImage:
+                        'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%)',
+                      WebkitMaskImage:
+                        'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 30%, rgba(0,0,0,1) 70%, rgba(0,0,0,0) 100%)',
+                    }}
+                  />
+                )}
+
+                {/* 名称 + 地址 */}
+                <div className="flex-1 min-w-0 relative z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">{server.name}</span>
                     <Badge
-                      variant="outline"
-                      className="text-[10px] h-4 px-1 flex-shrink-0 text-teal-600 border-teal-300/50"
+                      className={`text-[10px] h-4 px-1 flex-shrink-0 border ${getProtocolBadgeVariant(server.protocol)}`}
                     >
-                      +ST
+                      {server.protocol.toUpperCase()}
                     </Badge>
-                  )}
-                  {selectedServerId === server.id && (
-                    <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">
-                      {t('servers.current')}
-                    </Badge>
-                  )}
+                    {server.shadowTlsSettings && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-4 px-1 flex-shrink-0 text-teal-600 border-teal-300/50"
+                      >
+                        +ST
+                      </Badge>
+                    )}
+                    {selectedServerId === server.id && (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">
+                        {t('servers.current')}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {server.address}:{server.port}
+                    {server.network && server.network !== 'tcp' && (
+                      <span className="ml-2">{server.network}</span>
+                    )}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {server.address}:{server.port}
-                  {server.network && server.network !== 'tcp' && (
-                    <span className="ml-2">{server.network}</span>
-                  )}
-                </p>
-              </div>
 
-              {/* 延迟 + 操作 */}
-              {!isSelecting && renderActions(server)}
-            </div>
-          ))}
+                {/* 延迟 + 操作 */}
+                {!isSelecting && (
+                  <div className="relative z-10 flex items-center">{renderActions(server)}</div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
