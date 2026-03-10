@@ -8,7 +8,7 @@
 // ============================================================================
 
 export type ProxyMode = 'global' | 'smart' | 'direct';
-export type ProxyModeType = 'systemProxy' | 'tun';
+export type ProxyModeType = 'systemProxy' | 'tun' | 'manual';
 export type Protocol =
   | 'vless'
   | 'trojan'

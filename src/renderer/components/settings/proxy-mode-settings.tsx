@@ -30,7 +30,13 @@ export function ProxyModeSettings() {
     return null;
   }
 
-  const isConnected = connectionStatus?.proxyCore?.running && connectionStatus?.proxy?.enabled;
+  const proxyModeType = connectionStatus?.proxyModeType || config?.proxyModeType || 'systemProxy';
+  const isTunMode = proxyModeType === 'tun';
+  const isManualMode = proxyModeType === 'manual';
+  const isConnected =
+    isTunMode || isManualMode
+      ? connectionStatus?.proxyCore?.running === true
+      : connectionStatus?.proxyCore?.running && connectionStatus?.proxy?.enabled;
 
   const handleModeTypeChange = (value: ProxyModeType) => {
     if (isConnected) {
@@ -101,6 +107,17 @@ export function ProxyModeSettings() {
                   </div>
                 </Label>
               </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="manual" id="manual-mode" />
+                <Label htmlFor="manual-mode" className="cursor-pointer font-normal">
+                  <div>
+                    <div className="font-medium">{t('settings.proxyMode.manualProxyMode')}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {t('settings.proxyMode.manualProxyModeDesc')}
+                    </div>
+                  </div>
+                </Label>
+              </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground mt-2">
               {t('settings.proxyMode.tunModeNote')}
@@ -127,9 +144,11 @@ export function ProxyModeSettings() {
               <br />
               {t('settings.proxyMode.confirmSwitch')}
               <strong>
-                {pendingModeType?.toLowerCase() === 'tun'
+                {pendingModeType === 'tun'
                   ? t('settings.proxyMode.tunMode')
-                  : t('settings.proxyMode.systemProxyMode')}
+                  : pendingModeType === 'manual'
+                    ? t('settings.proxyMode.manualProxyMode')
+                    : t('settings.proxyMode.systemProxyMode')}
               </strong>
               {t('settings.proxyMode.confirmQuestion')}
             </AlertDialogDescription>

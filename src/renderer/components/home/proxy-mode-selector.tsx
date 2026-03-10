@@ -21,9 +21,11 @@ export function ProxyModeSelector() {
   // Check connection status based on proxy mode type
   const proxyModeType = connectionStatus?.proxyModeType || config?.proxyModeType || 'systemProxy';
   const isTunMode = proxyModeType === 'tun';
-  const isConnected = isTunMode
-    ? connectionStatus?.proxyCore?.running === true // TUN mode: only check proxy core
-    : connectionStatus?.proxyCore?.running && connectionStatus?.proxy?.enabled; // System proxy: check both
+  const isManualMode = proxyModeType === 'manual';
+  const isConnected =
+    isTunMode || isManualMode
+      ? connectionStatus?.proxyCore?.running === true // TUN/Manual mode: only check proxy core
+      : connectionStatus?.proxyCore?.running && connectionStatus?.proxy?.enabled; // System proxy: check both
 
   const hasError = connectionStatus?.proxyCore?.error;
 

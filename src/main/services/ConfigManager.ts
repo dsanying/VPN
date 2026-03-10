@@ -284,8 +284,8 @@ export class ConfigManager implements IConfigManager {
 
     // 验证 proxyModeType（不区分大小写）
     const modeTypeLower = config.proxyModeType?.toLowerCase();
-    if (!modeTypeLower || !['systemproxy', 'tun'].includes(modeTypeLower)) {
-      throw new Error('proxyModeType must be systemProxy or tun');
+    if (!modeTypeLower || !['systemproxy', 'tun', 'manual'].includes(modeTypeLower)) {
+      throw new Error('proxyModeType must be systemProxy, tun, or manual');
     }
 
     // 验证 tunConfig

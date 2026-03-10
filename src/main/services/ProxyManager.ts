@@ -391,7 +391,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     });
 
     // 如果是系统代理模式，设置系统代理
-    if (!isTunMode) {
+    if (config.proxyModeType === 'systemProxy') {
       await this.setSystemProxy(config);
     }
   }
@@ -840,7 +840,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     );
 
     // TUN 模式额外添加 TUN inbound
-    if (modeType !== 'systemproxy') {
+    if (modeType === 'tun') {
       const tunInbound: SingBoxInbound = {
         type: 'tun',
         tag: 'tun-in',

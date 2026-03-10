@@ -30,7 +30,12 @@ export function ConnectionStatusCard() {
     // Use proxyModeType from connectionStatus if available, otherwise fall back to config
     const proxyModeType = connectionStatus?.proxyModeType || config?.proxyModeType || 'systemProxy';
     const isTunMode = proxyModeType === 'tun';
-    const modeText = isTunMode ? t('home.tunMode') : t('home.systemProxyMode');
+    const isManualMode = proxyModeType === 'manual';
+    const modeText = isTunMode
+      ? t('home.tunMode')
+      : isManualMode
+        ? t('home.manualMode')
+        : t('home.systemProxyMode');
 
     // Show error from store if present
     if (error) {
@@ -107,11 +112,23 @@ export function ConnectionStatusCard() {
       };
     }
 
-    // 系统代理模式下，需要检查代理核心和系统代理
-    if (proxyCore.running && proxy.enabled) {
+    // 系统代理或仅本地代理模式下，需要检查代理核心和（系统代理的）状态
+    // 对于仅本地代理，只要 proxyCore.running 即可，因为它不碰 proxy.enabled状态
+    if (proxyCore.running && (proxy.enabled || isManualMode)) {
       const uptime = proxyCore.uptime
         ? t('home.uptime', { min: Math.floor(proxyCore.uptime / 60) })
         : '';
+
+      if (isManualMode) {
+        return {
+          label: t('home.statusConnected'),
+          variant: 'default' as const,
+          description: uptime ? `${t('home.manualMode')} - ${uptime}` : t('home.manualMode'),
+          mode: modeText,
+          isManualNotice: true,
+        };
+      }
+
       return {
         label: t('home.statusConnected'),
         variant: 'default' as const,
@@ -120,7 +137,7 @@ export function ConnectionStatusCard() {
       };
     }
 
-    if (proxyCore.running && !proxy.enabled) {
+    if (proxyCore.running && !proxy.enabled && !isManualMode) {
       return {
         label: t('home.statusConnecting'),
         variant: 'secondary' as const,
@@ -279,6 +296,19 @@ export function ConnectionStatusCard() {
         <div className="pt-2 border-t">
           <p className="text-xs text-muted-foreground">{statusInfo.description}</p>
         </div>
+
+        {/* 仅本地代理特殊提示区 */}
+        {(statusInfo as any).isManualNotice && (
+          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg space-y-1">
+            <p className="text-sm font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+              </span>
+              {t('home.manualModeTip')}
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
