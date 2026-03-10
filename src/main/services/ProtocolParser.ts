@@ -47,7 +47,10 @@ export class ProtocolParser implements IProtocolParser {
       url.startsWith('hysteria2://') ||
       url.startsWith('hy2://') ||
       url.startsWith('ss://') ||
-      url.startsWith('anytls://')
+      url.startsWith('anytls://') ||
+      url.startsWith('tuic://') ||
+      url.startsWith('http2://') ||
+      url.startsWith('naive+https://')
     );
   }
 
@@ -110,6 +113,11 @@ export class ProtocolParser implements IProtocolParser {
         protocolStr = 'shadowsocks';
       }
 
+      // naive 是 http2 或者 naive+https 的内部别名
+      if (protocolStr === 'http2' || protocolStr === 'naive+https') {
+        protocolStr = 'naive';
+      }
+
       const protocol = protocolStr as Protocol;
 
       if (protocol === 'vless') {
@@ -122,6 +130,10 @@ export class ProtocolParser implements IProtocolParser {
         return this.parseShadowsocks(urlObj);
       } else if (protocol === 'anytls') {
         return this.parseAnyTls(urlObj);
+      } else if (protocol === 'tuic') {
+        return this.parseTuic(urlObj);
+      } else if (protocol === 'naive') {
+        return this.parseNaive(urlObj);
       }
 
       throw new Error(`不支持的协议: ${protocol}`);
@@ -318,6 +330,71 @@ export class ProtocolParser implements IProtocolParser {
 
     if (Object.keys(tlsSettings).length > 0) {
       config.tlsSettings = tlsSettings;
+    }
+
+    return config;
+  }
+
+  /**
+   * 解析 TUIC URL
+   * 格式: tuic://uuid:password@address:port?congestion_control=bbr&alpn=h3&sni=link.apple.com&udp_relay_mode=native&allow_insecure=1#name
+   */
+  private parseTuic(url: URL): ServerConfig {
+    const params = url.searchParams;
+    const name = decodeURIComponent(url.hash ? url.hash.slice(1) : '');
+
+    // Credentials format: tuic://uuid:password@...
+    const credentials = decodeURIComponent(url.username + (url.password ? ':' + url.password : ''));
+    const [uuid, ...passwordParts] = credentials.split(':');
+    const password = passwordParts.join(':');
+
+    if (!uuid || !password) {
+      throw new Error('TUIC 协议缺少 uuid 或 password');
+    }
+
+    const config: ServerConfig = {
+      id: randomUUID(),
+      name: name || 'TUIC Node',
+      protocol: 'tuic',
+      address: this.stripIpv6Brackets(url.hostname),
+      port: parseInt(url.port, 10),
+      uuid,
+      password,
+      network: 'tcp', // sing-box tuic default network isn't strictly necessary but keeping for consistency
+      security: 'tls',
+      tuicSettings: {},
+      tlsSettings: {
+        serverName: params.get('sni') || url.hostname,
+        allowInsecure: params.get('allow_insecure') === '1' || params.get('insecure') === '1',
+      },
+    };
+
+    // Alpn (typically 'h3' for TUIC v5)
+    const alpnParam = params.get('alpn');
+    if (alpnParam) {
+      config.tlsSettings!.alpn = alpnParam.split(',').map((s) => s.trim());
+    }
+
+    // Congestion control
+    const congestionControl = params.get('congestion_control');
+    if (
+      congestionControl === 'bbr' ||
+      congestionControl === 'cubic' ||
+      congestionControl === 'new_reno'
+    ) {
+      config.tuicSettings!.congestionControl = congestionControl;
+    }
+
+    // UDP Relay Mode
+    const udpRelayMode = params.get('udp_relay_mode');
+    if (udpRelayMode === 'native' || udpRelayMode === 'quic') {
+      config.tuicSettings!.udpRelayMode = udpRelayMode;
+    }
+
+    // Others like zero_rtt_handshake / heartbeat
+    const heartbeat = params.get('heartbeat');
+    if (heartbeat) {
+      config.tuicSettings!.heartbeat = heartbeat;
     }
 
     return config;
@@ -539,6 +616,49 @@ export class ProtocolParser implements IProtocolParser {
   }
 
   /**
+   * 解析 NaiveProxy URL
+   * 格式: http2://username:password@address:port#name
+   */
+  private parseNaive(urlObj: URL): ServerConfig {
+    const username = decodeURIComponent(urlObj.username);
+    const password = decodeURIComponent(urlObj.password);
+    const address = this.stripIpv6Brackets(urlObj.hostname);
+    const port = parseInt(urlObj.port) || 443;
+    const name = decodeURIComponent(urlObj.hash.slice(1)) || `${address}:${port}`;
+
+    if (!username || !password) {
+      throw new Error('NaiveProxy URL 缺少用户名或密码');
+    }
+
+    const config: ServerConfig = {
+      id: randomUUID(),
+      name,
+      protocol: 'naive',
+      address,
+      port,
+      username,
+      password,
+    };
+
+    // 解析传输层配置
+    const params = new URLSearchParams(urlObj.search);
+    const network = params.get('type') as Network | null;
+    if (network) {
+      config.network = network;
+      this.parseTransportSettings(config, params, network);
+    }
+
+    // 设置默认 TLS
+    config.security = 'tls';
+    config.tlsSettings = {
+      serverName: address,
+      allowInsecure: false,
+    };
+
+    return config;
+  }
+
+  /**
    * 解析传输层配置
    */
   private parseTransportSettings(
@@ -703,6 +823,10 @@ export class ProtocolParser implements IProtocolParser {
       return this.generateShadowsocksUrl(config);
     } else if (protocol === 'anytls') {
       return this.generateAnyTlsUrl(config);
+    } else if (protocol === 'tuic') {
+      return this.generateTuicUrl(config);
+    } else if (protocol === 'naive') {
+      return this.generateNaiveUrl(config);
     }
     throw new Error(`不支持的协议: ${config.protocol}`);
   }
@@ -826,6 +950,62 @@ export class ProtocolParser implements IProtocolParser {
     const queryString = params.toString();
     const queryPart = queryString ? `?${queryString}` : '';
     return `hysteria2://${password}@${config.address}:${config.port}${queryPart}#${name}`;
+  }
+
+  /**
+   * 生成 TUIC URL
+   */
+  private generateTuicUrl(config: ServerConfig): string {
+    const params = new URLSearchParams();
+    const name = encodeURIComponent(config.name || '');
+
+    // UUID and Password
+    const uuid = config.uuid || '';
+    const password = config.password || '';
+
+    // TLS Settings
+    if (config.tlsSettings) {
+      if (config.tlsSettings.serverName) {
+        params.set('sni', config.tlsSettings.serverName);
+      }
+      if (config.tlsSettings.allowInsecure) {
+        params.set('allow_insecure', '1');
+      }
+      if (config.tlsSettings.alpn && config.tlsSettings.alpn.length > 0) {
+        params.set('alpn', config.tlsSettings.alpn.join(','));
+      }
+    }
+
+    // TUIC Settings
+    if (config.tuicSettings) {
+      if (config.tuicSettings.congestionControl) {
+        params.set('congestion_control', config.tuicSettings.congestionControl);
+      }
+      if (config.tuicSettings.udpRelayMode) {
+        params.set('udp_relay_mode', config.tuicSettings.udpRelayMode);
+      }
+      if (config.tuicSettings.heartbeat) {
+        params.set('heartbeat', config.tuicSettings.heartbeat);
+      }
+    }
+
+    const queryStr = params.toString();
+    const queryPart = queryStr ? `?${queryStr}` : '';
+    // tuic credential is uuid:password
+    const credentials = encodeURIComponent(`${uuid}:${password}`);
+
+    return `tuic://${credentials}@${config.address}:${config.port}${queryPart}#${name}`;
+  }
+
+  /**
+   * 生成 NaiveProxy URL
+   */
+  private generateNaiveUrl(config: ServerConfig): string {
+    const name = encodeURIComponent(config.name || `${config.address}:${config.port}`);
+    const username = encodeURIComponent(config.username || '');
+    const password = encodeURIComponent(config.password || '');
+    // NaiveUrl scheme is http2:// taking username:password@host:port
+    return `http2://${username}:${password}@${config.address}:${config.port}#${name}`;
   }
 
   /**

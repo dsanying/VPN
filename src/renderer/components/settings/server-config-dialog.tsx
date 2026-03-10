@@ -20,6 +20,8 @@ import { TrojanForm } from './trojan-form';
 import { Hysteria2Form } from './hysteria2-form';
 import { SsForm } from './ss-form';
 import { AnyTlsForm } from './anytls-form';
+import { TuicForm } from './tuic-form';
+import { NaiveForm } from './naive-form';
 import type { ServerConfig, ProtocolType } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
 
@@ -135,6 +137,8 @@ export function ServerConfigDialog({
                 <SelectItem value="hysteria2">Hysteria2</SelectItem>
                 <SelectItem value="shadowsocks">Shadowsocks</SelectItem>
                 <SelectItem value="anytls">AnyTLS</SelectItem>
+                <SelectItem value="tuic">TUIC</SelectItem>
+                <SelectItem value="naive">NaiveProxy</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
@@ -222,6 +226,28 @@ export function ServerConfigDialog({
                 key={currentServerConfig?.id || 'new'}
                 serverConfig={
                   currentServerConfig?.protocol?.toLowerCase() === 'anytls'
+                    ? currentServerConfig
+                    : undefined
+                }
+                onSubmit={handleSave}
+              />
+            )}
+            {selectedProtocol === 'tuic' && (
+              <TuicForm
+                key={currentServerConfig?.id || 'new'}
+                serverConfig={
+                  currentServerConfig?.protocol?.toLowerCase() === 'tuic'
+                    ? currentServerConfig
+                    : undefined
+                }
+                onSubmit={handleSave}
+              />
+            )}
+            {selectedProtocol === 'naive' && (
+              <NaiveForm
+                key={currentServerConfig?.id || 'new'}
+                serverConfig={
+                  currentServerConfig?.protocol?.toLowerCase() === 'naive'
                     ? currentServerConfig
                     : undefined
                 }

@@ -44,12 +44,26 @@ export function ProxyModeSelector() {
       return !!(selectedServer.uuid && selectedServer.uuid.trim() !== '');
     } else if (protocol === 'trojan' || protocol === 'hysteria2' || protocol === 'anytls') {
       return !!(selectedServer.password && selectedServer.password.trim() !== '');
+    } else if (protocol === 'tuic') {
+      return !!(
+        selectedServer.uuid &&
+        selectedServer.uuid.trim() !== '' &&
+        selectedServer.password &&
+        selectedServer.password.trim() !== ''
+      );
     } else if (protocol === 'shadowsocks') {
       return !!(
         selectedServer.shadowsocksSettings?.method &&
         selectedServer.shadowsocksSettings?.method.trim() !== '' &&
         selectedServer.shadowsocksSettings?.password &&
         selectedServer.shadowsocksSettings?.password.trim() !== ''
+      );
+    } else if (protocol === 'naive') {
+      return !!(
+        selectedServer.username &&
+        selectedServer.username.trim() !== '' &&
+        selectedServer.password &&
+        selectedServer.password.trim() !== ''
       );
     }
 

@@ -57,7 +57,15 @@ type ViewMode = 'card' | 'list';
 type SortKey = 'name' | 'protocol' | 'latency' | 'address';
 type SortOrder = 'asc' | 'desc';
 
-const ALL_PROTOCOLS = ['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls'] as const;
+const ALL_PROTOCOLS = [
+  'vless',
+  'trojan',
+  'hysteria2',
+  'shadowsocks',
+  'anytls',
+  'tuic',
+  'naive',
+] as const;
 
 interface ServerListProps {
   servers: ServerConfigWithId[];
@@ -178,6 +186,38 @@ export function ServerList({
     }
   };
 
+  const handleBatchCopy = async () => {
+    try {
+      const selectedServersList = servers.filter((s) => selectedIds.has(s.id));
+      const urls: string[] = [];
+      let successCount = 0;
+
+      for (const server of selectedServersList) {
+        const response = await generateShareUrl(server);
+        if (response.success && response.data) {
+          urls.push(response.data);
+          successCount++;
+        }
+      }
+
+      if (urls.length > 0) {
+        await navigator.clipboard.writeText(urls.join('\n'));
+        toast.success(t('servers.batchCopySuccess', { count: successCount }));
+      } else {
+        toast.error(t('servers.shareUrlFail'));
+      }
+    } catch (error) {
+      toast.error(
+        t('servers.batchCopyFail', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+    } finally {
+      setIsSelecting(false);
+      setSelectedIds(new Set());
+    }
+  };
+
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedIds((prev) => {
@@ -248,6 +288,8 @@ export function ServerList({
       hysteria2: 'bg-orange-500/15 text-orange-600 border-orange-300/30',
       shadowsocks: 'bg-green-500/15 text-green-600 border-green-300/30',
       anytls: 'bg-teal-500/15 text-teal-600 border-teal-300/30',
+      tuic: 'bg-indigo-500/15 text-indigo-600 border-indigo-300/30',
+      naive: 'bg-rose-500/15 text-rose-600 border-rose-300/30',
     };
     return colors[protocol.toLowerCase()] || 'bg-muted text-muted-foreground';
   };
@@ -501,36 +543,47 @@ export function ServerList({
             </span>
           </div>
           {selectedIds.size > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="flex items-center gap-1"
-                  disabled={deletableSelected.length === 0}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t('servers.deleteCount', { count: deletableSelected.length })}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{t('servers.batchDelete')}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t('servers.batchDeleteDesc', { count: deletableSelected.length })}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleBatchDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex items-center gap-1"
+                onClick={handleBatchCopy}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {t('servers.batchCopyCount', { count: selectedIds.size })}
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex items-center gap-1"
+                    disabled={deletableSelected.length === 0}
                   >
-                    {t('servers.confirmDelete')}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t('servers.deleteCount', { count: deletableSelected.length })}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t('servers.batchDelete')}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t('servers.batchDeleteDesc', { count: deletableSelected.length })}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleBatchDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {t('servers.confirmDelete')}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           )}
         </div>
       )}
@@ -591,21 +644,8 @@ export function ServerList({
             >
               {/* 批量选择 checkbox */}
               {isSelecting && (
-                <div className="absolute top-2 left-2 z-10">
-                  <Checkbox
-                    checked={selectedIds.has(server.id)}
-                    onCheckedChange={() => {
-                      setSelectedIds((prev) => {
-                        const s = new Set(prev);
-                        if (s.has(server.id)) {
-                          s.delete(server.id);
-                        } else {
-                          s.add(server.id);
-                        }
-                        return s;
-                      });
-                    }}
-                  />
+                <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                  <Checkbox checked={selectedIds.has(server.id)} />
                 </div>
               )}
               <CardHeader className={`pb-2 ${isSelecting ? 'pl-8' : ''}`}>
@@ -687,21 +727,7 @@ export function ServerList({
             >
               {/* 批量选择 */}
               {isSelecting && (
-                <Checkbox
-                  checked={selectedIds.has(server.id)}
-                  onCheckedChange={() => {
-                    setSelectedIds((prev) => {
-                      const s = new Set(prev);
-                      if (s.has(server.id)) {
-                        s.delete(server.id);
-                      } else {
-                        s.add(server.id);
-                      }
-                      return s;
-                    });
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                />
+                <Checkbox className="pointer-events-none" checked={selectedIds.has(server.id)} />
               )}
 
               {/* 选中指示器 */}

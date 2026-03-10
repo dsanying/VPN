@@ -193,7 +193,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {mode === 'add' ? t('rules.addRule', '添加规则') : t('rules.editRule', '编辑规则')}

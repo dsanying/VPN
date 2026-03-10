@@ -183,9 +183,13 @@ export class ConfigManager implements IConfigManager {
       const protocolLower = server.protocol?.toLowerCase(); // 验证必填字段
       if (
         !server.protocol ||
-        !['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls'].includes(server.protocol)
+        !['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls', 'tuic', 'naive'].includes(
+          server.protocol
+        )
       ) {
-        throw new Error('Server protocol must be vless, trojan, hysteria2, shadowsocks, or anytls');
+        throw new Error(
+          'Server protocol must be vless, trojan, hysteria2, shadowsocks, anytls, tuic, or naive'
+        );
       }
       if (!server.address || typeof server.address !== 'string') {
         throw new Error('Server address is required and must be a string');
@@ -217,6 +221,26 @@ export class ConfigManager implements IConfigManager {
       if (protocolLower === 'hysteria2') {
         if (!server.password || typeof server.password !== 'string') {
           throw new Error('Hysteria2 server requires password');
+        }
+      }
+
+      // TUIC 特定验证
+      if (protocolLower === 'tuic') {
+        if (!server.uuid || typeof server.uuid !== 'string') {
+          throw new Error('TUIC server requires uuid');
+        }
+        if (!server.password || typeof server.password !== 'string') {
+          throw new Error('TUIC server requires password');
+        }
+      }
+
+      // Naive 特定验证
+      if (protocolLower === 'naive') {
+        if (!server.username || typeof server.username !== 'string') {
+          throw new Error('Naive server requires username');
+        }
+        if (!server.password || typeof server.password !== 'string') {
+          throw new Error('Naive server requires password');
         }
       }
 

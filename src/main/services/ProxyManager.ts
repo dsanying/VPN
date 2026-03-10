@@ -131,6 +131,7 @@ interface SingBoxOutbound {
   // Shadowsocks
   method?: string;
   password?: string;
+  username?: string;
   plugin?: string;
   plugin_opts?: string;
   // VLESS
@@ -147,6 +148,11 @@ interface SingBoxOutbound {
     password: string;
   };
   network?: string;
+  // TUIC specific
+  congestion_control?: string;
+  udp_relay_mode?: string;
+  zero_rtt_handshake?: boolean;
+  heartbeat?: string;
   // ShadowTLS specific
   version?: number;
   // AnyTLS specific
@@ -719,6 +725,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         tag: 'dns-local',
         type: 'local',
       },
+      {
+        // 专用解析器：用于强制解析代理服务器真实 IP，绕过系统可能存在的 FakeIP 劫持
+        tag: 'dns-proxy-resolver',
+        type: 'udp',
+        server: '223.5.5.5',
+      },
       // 国内直连 DNS
       this.parseDnsAddress(
         userDnsConfig.domesticDns || 'https://doh.pub/dns-query',
@@ -751,11 +763,19 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     const dnsRules: SingBoxDnsRule[] = [];
 
-    // 代理服务器域名必须使用本地 DNS 解析（避免死循环）
+    // 代理服务器域名必须使用真实 DNS 解析（避免死循环及系统级 FakeIP 劫持导致 libcronet 拒绝）
     if (selectedServer?.address) {
+      const proxyDomains = [selectedServer.address];
+      if (selectedServer.tlsSettings?.serverName) {
+        proxyDomains.push(selectedServer.tlsSettings.serverName);
+      }
+      const uniqueDomains = Array.from(new Set(proxyDomains));
+
       dnsRules.push({
-        domain: [selectedServer.address],
-        server: 'dns-local',
+        domain: uniqueDomains,
+        domain_suffix: uniqueDomains.flatMap((d) => [d, `.${d}`]),
+        domain_keyword: uniqueDomains,
+        server: 'dns-proxy-resolver',
       } as SingBoxDnsRule);
     }
 
@@ -1035,7 +1055,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    */
   private generateProxyOutbound(server: ServerConfig): SingBoxOutbound {
     // sing-box 要求协议类型必须是小写
-    const protocol = server.protocol.toLowerCase();
+    let protocol = server.protocol.toLowerCase();
 
     const outbound: SingBoxOutbound = {
       type: protocol,
@@ -1115,6 +1135,41 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       }
     }
 
+    // TUIC 特定配置
+    if (server.protocol === 'tuic') {
+      outbound.uuid = server.uuid;
+      outbound.password = server.password;
+
+      if (server.tuicSettings) {
+        if (server.tuicSettings.congestionControl) {
+          outbound.congestion_control = server.tuicSettings.congestionControl;
+        }
+        if (server.tuicSettings.udpRelayMode) {
+          outbound.udp_relay_mode = server.tuicSettings.udpRelayMode;
+        }
+        if (server.tuicSettings.zeroRttHandshake !== undefined) {
+          outbound.zero_rtt_handshake = server.tuicSettings.zeroRttHandshake;
+        }
+        if (server.tuicSettings.heartbeat) {
+          outbound.heartbeat = server.tuicSettings.heartbeat;
+        }
+      }
+    }
+
+    // NaiveProxy 特定配置
+    if (server.protocol === 'naive') {
+      outbound.username = server.username;
+      outbound.password = server.password;
+
+      // Force TLS enabled for naive if not already set, usually HTTP/2
+      if (!server.security || server.security === 'none') {
+        server.security = 'tls';
+      }
+      if (!server.tlsSettings) {
+        server.tlsSettings = { allowInsecure: false, serverName: server.address };
+      }
+    }
+
     // TLS 配置
     if (server.security === 'tls' || server.tlsSettings) {
       outbound.tls = {
@@ -1123,15 +1178,20 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         insecure: server.tlsSettings?.allowInsecure || false,
       };
 
-      // uTLS 仅适用于基于 TCP 的协议，Hysteria2 使用 QUIC (UDP) 不支持 uTLS
-      if (protocol !== 'hysteria2') {
+      // uTLS 仅适用于基于 TCP 的协议，Hysteria2 和 TUIC 使用 QUIC (UDP) 不支持 uTLS，Naive 自带指纹处理均不支持 uTLS
+      if (
+        server.protocol !== 'hysteria2' &&
+        server.protocol !== 'tuic' &&
+        server.protocol !== 'naive'
+      ) {
         outbound.tls.utls = {
           enabled: true,
           fingerprint: server.tlsSettings?.fingerprint || 'chrome',
         };
       }
 
-      if (server.tlsSettings?.alpn) {
+      // ALPN 仅在支持的协议上设置，Naive 和部分协议由底层自行管理，不支持声明 ALPN
+      if (server.tlsSettings?.alpn && server.protocol !== 'naive') {
         outbound.tls.alpn = server.tlsSettings.alpn;
       }
     }
@@ -1153,10 +1213,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       };
     }
 
-    // 传输层配置（不适用于 hysteria2 和 anytls）
+    // 传输层配置（不适用于 hysteria2、anytls、naive）
     if (
-      protocol !== 'hysteria2' &&
-      protocol !== 'anytls' &&
+      server.protocol !== 'hysteria2' &&
+      server.protocol !== 'anytls' &&
+      server.protocol !== 'naive' &&
       server.network &&
       server.network !== 'tcp'
     ) {
@@ -1217,8 +1278,16 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 排除代理服务器域名，确保代理服务器的连接走直连
     // 这必须放在其他规则之前，否则可能被 geosite-cn 匹配导致死循环
     if (selectedServer?.address) {
+      const proxyDomains = [selectedServer.address];
+      if (selectedServer.tlsSettings?.serverName) {
+        proxyDomains.push(selectedServer.tlsSettings.serverName);
+      }
+      const uniqueDomains = Array.from(new Set(proxyDomains));
+
       rules.push({
-        domain: [selectedServer.address],
+        domain: uniqueDomains,
+        domain_suffix: uniqueDomains.flatMap((d) => [d, `.${d}`]),
+        domain_keyword: uniqueDomains,
         action: 'route',
         outbound: 'direct',
       });

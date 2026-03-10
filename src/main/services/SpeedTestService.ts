@@ -102,6 +102,17 @@ export class SpeedTestService {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const isConnectionRefused = errorMessage.includes('ECONNREFUSED');
+
+      // 对于基于 UDP 的协议 (如 TUIC, Hysteria2)，目标服务器通常不会监听 TCP 端口
+      // 因此会立即返回 ECONNREFUSED (TCP RST)。我们正好利用这个拒绝响应的 RTT 作为真实的延迟。
+      if (isConnectionRefused && (server.protocol === 'tuic' || server.protocol === 'hysteria2')) {
+        return {
+          serverId: server.id,
+          latency: Date.now() - start,
+        };
+      }
+
       return {
         serverId: server.id,
         latency: null,

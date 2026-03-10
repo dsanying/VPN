@@ -9,7 +9,14 @@
 
 export type ProxyMode = 'global' | 'smart' | 'direct';
 export type ProxyModeType = 'systemProxy' | 'tun';
-export type Protocol = 'vless' | 'trojan' | 'hysteria2' | 'shadowsocks' | 'anytls';
+export type Protocol =
+  | 'vless'
+  | 'trojan'
+  | 'hysteria2'
+  | 'shadowsocks'
+  | 'anytls'
+  | 'tuic'
+  | 'naive';
 export type Network = 'tcp' | 'ws' | 'grpc' | 'http';
 export type Hysteria2Network = 'tcp' | 'udp';
 export type Security = 'none' | 'tls' | 'reality';
@@ -64,6 +71,14 @@ export interface Hysteria2Settings {
   downMbps?: number;
   obfs?: Hysteria2ObfsSettings;
   network?: Hysteria2Network;
+}
+
+// TUIC 协议设置
+export interface TuicSettings {
+  congestionControl?: 'bbr' | 'cubic' | 'new_reno';
+  udpRelayMode?: 'native' | 'quic';
+  zeroRttHandshake?: boolean;
+  heartbeat?: string;
 }
 
 // Shadowsocks 协议设置
@@ -130,8 +145,14 @@ export interface ServerConfig {
   // Trojan 和 Hysteria2 通用
   password?: string;
 
+  // Naive 特定
+  username?: string;
+
   // Hysteria2 特定
   hysteria2Settings?: Hysteria2Settings;
+
+  // TUIC 特定
+  tuicSettings?: TuicSettings;
 
   // AnyTLS 特定
   anyTlsSettings?: AnyTlsSettings;

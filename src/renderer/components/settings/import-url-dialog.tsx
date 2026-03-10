@@ -104,7 +104,10 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
       url.startsWith('hysteria2://') ||
       url.startsWith('hy2://') ||
       url.startsWith('ss://') ||
-      url.startsWith('anytls://')
+      url.startsWith('anytls://') ||
+      url.startsWith('tuic://') ||
+      url.startsWith('http2://') ||
+      url.startsWith('naive+https://')
     );
   };
 
@@ -119,7 +122,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
           <DialogDescription>
             {t(
               'importUrl.desc',
-              'Supports vless://, trojan://, hysteria2://, hy2://, ss:// and anytls:// protocol links'
+              'Supports vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// and http2:// protocol links'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -132,11 +135,11 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                 id="protocol-url"
                 placeholder={t(
                   'importUrl.urlPlaceholder',
-                  'vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name'
+                  'vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name\nor tuic://uuid:password@server:port?sni=example.com#name\nor http2://username:password@server:port#name'
                 )}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="min-h-[80px] resize-none"
+                className="min-h-[100px] resize-none"
               />
               <Button
                 onClick={handleParseUrl}
@@ -154,7 +157,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
               <p className="text-sm text-destructive">
                 {t(
                   'importUrl.invalidUrl',
-                  'Please enter a valid vless://, trojan://, hysteria2://, hy2://, ss:// or anytls:// link'
+                  'Please enter a valid vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// or http2:// link'
                 )}
               </p>
             )}
@@ -228,6 +231,20 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                       </span>
                       <span className="ml-2">••••••••</span>
                     </div>
+                  )}
+                  {parsedConfig.protocol === 'tuic' && (
+                    <>
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">UUID:</span>
+                        <span className="ml-2 font-mono text-xs">{parsedConfig.uuid}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">
+                          {t('importUrl.password', 'Password')}:
+                        </span>
+                        <span className="ml-2">••••••••</span>
+                      </div>
+                    </>
                   )}
                   {parsedConfig.protocol === 'shadowsocks' && (
                     <>
