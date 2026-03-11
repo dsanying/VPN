@@ -33,13 +33,12 @@
 
 ## 🖼 界面预览
 
-<img src="https://cdn.nodeimage.com/i/ns0xeUtvL7WUqXTcqpIoD9ucKL1oXiOl.webp">
-<img src="https://cdn.nodeimage.com/i/CqlzFHAJO0MoEyyoUhUIjDjY2Xl41tCi.webp">
-<img src="https://cdn.nodeimage.com/i/Ob4dWzZrKM6yrLmUSxfAzvrnTyoTxxeR.webp">
-<img src="https://cdn.nodeimage.com/i/xxDUa2qewcGN650rvy4nrW2v1ib34yaq.webp" alt="xxDUa2qewcGN650rvy4nrW2v1ib34yaq.webp">
-<img src="https://cdn.nodeimage.com/i/ciNj5Od20SgQbYBzrCekz5xsnM9Db9Rm.webp" alt="ciNj5Od20SgQbYBzrCekz5xsnM9Db9Rm.webp">
-<img src="https://cdn.nodeimage.com/i/kxhVxYFpfgGH9XgGqypLBhMIC7kj2XTF.webp">
-
+<img src="https://cdn.nodeimage.com/i/YvkiEO6sI7ex8UzWTGobq2U3UCwo7pnv.webp" alt="YvkiEO6sI7ex8UzWTGobq2U3UCwo7pnv.webp">
+<img src="https://cdn.nodeimage.com/i/4LphwAWwgnSsYv8UgV2THM6BNDHNbnGM.webp" alt="4LphwAWwgnSsYv8UgV2THM6BNDHNbnGM.webp">
+<img src="https://cdn.nodeimage.com/i/7Th2DdFQ52V3xNg67ecS88zOfqV5KWJ1.webp" alt="7Th2DdFQ52V3xNg67ecS88zOfqV5KWJ1.webp">
+<img src="https://cdn.nodeimage.com/i/eF2PxEG9figyhXJe6EqRbu7TtcucVDLH.webp" alt="eF2PxEG9figyhXJe6EqRbu7TtcucVDLH.webp">
+<img src="https://cdn.nodeimage.com/i/ihpRZpWuW3MgQR8kkEKmZl2u6ANrXXcw.webp" alt="ihpRZpWuW3MgQR8kkEKmZl2u6ANrXXcw.webp">
+<img src="https://cdn.nodeimage.com/i/sicWxjH9z3ZyVFWPEDNYvYWl0cYMASdR.webp" alt="sicWxjH9z3ZyVFWPEDNYvYWl0cYMASdR.webp">
 ---
 
 ## 📋 系统要求
