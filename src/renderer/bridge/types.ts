@@ -22,6 +22,7 @@ export type ProtocolType =
   | 'shadowsocks'
   | 'anytls'
   | 'tuic'
+  | 'vmess'
   | 'naive';
 
 // 兼容旧代码的类型别名

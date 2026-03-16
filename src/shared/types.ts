@@ -16,6 +16,7 @@ export type Protocol =
   | 'shadowsocks'
   | 'anytls'
   | 'tuic'
+  | 'vmess'
   | 'naive';
 export type Network = 'tcp' | 'ws' | 'grpc' | 'http';
 export type Hysteria2Network = 'tcp' | 'udp';
@@ -147,6 +148,10 @@ export interface ServerConfig {
 
   // Naive 特定
   username?: string;
+
+  // VMess 特定
+  alterId?: number;
+  vmessSecurity?: string;
 
   // Hysteria2 特定
   hysteria2Settings?: Hysteria2Settings;

@@ -183,12 +183,19 @@ export class ConfigManager implements IConfigManager {
       const protocolLower = server.protocol?.toLowerCase(); // 验证必填字段
       if (
         !server.protocol ||
-        !['vless', 'trojan', 'hysteria2', 'shadowsocks', 'anytls', 'tuic', 'naive'].includes(
-          server.protocol
-        )
+        ![
+          'vless',
+          'vmess',
+          'trojan',
+          'hysteria2',
+          'shadowsocks',
+          'anytls',
+          'tuic',
+          'naive',
+        ].includes(server.protocol)
       ) {
         throw new Error(
-          'Server protocol must be vless, trojan, hysteria2, shadowsocks, anytls, tuic, or naive'
+          'Server protocol must be vless, vmess, trojan, hysteria2, shadowsocks, anytls, tuic, or naive'
         );
       }
       if (!server.address || typeof server.address !== 'string') {
@@ -207,6 +214,13 @@ export class ConfigManager implements IConfigManager {
       if (protocolLower === 'vless') {
         if (!server.uuid || typeof server.uuid !== 'string') {
           throw new Error('VLESS server requires uuid');
+        }
+      }
+
+      // VMess 特定验证
+      if (protocolLower === 'vmess') {
+        if (!server.uuid || typeof server.uuid !== 'string') {
+          throw new Error('VMess server requires uuid');
         }
       }
 

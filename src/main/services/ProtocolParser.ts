@@ -50,7 +50,8 @@ export class ProtocolParser implements IProtocolParser {
       url.startsWith('anytls://') ||
       url.startsWith('tuic://') ||
       url.startsWith('http2://') ||
-      url.startsWith('naive+https://')
+      url.startsWith('naive+https://') ||
+      url.startsWith('vmess://')
     );
   }
 
@@ -134,6 +135,8 @@ export class ProtocolParser implements IProtocolParser {
         return this.parseTuic(urlObj);
       } else if (protocol === 'naive') {
         return this.parseNaive(urlObj);
+      } else if (protocol === 'vmess') {
+        return this.parseVmess(url);
       }
 
       throw new Error(`不支持的协议: ${protocol}`);
@@ -659,6 +662,82 @@ export class ProtocolParser implements IProtocolParser {
   }
 
   /**
+   * 解析 VMess URL (V2RayN 格式: vmess://base64(json))
+   */
+  private parseVmess(url: string): ServerConfig {
+    try {
+      const base64Data = url.slice(8); // Remove 'vmess://'
+      const jsonStr = Buffer.from(base64Data, 'base64').toString('utf-8');
+      const vmessData = JSON.parse(jsonStr);
+
+      const address = vmessData.add;
+      const port = parseInt(vmessData.port);
+      const uuid = vmessData.id;
+      const name = vmessData.ps || `${address}:${port}`;
+
+      if (!address || !port || !uuid) {
+        throw new Error('VMess 配置信息不完整');
+      }
+
+      const config: ServerConfig = {
+        id: randomUUID(),
+        name,
+        protocol: 'vmess',
+        address,
+        port,
+        uuid,
+        alterId: parseInt(vmessData.aid) || 0,
+        vmessSecurity: vmessData.scy || 'auto',
+      };
+
+      // 解析传输层
+      const net = (vmessData.net || 'tcp').toLowerCase();
+      if (net === 'ws') {
+        config.network = 'ws';
+        config.wsSettings = {
+          path: vmessData.path || '/',
+          headers: vmessData.host ? { Host: vmessData.host } : undefined,
+        };
+      } else if (net === 'h2' || net === 'http') {
+        config.network = 'http';
+        config.httpSettings = {
+          path: vmessData.path || '/',
+          host: vmessData.host ? vmessData.host.split(',') : undefined,
+        };
+      } else if (net === 'grpc') {
+        config.network = 'grpc';
+        config.grpcSettings = {
+          serviceName: vmessData.path || '',
+        };
+      } else {
+        config.network = 'tcp';
+      }
+
+      // 解析安全层
+      if (vmessData.tls === 'tls') {
+        config.security = 'tls';
+        config.tlsSettings = {
+          serverName: vmessData.sni || vmessData.host || address,
+          allowInsecure: false,
+          fingerprint: vmessData.fp || 'chrome',
+        };
+        if (vmessData.alpn) {
+          config.tlsSettings.alpn = vmessData.alpn.split(',');
+        }
+      } else {
+        config.security = 'none';
+      }
+
+      return config;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`VMess URL 解析失败: ${error.message}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * 解析传输层配置
    */
   private parseTransportSettings(
@@ -827,6 +906,8 @@ export class ProtocolParser implements IProtocolParser {
       return this.generateTuicUrl(config);
     } else if (protocol === 'naive') {
       return this.generateNaiveUrl(config);
+    } else if (protocol === 'vmess') {
+      return this.generateVmessUrl(config);
     }
     throw new Error(`不支持的协议: ${config.protocol}`);
   }
@@ -1006,6 +1087,48 @@ export class ProtocolParser implements IProtocolParser {
     const password = encodeURIComponent(config.password || '');
     // NaiveUrl scheme is http2:// taking username:password@host:port
     return `http2://${username}:${password}@${config.address}:${config.port}#${name}`;
+  }
+
+  /**
+   * 生成 VMess URL (V2RayN 格式)
+   */
+  private generateVmessUrl(config: ServerConfig): string {
+    const vmessData: any = {
+      v: '2',
+      ps: config.name,
+      add: config.address,
+      port: config.port.toString(),
+      id: config.uuid,
+      aid: (config.alterId || 0).toString(),
+      scy: config.vmessSecurity || 'auto',
+      net: config.network || 'tcp',
+      type: 'none',
+      host: '',
+      path: '',
+      tls: config.security === 'tls' ? 'tls' : '',
+    };
+
+    if (config.network === 'ws' && config.wsSettings) {
+      vmessData.path = config.wsSettings.path || '/';
+      vmessData.host = config.wsSettings.headers?.Host || '';
+    } else if (config.network === 'http' && config.httpSettings) {
+      vmessData.path = config.httpSettings.path || '/';
+      vmessData.host = config.httpSettings.host ? config.httpSettings.host.join(',') : '';
+    } else if (config.network === 'grpc' && config.grpcSettings) {
+      vmessData.path = config.grpcSettings.serviceName || '';
+    }
+
+    if (config.security === 'tls' && config.tlsSettings) {
+      vmessData.sni = config.tlsSettings.serverName || '';
+      vmessData.fp = config.tlsSettings.fingerprint || '';
+      if (config.tlsSettings.alpn && config.tlsSettings.alpn.length > 0) {
+        vmessData.alpn = config.tlsSettings.alpn.join(',');
+      }
+    }
+
+    const jsonStr = JSON.stringify(vmessData);
+    const base64Data = Buffer.from(jsonStr).toString('base64');
+    return `vmess://${base64Data}`;
   }
 
   /**

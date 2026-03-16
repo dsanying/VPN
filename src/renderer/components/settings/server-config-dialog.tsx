@@ -22,6 +22,7 @@ import { SsForm } from './ss-form';
 import { AnyTlsForm } from './anytls-form';
 import { TuicForm } from './tuic-form';
 import { NaiveForm } from './naive-form';
+import { VmessForm } from './vmess-form';
 import type { ServerConfig, ProtocolType } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
 
@@ -138,6 +139,7 @@ export function ServerConfigDialog({
                 <SelectItem value="shadowsocks">Shadowsocks</SelectItem>
                 <SelectItem value="anytls">AnyTLS</SelectItem>
                 <SelectItem value="tuic">TUIC</SelectItem>
+                <SelectItem value="vmess">VMess</SelectItem>
                 <SelectItem value="naive">NaiveProxy</SelectItem>
               </SelectContent>
             </Select>
@@ -248,6 +250,17 @@ export function ServerConfigDialog({
                 key={currentServerConfig?.id || 'new'}
                 serverConfig={
                   currentServerConfig?.protocol?.toLowerCase() === 'naive'
+                    ? currentServerConfig
+                    : undefined
+                }
+                onSubmit={handleSave}
+              />
+            )}
+            {selectedProtocol === 'vmess' && (
+              <VmessForm
+                key={currentServerConfig?.id || 'new'}
+                serverConfig={
+                  currentServerConfig?.protocol?.toLowerCase() === 'vmess'
                     ? currentServerConfig
                     : undefined
                 }
