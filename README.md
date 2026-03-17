@@ -1,7 +1,7 @@
 # FlowZ
 
 简洁现代的跨平台代理客户端，基于 sing-box 核心。  
-支持 VLESS、VMess、Trojan、Shadowsocks、Hysteria2、Anytls、TUIC、Shadows-tls 协议。  
+支持 NaïveProxy、VLESS、VMess、Trojan、Shadowsocks、Hysteria2、Anytls、TUIC、Shadows-tls 协议。  
 
 主打：
 
@@ -14,7 +14,7 @@
 
 ## ✨ 功能特性
 
-- ✅ 支持 VLESS、VMess、Trojan、Hysteria2、Shadowsocks、Anytls、TUIC、Shadows-tls协议。
+- ✅ 支持 NaïveProxy、VLESS、VMess、Trojan、Hysteria2、Shadowsocks、Anytls、TUIC、Shadows-tls协议。
 - ✅ 强大的路由规则系统（支持 geosite / geoip 规则集）
 - ✅ 多种代理模式（全局 / 智能 / 直连）
 - ✅ 支持订阅链接
