@@ -83,6 +83,20 @@ export function NaiveForm({ serverConfig, onSubmit }: NaiveFormProps) {
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <Card>
           <CardContent className="pt-6 space-y-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
+              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                {t('servers.naive.versionWarning')}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-900 dark:text-amber-100"
+                onClick={() => (window.location.hash = '#/settings/about')}
+              >
+                {t('servers.naive.goUpdate')}
+              </Button>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

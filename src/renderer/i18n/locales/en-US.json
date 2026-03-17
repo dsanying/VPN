@@ -439,7 +439,11 @@
     "congestionControl": "Congestion Control",
     "udpRelayMode": "UDP Relay Mode",
     "alpn": "ALPN",
-    "alpnDesc": "Application-Layer Protocol Negotiation, e.g. h3"
+    "alpnDesc": "Application-Layer Protocol Negotiation, e.g. h3",
+    "naive": {
+      "versionWarning": "⚠️ Naive protocol requires sing-box v1.13+ core. If you are using v1.12, please go to 'Settings -> About' to update your core.",
+      "goUpdate": "Update Core"
+    }
   },
   "rules": {
     "customRules": "Custom Rules",

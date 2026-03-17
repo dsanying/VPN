@@ -113,7 +113,7 @@ export class CoreUpdateService {
       // 2. 解压文件 (如果需要)
       // Sing-box release 通常是 .tar.gz 或 .zip
       this.logManager.addLog('info', '正在解压核心文件...', 'CoreUpdateService');
-      const corePath = await this.extractCore(tempPath);
+      const { corePath, extractDir: tempExtractDir } = await this.extractCore(tempPath);
 
       // 3. 停止代理
       let wasRunning = false;
@@ -141,11 +141,23 @@ export class CoreUpdateService {
         fs.mkdirSync(targetDir, { recursive: true });
       }
 
-      // 复制新核心到目标位置
-      if (process.platform === 'win32') {
-        await this.copyFileElevatedWindows(corePath, targetPath);
-      } else {
-        await this.copyFileWithRetry(corePath, targetPath);
+      // 复制新核心及配套文件到目标位置
+      const sourceDir = path.dirname(corePath);
+      const files = fs.readdirSync(sourceDir);
+
+      for (const file of files) {
+        const srcFile = path.join(sourceDir, file);
+        const destFile = path.join(targetDir, file);
+
+        // 只复制文件，不复制目录
+        if (fs.statSync(srcFile).isFile()) {
+          this.logManager.addLog('info', `正在复制: ${file}`, 'CoreUpdateService');
+          if (process.platform === 'win32') {
+            await this.copyFileElevatedWindows(srcFile, destFile);
+          } else {
+            await this.copyFileWithRetry(srcFile, destFile);
+          }
+        }
       }
 
       // 设置执行权限 (macOS/Linux)
@@ -176,12 +188,14 @@ export class CoreUpdateService {
       // 6. 清理临时文件
       try {
         fs.unlinkSync(tempPath);
-        // 如果 corePath 是解压出来的临时文件，也删除它
-        if (corePath.includes(app.getPath('temp')) && corePath !== tempPath) {
-          fs.unlinkSync(corePath);
+        // 清理整个临时解压目录
+        if (tempExtractDir && fs.existsSync(tempExtractDir)) {
+          fs.rmSync(tempExtractDir, { recursive: true, force: true });
+          this.logManager.addLog('info', '已清理临时解压目录', 'CoreUpdateService');
         }
-      } catch {
+      } catch (err) {
         // 忽略清理错误
+        console.error('Cleanup failed:', err);
       }
 
       // 7. 重启代理 (如果之前在运行)
@@ -336,12 +350,30 @@ export class CoreUpdateService {
     }
 
     // 优先查找包含特定架构的
-    return assets.find(
+    const filteredAssets = assets.filter(
       (a: any) =>
         a.name.toLowerCase().includes(keyword) &&
         a.name.toLowerCase().includes(archKeyword) &&
         (a.name.endsWith(ext) || a.name.endsWith('.zip'))
     );
+
+    if (filteredAssets.length === 0) return undefined;
+
+    // 优先顺序：
+    // 1. 包含 with-naive 或 full 的版本 (针对 Windows)
+    // 2. 不含 legacy 的版本
+    // 3. 其他匹配项
+
+    const preferred = filteredAssets.find(
+      (a: any) =>
+        a.name.toLowerCase().includes('with-naive') || a.name.toLowerCase().includes('full')
+    );
+    if (preferred) return preferred;
+
+    const nonLegacy = filteredAssets.find((a: any) => !a.name.toLowerCase().includes('legacy'));
+    if (nonLegacy) return nonLegacy;
+
+    return filteredAssets[0];
   }
 
   private async downloadFile(url: string, isRetry = false): Promise<string> {
@@ -424,7 +456,7 @@ export class CoreUpdateService {
     });
   }
 
-  private async extractCore(filePath: string): Promise<string> {
+  private async extractCore(filePath: string): Promise<{ corePath: string; extractDir: string }> {
     // 这是一个简化实现，处理 zip 和 tar.gz 需要引入 adm-zip 或 tar 库
     // 假设项目中可能有这些依赖，或者使用系统命令
     // 为了稳健性，这里使用系统命令 (tar / powershell Expand-Archive)
@@ -474,8 +506,16 @@ export class CoreUpdateService {
         throw new Error('无法在压缩包中找到 sing-box 可执行文件');
       }
 
-      return corePath;
+      return { corePath, extractDir };
     } catch (error) {
+      // 报错时也尝试清理临时目录
+      try {
+        if (fs.existsSync(extractDir)) {
+          fs.rmSync(extractDir, { recursive: true, force: true });
+        }
+      } catch (cleanupErr) {
+        // Ignore cleanup errors during recovery
+      }
       throw new Error(`解压失败: ${(error as any).message}`);
     }
   }

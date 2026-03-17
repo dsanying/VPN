@@ -438,7 +438,11 @@
     "congestionControl": "拥塞控制",
     "udpRelayMode": "UDP 转发模式",
     "alpn": "ALPN",
-    "alpnDesc": "应用层协议协商，例如 h3"
+    "alpnDesc": "应用层协议协商，例如 h3",
+    "naive": {
+      "versionWarning": "⚠️ Naive 协议需要 sing-box v1.13+ 核心支持。如果您当前使用的是 v1.12 核心，请前往“设置 -> 关于”点击更新核心。",
+      "goUpdate": "去更新核心"
+    }
   },
   "rules": {
     "customRules": "自定义规则",

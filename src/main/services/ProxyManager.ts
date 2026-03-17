@@ -775,7 +775,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         domain: uniqueDomains,
         domain_suffix: uniqueDomains.flatMap((d) => [d, `.${d}`]),
         domain_keyword: uniqueDomains,
-        server: 'dns-proxy-resolver',
+        server: 'dns-local', // 使用系统 DNS 直接解析，避免死循环和复杂的解包逻辑
       } as SingBoxDnsRule);
     }
 
@@ -1161,37 +1161,36 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       outbound.username = server.username;
       outbound.password = server.password;
 
-      // Force TLS enabled for naive if not already set, usually HTTP/2
-      if (!server.security || server.security === 'none') {
-        server.security = 'tls';
-      }
-      if (!server.tlsSettings) {
-        server.tlsSettings = { allowInsecure: false, serverName: server.address };
-      }
+      // NaiveProxy specific configuration
+      // 1. Force TLS enabled (NaiveProxy usually uses H2/TLS)
+      // 2. Default server_name to server address if not specified
+      outbound.tls = {
+        enabled: true,
+        server_name: server.tlsSettings?.serverName || server.address,
+        insecure: server.tlsSettings?.allowInsecure || false,
+      };
+
+      // 3. Naive handles its own fingerprint/transport, typically does not use uTLS settings
     }
 
-    // TLS 配置
-    if (server.security === 'tls' || server.tlsSettings) {
+    // TLS 配置 (非 Naive 协议，因为 Naive 已在前一段处理了 tls 结构)
+    if (server.protocol !== 'naive' && (server.security === 'tls' || server.tlsSettings)) {
       outbound.tls = {
         enabled: true,
         server_name: server.tlsSettings?.serverName || undefined,
         insecure: server.tlsSettings?.allowInsecure || false,
       };
 
-      // uTLS 仅适用于基于 TCP 的协议，Hysteria2 和 TUIC 使用 QUIC (UDP) 不支持 uTLS，Naive 自带指纹处理均不支持 uTLS
-      if (
-        server.protocol !== 'hysteria2' &&
-        server.protocol !== 'tuic' &&
-        server.protocol !== 'naive'
-      ) {
+      // uTLS 仅适用于基于 TCP 的协议，Hysteria2 和 TUIC 使用 QUIC (UDP) 不支持 uTLS
+      if (server.protocol !== 'hysteria2' && server.protocol !== 'tuic') {
         outbound.tls.utls = {
           enabled: true,
           fingerprint: server.tlsSettings?.fingerprint || 'chrome',
         };
       }
 
-      // ALPN 仅在支持的协议上设置，Naive 和部分协议由底层自行管理，不支持声明 ALPN
-      if (server.tlsSettings?.alpn && server.protocol !== 'naive') {
+      // ALPN 仅在支持的协议上设置
+      if (server.tlsSettings?.alpn) {
         outbound.tls.alpn = server.tlsSettings.alpn;
       }
     }
