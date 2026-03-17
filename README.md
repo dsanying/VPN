@@ -44,7 +44,7 @@
 ## 📋 系统要求
 
 - Windows 10 (1809+) 或 Windows 11
-- macOS 10.15+（Catalina 或更高版本）
+- macOS 12+
 
 ---
 
