@@ -24,8 +24,8 @@ export interface IAdminPrivilege {
 export function isRunningAsAdmin(): boolean {
   if (process.platform === 'win32') {
     return isWindowsAdmin();
-  } else if (process.platform === 'darwin') {
-    return isMacOSAdmin();
+  } else if (process.platform === 'darwin' || process.platform === 'linux') {
+    return isMacOSAdmin(); // id -u works on both macOS and Linux
   }
   return false;
 }

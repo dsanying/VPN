@@ -522,6 +522,100 @@ export class MacOSSystemProxy extends SystemProxyBase {
 }
 
 /**
+ * Linux 系统代理管理器
+ * 目前主要针对使用 GNOME 桌面环境的发行版（如 Debian/Ubuntu/Fedora）
+ * 使用 gsettings 命令配置系统代理
+ */
+export class LinuxSystemProxy extends SystemProxyBase {
+  /**
+   * 启用系统代理
+   */
+  async enableProxy(address: string, httpPort: number, socksPort: number): Promise<void> {
+    console.log(`正在设置 Linux 系统代理: ${address}:${httpPort}`);
+
+    // 保存原始设置
+    try {
+      this.originalSettings = await this.getProxyStatus();
+      console.log('已保存原始代理设置:', this.originalSettings);
+    } catch (error) {
+      console.warn('无法获取原始代理设置:', error);
+    }
+
+    try {
+      await retry(
+        async () => {
+          // 设置 Mode 为 manual (gsettings)
+          await execAsync('gsettings set org.gnome.system.proxy mode "manual"');
+
+          // 设置 HTTP 代理
+          await execAsync(`gsettings set org.gnome.system.proxy.http host "${address}"`);
+          await execAsync(`gsettings set org.gnome.system.proxy.http port ${httpPort}`);
+          await execAsync('gsettings set org.gnome.system.proxy.http enabled true');
+
+          // 设置 HTTPS 代理
+          await execAsync(`gsettings set org.gnome.system.proxy.https host "${address}"`);
+          await execAsync(`gsettings set org.gnome.system.proxy.https port ${httpPort}`);
+
+          // 设置 SOCKS 代理
+          await execAsync(`gsettings set org.gnome.system.proxy.socks host "${address}"`);
+          await execAsync(`gsettings set org.gnome.system.proxy.socks port ${socksPort}`);
+
+          // 设置忽略列表
+          const ignoreList =
+            "['localhost', '127.0.0.1', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']";
+          await execAsync(`gsettings set org.gnome.system.proxy ignore-hosts "${ignoreList}"`);
+        },
+        { maxRetries: 1, delay: 500 }
+      );
+      console.log('Linux 系统代理设置成功');
+    } catch (error) {
+      console.error('设置 Linux 系统代理失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 禁用系统代理
+   */
+  async disableProxy(): Promise<void> {
+    console.log('正在禁用 Linux 系统代理...');
+    try {
+      await execAsync('gsettings set org.gnome.system.proxy mode "none"');
+      console.log('已禁用系统代理');
+    } catch (error) {
+      console.error('禁用 Linux 系统代理失败:', error);
+    }
+  }
+
+  /**
+   * 获取代理状态
+   */
+  async getProxyStatus(): Promise<SystemProxyStatus> {
+    try {
+      const modeResult = await execAsync('gsettings get org.gnome.system.proxy mode');
+      const isManual = modeResult.stdout.includes("'manual'");
+
+      if (!isManual) {
+        return { enabled: false };
+      }
+
+      const hostResult = await execAsync('gsettings get org.gnome.system.proxy.http host');
+      const portResult = await execAsync('gsettings get org.gnome.system.proxy.http port');
+
+      const host = hostResult.stdout.replace(/'/g, '').trim();
+      const port = portResult.stdout.trim();
+
+      return {
+        enabled: true,
+        httpProxy: `${host}:${port}`,
+      };
+    } catch {
+      return { enabled: false };
+    }
+  }
+}
+
+/**
  * 创建系统代理管理器
  * 根据当前平台返回对应的实现
  */
@@ -532,7 +626,9 @@ export function createSystemProxyManager(): ISystemProxyManager {
     return new WindowsSystemProxy();
   } else if (platform === 'darwin') {
     return new MacOSSystemProxy();
+  } else if (platform === 'linux') {
+    return new LinuxSystemProxy();
   }
 
-  throw new Error(`不支持的平台: ${platform}`);
+  throw new Error(`不支持平台: ${platform}`);
 }

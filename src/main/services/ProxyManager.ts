@@ -1541,11 +1541,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * Windows 和 macOS 的 TUN 模式都需要管理员权限
    */
   private needsRootPrivilege(): boolean {
-    // 只有 TUN 模式才需要管理员权限
-    // proxyModeType 的值为 'systemProxy' 或 'tun'
     const isTunMode = this.currentConfig?.proxyModeType === 'tun';
-    // Windows 和 macOS 的 TUN 模式都需要管理员权限
-    return isTunMode && (process.platform === 'darwin' || process.platform === 'win32');
+    // Windows, macOS, and Linux TUN 模式都需要管理员权限
+    return (
+      isTunMode &&
+      (process.platform === 'darwin' ||
+        process.platform === 'win32' ||
+        process.platform === 'linux')
+    );
   }
 
   /**

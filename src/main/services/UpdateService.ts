@@ -3,8 +3,7 @@
  * 通过 GitHub API 检查新版本并支持下载
  */
 
-import { app, shell, BrowserWindow, dialog } from 'electron';
-import * as https from 'https';
+import { app, shell, BrowserWindow, dialog, net } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { LogManager } from './LogManager';
@@ -537,92 +536,26 @@ open "${installerPath}"
     }
   }
 
-  /**
-   * 带进度窗口的文件下载
-   */
-  private async downloadFileWithProgressWindow(
-    url: string,
-    destPath: string,
-    totalSize: number
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(destPath);
-      let downloadedBytes = 0;
-
-      const request = (downloadUrl: string) => {
-        https
-          .get(downloadUrl, { headers: { 'User-Agent': 'FlowZ-Electron' } }, (response) => {
-            // 处理重定向
-            if (response.statusCode === 302 || response.statusCode === 301) {
-              const redirectUrl = response.headers.location;
-              if (redirectUrl) {
-                request(redirectUrl);
-                return;
-              }
-            }
-
-            if (response.statusCode !== 200) {
-              reject(new Error(`下载失败: HTTP ${response.statusCode}`));
-              return;
-            }
-
-            response.on('data', (chunk) => {
-              downloadedBytes += chunk.length;
-              file.write(chunk);
-
-              if (totalSize > 0) {
-                const percentage = Math.round((downloadedBytes / totalSize) * 100);
-                const downloadedMB = (downloadedBytes / 1024 / 1024).toFixed(1);
-                const totalMB = (totalSize / 1024 / 1024).toFixed(1);
-                this.updateProgressWindow(percentage, `${downloadedMB} MB / ${totalMB} MB`);
-              }
-            });
-
-            response.on('end', () => {
-              file.end();
-              resolve();
-            });
-
-            response.on('error', (err) => {
-              file.close();
-              fs.unlinkSync(destPath);
-              reject(err);
-            });
-          })
-          .on('error', (err) => {
-            file.close();
-            if (fs.existsSync(destPath)) {
-              fs.unlinkSync(destPath);
-            }
-            reject(err);
-          });
-      };
-
-      request(url);
-    });
-  }
-
   // ========== 私有方法 ==========
 
   private async fetchReleases(): Promise<any[]> {
     return new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.github.com',
-        path: `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`,
+      const request = net.request({
         method: 'GET',
-        headers: {
-          'User-Agent': 'FlowZ-Electron',
-          Accept: 'application/vnd.github.v3+json',
-        },
-      };
+        url: `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`,
+      });
+      request.setHeader('User-Agent', 'FlowZ-Electron');
+      request.setHeader('Accept', 'application/vnd.github.v3+json');
 
-      const req = https.request(options, (res) => {
+      request.on('response', (res) => {
         let data = '';
-        res.on('data', (chunk) => (data += chunk));
+        res.on('data', (chunk) => (data += chunk.toString()));
         res.on('end', () => {
           try {
             if (res.statusCode === 200) {
               resolve(JSON.parse(data));
+            } else if (res.statusCode === 403) {
+              reject(new Error('GitHub API 访问频率限制 (403)，请稍后再试或使用代理'));
             } else {
               reject(new Error(`GitHub API 返回错误: ${res.statusCode}`));
             }
@@ -632,12 +565,8 @@ open "${installerPath}"
         });
       });
 
-      req.on('error', reject);
-      req.setTimeout(30000, () => {
-        req.destroy();
-        reject(new Error('请求超时'));
-      });
-      req.end();
+      request.on('error', reject);
+      request.end();
     });
   }
 
@@ -645,36 +574,23 @@ open "${installerPath}"
     const platform = process.platform;
     const arch = process.arch;
 
-    // 根据平台选择合适的安装包
-    // 文件命名格式: FlowZ-{version}-{platform}-{arch}.{ext}
-    // 例如: FlowZ-3.0.3-mac-arm64.dmg, FlowZ-3.0.3-win-x64.exe
-
     if (platform === 'win32') {
-      // Windows: 查找 .exe 安装包
       const winAsset = assets.find((a: any) => a.name.endsWith('.exe') && a.name.includes('win'));
       return winAsset || null;
     } else if (platform === 'darwin') {
-      // macOS: 优先选择对应架构的 dmg
       const archPattern = arch === 'arm64' ? 'mac-arm64' : 'mac-x64';
-
-      // 优先匹配精确架构
       let asset = assets.find((a: any) => a.name.includes(archPattern) && a.name.endsWith('.dmg'));
-
-      // 如果没找到，尝试通用 dmg
       if (!asset) {
         asset = assets.find((a: any) => a.name.endsWith('.dmg'));
       }
-
       return asset || null;
     } else if (platform === 'linux') {
-      // Linux: 优先 AppImage，其次 deb
       let asset = assets.find((a: any) => a.name.endsWith('.AppImage'));
       if (!asset) {
         asset = assets.find((a: any) => a.name.endsWith('.deb'));
       }
       return asset || null;
     }
-
     return null;
   }
 
@@ -682,7 +598,6 @@ open "${installerPath}"
     try {
       const latestParts = latest.split('.').map(Number);
       const currentParts = current.split('.').map(Number);
-
       for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
         const l = latestParts[i] || 0;
         const c = currentParts[i] || 0;
@@ -695,63 +610,183 @@ open "${installerPath}"
     }
   }
 
-  private async downloadFile(url: string, destPath: string, totalSize: number): Promise<void> {
+  private async downloadFile(
+    url: string,
+    destPath: string,
+    totalSize: number,
+    isRetry = false
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const file = fs.createWriteStream(destPath);
       let downloadedBytes = 0;
 
-      const request = (downloadUrl: string) => {
-        https
-          .get(downloadUrl, { headers: { 'User-Agent': 'FlowZ-Electron' } }, (response) => {
-            // 处理重定向
-            if (response.statusCode === 302 || response.statusCode === 301) {
-              const redirectUrl = response.headers.location;
-              if (redirectUrl) {
-                request(redirectUrl);
-                return;
-              }
-            }
+      const request = net.request({
+        url: url,
+        method: 'GET',
+      });
+      request.setHeader('User-Agent', 'FlowZ-Electron');
 
-            if (response.statusCode !== 200) {
-              reject(new Error(`下载失败: HTTP ${response.statusCode}`));
-              return;
-            }
-
-            response.on('data', (chunk) => {
-              downloadedBytes += chunk.length;
-              file.write(chunk);
-
-              if (totalSize > 0) {
-                const percentage = Math.round((downloadedBytes / totalSize) * 100);
-                this.updateProgress({
-                  status: 'downloading',
-                  percentage,
-                  message: `正在下载更新... ${percentage}%`,
-                });
-              }
-            });
-
-            response.on('end', () => {
-              file.end();
-              resolve();
-            });
-
-            response.on('error', (err) => {
-              file.close();
-              fs.unlinkSync(destPath);
-              reject(err);
-            });
-          })
-          .on('error', (err) => {
+      request.on('response', (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          const redirectUrl = response.headers.location;
+          if (redirectUrl) {
             file.close();
-            if (fs.existsSync(destPath)) {
-              fs.unlinkSync(destPath);
-            }
-            reject(err);
-          });
-      };
+            if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+            this.downloadFile(
+              Array.isArray(redirectUrl) ? redirectUrl[0] : redirectUrl,
+              destPath,
+              totalSize,
+              isRetry
+            )
+              .then(resolve)
+              .catch(reject);
+            return;
+          }
+        }
 
-      request(url);
+        if (response.statusCode !== 200) {
+          file.close();
+          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+          reject(new Error(`下载失败: HTTP ${response.statusCode}`));
+          return;
+        }
+
+        response.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          file.write(chunk);
+          if (totalSize > 0) {
+            const percentage = Math.round((downloadedBytes / totalSize) * 100);
+            this.updateProgress({
+              status: 'downloading',
+              percentage,
+              message: `正在下载更新... ${percentage}%`,
+            });
+          }
+        });
+
+        response.on('end', () => {
+          file.end();
+          resolve();
+        });
+
+        response.on('error', (err) => {
+          file.close();
+          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+          reject(err);
+        });
+      });
+
+      request.on('error', (err) => {
+        file.close();
+        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+
+        if (!isRetry && url.includes('github.com')) {
+          this.logManager.addLog(
+            'warn',
+            `下载出错，尝试使用加速镜像: ${err.message}`,
+            'UpdateService'
+          );
+          const mirrorUrl = `https://ghp.ci/${url}`;
+          this.updateProgress({
+            status: 'downloading',
+            percentage: 0,
+            message: '正在尝试通过镜像下载...',
+          });
+          this.downloadFile(mirrorUrl, destPath, totalSize, true).then(resolve).catch(reject);
+          return;
+        }
+        reject(err);
+      });
+
+      request.end();
+    });
+  }
+
+  private async downloadFileWithProgressWindow(
+    url: string,
+    destPath: string,
+    totalSize: number,
+    isRetry = false
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(destPath);
+      let downloadedBytes = 0;
+
+      const request = net.request({
+        url: url,
+        method: 'GET',
+      });
+      request.setHeader('User-Agent', 'FlowZ-Electron');
+
+      request.on('response', (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          const redirectUrl = response.headers.location;
+          if (redirectUrl) {
+            file.close();
+            if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+            this.downloadFileWithProgressWindow(
+              Array.isArray(redirectUrl) ? redirectUrl[0] : redirectUrl,
+              destPath,
+              totalSize,
+              isRetry
+            )
+              .then(resolve)
+              .catch(reject);
+            return;
+          }
+        }
+
+        if (response.statusCode !== 200) {
+          file.close();
+          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+          reject(new Error(`下载失败: HTTP ${response.statusCode}`));
+          return;
+        }
+
+        response.on('data', (chunk) => {
+          downloadedBytes += chunk.length;
+          file.write(chunk);
+          if (totalSize > 0) {
+            const percentage = Math.round((downloadedBytes / totalSize) * 100);
+            const downloadedMB = (downloadedBytes / 1024 / 1024).toFixed(1);
+            const totalMB = (totalSize / 1024 / 1024).toFixed(1);
+            this.updateProgressWindow(percentage, `${downloadedMB} MB / ${totalMB} MB`);
+          }
+        });
+
+        response.on('end', () => {
+          file.end();
+          resolve();
+        });
+
+        response.on('error', (err) => {
+          file.close();
+          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+          reject(err);
+        });
+      });
+
+      request.on('error', (err) => {
+        file.close();
+        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+
+        if (!isRetry && url.includes('github.com')) {
+          this.logManager.addLog(
+            'warn',
+            `下载出错，尝试使用加速镜像: ${err.message}`,
+            'UpdateService'
+          );
+          const mirrorUrl = `https://ghp.ci/${url}`;
+          this.updateProgressWindow(0, '正在尝试通过镜像下载...');
+          this.downloadFileWithProgressWindow(mirrorUrl, destPath, totalSize, true)
+            .then(resolve)
+            .catch(reject);
+          return;
+        }
+        reject(err);
+      });
+
+      request.end();
     });
   }
 

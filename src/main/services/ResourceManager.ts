@@ -134,6 +134,21 @@ export class ResourceManager {
         // 生产环境：打包后统一使用 mac 目录
         return path.join(baseDir, 'mac');
       }
+    } else if (this.platform === 'linux') {
+      if (this.isDev) {
+        // 开发环境：优先根据架构选择目录，如果找不到则回退到 linux 目录
+        const fs = require('fs');
+        const archDir = this.arch === 'arm64' ? 'linux-arm64' : 'linux-x64';
+        const fullArchDirPath = path.join(baseDir, archDir);
+
+        if (fs.existsSync(fullArchDirPath)) {
+          return fullArchDirPath;
+        }
+        return path.join(baseDir, 'linux');
+      } else {
+        // 生产环境：打包后统一使用 linux 目录
+        return path.join(baseDir, 'linux');
+      }
     }
 
     throw new Error(`Unsupported platform: ${this.platform}`);

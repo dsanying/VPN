@@ -141,7 +141,31 @@
       "deb"
     ],
     "category": "Network",
-    "icon": "build/icon.ico"
+    "icon": "resources/app.png",
+    "extraResources": [
+      {
+        "from": "resources/linux",
+        "to": "linux",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/data",
+        "to": "data",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": [
+          "app.png",
+          "app-gray.png"
+        ]
+      }
+    ]
   },
   "publish": null
 }
