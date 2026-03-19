@@ -1,6 +1,6 @@
 {
   "name": "flowz",
-  "version": "3.3.10",
+  "version": "3.3.11",
   "singboxVersion": "1.12.13",
   "description": "FlowZ - 简洁现代的跨平台代理客户端",
   "main": "dist/main/main/index.js",
@@ -39,7 +39,7 @@
     "trojan",
     "flowz"
   ],
-  "author": "",
+  "author": "dododook <admin@flowz.app>",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^30.0.0",
