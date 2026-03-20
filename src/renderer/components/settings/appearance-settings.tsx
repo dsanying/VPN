@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -29,11 +29,7 @@ export function AppearanceSettings() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.appearance.title')}</CardTitle>
-        <CardDescription>{t('settings.appearance.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-6">
         <div className="space-y-2">
           <Label htmlFor="theme">{t('settings.appearance.theme')}</Label>
           <Select value={theme} onValueChange={handleThemeChange}>

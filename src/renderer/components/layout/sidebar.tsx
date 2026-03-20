@@ -55,13 +55,11 @@ export function Sidebar({
       <button key={item.id} onClick={onClick} className={`nav-item${isActive ? ' active' : ''}`}>
         <span className="nav-item-indicator" />
         <Icon
-          className="h-[15px] w-[15px] flex-shrink-0"
+          className="h-[16px] w-[16px] flex-shrink-0"
           strokeWidth={isActive ? 2.2 : 1.8}
           style={{ color: isActive ? 'var(--accent-blue)' : 'var(--ink-tertiary)' }}
         />
-        <span style={{ fontSize: '13.5px' }}>
-          {isSettings ? t(`settings.nav.${item.id}`, item.id) : t(`sidebar.${item.id}`)}
-        </span>
+        <span>{isSettings ? t(`settings.nav.${item.id}`, item.id) : t(`sidebar.${item.id}`)}</span>
       </button>
     );
   };
@@ -89,14 +87,14 @@ export function Sidebar({
                 className="h-4 w-4 flex-shrink-0"
                 style={{ color: 'var(--ink-secondary)' }}
               />
-              <span style={{ fontSize: '13.5px', color: 'var(--ink-secondary)' }}>
+              <span style={{ color: 'var(--ink-secondary)' }}>
                 {t('settings.nav.back', '返回应用')}
               </span>
             </button>
           </div>
 
           {/* Settings sub-nav items */}
-          <nav className="flex-1 app-region-no-drag space-y-[2px] overflow-hidden">
+          <nav className="flex-1 app-region-no-drag space-y-[6px] overflow-hidden">
             {settingsNavItems.map((item) =>
               renderNavItem(
                 item,
@@ -109,14 +107,14 @@ export function Sidebar({
       ) : (
         /* ── Main navigation ── */
         <>
-          <nav className="flex-1 pb-2 app-region-no-drag space-y-[2px] overflow-hidden">
+          <nav className="flex-1 pb-2 app-region-no-drag space-y-[6px] overflow-hidden">
             {mainNavItems.map((item) =>
               renderNavItem(item, () => onViewChange(item.id), currentView === item.id)
             )}
           </nav>
 
           {/* Settings pinned to bottom */}
-          <div className="pb-4 app-region-no-drag space-y-[2px]">
+          <div className="pb-4 app-region-no-drag space-y-[6px]">
             {renderNavItem(
               { id: 'settings', icon: Settings },
               () => onViewChange('settings'),

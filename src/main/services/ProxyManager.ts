@@ -679,7 +679,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         server,
         server_port: url.port ? Number(url.port) : 443,
         path: url.pathname || '/dns-query',
-        ...(isIp ? {} : { domain_resolver: 'dns-local' }),
+        // 使用 dns-proxy-resolver（固定 IP 119.29.29.29）解析 DoH 服务器的域名
+        // 不能用 dns-local，因为 dns-local 本身也需要被解析（在 TUN 模式下会造成死循环）
+        ...(isIp ? {} : { domain_resolver: 'dns-proxy-resolver' }),
       } as SingBoxDnsServer;
     } else if (address.startsWith('tls://')) {
       const hostPort = address.slice(6);
@@ -690,7 +692,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         type: 'tls',
         server: host,
         server_port: port ? Number(port) : 853,
-        ...(isIp ? {} : { domain_resolver: 'dns-local' }),
+        ...(isIp ? {} : { domain_resolver: 'dns-proxy-resolver' }),
       } as SingBoxDnsServer;
     } else {
       // 普通 UDP DNS（通常是 IP，不需要 domain_resolver）
@@ -719,17 +721,30 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     const enableFakeIp = isTunMode && userDnsConfig.enableFakeIp;
 
     // sing-box 1.13+ 新格式：每个 server 必须有显式 type 字段
+    //
+    // 重要说明：
+    // - 在 TUN 模式下（尤其 Windows strict_route=true），系统级 DNS 会被 TUN 拦截，
+    //   因此 type:'local' 的 dns-local 可能无法正常工作（因为它发出的 UDP 包会被 TUN 再次捕获）。
+    // - 解决方案：使用固定 IP 的 UDP DNS（223.5.5.5）作为 bootstrap，
+    //   并通过 route_exclude_address 将其 IP 排除在 TUN 路由之外。
+    // - dns-remote (如 dns.google) 的 domain_resolver 必须指向已经可达的固定 IP DNS，
+    //   而不能指向 dns-local（否则会产生 dns-local 无法解析 -> dns-remote 无法启动的死循环）。
     const dnsServers: SingBoxDnsServer[] = [
       {
-        // 本地/系统 DNS：直接使用操作系统当前的 DNS 配置
+        // 本地 bootstrap DNS：使用固定 IP 的阿里云公共 DNS，绕过系统 DNS 解析
+        // 注意：此服务器 IP (223.5.5.5) 必须在 TUN inbound 的 route_exclude_address 中排除
         tag: 'dns-local',
-        type: 'local',
+        type: 'udp',
+        server: '223.5.5.5',
+        server_port: 53,
       },
       {
         // 专用解析器：用于强制解析代理服务器真实 IP，绕过系统可能存在的 FakeIP 劫持
+        // 同样使用固定 IP，以免依赖 dns-local 形成循环
         tag: 'dns-proxy-resolver',
         type: 'udp',
-        server: '223.5.5.5',
+        server: '119.29.29.29',
+        server_port: 53,
       },
       // 国内直连 DNS
       this.parseDnsAddress(
@@ -737,6 +752,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         'dns-domestic'
       ),
       // 远程 DNS（解析国外域名）
+      // domain_resolver 必须使用固定 IP 的 DNS，不能用 dns-local（防止死循环）
       this.parseDnsAddress(
         userDnsConfig.foreignDns || 'https://dns.google/dns-query',
         'dns-remote'
@@ -775,7 +791,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         domain: uniqueDomains,
         domain_suffix: uniqueDomains.flatMap((d) => [d, `.${d}`]),
         domain_keyword: uniqueDomains,
-        server: 'dns-local', // 使用系统 DNS 直接解析，避免死循环和复杂的解包逻辑
+        server: 'dns-proxy-resolver', // 使用固定 IP DNS 解析，避免 TUN 模式下 dns-local 无法工作的问题
       } as SingBoxDnsRule);
     }
 
@@ -864,7 +880,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         sniff: true,
         sniff_override_destination: true,
         // 在系统路由层面排除本地地址，确保本地代理端口可访问
-        route_exclude_address: ['127.0.0.0/8', '::1/128'],
+        // 同时排除 bootstrap DNS 服务器的 IP（223.5.5.5 和 119.29.29.29），
+        // 让它们的 UDP 53 包直接走真实网络，不被 TUN 再次拦截（对 Windows strict_route 尤为关键）
+        route_exclude_address: [
+          '127.0.0.0/8',
+          '::1/128',
+          '223.5.5.5/32', // dns-local bootstrap (阿里云 DNS)
+          '119.29.29.29/32', // dns-proxy-resolver bootstrap (腾讯 DNSPod)
+        ],
       };
 
       // macOS 平台特定配置
@@ -1318,19 +1341,24 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       outbound: 'direct',
     });
 
-    // 智能分流规则（仅在智能分流模式下启用）
-    if (proxyMode === 'smart') {
-      // 屏蔽 QUIC (UDP 443)，强制浏览器回退到 TCP/HTTP2
-      // 这可以解决 Google 等服务在 TUN 模式下的 UDP 连接问题
+    // 屏蔽 QUIC，强制浏览器回退到 TCP/HTTP2
+    // 这可以解决 Google/YouTube 等服务在 TUN 模式下的连接问题
+    // 注意：sing-box 的 `protocol` 字段匹配的是嗅探到的应用层协议（http/tls/quic/dns/stun），
+    // 而非传输层协议。之前使用 `protocol: 'udp'` 永远不会匹配到任何流量。
+    // 正确写法是 `protocol: 'quic'`，直接匹配被嗅探为 QUIC 的流量。
+    // 在智能分流和全局代理模式下都需要屏蔽 QUIC。
+    if (proxyMode !== 'direct') {
       rules.push({
-        protocol: 'udp',
-        port: 443,
+        protocol: 'quic',
         action: 'reject',
       });
+    }
 
+    // 智能分流规则（仅在智能分流模式下启用）
+    if (proxyMode === 'smart') {
       // 显式添加 Google 规则，确保其走代理 (防止被 IP 规则误判)
       rules.push({
-        domain_keyword: ['google', 'gmail', 'youtube'],
+        domain_keyword: ['google', 'gmail', 'youtube', 'gstatic', 'googleapis'],
         action: 'route',
         outbound: 'proxy',
       });

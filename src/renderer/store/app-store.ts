@@ -38,10 +38,14 @@ interface AppState {
   // Statistics
   stats: TrafficStats | null;
 
+  // Latency test results (persisted across view changes)
+  latencyMap: Record<string, number>;
+
   // Actions
   setCurrentView: (view: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setLatencyMap: (map: Record<string, number>) => void;
 
   // Proxy Control Actions
   startProxy: () => Promise<void>;
@@ -75,11 +79,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   connectionStatus: null,
   config: null,
   stats: null,
+  latencyMap: {},
 
   // UI Actions
   setCurrentView: (view) => set({ currentView: view }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
+  setLatencyMap: (map) => set({ latencyMap: map }),
 
   // Proxy Control Actions
   startProxy: async () => {

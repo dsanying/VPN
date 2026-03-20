@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
@@ -248,10 +248,6 @@ export function AboutSettings() {
   if (loading) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.about.title')}</CardTitle>
-          <CardDescription>{t('settings.about.description')}</CardDescription>
-        </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </CardContent>
@@ -261,11 +257,7 @@ export function AboutSettings() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.about.title')}</CardTitle>
-        <CardDescription>{t('settings.about.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-6">
         <div className="space-y-4">
           <div>
             <h4 className="text-sm font-medium text-muted-foreground">

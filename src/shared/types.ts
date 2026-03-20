@@ -264,6 +264,10 @@ export interface UserConfig {
   autoCheckUpdate: boolean;
   autoLightweightMode: boolean;
   autoUpdateSubscriptionOnStart: boolean; // 启动时自动更新订阅
+  rememberWindowSize?: boolean; // 记忆调整后的窗口大小
+
+  // 窗口尺寸（仅在 rememberWindowSize 启用时使用）
+  windowBounds?: { width: number; height: number };
 
   // DNS 配置
   dnsConfig?: DnsConfig;

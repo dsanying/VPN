@@ -378,6 +378,14 @@ export class ConfigManager implements IConfigManager {
       config.autoLightweightMode = false;
     }
 
+    // rememberWindowSize 是可选字段，兼容旧配置
+    if (config.rememberWindowSize !== undefined && typeof config.rememberWindowSize !== 'boolean') {
+      throw new Error('rememberWindowSize must be a boolean');
+    }
+    if (config.rememberWindowSize === undefined) {
+      config.rememberWindowSize = false;
+    }
+
     // 验证端口
     if (typeof config.socksPort !== 'number' || config.socksPort < 1 || config.socksPort > 65535) {
       throw new Error('socksPort must be a number between 1 and 65535');
@@ -415,6 +423,7 @@ export class ConfigManager implements IConfigManager {
       autoCheckUpdate: true, // 默认启用启动时自动检查更新
       autoLightweightMode: false, // 默认不启用自动轻量模式
       autoUpdateSubscriptionOnStart: false, // 默认不启用启动时更新订阅
+      rememberWindowSize: false, // 默认不启用记忆窗口大小
 
       // 默认 DNS 配置
       dnsConfig: {

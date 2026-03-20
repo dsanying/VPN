@@ -96,7 +96,7 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
  * 显示主窗口
  * 如果窗口不存在则创建，如果已存在则显示并聚焦
  */
-function showWindow() {
+async function showWindow() {
   if (mainWindow) {
     if (mainWindow.isMinimized()) {
       mainWindow.restore();
@@ -104,11 +104,11 @@ function showWindow() {
     mainWindow.show();
     mainWindow.focus();
   } else {
-    createWindow();
+    await createWindow();
   }
 }
 
-function createWindow() {
+async function createWindow() {
   // macOS 需要设置应用菜单以启用 Cmd+C/V/X/A 等快捷键
   if (process.platform === 'darwin') {
     const template: Electron.MenuItemConstructorOptions[] = [
@@ -155,12 +155,25 @@ function createWindow() {
 
   const isMac = process.platform === 'darwin';
 
+  // 读取保存的窗口尺寸（如果启用了记忆窗口大小）
+  let windowWidth = 1200;
+  let windowHeight = 800;
+  try {
+    const cfg = await configManager.loadConfig();
+    if (cfg.rememberWindowSize && cfg.windowBounds) {
+      windowWidth = cfg.windowBounds.width;
+      windowHeight = cfg.windowBounds.height;
+    }
+  } catch {
+    // 使用默认尺寸
+  }
+
   // 创建主窗口
   // 注意：transparent 仅在 macOS 上启用，Windows/Linux 上启用会导致
   // 侧边栏透明且鼠标事件无法正常传递（Electron 已知问题）
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowWidth,
+    height: windowHeight,
     minWidth: 800,
     minHeight: 600,
     title: 'FlowZ',
@@ -182,6 +195,24 @@ function createWindow() {
       vibrancy: 'sidebar',
       visualEffectState: 'active',
     }),
+  });
+
+  // ── 窗口尺寸记忆：监听 resize 并防抖保存 ──
+  let resizeTimer: NodeJS.Timeout | null = null;
+  mainWindow.on('resize', () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(async () => {
+      try {
+        const cfg = await configManager.loadConfig();
+        if (cfg.rememberWindowSize && mainWindow && !mainWindow.isDestroyed()) {
+          const [w, h] = mainWindow.getSize();
+          cfg.windowBounds = { width: w, height: h };
+          await configManager.saveConfig(cfg);
+        }
+      } catch {
+        // 保存失败不影响使用
+      }
+    }, 500);
   });
 
   // 移除默认菜单栏（Windows/Linux）
@@ -217,14 +248,7 @@ function createWindow() {
     // 如果需要调试，可以通过快捷键 (Cmd/Ctrl+Shift+I) 打开，
     // 因为 webPreferences.devTools 仍然是 enable 的
 
-    if (__dirname.includes('app.asar')) {
-      // 在 asar 包中，使用 app.asar.unpacked 路径
-      const asarPath = __dirname.replace('app.asar', 'app.asar.unpacked');
-      indexPath = path.join(asarPath, '../../renderer/index.html');
-    } else {
-      // 不在 asar 包中
-      indexPath = path.join(__dirname, '../../renderer/index.html');
-    }
+    indexPath = path.join(__dirname, '../../renderer/index.html');
 
     mainWindow.loadFile(indexPath).catch((err) => {
       logManager.addLog('error', `Failed to load index.html: ${err.message}`, 'Main');
@@ -435,7 +459,7 @@ app.whenReady().then(async () => {
     );
   }
 
-  createWindow();
+  await createWindow();
 
   // 初始化 ProxyManager（需要在窗口创建后）
   proxyManager = new ProxyManager(logManager, mainWindow || undefined);
@@ -946,9 +970,9 @@ app.whenReady().then(async () => {
     }
   });
 
-  app.on('activate', () => {
+  app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      await createWindow();
     }
   });
 });

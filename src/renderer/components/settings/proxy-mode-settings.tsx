@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAppStore } from '@/store/app-store';
@@ -74,11 +74,7 @@ export function ProxyModeSettings() {
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.proxyMode.title')}</CardTitle>
-          <CardDescription>{t('settings.proxyMode.description')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
           <div className="space-y-3">
             <Label>{t('settings.proxyMode.implementationMode')}</Label>
             <RadioGroup

@@ -51,6 +51,7 @@ import { generateShareUrl } from '@/bridge/api-wrapper';
 import { api } from '@/ipc/api-client';
 import type { ServerConfig } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
+import { useAppStore } from '@/store/app-store';
 
 type ServerConfigWithId = ServerConfig;
 type ViewMode = 'card' | 'list';
@@ -119,7 +120,9 @@ export function ServerList({
   onSelectServer,
   onImportSuccess,
 }: ServerListProps) {
-  const [latencyMap, setLatencyMap] = useState<Record<string, number>>({});
+  // 使用全局 store 存储延迟数据，切换页面不丢失
+  const latencyMap = useAppStore((state) => state.latencyMap);
+  const setLatencyMap = useAppStore((state) => state.setLatencyMap);
   const [isTestingSpeed, setIsTestingSpeed] = useState(false);
   const { t } = useTranslation();
 
@@ -146,7 +149,6 @@ export function ServerList({
 
   const handleSpeedTest = async () => {
     setIsTestingSpeed(true);
-    setLatencyMap({});
     try {
       toast.info(t('servers.speedTestStart'));
       const serverIdsToTest = servers.map((s) => s.id);

@@ -133,6 +133,7 @@
       "minimizeToTrayTitle": "Minimize to System Tray",
       "autoLightweightMode": "Auto Lightweight Mode (10 mins idle)",
       "autoCheckUpdate": "Check for updates on startup",
+      "rememberWindowSize": "Remember window size",
       "successUpdate": "Settings saved",
       "failUpdate": "Failed to save settings"
     },
@@ -527,13 +528,14 @@
   },
   "importUrl": {
     "title": "Import Server from URL",
-    "desc": "Supports vmess://, vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// and http2:// protocol links",
+    "desc": "Supports vmess://, vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// and http2:// protocol links. Paste multiple links (one per line) for batch import.",
     "urlLabel": "Protocol URL",
-    "urlPlaceholder": "vmess://base64(json)\nor vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name\nor tuic://uuid:password@server:port?sni=example.com#name\nor http2://username:password@server:port#name",
+    "urlPlaceholder": "vmess://base64(json)\nor vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name\nor tuic://uuid:password@server:port?sni=example.com#name\nor http2://username:password@server:port#name\n\nSupport multiple links, one per line",
     "parse": "Parse",
     "invalidUrl": "Please enter a valid vmess://, vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// or http2:// link",
+    "invalidProtocol": "Unsupported protocol",
     "parseResult": "Parse Result",
-    "parseResultDesc": "URL parsed successfully, please confirm the configuration",
+    "parseResultDesc": "Click the edit icon to rename a node",
     "protocol": "Protocol",
     "address": "Address",
     "transport": "Transport",
@@ -546,10 +548,16 @@
     "serverNamePlaceholder": "Enter server name",
     "importing": "Importing...",
     "importServer": "Import Server",
+    "importCount": "Import {{count}} nodes",
     "pleaseEnterUrl": "Please enter a protocol URL",
     "parseSuccess": "URL parsed successfully",
-    "parseFailed": "URL parse failed",
+    "parseSuccessCount": "Successfully parsed {{count}} node(s)",
+    "parseFailed": "Parse Failed",
+    "parseFailCount": "{{count}} line(s) failed to parse",
     "parseFirstAndName": "Please parse the URL and enter a server name first",
-    "importFailed": "Failed to import server"
+    "importFailed": "Failed to import server",
+    "importSuccessCount": "Successfully imported {{count}} node(s)",
+    "importFailCount": "{{count}} node(s) failed to import",
+    "noNodesToImport": "No nodes to import"
   }
 }

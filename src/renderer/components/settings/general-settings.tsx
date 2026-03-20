@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useAppStore } from '@/store/app-store';
@@ -17,7 +17,8 @@ export function GeneralSettings() {
       | 'autoConnect'
       | 'minimizeToTray'
       | 'autoCheckUpdate'
-      | 'autoLightweightMode',
+      | 'autoLightweightMode'
+      | 'rememberWindowSize',
     value: boolean
   ) => {
     if (!config) return;
@@ -47,11 +48,7 @@ export function GeneralSettings() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.general.title')}</CardTitle>
-        <CardDescription>{t('settings.general.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-6">
         <div className="flex items-center space-x-2">
           <Checkbox
             id="autoStart"
@@ -119,6 +116,20 @@ export function GeneralSettings() {
             className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
           >
             {t('settings.general.autoCheckUpdate')}
+          </Label>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="rememberWindowSize"
+            checked={config.rememberWindowSize === true}
+            onCheckedChange={(checked) => handleToggle('rememberWindowSize', checked as boolean)}
+          />
+          <Label
+            htmlFor="rememberWindowSize"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+          >
+            {t('settings.general.rememberWindowSize')}
           </Label>
         </div>
       </CardContent>

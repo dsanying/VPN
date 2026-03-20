@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -60,11 +60,7 @@ export function AdvancedSettings() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.advanced.title')}</CardTitle>
-        <CardDescription>{t('settings.advanced.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 pt-6">
         {/* DNS 设置区域 */}
         <div className="space-y-4">
           <h4 className="text-sm font-medium mb-2">{t('settings.advanced.dnsSettings')}</h4>

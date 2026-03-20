@@ -14,10 +14,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Link, Server } from 'lucide-react';
+import { Loader2, Link, Server, Check, X, Edit2 } from 'lucide-react';
 import { parseProtocolUrl, addServerFromUrl } from '@/bridge/api-wrapper';
 import type { ServerConfig } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
+
+interface ParsedServer {
+  url: string;
+  config: ServerConfig;
+  name: string;
+  error?: string;
+}
 
 interface ImportUrlDialogProps {
   open: boolean;
@@ -28,92 +35,176 @@ interface ImportUrlDialogProps {
 export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportUrlDialogProps) {
   const { t } = useTranslation();
   const [url, setUrl] = useState('');
-  const [name, setName] = useState('');
-  const [parsedConfig, setParsedConfig] = useState<ServerConfig | null>(null);
+  const [parsedServers, setParsedServers] = useState<ParsedServer[]>([]);
+  const [failedLines, setFailedLines] = useState<{ line: string; error: string }[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  const isValidUrl = (u: string) => {
+    return (
+      u.startsWith('vless://') ||
+      u.startsWith('vmess://') ||
+      u.startsWith('trojan://') ||
+      u.startsWith('hysteria2://') ||
+      u.startsWith('hy2://') ||
+      u.startsWith('ss://') ||
+      u.startsWith('anytls://') ||
+      u.startsWith('tuic://') ||
+      u.startsWith('http2://') ||
+      u.startsWith('naive+https://')
+    );
+  };
 
   const handleParseUrl = async () => {
-    if (!url.trim()) {
+    const input = url.trim();
+    if (!input) {
+      toast.error(t('importUrl.pleaseEnterUrl', 'Please enter a protocol URL'));
+      return;
+    }
+
+    // 支持多行：按换行符分割
+    const lines = input
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    if (lines.length === 0) {
       toast.error(t('importUrl.pleaseEnterUrl', 'Please enter a protocol URL'));
       return;
     }
 
     setIsParsing(true);
-    try {
-      const response = await parseProtocolUrl(url.trim());
-      if (response && response.success && response.data) {
-        setParsedConfig(response.data as any);
+    const parsed: ParsedServer[] = [];
+    const failed: { line: string; error: string }[] = [];
 
-        if (!name.trim()) {
-          const protocol = response.data.protocol.toUpperCase();
-          const address = response.data.address;
-          setName(`${protocol} - ${address}`);
-        }
-
-        toast.success(t('importUrl.parseSuccess', 'URL parsed successfully'));
-      } else {
-        toast.error(response?.error || t('importUrl.parseFailed', 'URL parse failed'));
-        setParsedConfig(null);
+    for (const line of lines) {
+      if (!isValidUrl(line)) {
+        failed.push({ line, error: t('importUrl.invalidProtocol', 'Unsupported protocol') });
+        continue;
       }
-    } catch (error) {
-      console.error('Parse URL error:', error);
-      toast.error(t('importUrl.parseFailed', 'URL parse failed'));
-      setParsedConfig(null);
-    } finally {
-      setIsParsing(false);
+
+      try {
+        const response = await parseProtocolUrl(line);
+        if (response && response.success && response.data) {
+          const config = response.data as ServerConfig;
+          // 优先使用 URL 中解析出来的名称（#fragment）
+          const name = config.name || `${config.protocol.toUpperCase()} - ${config.address}`;
+          parsed.push({ url: line, config, name });
+        } else {
+          failed.push({
+            line,
+            error: response?.error || t('importUrl.parseFailed', 'URL parse failed'),
+          });
+        }
+      } catch (error) {
+        failed.push({
+          line,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
+
+    setParsedServers(parsed);
+    setFailedLines(failed);
+
+    if (parsed.length > 0) {
+      toast.success(
+        t('importUrl.parseSuccessCount', {
+          defaultValue: 'Successfully parsed {{count}} node(s)',
+          count: parsed.length,
+        })
+      );
+    }
+    if (failed.length > 0) {
+      toast.warning(
+        t('importUrl.parseFailCount', {
+          defaultValue: '{{count}} line(s) failed to parse',
+          count: failed.length,
+        })
+      );
+    }
+
+    setIsParsing(false);
   };
 
   const handleImport = async () => {
-    if (!parsedConfig || !name.trim()) {
-      toast.error(
-        t('importUrl.parseFirstAndName', 'Please parse the URL and enter a server name first')
-      );
+    if (parsedServers.length === 0) {
+      toast.error(t('importUrl.noNodesToImport', 'No nodes to import'));
       return;
     }
 
     setIsImporting(true);
-    try {
-      const response = await addServerFromUrl(url.trim(), name.trim());
-      if (response && response.success) {
-        onImportSuccess?.();
-        handleClose();
-      } else {
-        toast.error(response?.error || t('importUrl.importFailed', 'Failed to import server'));
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const server of parsedServers) {
+      try {
+        const response = await addServerFromUrl(server.url, server.name);
+        if (response && response.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
       }
-    } catch (error) {
-      console.error('Import server error:', error);
-      toast.error(t('importUrl.importFailed', 'Failed to import server'));
-    } finally {
-      setIsImporting(false);
     }
+
+    if (successCount > 0) {
+      toast.success(
+        t('importUrl.importSuccessCount', {
+          defaultValue: 'Successfully imported {{count}} node(s)',
+          count: successCount,
+        })
+      );
+      onImportSuccess?.();
+    }
+    if (failCount > 0) {
+      toast.error(
+        t('importUrl.importFailCount', {
+          defaultValue: '{{count}} node(s) failed to import',
+          count: failCount,
+        })
+      );
+    }
+
+    setIsImporting(false);
+    handleClose();
   };
 
   const handleClose = () => {
     setUrl('');
-    setName('');
-    setParsedConfig(null);
+    setParsedServers([]);
+    setFailedLines([]);
+    setEditingIndex(null);
     onOpenChange(false);
   };
 
-  const isValidUrl = (url: string) => {
-    return (
-      url.startsWith('vless://') ||
-      url.startsWith('trojan://') ||
-      url.startsWith('hysteria2://') ||
-      url.startsWith('hy2://') ||
-      url.startsWith('ss://') ||
-      url.startsWith('anytls://') ||
-      url.startsWith('tuic://') ||
-      url.startsWith('http2://') ||
-      url.startsWith('naive+https://')
-    );
+  const handleRemoveServer = (index: number) => {
+    setParsedServers((prev) => prev.filter((_, i) => i !== index));
   };
+
+  const handleStartEditName = (index: number) => {
+    setEditingIndex(index);
+    setEditingName(parsedServers[index].name);
+  };
+
+  const handleSaveEditName = (index: number) => {
+    if (editingName.trim()) {
+      setParsedServers((prev) =>
+        prev.map((s, i) => (i === index ? { ...s, name: editingName.trim() } : s))
+      );
+    }
+    setEditingIndex(null);
+  };
+
+  const hasAnyValidUrl = url.split(/\r?\n/).some((l) => isValidUrl(l.trim()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link className="h-5 w-5" />
@@ -122,7 +213,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
           <DialogDescription>
             {t(
               'importUrl.desc',
-              'Supports vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// and http2:// protocol links'
+              'Supports vless://, vmess://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// and http2:// protocol links. Paste multiple links (one per line) for batch import.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -135,7 +226,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                 id="protocol-url"
                 placeholder={t(
                   'importUrl.urlPlaceholder',
-                  'vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name\nor tuic://uuid:password@server:port?sni=example.com#name\nor http2://username:password@server:port#name'
+                  'vless://uuid@server:port?encryption=none&security=tls&type=ws#name\nor trojan://password@server:port?security=tls#name\nor hysteria2://password@server:port?sni=example.com#name\nor ss://base64(method:password)@server:port#name\nor anytls://password@server:port?security=tls&sni=example.com#name\nor tuic://uuid:password@server:port?sni=example.com#name\nor http2://username:password@server:port#name\n\nSupport multiple links, one per line'
                 )}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
@@ -143,7 +234,7 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
               />
               <Button
                 onClick={handleParseUrl}
-                disabled={!url.trim() || !isValidUrl(url.trim()) || isParsing}
+                disabled={!url.trim() || !hasAnyValidUrl || isParsing}
                 className="shrink-0"
               >
                 {isParsing ? (
@@ -153,148 +244,108 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
                 )}
               </Button>
             </div>
-            {url.trim() && !isValidUrl(url.trim()) && (
-              <p className="text-sm text-destructive">
-                {t(
-                  'importUrl.invalidUrl',
-                  'Please enter a valid vless://, trojan://, hysteria2://, hy2://, ss://, anytls://, tuic:// or http2:// link'
-                )}
-              </p>
-            )}
           </div>
 
-          {parsedConfig && (
+          {/* 解析成功的节点列表 */}
+          {parsedServers.length > 0 && (
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Server className="h-4 w-4" />
                   {t('importUrl.parseResult', 'Parse Result')}
+                  <Badge variant="secondary" className="ml-1">
+                    {parsedServers.length}
+                  </Badge>
                 </CardTitle>
                 <CardDescription>
-                  {t(
-                    'importUrl.parseResultDesc',
-                    'URL parsed successfully, please confirm the configuration'
-                  )}
+                  {t('importUrl.parseResultDesc', 'Click the edit icon to rename a node')}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">
-                      {t('importUrl.protocol', 'Protocol')}:
-                    </span>
-                    <Badge variant="outline" className="ml-2">
-                      {parsedConfig.protocol}
+              <CardContent className="space-y-2">
+                {parsedServers.map((server, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 p-2 rounded-md border bg-muted/30 hover:bg-muted/50 transition-colors"
+                  >
+                    <Badge variant="outline" className="shrink-0 text-xs">
+                      {server.config.protocol.toUpperCase()}
                     </Badge>
-                  </div>
-                  <div className="flex flex-col md:flex-row md:items-baseline relative pr-2">
-                    <span className="text-muted-foreground whitespace-nowrap">
-                      {t('importUrl.address', 'Address')}:
-                    </span>
-                    <span className="md:ml-2 font-mono break-all line-clamp-2 md:line-clamp-none">
-                      {parsedConfig.address.includes(':')
-                        ? `[${parsedConfig.address}]`
-                        : parsedConfig.address}
-                      :{parsedConfig.port}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">
-                      {t('importUrl.transport', 'Transport')}:
-                    </span>
-                    <span className="ml-2">{parsedConfig.network}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">
-                      {t('importUrl.encryption', 'Encryption')}:
-                    </span>
-                    <span className="ml-2">{parsedConfig.security}</span>
-                  </div>
-                  {parsedConfig.protocol === 'vless' && parsedConfig.uuid && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">UUID:</span>
-                      <span className="ml-2 font-mono text-xs">{parsedConfig.uuid}</span>
-                    </div>
-                  )}
-                  {parsedConfig.protocol === 'trojan' && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">
-                        {t('importUrl.password', 'Password')}:
+                    <div className="flex-1 min-w-0">
+                      {editingIndex === index ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEditName(index);
+                              if (e.key === 'Escape') setEditingIndex(null);
+                            }}
+                            className="h-7 text-sm"
+                            autoFocus
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => handleSaveEditName(index)}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-medium truncate">{server.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 shrink-0 opacity-50 hover:opacity-100"
+                            onClick={() => handleStartEditName(index)}
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {server.config.address}:{server.config.port}
                       </span>
-                      <span className="ml-2">••••••••</span>
                     </div>
-                  )}
-                  {parsedConfig.protocol === 'hysteria2' && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">
-                        {t('importUrl.password', 'Password')}:
-                      </span>
-                      <span className="ml-2">••••••••</span>
-                    </div>
-                  )}
-                  {parsedConfig.protocol === 'tuic' && (
-                    <>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">UUID:</span>
-                        <span className="ml-2 font-mono text-xs">{parsedConfig.uuid}</span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">
-                          {t('importUrl.password', 'Password')}:
-                        </span>
-                        <span className="ml-2">••••••••</span>
-                      </div>
-                    </>
-                  )}
-                  {parsedConfig.protocol === 'shadowsocks' && (
-                    <>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">
-                          {t('importUrl.encryptionMethod', 'Encryption Method')}:
-                        </span>
-                        <span className="ml-2">
-                          {parsedConfig.shadowsocksSettings?.method || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-muted-foreground">
-                          {t('importUrl.password', 'Password')}:
-                        </span>
-                        <span className="ml-2">••••••••</span>
-                      </div>
-                    </>
-                  )}
-                  {parsedConfig.wsSettings?.path && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">
-                        {t('importUrl.wsPath', 'WebSocket Path')}:
-                      </span>
-                      <span className="ml-2 font-mono">{parsedConfig.wsSettings.path}</span>
-                    </div>
-                  )}
-                  {parsedConfig.tlsSettings?.serverName && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">
-                        {t('importUrl.tlsServer', 'TLS Server Name')}:
-                      </span>
-                      <span className="ml-2">{parsedConfig.tlsSettings.serverName}</span>
-                    </div>
-                  )}
-                </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => handleRemoveServer(index)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
 
-          {parsedConfig && (
-            <div className="space-y-2">
-              <Label htmlFor="server-name">{t('importUrl.serverName', 'Server Name')}</Label>
-              <Input
-                id="server-name"
-                placeholder={t('importUrl.serverNamePlaceholder', 'Enter server name')}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
+          {/* 解析失败的行 */}
+          {failedLines.length > 0 && (
+            <Card className="border-destructive/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-destructive flex items-center gap-2">
+                  <X className="h-4 w-4" />
+                  {t('importUrl.parseFailed', 'Parse Failed')}
+                  <Badge variant="destructive" className="ml-1">
+                    {failedLines.length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {failedLines.map((item, index) => (
+                  <div key={index} className="text-xs text-muted-foreground">
+                    <span className="font-mono truncate block">
+                      {item.line.substring(0, 60)}...
+                    </span>
+                    <span className="text-destructive">{item.error}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -302,12 +353,17 @@ export function ImportUrlDialog({ open, onOpenChange, onImportSuccess }: ImportU
           <Button variant="outline" onClick={handleClose}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button onClick={handleImport} disabled={!parsedConfig || !name.trim() || isImporting}>
+          <Button onClick={handleImport} disabled={parsedServers.length === 0 || isImporting}>
             {isImporting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 {t('importUrl.importing', 'Importing...')}
               </>
+            ) : parsedServers.length > 1 ? (
+              t('importUrl.importCount', {
+                defaultValue: 'Import {{count}} nodes',
+                count: parsedServers.length,
+              })
             ) : (
               t('importUrl.importServer', 'Import Server')
             )}

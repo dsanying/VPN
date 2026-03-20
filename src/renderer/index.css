@@ -169,14 +169,14 @@
   .nav-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
     width: 100%;
-    padding: 6px 12px 6px 16px;
+    padding: 8px 12px 8px 16px;
     border-radius: 8px;
     margin: 0 6px;
     width: calc(100% - 12px);
     text-align: left;
-    font-size: 13.5px;
+    font-size: 14px;
     color: hsl(var(--foreground) / 0.85);
     transition:
       background 0.15s,
@@ -225,13 +225,34 @@
     background-color: hsl(222.2 47.4% 9%);
   }
 
-  /* Outer shell - transparent on macOS so vibrancy shows through;
-     solid on Windows/Linux since there is no vibrancy */
+  /* Outer shell – background must match the sidebar so that the
+     rounded top-left corner of .main-content-card doesn't expose
+     a mismatched color behind it.
+     NOTE: use hardcoded colours instead of CSS vars to avoid
+     Chromium GPU-cache rendering bugs when the window is restored
+     from a long background session on Windows.                    */
+
+  .app-shell {
+    will-change: background; /* keep on a GPU compositing layer */
+  }
+
+  /* macOS light: transparent keeps native vibrancy behind the sidebar */
   html.platform-darwin .app-shell {
     background: transparent;
   }
 
+  /* macOS dark: match the dark sidebar color */
+  html.platform-darwin.dark .app-shell {
+    background: rgba(30, 30, 46, 0.97);
+  }
+
+  /* Windows / Linux light – hardcoded equivalent of --muted (210 40% 96.1%) */
   html:not(.platform-darwin) .app-shell {
-    background: hsl(var(--background));
+    background: #f1f5f9;
+  }
+
+  /* Windows / Linux dark */
+  html:not(.platform-darwin).dark .app-shell {
+    background: rgba(30, 30, 46, 0.97);
   }
 }
