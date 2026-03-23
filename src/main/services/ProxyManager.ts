@@ -184,10 +184,16 @@ interface SingBoxOutbound {
   };
   // DNS resolver for outbound server domain
   domain_resolver?: string;
+  // UDP over TCP (UoT)
+  udp_over_tcp?: {
+    enabled: boolean;
+    version: number;
+  };
 }
 
 interface SingBoxRouteRule {
   protocol?: string;
+  network?: string[];
   rule_set?: string | string[];
   domain?: string[];
   domain_suffix?: string[];
@@ -577,7 +583,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     const singboxConfig: SingBoxConfig = {
       log: this.generateLogConfig(config),
-      dns: this.generateDnsConfig(config, selectedServer),
+      dns: this.generateDnsConfig(config),
       inbounds: this.generateInbounds(config),
       outbounds: this.generateOutbounds(selectedServer),
       route: this.generateRouteConfig(config),
@@ -667,6 +673,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    *   tls://dns.google           → { type: "tls",   server: "dns.google" }
    *   8.8.8.8 / 8.8.8.8:53     → { type: "udp",   server: "8.8.8.8", server_port: 53 }
    */
+
   private parseDnsAddress(address: string, tag: string): SingBoxDnsServer {
     if (address.startsWith('https://')) {
       const url = new URL(address);
@@ -679,9 +686,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         server,
         server_port: url.port ? Number(url.port) : 443,
         path: url.pathname || '/dns-query',
-        // 使用 dns-proxy-resolver（固定 IP 119.29.29.29）解析 DoH 服务器的域名
-        // 不能用 dns-local，因为 dns-local 本身也需要被解析（在 TUN 模式下会造成死循环）
-        ...(isIp ? {} : { domain_resolver: 'dns-proxy-resolver' }),
+        // 使用本地 DNS 解析 DoH 服务器域名（如有必要）
+        ...(isIp ? {} : { domain_resolver: 'dns-local' }),
       } as SingBoxDnsServer;
     } else if (address.startsWith('tls://')) {
       const hostPort = address.slice(6);
@@ -692,7 +698,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         type: 'tls',
         server: host,
         server_port: port ? Number(port) : 853,
-        ...(isIp ? {} : { domain_resolver: 'dns-proxy-resolver' }),
+        ...(isIp ? {} : { domain_resolver: 'dns-bootstrap' }),
       } as SingBoxDnsServer;
     } else {
       // 普通 UDP DNS（通常是 IP，不需要 domain_resolver）
@@ -706,7 +712,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
   }
 
-  private generateDnsConfig(config: UserConfig, selectedServer: ServerConfig): SingBoxDnsConfig {
+  private generateDnsConfig(config: UserConfig): SingBoxDnsConfig {
     const proxyMode = (config.proxyMode || 'smart').toLowerCase();
 
     // 获取用户 DNS 配置，不存在则使用默认值
@@ -716,35 +722,35 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       enableFakeIp: false,
     };
 
-    const isTunMode = config.proxyModeType?.toLowerCase() !== 'systemproxy';
-    // 只有在 TUN 模式下才可以用 FakeIP
-    const enableFakeIp = isTunMode && userDnsConfig.enableFakeIp;
+    // 决定是否开启 FakeIP。
+    // 在 TUN 模式下强制开启 FakeIP。
+    // 原因：很多第三方机场的节点防滥用严格，如果收到纯 IP 地址而非域名，会直接拒绝连接并抛出无效证书或拦截页面。
+    // 配合我们刚刚修复的 macOS gvisor strict_route DHCP DNS 劫持逻辑，
+    // FakeIP 现在能够 100% 完美的用内部 cache 把假 IP 还原成真域名丢给代理节点。
+    // 从而完美避开机场对纯 IP 请求的无情封杀！
+    const enableFakeIp =
+      config.proxyModeType?.toLowerCase() !== 'systemproxy' ? true : userDnsConfig.enableFakeIp;
 
     // sing-box 1.13+ 新格式：每个 server 必须有显式 type 字段
     //
-    // 重要说明：
-    // - 在 TUN 模式下（尤其 Windows strict_route=true），系统级 DNS 会被 TUN 拦截，
-    //   因此 type:'local' 的 dns-local 可能无法正常工作（因为它发出的 UDP 包会被 TUN 再次捕获）。
-    // - 解决方案：使用固定 IP 的 UDP DNS（223.5.5.5）作为 bootstrap，
-    //   并通过 route_exclude_address 将其 IP 排除在 TUN 路由之外。
-    // - dns-remote (如 dns.google) 的 domain_resolver 必须指向已经可达的固定 IP DNS，
-    //   而不能指向 dns-local（否则会产生 dns-local 无法解析 -> dns-remote 无法启动的死循环）。
+    // 关键架构说明：
+    // - 在 TUN 下，Windows 的系统 DNS (svchost) 发出的解析请求会被 TUN 劫持。如果该系统 DNS 配置为公共 IP，
+    //   此时 type: 'local' (调用系统 getaddrinfo) 就会进入死循环。
+    // - 为了彻底解决这个问题，同时避免 UDP 53 屏蔽（之前使用 223.5.5.5 UDP 的缺陷），
+    //   我们引入一个坚不可摧的 DoH IP Bootstrap：向 223.5.5.5(HTTP) 直接发包，并且 detour: 'direct' 强制绕过 TUN。
     const dnsServers: SingBoxDnsServer[] = [
       {
-        // 本地 bootstrap DNS：使用固定 IP 的阿里云公共 DNS，绕过系统 DNS 解析
-        // 注意：此服务器 IP (223.5.5.5) 必须在 TUN inbound 的 route_exclude_address 中排除
-        tag: 'dns-local',
-        type: 'udp',
+        // 引导解析：专门用于解析其他 DNS 或代理域名的 IP 解析器
+        tag: 'dns-bootstrap',
+        type: 'https',
         server: '223.5.5.5',
-        server_port: 53,
+        server_port: 443,
+        path: '/dns-query',
       },
       {
-        // 专用解析器：用于强制解析代理服务器真实 IP，绕过系统可能存在的 FakeIP 劫持
-        // 同样使用固定 IP，以免依赖 dns-local 形成循环
-        tag: 'dns-proxy-resolver',
-        type: 'udp',
-        server: '119.29.29.29',
-        server_port: 53,
+        // 兼容性和兜底的系统 DNS，尽量少用
+        tag: 'dns-local',
+        type: 'local',
       },
       // 国内直连 DNS
       this.parseDnsAddress(
@@ -752,7 +758,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         'dns-domestic'
       ),
       // 远程 DNS（解析国外域名）
-      // domain_resolver 必须使用固定 IP 的 DNS，不能用 dns-local（防止死循环）
       this.parseDnsAddress(
         userDnsConfig.foreignDns || 'https://dns.google/dns-query',
         'dns-remote'
@@ -774,12 +779,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       rules: [],
       // 默认使用国内 DNS 解析
       final: 'dns-domestic',
-      strategy: 'prefer_ipv4',
+      strategy: config.enableIPv6 ? 'prefer_ipv4' : 'ipv4_only',
     };
-
     const dnsRules: SingBoxDnsRule[] = [];
 
-    // 代理服务器域名必须使用真实 DNS 解析（避免死循环及系统级 FakeIP 劫持导致 libcronet 拒绝）
+    // 代理服务器域名必须使用真实 DNS 解析（避免 FakeIP 劫持产生死循环）
+    const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
     if (selectedServer?.address) {
       const proxyDomains = [selectedServer.address];
       if (selectedServer.tlsSettings?.serverName) {
@@ -791,30 +796,41 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         domain: uniqueDomains,
         domain_suffix: uniqueDomains.flatMap((d) => [d, `.${d}`]),
         domain_keyword: uniqueDomains,
-        server: 'dns-proxy-resolver', // 使用固定 IP DNS 解析，避免 TUN 模式下 dns-local 无法工作的问题
+        server: 'dns-bootstrap',
       } as SingBoxDnsRule);
     }
 
     // 智能分流/全局代理模式下的 DNS 规则
     if (proxyMode === 'smart' || proxyMode === 'global') {
-      if (proxyMode === 'smart') {
-        // 国内域名走国内 DNS
-        dnsRules.push({
-          rule_set: 'geosite-cn',
-          server: 'dns-domestic',
-        } as SingBoxDnsRule);
-
-        // 国外域名走远程 DNS，如果开启 FakeIP，走 fakeip 服务器进行劫持
-        dnsRules.push({
-          rule_set: 'geosite-geolocation-!cn',
-          server: enableFakeIp ? 'fakeip' : 'dns-remote',
-        } as SingBoxDnsRule);
-      } else {
-        // Global 模式
+      if (enableFakeIp) {
+        // [原版 Fork 核心精髓：Clash-style 全局 FakeIP]
+        // 让所有的 A/AAAA（IPv4/IPv6）解析无脑走 FakeIP 返回 198.18 的伪装 IP。
+        // 等浏览器连过来以后，Sing-box 靠伪装 IP 查缓存恢复域名，然后交给下面的 Route 引擎。
+        // Route 引擎看到域名，如果命中 geosite-cn，就走 direct 出口，走 direct 时再真正发起本地 DNS 查询拿到淘宝的真实 IP。
+        // 如果查不到 cn 规则，自然落入 proxy，连同域名一起完好无损发给代理节点！极其稳如泰山！
         dnsRules.push({
           query_type: ['A', 'AAAA'],
-          server: enableFakeIp ? 'fakeip' : 'dns-remote',
+          server: 'fakeip',
         } as SingBoxDnsRule);
+      } else {
+        // 如果实在没开 FakeIP（比如系统代理模式），那就用 geosite 规则让它各自拿正确的 IP 吧（但也容易被墙污染）
+        if (proxyMode === 'smart') {
+          dnsRules.push({
+            rule_set: 'geosite-cn',
+            server: 'dns-domestic',
+          } as SingBoxDnsRule);
+
+          // 此处移除了 rule_set: 'geosite-geolocation-!cn'，因为 1.12 的 singbox 在
+          // dns block 里跑规则集会导致某些内置不支持的匹配失效或报错，一律 fallthrough 给 dns-remote
+          dnsRules.push({
+            server: 'dns-remote',
+          } as SingBoxDnsRule);
+        } else {
+          dnsRules.push({
+            query_type: ['A', 'AAAA'],
+            server: 'dns-remote',
+          } as SingBoxDnsRule);
+        }
       }
     }
 
@@ -857,37 +873,48 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // TUN 模式额外添加 TUN inbound
     if (modeType === 'tun') {
+      const isIpv4 = (host: string) => /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
+      const isIpv6 = (host: string) => /^[0-9a-fA-F:]+$/.test(host) && host.includes(':');
+
+      const excludeAddr =
+        process.platform === 'win32' ? [...PRIVATE_IP_CIDRS] : ['127.0.0.0/8', '::1/128'];
+
+      // 绝杀级修复：如果代理节点自身是一个纯 IP，在 TUN 模式（尤其是 Mac gvisor 和部分特定环境）下，
+      // sing-box 可能无法正确通过 auto_route 将其动态绑出物理网卡，从而导致连接无限回流到 TUN causing timeout。
+      // 最暴力的解法是：直接在此刻将它的 IP 扔进系统级 TUN 排除黑名单，物理级放行该 IP 走真实网卡！
+      const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
+      if (selectedServer?.address) {
+        if (isIpv4(selectedServer.address)) {
+          excludeAddr.push(`${selectedServer.address}/32`);
+        } else if (isIpv6(selectedServer.address)) {
+          excludeAddr.push(`${selectedServer.address}/128`);
+        }
+      }
+
+      const tunAddress = [config.tunConfig?.inet4Address || '172.19.0.1/30'];
+      if (config.enableIPv6) {
+        tunAddress.push(config.tunConfig?.inet6Address || 'fdfe:dcba:9876::1/126');
+      }
+
       const tunInbound: SingBoxInbound = {
         type: 'tun',
         tag: 'tun-in',
-        address: [
-          config.tunConfig?.inet4Address || '172.19.0.1/30',
-          config.tunConfig?.inet6Address || 'fdfe:dcba:9876::1/126',
-        ],
+        address: tunAddress,
         mtu: config.tunConfig?.mtu || 1400,
         auto_route: config.tunConfig?.autoRoute ?? true,
-        // macOS 上不使用 strict_route，避免网络完全不通
-        strict_route:
-          process.platform === 'darwin' ? false : (config.tunConfig?.strictRoute ?? true),
-        // 关键修复：Windows 和 macOS 使用 gvisor stack
-        // 原因：Windows 的 system stack 在处理流量嗅探时存在竞态条件，导致 TLS 握手超时
-        // gvisor 是用户态网络栈，绕过内核 TUN 实现，消除竞态条件
-        // macOS 也使用 gvisor 以保持跨平台行为一致
-        stack:
-          process.platform === 'win32' || process.platform === 'darwin'
-            ? 'gvisor'
-            : config.tunConfig?.stack || 'system',
+        // macOS 则必须使用 gvisor 栈，配合 strict_route 才能实现完整的物理网卡接管！
+        // 曾误以为 strict_route 会导致 Mac 断网，实际上只有在 system 栈（pf 规则冲突）下才会断网。
+        // 在 gvisor 栈下，如果关闭 strict_route，发往物理路由器 (192.168.1.1) 的 DHCP DNS 查询会直接漏过 TUN 导致完全被运营商污染！
+        // 开启 strict_route 后，192.168 的 DNS 请求被完美劫持进 FakeIP，本地打印机等依然能通过下面 route_config 中的 direct 或黑名单放行！
+        strict_route: config.tunConfig?.strictRoute ?? true,
+        // macOS 默认使用 system 栈
+        stack: config.tunConfig?.stack || 'system',
         sniff: true,
         sniff_override_destination: true,
-        // 在系统路由层面排除本地地址，确保本地代理端口可访问
-        // 同时排除 bootstrap DNS 服务器的 IP（223.5.5.5 和 119.29.29.29），
-        // 让它们的 UDP 53 包直接走真实网络，不被 TUN 再次拦截（对 Windows strict_route 尤为关键）
-        route_exclude_address: [
-          '127.0.0.0/8',
-          '::1/128',
-          '223.5.5.5/32', // dns-local bootstrap (阿里云 DNS)
-          '119.29.29.29/32', // dns-proxy-resolver bootstrap (腾讯 DNSPod)
-        ],
+        // 原版 Fork 甚至只排除了本地回环：
+        // 对于 Windows：Windows 的 Wintun 机制能完美接管系统 DNS，且如果由于系统路由环路被 TUN 拦截本地网关，会导致无法上网。
+        // 所以 Windows 必须排除局域网段。
+        route_exclude_address: excludeAddr,
       };
 
       // macOS 平台特定配置
@@ -1189,15 +1216,20 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 2. Default server_name to server address if not specified
       outbound.tls = {
         enabled: true,
-        server_name: server.tlsSettings?.serverName || server.address,
+        server_name: server.tlsSettings?.serverName || undefined,
         insecure: server.tlsSettings?.allowInsecure || false,
+        alpn: server.tlsSettings?.alpn || undefined,
       };
 
       // 3. Naive handles its own fingerprint/transport, typically does not use uTLS settings
     }
 
     // TLS 配置 (非 Naive 协议，因为 Naive 已在前一段处理了 tls 结构)
-    if (server.protocol !== 'naive' && (server.security === 'tls' || server.tlsSettings)) {
+    const tlsProtocols = ['vless', 'trojan', 'anytls', 'hysteria2', 'tuic'];
+    if (
+      server.protocol !== 'naive' &&
+      (server.security === 'tls' || server.tlsSettings || tlsProtocols.includes(protocol))
+    ) {
       outbound.tls = {
         enabled: true,
         server_name: server.tlsSettings?.serverName || undefined,
@@ -1283,36 +1315,109 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 先初始化整个 RouteConfig，随后再根据模式填充 rule_set 和 rules
     const routeConfig: SingBoxRouteConfig = {
       rules,
+      // 默认解析器使用本地系统 DNS (通过 TUN 内部劫持逻辑实现)
       default_domain_resolver: 'dns-local',
       auto_detect_interface: true,
       final: proxyMode === 'direct' ? 'direct' : 'proxy',
     };
-
     // 获取当前选中的服务器，用于排除代理服务器域名
     const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
 
-    // DNS 劫持规则（必须）
+    // 强制引导 DNS 直连，防止解析代理节点自身的域名时产生死循环
     rules.push({
-      protocol: 'dns',
+      ip_cidr: ['223.5.5.5/32'],
+      port: [443],
+      action: 'route',
+      outbound: 'direct',
+    });
+
+    // DNS 劫持规则（更宽泛，捕捉所有 53 端口）
+    rules.push({
+      port: [53],
       action: 'hijack-dns',
+    });
+
+    // 【全域禁止 QUIC】：强迫浏览器回退到 TCP (TLS)，显著提升加载成功率和稳定性
+    rules.push({
+      network: ['udp'],
+      port: [443],
+      action: 'route',
+      outbound: 'block',
+    });
+
+    // 【终极绝杀浏览器 DoH】：
+    // 现代浏览器 (Chrome/Edge) 默认开启了“安全 DNS (DoH)”，它会绕过上面的 hijack-dns，
+    // 强行向 8.8.8.8 发起 HTTPS/QUIC 请求获取真实的 Google IPv6/IPv4。
+    // 在 FlowZ 里我们把智能模式的 final 从 direct 改成了 proxy（为了支持 TG 等纯 IP 应用），
+    // 结果意外导致浏览器的 DoH 穿透了代理，拿到真实 IP 后触发了无 SNI 原生握手被节点拒绝（Connection Refused）！
+    // 解决办法：直接让常见公共 DNS 的 HTTPS/QUIC 流量被墙或丢弃，逼迫浏览器瞬间回退到系统的 UDP 53，从而被 FakeIP 完美生擒！
+    rules.push({
+      ip_cidr: [
+        '8.8.8.8/32',
+        '8.8.4.4/32',
+        '1.1.1.1/32',
+        '1.0.0.1/32',
+        '9.9.9.9/32',
+        '149.112.112.112/32',
+        '208.67.222.222/32',
+        '208.67.220.220/32',
+        // IPv6 Public DNS
+        '2001:4860:4860::8888/128',
+        '2001:4860:4860::8844/128',
+        '2606:4700:4700::1111/128',
+        '2606:4700:4700::1001/128',
+      ],
+      domain_keyword: [
+        'dns.google',
+        'cloudflare-dns.com',
+        'doh.opendns.com',
+        'dns.quad9.net',
+        'one.one.one.one',
+      ],
+      port: [443, 853],
+      action: 'route',
+      // 这里如果填 direct，就是丢给高墙。如果填 block，就是让 sing-box 强行断网，Chrome 回退更快。
+      outbound: 'block',
     });
 
     // 排除代理服务器域名，确保代理服务器的连接走直连
     // 这必须放在其他规则之前，否则可能被 geosite-cn 匹配导致死循环
     if (selectedServer?.address) {
-      const proxyDomains = [selectedServer.address];
+      const proxyHosts = [selectedServer.address];
       if (selectedServer.tlsSettings?.serverName) {
-        proxyDomains.push(selectedServer.tlsSettings.serverName);
+        proxyHosts.push(selectedServer.tlsSettings.serverName);
       }
-      const uniqueDomains = Array.from(new Set(proxyDomains));
+      const uniqueHosts = Array.from(new Set(proxyHosts));
 
-      rules.push({
-        domain: uniqueDomains,
-        domain_suffix: uniqueDomains.flatMap((d) => [d, `.${d}`]),
-        domain_keyword: uniqueDomains,
-        action: 'route',
-        outbound: 'direct',
+      const ips: string[] = [];
+      const domains: string[] = [];
+
+      const isIpv4 = (host: string) => /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
+      const isIpv6 = (host: string) => /^[0-9a-fA-F:]+$/.test(host) && host.includes(':');
+
+      uniqueHosts.forEach((host) => {
+        if (isIpv4(host)) ips.push(`${host}/32`);
+        else if (isIpv6(host)) ips.push(`${host}/128`);
+        else domains.push(host);
       });
+
+      if (domains.length > 0) {
+        rules.push({
+          domain: domains,
+          domain_suffix: domains.flatMap((d) => [d, `.${d}`]),
+          domain_keyword: domains,
+          action: 'route',
+          outbound: 'direct',
+        });
+      }
+
+      if (ips.length > 0) {
+        rules.push({
+          ip_cidr: ips,
+          action: 'route',
+          outbound: 'direct',
+        });
+      }
     }
 
     // 自定义规则（优先级最高，必须放在智能分流规则之前）
@@ -1341,21 +1446,20 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       outbound: 'direct',
     });
 
-    // 屏蔽 QUIC，强制浏览器回退到 TCP/HTTP2
-    // 这可以解决 Google/YouTube 等服务在 TUN 模式下的连接问题
-    // 注意：sing-box 的 `protocol` 字段匹配的是嗅探到的应用层协议（http/tls/quic/dns/stun），
-    // 而非传输层协议。之前使用 `protocol: 'udp'` 永远不会匹配到任何流量。
-    // 正确写法是 `protocol: 'quic'`，直接匹配被嗅探为 QUIC 的流量。
-    // 在智能分流和全局代理模式下都需要屏蔽 QUIC。
-    if (proxyMode !== 'direct') {
-      rules.push({
-        protocol: 'quic',
-        action: 'reject',
-      });
-    }
+    // 屏蔽 QUIC (UDP 443) 防止不支持 UDP 的节点导致 Chrome 疯狂等待：
+    // 同时不能屏蔽 53/853，否则 sing-box 内部的 dns-remote 在尝试 UDP 降级解析时会全面瘫痪。
+    rules.push({
+      port: [443],
+      network: ['udp'],
+      action: 'route',
+      outbound: 'block',
+    });
 
     // 智能分流规则（仅在智能分流模式下启用）
     if (proxyMode === 'smart') {
+      // 已移除 ::/0 block，因为 block 是静默丢包，会导致 Chrome 等浏览器在发起 TCP SYN 包时陷入漫长的 21 秒重传等待（Happy Eyeballs 假死），
+      // 从而让用户以为“所有的海外网站全都打不开了”。我们必须依靠浏览器的原生 fallback，或者直接让 Mac 本机关闭 IPv6 分配。
+
       // 显式添加 Google 规则，确保其走代理 (防止被 IP 规则误判)
       rules.push({
         domain_keyword: ['google', 'gmail', 'youtube', 'gstatic', 'googleapis'],
@@ -3018,9 +3122,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
 
     if (
-      lowerMessage.includes('certificate') ||
-      lowerMessage.includes('tls') ||
-      lowerMessage.includes('ssl')
+      (lowerMessage.includes('certificate') ||
+        lowerMessage.includes('tls') ||
+        lowerMessage.includes('ssl')) &&
+      !lowerMessage.includes('anytls') &&
+      !lowerMessage.includes('shadowtls')
     ) {
       // 保留原始错误信息，帮助用户诊断具体的证书问题
       return `TLS 证书错误：服务器证书验证失败 [${message}]`;

@@ -265,6 +265,9 @@ export interface UserConfig {
   autoLightweightMode: boolean;
   autoUpdateSubscriptionOnStart: boolean; // 启动时自动更新订阅
   rememberWindowSize?: boolean; // 记忆调整后的窗口大小
+  enableIPv6?: boolean; // 启用系统全局 IPv6 解析及路由 (不建议开启)
+  autoPrivacyMode?: boolean; // 自动进入隐私模式
+  privacyPassword?: string; // 隐私模式解锁密码
 
   // 窗口尺寸（仅在 rememberWindowSize 启用时使用）
   windowBounds?: { width: number; height: number };

@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -139,9 +140,26 @@ export function AdvancedSettings() {
                 {t('settings.advanced.enableFakeIp')}
               </Label>
             </div>
-            <p className="text-xs text-muted-foreground ml-6">
+            <p className="text-xs text-muted-foreground ml-6 mb-2">
               {t('settings.advanced.fakeIpDesc')}
             </p>
+
+            <div className="flex items-center space-x-2 pt-3 border-t">
+              <Checkbox
+                id="enableIPv6"
+                checked={config.enableIPv6 === true}
+                onCheckedChange={(checked) => {
+                  const updatedConfig = { ...config, enableIPv6: checked as boolean };
+                  saveConfig(updatedConfig);
+                }}
+              />
+              <Label
+                htmlFor="enableIPv6"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-orange-500"
+              >
+                {t('settings.general.enableIPv6')}
+              </Label>
+            </div>
           </div>
         </div>
 

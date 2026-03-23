@@ -134,6 +134,10 @@
       "autoLightweightMode": "Auto Lightweight Mode (10 mins idle)",
       "autoCheckUpdate": "Check for updates on startup",
       "rememberWindowSize": "Remember window size",
+      "enableIPv6": "Enable IPv6 DNS & Routing (Advanced, may cause timeouts)",
+      "autoPrivacyMode": "Auto Privacy Protection Mode (10 mins idle)",
+      "privacyPassword": "Privacy Lock Password",
+      "privacyPasswordPlaceholder": "Set password (leave blank to unlock freely)",
       "successUpdate": "Settings saved",
       "failUpdate": "Failed to save settings"
     },

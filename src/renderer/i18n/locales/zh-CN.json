@@ -133,6 +133,10 @@
       "autoLightweightMode": "自动进入轻量模式 (10分钟无操作)",
       "autoCheckUpdate": "启动时自动检查更新",
       "rememberWindowSize": "记忆调整后的窗口大小",
+      "enableIPv6": "启用系统全局 IPv6 解析及路由 (极客选项，节点不支持将导致假死)",
+      "autoPrivacyMode": "自动进入隐私保护模式 (10分钟无操作)",
+      "privacyPassword": "隐私保护密码",
+      "privacyPasswordPlaceholder": "设置解锁密码(留空则全屏幕单击解锁)",
       "successUpdate": "设置已保存",
       "failUpdate": "保存设置失败"
     },

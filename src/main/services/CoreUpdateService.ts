@@ -513,7 +513,7 @@ export class CoreUpdateService {
         if (fs.existsSync(extractDir)) {
           fs.rmSync(extractDir, { recursive: true, force: true });
         }
-      } catch (cleanupErr) {
+      } catch {
         // Ignore cleanup errors during recovery
       }
       throw new Error(`解压失败: ${(error as any).message}`);

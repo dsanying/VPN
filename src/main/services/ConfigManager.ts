@@ -424,6 +424,9 @@ export class ConfigManager implements IConfigManager {
       autoLightweightMode: false, // 默认不启用自动轻量模式
       autoUpdateSubscriptionOnStart: false, // 默认不启用启动时更新订阅
       rememberWindowSize: false, // 默认不启用记忆窗口大小
+      enableIPv6: false, // 默认不启用 IPv6 解析（防假死兜底）
+      autoPrivacyMode: false, // 默认不启用隐私模式
+      privacyPassword: '', // 默认隐私模式密码为空
 
       // 默认 DNS 配置
       dnsConfig: {

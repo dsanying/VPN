@@ -33,6 +33,14 @@ import { ipcEventEmitter } from './ipc/ipc-events';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
 import { initUserDataPath } from './utils/paths';
 
+// Windows LTSC / 精简版系统兼容处理
+// 如果用户是 LTSC 且黑屏，建议他们通过设置开启“禁用硬件加速”选项
+// 强制开启软件渲染会导致正常 Windows 用户出现严重白屏或掉帧，因此这里移除全局强制设定。
+// 仅保留基础的禁用 GPU 沙箱，防止部分环境权限不足导致的 GPU 进程崩溃
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+}
+
 let mainWindow: BrowserWindow | null = null;
 let trayManager: TrayManager | null = null;
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -260,16 +268,13 @@ async function createWindow() {
     logManager.addLog('error', `Window failed to load: ${errorDescription} (${errorCode})`, 'Main');
   });
 
-  // 自动进入轻量模式逻辑
-  // 当窗口失去焦点时启动计时器，获取焦点时取消计时器
-  mainWindow.on('blur', async () => {
-    // 检查配置是否启用
+  let privacyTimer: NodeJS.Timeout | null = null;
+
+  const startInactivityTimers = async () => {
     try {
       const config = await configManager.loadConfig();
       if (config.autoLightweightMode) {
-        // logManager.addLog('debug', 'Window blurred, starting inactivity timer', 'Main');
         if (inactivityTimer) clearTimeout(inactivityTimer);
-
         inactivityTimer = setTimeout(() => {
           logManager.addLog(
             'info',
@@ -282,16 +287,38 @@ async function createWindow() {
           inactivityTimer = null;
         }, INACTIVITY_TIMEOUT);
       }
+
+      if (config.autoPrivacyMode) {
+        if (privacyTimer) clearTimeout(privacyTimer);
+        // 10 minutes timeout for privacy mode
+        privacyTimer = setTimeout(
+          () => {
+            logManager.addLog('info', 'Inactivity timeout reached, entering privacy mode', 'Main');
+            if (mainWindow) {
+              mainWindow.webContents.send('event:enterPrivacyMode');
+            }
+            privacyTimer = null;
+          },
+          10 * 60 * 1000
+        );
+      }
     } catch {
       // ignore
     }
-  });
+  };
+
+  // 当窗口失去焦点或隐藏时启动计时器，获取焦点或显示时取消计时器
+  mainWindow.on('blur', startInactivityTimers);
+  mainWindow.on('hide', startInactivityTimers);
 
   mainWindow.on('focus', () => {
     if (inactivityTimer) {
-      // logManager.addLog('debug', 'Window focused, clearing inactivity timer', 'Main');
       clearTimeout(inactivityTimer);
       inactivityTimer = null;
+    }
+    if (privacyTimer) {
+      clearTimeout(privacyTimer);
+      privacyTimer = null;
     }
   });
 
@@ -784,6 +811,11 @@ app.whenReady().then(async () => {
         if (trayManager) {
           trayManager.updateSpeedTestResults(new Map(), []);
         }
+      }
+    },
+    onEnterPrivacyMode: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('event:enterPrivacyMode');
       }
     },
   });

@@ -87,6 +87,7 @@ export class TrayManager implements ITrayManager {
   private onManageServers?: () => void;
   private onSpeedTest?: () => void;
   private onLightweightMode?: () => void;
+  private onEnterPrivacyMode?: () => void;
 
   // 测速结果
   private speedTestResults: Map<string, number | null> = new Map();
@@ -107,6 +108,7 @@ export class TrayManager implements ITrayManager {
       onManageServers?: () => void;
       onSpeedTest?: () => void;
       onLightweightMode?: () => void;
+      onEnterPrivacyMode?: () => void;
     }
   ) {
     this.mainWindow = mainWindow;
@@ -122,6 +124,7 @@ export class TrayManager implements ITrayManager {
     this.onManageServers = callbacks?.onManageServers;
     this.onSpeedTest = callbacks?.onSpeedTest;
     this.onLightweightMode = callbacks?.onLightweightMode;
+    this.onEnterPrivacyMode = callbacks?.onEnterPrivacyMode;
   }
 
   /**
@@ -331,6 +334,10 @@ export class TrayManager implements ITrayManager {
         click: () => this.handleLightweightMode(),
       },
       {
+        label: '进入隐私模式',
+        click: () => this.handleEnterPrivacyMode(),
+      },
+      {
         label: '打开设置',
         click: () => this.handleOpenSettings(),
       },
@@ -459,6 +466,19 @@ export class TrayManager implements ITrayManager {
       this.logManager.addLog('info', 'Main window destroyed for lightweight mode', 'TrayManager');
     }
   }
+
+  /**
+   * 处理进入隐私模式
+   */
+  private handleEnterPrivacyMode(): void {
+    this.logManager.addLog('info', 'Enter privacy mode clicked from tray', 'TrayManager');
+    if (this.onEnterPrivacyMode) {
+      this.onEnterPrivacyMode();
+    } else if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('event:enterPrivacyMode');
+    }
+  }
+
   private handleShowWindow(): void {
     this.logManager.addLog('info', 'Show window clicked from tray', 'TrayManager');
     if (this.onShowWindow) {

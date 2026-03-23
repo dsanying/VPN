@@ -86,6 +86,7 @@ export const IPC_CHANNELS = {
   EVENT_LOG_RECEIVED: 'event:logReceived',
   EVENT_STATS_UPDATED: 'event:statsUpdated',
   EVENT_CONNECTION_STATE_CHANGED: 'event:connectionStateChanged',
+  EVENT_ENTER_PRIVACY_MODE: 'event:enterPrivacyMode',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

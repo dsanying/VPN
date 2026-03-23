@@ -41,11 +41,15 @@ interface AppState {
   // Latency test results (persisted across view changes)
   latencyMap: Record<string, number>;
 
+  // Privacy Protection Mode
+  isPrivacyMode: boolean;
+
   // Actions
   setCurrentView: (view: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setLatencyMap: (map: Record<string, number>) => void;
+  setPrivacyMode: (value: boolean) => void;
 
   // Proxy Control Actions
   startProxy: () => Promise<void>;
@@ -80,12 +84,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   config: null,
   stats: null,
   latencyMap: {},
+  isPrivacyMode: false,
 
   // UI Actions
   setCurrentView: (view) => set({ currentView: view }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
   setLatencyMap: (map) => set({ latencyMap: map }),
+  setPrivacyMode: (value) => set({ isPrivacyMode: value }),
 
   // Proxy Control Actions
   startProxy: async () => {
