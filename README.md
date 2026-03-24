@@ -27,7 +27,8 @@
 - ✅ 开机自启动与自动连接
 - ✅ 现代化 UI（基于 shadcn/ui）
 - ✅ 支持连接拓扑展示功能
-- ✅ 跨平台支持（Windows / macOS）
+- ✅ 支持连隐私保护模式
+- ✅ 跨平台支持（Windows / macOS / Linux（测试））
 - ✅ 支持中英文语言切换
 ---
 
@@ -40,6 +41,8 @@
 <img src="https://cdn.nodeimage.com/i/eF2PxEG9figyhXJe6EqRbu7TtcucVDLH.webp" alt="eF2PxEG9figyhXJe6EqRbu7TtcucVDLH.webp">
 <img src="https://cdn.nodeimage.com/i/ihpRZpWuW3MgQR8kkEKmZl2u6ANrXXcw.webp" alt="ihpRZpWuW3MgQR8kkEKmZl2u6ANrXXcw.webp">
 <img src="https://cdn.nodeimage.com/i/sicWxjH9z3ZyVFWPEDNYvYWl0cYMASdR.webp" alt="sicWxjH9z3ZyVFWPEDNYvYWl0cYMASdR.webp">
+<img src="https://cdn.nodeimage.com/i/CyL0QX2SvBCPZxonMkVws5pSPGpNtPVm.webp" alt="CyL0QX2SvBCPZxonMkVws5pSPGpNtPVm.webp">
+
 ---
 
 ## 📋 系统要求
