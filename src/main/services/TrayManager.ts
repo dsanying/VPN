@@ -474,8 +474,9 @@ export class TrayManager implements ITrayManager {
     this.logManager.addLog('info', 'Enter privacy mode clicked from tray', 'TrayManager');
     if (this.onEnterPrivacyMode) {
       this.onEnterPrivacyMode();
-    } else if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send('event:enterPrivacyMode');
+    } else {
+      const { setPrivacyMode } = require('../index');
+      setPrivacyMode(true);
     }
   }
 

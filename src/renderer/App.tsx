@@ -33,13 +33,6 @@ function App() {
   // Listen to native events
   useNativeEventListeners();
 
-  // Add platform class to <html> so CSS can be platform-aware
-  // e.g. "platform-darwin" on macOS, "platform-win32" on Windows
-  useEffect(() => {
-    const platform = window.electron?.platform ?? 'unknown';
-    document.documentElement.classList.add(`platform-${platform}`);
-  }, []);
-
   // Load initial data
   useEffect(() => {
     loadConfig();
@@ -97,10 +90,16 @@ function App() {
 
   // Listen to privacy mode trigger from main process idle timer
   useEffect(() => {
-    const unsubscribe = ipcClient.on('event:enterPrivacyMode', () => {
+    const unsubscribeEnter = ipcClient.on('event:enterPrivacyMode', () => {
       setPrivacyMode(true);
     });
-    return () => unsubscribe();
+    const unsubscribeExit = ipcClient.on('event:exitPrivacyMode', () => {
+      setPrivacyMode(false);
+    });
+    return () => {
+      unsubscribeEnter();
+      unsubscribeExit();
+    };
   }, [setPrivacyMode]);
 
   return (

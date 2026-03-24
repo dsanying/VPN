@@ -331,12 +331,22 @@ export class ConfigManager implements IConfigManager {
       if (!rule.id || typeof rule.id !== 'string') {
         throw new Error('Rule id is required and must be a string');
       }
-      if (!Array.isArray(rule.domains) || rule.domains.length === 0) {
-        throw new Error('Rule domains is required and must be a non-empty array');
+      if (!Array.isArray(rule.domains)) {
+        throw new Error('Rule domains must be an array');
       }
-      for (const domain of rule.domains) {
-        if (typeof domain !== 'string' || !domain.trim()) {
-          throw new Error('Each domain must be a non-empty string');
+
+      const hasDomains = rule.domains.length > 0;
+      const hasIpCidr = Array.isArray(rule.ipCidr) && rule.ipCidr.length > 0;
+
+      if (!hasDomains && !hasIpCidr) {
+        throw new Error('Rule must have at least one domain or IP CIDR');
+      }
+
+      if (hasDomains) {
+        for (const domain of rule.domains) {
+          if (typeof domain !== 'string' || !domain.trim()) {
+            throw new Error('Each domain must be a non-empty string');
+          }
         }
       }
       if (!['proxy', 'direct', 'block'].includes(rule.action)) {
@@ -440,6 +450,7 @@ export class ConfigManager implements IConfigManager {
       socksPort: 65534,
       httpPort: 65533,
       logLevel: 'info',
+      uiTheme: 'system',
     };
   }
 }

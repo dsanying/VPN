@@ -28,6 +28,13 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
     IPC_CHANNELS.CONFIG_SAVE,
     async (_event: IpcMainInvokeEvent, config: UserConfig) => {
       await configManager.saveConfig(config);
+
+      // 同步主题到原生系统
+      if (config.uiTheme) {
+        const { nativeTheme } = require('electron');
+        nativeTheme.themeSource = config.uiTheme;
+      }
+
       // 广播配置变更事件到渲染进程
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       // 触发主进程内部事件，用于更新托盘菜单等
@@ -61,9 +68,34 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
     async (_event: IpcMainInvokeEvent, args: { key: keyof UserConfig; value: any }) => {
       await configManager.set(args.key, args.value);
       const config = await configManager.loadConfig();
+
+      // 同步主题到原生系统
+      if (args.key === 'uiTheme') {
+        const { nativeTheme } = require('electron');
+        nativeTheme.themeSource = args.value;
+      }
+
       // 广播和触发事件
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);
+    }
+  );
+
+  // 获取隐私模式状态
+  registerIpcHandler<void, boolean>(
+    IPC_CHANNELS.CONFIG_GET_PRIVACY_MODE,
+    async (_event: IpcMainInvokeEvent) => {
+      const { getPrivacyMode } = require('../../index');
+      return getPrivacyMode();
+    }
+  );
+
+  // 设置隐私模式状态
+  registerIpcHandler<boolean, void>(
+    IPC_CHANNELS.CONFIG_SET_PRIVACY_MODE,
+    async (_event: IpcMainInvokeEvent, value: boolean) => {
+      const { setPrivacyMode } = require('../../index');
+      setPrivacyMode(value);
     }
   );
 

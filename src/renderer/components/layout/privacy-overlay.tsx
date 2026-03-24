@@ -43,8 +43,8 @@ export function PrivacyOverlay() {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col justify-center items-center backdrop-blur-[100px] bg-background/95 transition-all duration-500">
       <EyeOff className="w-24 h-24 text-muted-foreground mb-6 animate-pulse" />
-      <h2 className="text-3xl font-bold mb-3 tracking-tight">已开启隐私保护模式</h2>
-      <p className="text-muted-foreground mb-8">聊天内容不会泄露，消息提醒不再弹出</p>
+      <h2 className="text-3xl font-bold mb-3 tracking-tight">隐私保护模式已开启</h2>
+      <p className="text-muted-foreground mb-8">操作界面已锁定，请输入解锁密码以继续</p>
 
       <form onSubmit={handleUnlock} className="flex flex-col gap-3 items-center w-full max-w-sm">
         {config?.privacyPassword ? (

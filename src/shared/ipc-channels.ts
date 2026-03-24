@@ -16,6 +16,8 @@ export const IPC_CHANNELS = {
   CONFIG_UPDATE_MODE: 'config:updateMode',
   CONFIG_GET_VALUE: 'config:getValue',
   CONFIG_SET_VALUE: 'config:setValue',
+  CONFIG_GET_PRIVACY_MODE: 'config:getPrivacyMode',
+  CONFIG_SET_PRIVACY_MODE: 'config:setPrivacyMode',
 
   // 服务器管理
   SERVER_SWITCH: 'server:switch',

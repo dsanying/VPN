@@ -60,6 +60,7 @@ interface AppState {
   saveConfig: (config: UserConfig) => Promise<void>;
   updateProxyMode: (mode: ProxyMode) => Promise<void>;
   switchServer: (serverId: string) => Promise<void>;
+  setConfigValue: (key: keyof UserConfig, value: any) => Promise<void>;
 
   // Status Actions
   refreshConnectionStatus: () => Promise<void>;
@@ -91,7 +92,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
   setLatencyMap: (map) => set({ latencyMap: map }),
-  setPrivacyMode: (value) => set({ isPrivacyMode: value }),
+  setPrivacyMode: async (value) => {
+    if (get().isPrivacyMode === value) return;
+    set({ isPrivacyMode: value });
+    try {
+      await api.config.setPrivacyMode(value);
+    } catch (error) {
+      console.error('Failed to sync privacy mode to main process:', error);
+    }
+  },
 
   // Proxy Control Actions
   startProxy: async () => {
@@ -233,7 +242,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         config.proxyModeType = 'systemProxy';
       }
 
-      set({ config });
+      const isPrivacyMode = await api.config.getPrivacyMode();
+      set({ config, isPrivacyMode });
     } catch (error) {
       console.error('[Store] Exception loading config:', error);
       set({ error: String(error) });
@@ -369,6 +379,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().loadConfig();
     } catch (error) {
       set({ error: String(error) });
+      throw error;
     } finally {
       set({ isLoading: false });
     }
@@ -404,6 +415,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ error: String(error) });
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  setConfigValue: async (key, value) => {
+    try {
+      await api.config.setValue(key, value);
+      // Update local state immediately for better UX
+      const currentConfig = get().config;
+      if (currentConfig) {
+        set({ config: { ...currentConfig, [key]: value } });
+      } else {
+        await get().loadConfig();
+      }
+    } catch (error) {
+      console.error(`[Store] Failed to set config value for ${String(key)}:`, error);
+      set({ error: String(error) });
     }
   },
 }));

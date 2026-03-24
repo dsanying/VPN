@@ -800,6 +800,28 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       } as SingBoxDnsRule);
     }
 
+    // 处理自定义规则中的 bypassFakeIP
+    if (config.customRules && enableFakeIp) {
+      const bypassDomains: string[] = [];
+      for (const rule of config.customRules) {
+        if (rule.enabled && rule.bypassFakeIP && rule.domains.length > 0) {
+          for (const d of rule.domains) {
+            if (!d.startsWith('geosite:')) {
+              bypassDomains.push(d.startsWith('*.') ? d.slice(2) : d);
+            }
+          }
+        }
+      }
+
+      if (bypassDomains.length > 0) {
+        dnsRules.push({
+          domain: bypassDomains,
+          domain_suffix: bypassDomains.flatMap((d) => [d, `.${d}`]),
+          server: 'dns-bootstrap', // 使用真实 DNS 绕过 FakeIP
+        } as SingBoxDnsRule);
+      }
+    }
+
     // 智能分流/全局代理模式下的 DNS 规则
     if (proxyMode === 'smart' || proxyMode === 'global') {
       if (enableFakeIp) {
@@ -1568,7 +1590,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 处理旧的 DomainRule (纯文本域名/geosite类)
     for (const rule of customRules) {
-      if (!rule.enabled || rule.domains.length === 0) continue;
+      if (
+        !rule.enabled ||
+        (rule.domains.length === 0 && (!rule.ipCidr || rule.ipCidr.length === 0))
+      )
+        continue;
 
       // 统一使用 domain_suffix，匹配域名及其所有子域名
       // 如 google.com 会匹配 google.com、www.google.com、mail.google.com 等
@@ -1585,12 +1611,20 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         }
       }
 
-      // 如果有普通域名，创建一条规则
-      if (domainSuffix.length > 0) {
+      // 如果有普通域名或 IP CIDR，创建一条规则
+      if (domainSuffix.length > 0 || (rule.ipCidr && rule.ipCidr.length > 0)) {
         const singboxRule: SingBoxRouteRule = {
           action: 'route',
-          domain_suffix: domainSuffix,
         };
+
+        if (domainSuffix.length > 0) {
+          singboxRule.domain_suffix = domainSuffix;
+        }
+
+        if (rule.ipCidr && rule.ipCidr.length > 0) {
+          singboxRule.ip_cidr = rule.ipCidr;
+        }
+
         this.applyRuleAction(singboxRule, rule.action, rule.targetServerId, selectedServerId);
         rules.push(singboxRule);
       }

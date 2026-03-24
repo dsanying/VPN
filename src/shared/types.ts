@@ -284,6 +284,9 @@ export interface UserConfig {
 
   // 日志设置
   logLevel: LogLevel;
+
+  // UI 设置
+  uiTheme?: 'light' | 'dark' | 'system';
 }
 
 // ============================================================================

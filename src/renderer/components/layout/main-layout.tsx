@@ -26,7 +26,7 @@ export function MainLayout({
         settingsSection={settingsSection}
         onSettingsSectionChange={onSettingsSectionChange}
       />
-      <main className="flex-1 overflow-auto flex flex-col relative z-10 main-content-card">
+      <main className="flex-1 overflow-auto flex flex-col relative z-10 main-content-card transition-all duration-300">
         {isMac && <div className="h-9 flex-shrink-0 app-region-drag" />}
         <div
           className="container mx-auto px-6 pb-6 app-region-no-drag max-w-[1400px]"

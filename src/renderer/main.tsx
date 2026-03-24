@@ -30,9 +30,13 @@ window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => 
   event.preventDefault();
 });
 
+// Add platform class immediately so CSS can be platform-aware from the first paint
+const platform = window.electron?.platform || 'unknown';
+document.documentElement.classList.add(`platform-${platform}`);
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider defaultTheme="system" storageKey="flowz-ui-theme">
+    <ThemeProvider>
       <App />
     </ThemeProvider>
   </React.StrictMode>

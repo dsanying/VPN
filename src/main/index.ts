@@ -45,6 +45,30 @@ let mainWindow: BrowserWindow | null = null;
 let trayManager: TrayManager | null = null;
 const isDevelopment = process.env.NODE_ENV === 'development';
 let inactivityTimer: NodeJS.Timeout | null = null;
+
+// Privacy Mode State (Main Process)
+let isPrivacyMode = false;
+
+/**
+ * 获取隐私模式状态
+ */
+export function getPrivacyMode(): boolean {
+  return isPrivacyMode;
+}
+
+/**
+ * 设置隐私模式状态
+ * @param value 是否开启
+ */
+export function setPrivacyMode(value: boolean): void {
+  if (isPrivacyMode === value) return;
+  isPrivacyMode = value;
+  // 通知所有窗口同步此状态
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(value ? 'event:enterPrivacyMode' : 'event:exitPrivacyMode');
+  }
+}
+
 // 10 分钟无操作自动进入轻量模式
 const INACTIVITY_TIMEOUT = 10 * 60 * 1000;
 
@@ -179,6 +203,12 @@ async function createWindow() {
   // 创建主窗口
   // 注意：transparent 仅在 macOS 上启用，Windows/Linux 上启用会导致
   // 侧边栏透明且鼠标事件无法正常传递（Electron 已知问题）
+  const cfg = await configManager.loadConfig();
+  if (cfg.uiTheme) {
+    const { nativeTheme } = require('electron');
+    nativeTheme.themeSource = cfg.uiTheme;
+  }
+
   mainWindow = new BrowserWindow({
     width: windowWidth,
     height: windowHeight,
@@ -295,7 +325,7 @@ async function createWindow() {
           () => {
             logManager.addLog('info', 'Inactivity timeout reached, entering privacy mode', 'Main');
             if (mainWindow) {
-              mainWindow.webContents.send('event:enterPrivacyMode');
+              setPrivacyMode(true);
             }
             privacyTimer = null;
           },
@@ -323,26 +353,35 @@ async function createWindow() {
   });
 
   // 处理窗口关闭事件
-  mainWindow.on('close', async (event) => {
-    // 保存窗口引用，因为在异步操作后 mainWindow 可能变为 null
+  // 注意：必须同步调用 preventDefault()，否则窗口会直接销毁。
+  // 任何 await 操作都应该在此之后。
+  mainWindow.on('close', (event) => {
     const window = mainWindow;
     if (!window || window.isDestroyed()) return;
 
-    // 获取用户配置
-    const config = await configManager.loadConfig();
+    // 默认先阻止关闭
+    event.preventDefault();
 
-    // 再次检查窗口是否仍然有效
-    if (window.isDestroyed()) return;
+    // 异步获取配置并决定是隐藏还是真正销毁
+    configManager
+      .loadConfig()
+      .then((config) => {
+        if (window.isDestroyed()) return;
 
-    // 如果配置为最小化到托盘，则阻止窗口关闭，改为隐藏
-    if (config.minimizeToTray) {
-      event.preventDefault();
-      window.hide();
-      logManager.addLog('info', 'Window hidden to tray', 'Main');
-    } else {
-      // 否则允许窗口关闭，应用将退出
-      logManager.addLog('info', 'Window closing, app will quit', 'Main');
-    }
+        if (config.minimizeToTray) {
+          window.hide();
+          logManager.addLog('info', 'Window hidden to tray', 'Main');
+        } else {
+          // 允许窗口销毁，不再 preventDefault
+          // 既然已经调用过 preventDefault，我们需要手动调用 destroy
+          logManager.addLog('info', 'Window destroying, app will quit', 'Main');
+          window.destroy();
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load config during window close:', err);
+        if (!window.isDestroyed()) window.destroy();
+      });
   });
 
   mainWindow.on('closed', () => {

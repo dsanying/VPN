@@ -90,17 +90,44 @@ export function RulesPage() {
                       />
                     </TableCell>
                     <TableCell className="font-mono">
-                      <div className="max-w-[400px]">
-                        {rule.domains.length <= 3 ? (
-                          rule.domains.join(', ')
-                        ) : (
-                          <span title={rule.domains.join('\n')}>
-                            {rule.domains.slice(0, 3).join(', ')}
-                            <span className="text-muted-foreground">
-                              {' '}
-                              +{rule.domains.length - 3}
-                            </span>
-                          </span>
+                      <div className="flex flex-col gap-1 max-w-[400px]">
+                        {/* Domain rows */}
+                        {rule.domains.length > 0 && (
+                          <div className="text-sm truncate" title={rule.domains.join(', ')}>
+                            {rule.domains.length <= 3 ? (
+                              rule.domains.join(', ')
+                            ) : (
+                              <>
+                                {rule.domains.slice(0, 3).join(', ')}
+                                <span className="text-muted-foreground ml-1">
+                                  +{rule.domains.length - 3}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {/* IP CIDR rows */}
+                        {rule.ipCidr && rule.ipCidr.length > 0 && (
+                          <div
+                            className="text-xs text-muted-foreground truncate"
+                            title={rule.ipCidr.join(', ')}
+                          >
+                            <Badge
+                              variant="outline"
+                              className="scale-[0.8] origin-left mr-1 h-4 px-1 py-0 font-sans tracking-tight opacity-70"
+                            >
+                              IP
+                            </Badge>
+                            {rule.ipCidr.length <= 3 ? (
+                              rule.ipCidr.join(', ')
+                            ) : (
+                              <>
+                                {rule.ipCidr.slice(0, 3).join(', ')}
+                                <span className="ml-1">+{rule.ipCidr.length - 3}</span>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
                     </TableCell>

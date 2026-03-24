@@ -27,25 +27,25 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --background: 0 0% 7.5%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7.5%;
+    --popover-foreground: 0 0% 98%;
     --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
   }
 }
 
@@ -53,17 +53,23 @@
   * {
     @apply border-border;
   }
-  /* macOS: keep transparent so native vibrancy shows through */
-  html.platform-darwin,
-  html.platform-darwin body,
-  html.platform-darwin #root {
+  /* macOS: keep html transparent so native vibrancy shows through */
+  html.platform-darwin {
     background: transparent !important;
   }
 
+  /* Ensure content areas have solid backgrounds to avoid white-out */
+  html.platform-darwin body {
+    background: transparent;
+  }
+
   /* Windows / Linux: use a solid background so vibrancy is not needed */
-  html:not(.platform-darwin),
-  html:not(.platform-darwin) body,
-  html:not(.platform-darwin) #root {
+  html.platform-win32,
+  html.platform-win32 body,
+  html.platform-win32 #root,
+  html.platform-linux,
+  html.platform-linux body,
+  html.platform-linux #root {
     background: hsl(var(--background)) !important;
   }
 
@@ -157,13 +163,18 @@
   }
 
   /* Windows / Linux: solid sidebar background (no vibrancy available) */
-  html:not(.platform-darwin) .sidebar {
+  html.platform-win32 .sidebar,
+  html.platform-linux .sidebar {
     background: hsl(var(--muted));
   }
 
-  html.platform-darwin.dark .sidebar,
-  html:not(.platform-darwin).dark .sidebar {
-    background: rgba(30, 30, 46, 0.97); /* near-opaque dark sidebar on all platforms in dark mode */
+  html.platform-darwin.dark .sidebar {
+    background: transparent; /* allow vibrancy to show through */
+  }
+
+  html.platform-win32.dark .sidebar,
+  html.platform-linux.dark .sidebar {
+    background: rgba(18, 18, 23, 0.95); /* solid background for non-macOS */
   }
 
   .nav-item {
@@ -222,7 +233,7 @@
   }
 
   .dark .main-content-card {
-    background-color: hsl(222.2 47.4% 9%);
+    background-color: hsl(0 0% 7.5%);
   }
 
   /* Outer shell – background must match the sidebar so that the
@@ -241,18 +252,21 @@
     background: transparent;
   }
 
-  /* macOS dark: match the dark sidebar color */
+  /* macOS dark: transparent app-shell but solid sidebar if needed? 
+     Actually, app-shell should be transparent so sidebar vibrancy works. */
   html.platform-darwin.dark .app-shell {
-    background: rgba(30, 30, 46, 0.97);
+    background: transparent;
   }
 
   /* Windows / Linux light – hardcoded equivalent of --muted (210 40% 96.1%) */
-  html:not(.platform-darwin) .app-shell {
+  html.platform-win32 .app-shell,
+  html.platform-linux .app-shell {
     background: #f1f5f9;
   }
 
   /* Windows / Linux dark */
-  html:not(.platform-darwin).dark .app-shell {
-    background: rgba(30, 30, 46, 0.97);
+  html.platform-win32.dark .app-shell,
+  html.platform-linux.dark .app-shell {
+    background: rgba(18, 18, 23, 0.95);
   }
 }

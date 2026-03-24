@@ -120,6 +120,20 @@ export const configApi = {
   ): () => void {
     return ipcClient.on(IPC_CHANNELS.EVENT_CONFIG_CHANGED, listener);
   },
+
+  /**
+   * 获取隐私模式状态
+   */
+  async getPrivacyMode(): Promise<boolean> {
+    return ipcClient.invoke(IPC_CHANNELS.CONFIG_GET_PRIVACY_MODE);
+  },
+
+  /**
+   * 设置隐私模式状态
+   */
+  async setPrivacyMode(value: boolean): Promise<void> {
+    return ipcClient.invoke(IPC_CHANNELS.CONFIG_SET_PRIVACY_MODE, value);
+  },
 };
 
 /**
