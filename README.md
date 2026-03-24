@@ -110,7 +110,7 @@ macOS Intel 用户需要修改 `electron-builder.json`：
 
 ### 3. 选择代理模式
 
-默认使用 TUN 模式。
+默认使用 代理 模式。
 
 可选模式：
 
