@@ -324,6 +324,7 @@
     "copyFailed": "复制失败",
     "copyShareLink": "复制分享链接",
     "edit": "编辑",
+    "copyAndEdit": "克隆并通过手动编辑修复",
     "delete": "删除",
     "deleteServerConfig": "删除服务器配置",
     "deleteServerConfirm": "确定要删除服务器 \"{{serverName}}\" 吗？此操作无法撤销。",

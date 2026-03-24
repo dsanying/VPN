@@ -30,10 +30,12 @@ const createTrojanSchema = (t: any) =>
     address: z.string().min(1, t('servers.addressRequired')),
     port: z.number().min(1).max(65535),
     password: z.string().min(1, t('servers.passwordRequired')),
-    network: z.enum(['Tcp', 'Ws', 'H2']),
-    security: z.enum(['None', 'Tls']),
+    network: z.enum(['tcp', 'ws', 'h2']),
+    security: z.enum(['none', 'tls']),
     tlsServerName: z.string().optional(),
     tlsAllowInsecure: z.boolean(),
+    tlsFingerprint: z.string().optional(),
+    alpn: z.string().optional(),
   });
 
 type TrojanFormValues = z.infer<ReturnType<typeof createTrojanSchema>>;
@@ -53,26 +55,28 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
       address: '',
       port: 443,
       password: '',
-      network: 'Tcp',
-      security: 'Tls',
+      network: 'tcp',
+      security: 'tls',
       tlsServerName: '',
       tlsAllowInsecure: false,
+      tlsFingerprint: 'none',
+      alpn: '',
     },
   });
 
   useEffect(() => {
     console.log('[TrojanForm] Server config changed:', serverConfig);
     if (serverConfig && serverConfig.protocol?.toLowerCase() === 'trojan') {
-      // 标准化 network 和 security 值（首字母大写）
-      const normalizeNetwork = (n: string | undefined): 'Tcp' | 'Ws' | 'H2' => {
+      // 标准化 network 和 security 值（转为全小写以匹配 schema）
+      const normalizeNetwork = (n: string | undefined): 'tcp' | 'ws' | 'h2' => {
         const lower = (n || 'tcp').toLowerCase();
-        if (lower === 'ws' || lower === 'websocket') return 'Ws';
-        if (lower === 'h2' || lower === 'http2') return 'H2';
-        return 'Tcp';
+        if (lower === 'ws' || lower === 'websocket') return 'ws';
+        if (lower === 'h2' || lower === 'http2') return 'h2';
+        return 'tcp';
       };
-      const normalizeSecurity = (s: string | undefined): 'None' | 'Tls' => {
+      const normalizeSecurity = (s: string | undefined): 'none' | 'tls' => {
         const lower = (s || 'tls').toLowerCase();
-        return lower === 'none' ? 'None' : 'Tls';
+        return lower === 'none' ? 'none' : 'tls';
       };
 
       const formData = {
@@ -83,6 +87,8 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
         security: normalizeSecurity(serverConfig.security),
         tlsServerName: serverConfig.tlsSettings?.serverName || '',
         tlsAllowInsecure: serverConfig.tlsSettings?.allowInsecure || false,
+        tlsFingerprint: serverConfig.tlsSettings?.fingerprint || 'none',
+        alpn: serverConfig.tlsSettings?.alpn?.join(',') || '',
       };
       console.log('[TrojanForm] Resetting form with:', formData);
       form.reset(formData);
@@ -90,26 +96,33 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
   }, [serverConfig, form]);
 
   const handleSubmit = async (values: TrojanFormValues) => {
-    const serverConfig = {
-      protocol: 'Trojan' as const,
+    console.log('[TrojanForm] Submitting values:', values);
+    const config = {
+      protocol: 'trojan',
       address: values.address,
       port: values.port,
       password: values.password,
       network: values.network,
       security: values.security,
       tlsSettings:
-        values.security === 'Tls'
+        values.security === 'tls'
           ? {
               serverName: values.tlsServerName || null,
               allowInsecure: values.tlsAllowInsecure,
+              fingerprint: values.tlsFingerprint || 'none',
+              alpn: values.alpn ? values.alpn.split(',').map((s) => s.trim()) : undefined,
             }
           : null,
     };
 
-    await onSubmit(serverConfig);
+    try {
+      await onSubmit(config);
+    } catch (error) {
+      console.error('[TrojanForm] Submit failed:', error);
+    }
   };
 
-  const isTlsEnabled = form.watch('security') === 'Tls';
+  const isTlsEnabled = form.watch('security') === 'tls';
 
   return (
     <Form {...form}>
@@ -177,9 +190,9 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="Tcp">TCP</SelectItem>
-                  <SelectItem value="Ws">WebSocket</SelectItem>
-                  <SelectItem value="H2">HTTP/2</SelectItem>
+                  <SelectItem value="tcp">TCP</SelectItem>
+                  <SelectItem value="ws">WebSocket</SelectItem>
+                  <SelectItem value="h2">HTTP/2</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>{t('servers.transportDesc')}</FormDescription>
@@ -201,8 +214,8 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="None">{t('servers.none')}</SelectItem>
-                  <SelectItem value="Tls">TLS</SelectItem>
+                  <SelectItem value="none">{t('servers.none')}</SelectItem>
+                  <SelectItem value="tls">TLS</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>{t('servers.securityDesc')}</FormDescription>
@@ -213,16 +226,64 @@ export function TrojanForm({ serverConfig, onSubmit }: TrojanFormProps) {
 
         {isTlsEnabled && (
           <>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="tlsServerName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('servers.tlsServerName')}</FormLabel>
+                    <FormControl>
+                      <Input placeholder="example.com" {...field} />
+                    </FormControl>
+                    <FormDescription>{t('servers.tlsServerNameDesc')}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="alpn"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('servers.alpn')}</FormLabel>
+                    <FormControl>
+                      <Input placeholder="http/1.1" {...field} />
+                    </FormControl>
+                    <FormDescription>{t('servers.alpnDesc')}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
-              name="tlsServerName"
+              name="tlsFingerprint"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('servers.tlsServerName')}</FormLabel>
-                  <FormControl>
-                    <Input placeholder="example.com" {...field} />
-                  </FormControl>
-                  <FormDescription>{t('servers.tlsServerNameDesc')}</FormDescription>
+                  <FormLabel>{t('servers.fingerprint')}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={t('servers.selectFingerprint', 'Select TLS Fingerprint')}
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">{t('servers.none', 'None')}</SelectItem>
+                      <SelectItem value="chrome">Chrome</SelectItem>
+                      <SelectItem value="firefox">Firefox</SelectItem>
+                      <SelectItem value="safari">Safari</SelectItem>
+                      <SelectItem value="edge">Edge</SelectItem>
+                      <SelectItem value="ios">iOS</SelectItem>
+                      <SelectItem value="android">Android</SelectItem>
+                      <SelectItem value="random">{t('servers.random')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>{t('servers.fingerprintDesc')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

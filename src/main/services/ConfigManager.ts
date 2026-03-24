@@ -180,9 +180,9 @@ export class ConfigManager implements IConfigManager {
       if (!server.name || typeof server.name !== 'string') {
         throw new Error('Server name is required and must be a string');
       }
-      const protocolLower = server.protocol?.toLowerCase(); // 验证必填字段
+      const protocolLower = server.protocol?.toLowerCase();
       if (
-        !server.protocol ||
+        !protocolLower ||
         ![
           'vless',
           'vmess',
@@ -192,7 +192,7 @@ export class ConfigManager implements IConfigManager {
           'anytls',
           'tuic',
           'naive',
-        ].includes(server.protocol)
+        ].includes(protocolLower)
       ) {
         throw new Error(
           'Server protocol must be vless, vmess, trojan, hysteria2, shadowsocks, anytls, tuic, or naive'

@@ -99,6 +99,7 @@ export function ServerPage() {
             ? {
                 ...serverData,
                 id: editingServer.id,
+                subscriptionId: undefined, // 编辑后转换为手动节点以防被订阅刷新覆盖
                 createdAt: editingServer.createdAt,
                 updatedAt: now,
               }

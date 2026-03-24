@@ -346,9 +346,8 @@ export function ServerList({
       <Button
         variant="ghost"
         size="sm"
-        title={t('common.edit')}
+        title={server.subscriptionId ? t('servers.copyAndEdit', 'Copy and Edit') : t('common.edit')}
         className="h-7 w-7 p-0"
-        disabled={!!server.subscriptionId}
         onClick={(e) => {
           if (stopPropagation) e.stopPropagation();
           onEditServer(server);

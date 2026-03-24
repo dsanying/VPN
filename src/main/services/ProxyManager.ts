@@ -1127,7 +1127,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    */
   private generateProxyOutbound(server: ServerConfig): SingBoxOutbound {
     // sing-box 要求协议类型必须是小写
-    let protocol = server.protocol.toLowerCase();
+    const protocol = server.protocol.toLowerCase();
+    const protocolLower = protocol;
+    const tlsProtocols = ['vless', 'vmess', 'trojan', 'anytls', 'hysteria2', 'tuic'];
 
     const outbound: SingBoxOutbound = {
       type: protocol,
@@ -1238,7 +1240,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 2. Default server_name to server address if not specified
       outbound.tls = {
         enabled: true,
-        server_name: server.tlsSettings?.serverName || undefined,
+        server_name: server.tlsSettings?.serverName || server.address,
         insecure: server.tlsSettings?.allowInsecure || false,
         alpn: server.tlsSettings?.alpn || undefined,
       };
@@ -1247,22 +1249,44 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
 
     // TLS 配置 (非 Naive 协议，因为 Naive 已在前一段处理了 tls 结构)
-    const tlsProtocols = ['vless', 'trojan', 'anytls', 'hysteria2', 'tuic'];
     if (
       server.protocol !== 'naive' &&
       (server.security === 'tls' || server.tlsSettings || tlsProtocols.includes(protocol))
     ) {
+      // 为 Trojan 设置默认 ALPN ["http/1.1"] 以提高兼容性
+      let finalAlpn = server.tlsSettings?.alpn;
+      if (!finalAlpn && protocolLower === 'trojan') {
+        finalAlpn = ['http/1.1'];
+      }
+
       outbound.tls = {
         enabled: true,
-        server_name: server.tlsSettings?.serverName || undefined,
+        server_name: server.tlsSettings?.serverName || server.address,
         insecure: server.tlsSettings?.allowInsecure || false,
+        alpn: finalAlpn,
       };
 
       // uTLS 仅适用于基于 TCP 的协议，Hysteria2 和 TUIC 使用 QUIC (UDP) 不支持 uTLS
-      if (server.protocol !== 'hysteria2' && server.protocol !== 'tuic') {
+      const fingerprint = server.tlsSettings?.fingerprint;
+
+      // 默认行为：VLESS 等协议默认开启 chrome 指纹，Trojan 默认不开启（none）以通过标准 TLS 握手
+      let finalFingerprint = fingerprint;
+      if (!finalFingerprint) {
+        if (protocolLower === 'vless' || protocolLower === 'anytls') {
+          finalFingerprint = 'chrome';
+        } else {
+          finalFingerprint = 'none';
+        }
+      }
+
+      if (
+        server.protocol !== 'hysteria2' &&
+        server.protocol !== 'tuic' &&
+        finalFingerprint !== 'none'
+      ) {
         outbound.tls.utls = {
           enabled: true,
-          fingerprint: server.tlsSettings?.fingerprint || 'chrome',
+          fingerprint: finalFingerprint,
         };
       }
 

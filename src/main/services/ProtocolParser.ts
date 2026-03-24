@@ -217,10 +217,6 @@ export class ProtocolParser implements IProtocolParser {
     const params = new URLSearchParams(url.search);
     const name = decodeURIComponent(url.hash.slice(1)) || `${address}:${port}`;
 
-    if (!password) {
-      throw new Error('Trojan URL 缺少密码');
-    }
-
     const config: ServerConfig = {
       id: randomUUID(),
       name,
@@ -237,16 +233,15 @@ export class ProtocolParser implements IProtocolParser {
       this.parseTransportSettings(config, params, network);
     }
 
-    // 解析安全配置
-    const security = params.get('security') as Security | null;
-    if (security) {
-      config.security = security;
-      if (security === 'tls' || security === 'reality') {
-        config.tlsSettings = this.parseTlsSettings(params);
-      }
-      if (security === 'reality') {
-        config.realitySettings = this.parseRealitySettings(params);
-      }
+    // 解析安全配置 (Trojan 默认通常就是 TLS)
+    const security = (params.get('security') as Security | null) || 'tls';
+    config.security = security;
+
+    if (security === 'tls' || security === 'reality') {
+      config.tlsSettings = this.parseTlsSettings(params);
+    }
+    if (security === 'reality') {
+      config.realitySettings = this.parseRealitySettings(params);
     }
 
     return config;

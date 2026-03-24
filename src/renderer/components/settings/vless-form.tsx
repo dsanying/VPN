@@ -314,6 +314,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="none">{t('servers.none', 'None')}</SelectItem>
                       <SelectItem value="chrome">Chrome</SelectItem>
                       <SelectItem value="firefox">Firefox</SelectItem>
                       <SelectItem value="safari">Safari</SelectItem>
@@ -407,6 +408,7 @@ export function VlessForm({ serverConfig, onSubmit }: VlessFormProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="none">{t('servers.none', '无')}</SelectItem>
                       <SelectItem value="chrome">Chrome</SelectItem>
                       <SelectItem value="firefox">Firefox</SelectItem>
                       <SelectItem value="safari">Safari</SelectItem>

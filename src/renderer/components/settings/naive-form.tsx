@@ -14,6 +14,13 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import type { ServerConfig } from '@/bridge/types';
 
@@ -24,6 +31,7 @@ const createNaiveSchema = (t: any) =>
     username: z.string().min(1, t('servers.usernameRequired', 'Username is required')),
     password: z.string().min(1, t('servers.passwordRequired')),
     tlsServerName: z.string().optional(),
+    tlsFingerprint: z.string().optional(),
   });
 
 type NaiveFormValues = z.infer<ReturnType<typeof createNaiveSchema>>;
@@ -45,6 +53,7 @@ export function NaiveForm({ serverConfig, onSubmit }: NaiveFormProps) {
         username: serverConfig.username || '',
         password: serverConfig.password || '',
         tlsServerName: serverConfig.tlsSettings?.serverName || '',
+        tlsFingerprint: serverConfig.tlsSettings?.fingerprint || 'none',
       };
     }
     return {
@@ -53,6 +62,7 @@ export function NaiveForm({ serverConfig, onSubmit }: NaiveFormProps) {
       username: '',
       password: '',
       tlsServerName: '',
+      tlsFingerprint: 'none',
     };
   };
 
@@ -73,6 +83,7 @@ export function NaiveForm({ serverConfig, onSubmit }: NaiveFormProps) {
       tlsSettings: {
         serverName: values.tlsServerName?.trim() || undefined,
         allowInsecure: false,
+        fingerprint: values.tlsFingerprint || 'none',
       },
     };
     await onSubmit(config);
@@ -173,6 +184,37 @@ export function NaiveForm({ serverConfig, onSubmit }: NaiveFormProps) {
                     <Input placeholder={t('servers.sniPlaceholder')} {...field} />
                   </FormControl>
                   <FormDescription>{t('servers.sniDesc')}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tlsFingerprint"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-foreground">{t('servers.fingerprint')}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={t('servers.selectFingerprint', 'Select TLS Fingerprint')}
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">{t('servers.none', 'None')}</SelectItem>
+                      <SelectItem value="chrome">Chrome</SelectItem>
+                      <SelectItem value="firefox">Firefox</SelectItem>
+                      <SelectItem value="safari">Safari</SelectItem>
+                      <SelectItem value="edge">Edge</SelectItem>
+                      <SelectItem value="ios">iOS</SelectItem>
+                      <SelectItem value="android">Android</SelectItem>
+                      <SelectItem value="random">{t('servers.random')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>{t('servers.fingerprintDesc')}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
