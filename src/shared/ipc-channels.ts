@@ -89,6 +89,9 @@ export const IPC_CHANNELS = {
   EVENT_STATS_UPDATED: 'event:statsUpdated',
   EVENT_CONNECTION_STATE_CHANGED: 'event:connectionStateChanged',
   EVENT_ENTER_PRIVACY_MODE: 'event:enterPrivacyMode',
+
+  // 应用语言同步（渲染进程 -> 主进程）
+  APP_SET_LANGUAGE: 'app:setLanguage',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

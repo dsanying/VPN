@@ -11,6 +11,8 @@ import { ErrorBoundary } from './components/error-boundary';
 import { ipcClient } from './ipc/ipc-client';
 import { toast } from 'sonner';
 import { PrivacyOverlay } from './components/layout/privacy-overlay';
+import { api } from './ipc/api-client';
+import i18n from './i18n';
 
 function App() {
   const currentView = useAppStore((state) => state.currentView);
@@ -37,6 +39,9 @@ function App() {
   useEffect(() => {
     loadConfig();
     refreshConnectionStatus();
+
+    // Sync initial language to main process for tray menu
+    api.config.setLanguage(i18n.language).catch(console.error);
 
     // Poll connection status every 2 seconds
     const statusInterval = setInterval(() => {

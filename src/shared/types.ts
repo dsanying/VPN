@@ -281,6 +281,7 @@ export interface UserConfig {
   // 端口配置
   socksPort: number;
   httpPort: number;
+  mixedPort?: number; // 混合端口（可选，同时支持 HTTP 和 SOCKS5，0 或 undefined 表示禁用）
 
   // 日志设置
   logLevel: LogLevel;

@@ -74,6 +74,8 @@ export class TrayManager implements ITrayManager {
   private servers: ServerConfig[] = [];
   private selectedServerId: string | null = null;
   private proxyMode: ProxyMode = 'smart';
+  // 应用内语言设置，由渲染进程通过 IPC 同步过来，默认跟随系统
+  private currentLanguage: string = app.getLocale?.() || 'zh-CN';
 
   // 回调函数
   private onStartProxy?: () => void;
@@ -222,6 +224,23 @@ export class TrayManager implements ITrayManager {
   }
 
   /**
+   * 设置应用语言（由主进程根据渲染进程 IPC 调用）
+   */
+  setLanguage(lang: string): void {
+    this.currentLanguage = lang;
+    // 重新渲染菜单以应用新语言
+    this.updateTrayMenu(this.isProxyRunning);
+  }
+
+  /**
+   * 获取本地化字符串（主进程托盘菜单用）
+   * 根据应用语言配置决定显示中文还是英文
+   */
+  private t(zh: string, en: string): string {
+    return this.currentLanguage.startsWith('zh') ? zh : en;
+  }
+
+  /**
    * 更新完整托盘菜单（包含服务器列表和代理模式）
    */
   updateFullTrayMenu(data: TrayMenuData): void {
@@ -239,11 +258,11 @@ export class TrayManager implements ITrayManager {
     // 🔵 蓝色 = 已连接，⚪ 灰色 = 已断开，🔴 红色 = 连接异常
     let statusLabel: string;
     if (data.hasError) {
-      statusLabel = '🔴 连接异常';
+      statusLabel = this.t('🔴 连接异常', '🔴 Connection Error');
     } else if (data.isProxyRunning) {
-      statusLabel = '🔵 已连接';
+      statusLabel = this.t('🔵 已连接', '🔵 Connected');
     } else {
-      statusLabel = '⚪ 已断开';
+      statusLabel = this.t('⚪ 已断开', '⚪ Disconnected');
     }
 
     // 构建服务器子菜单
@@ -256,7 +275,11 @@ export class TrayManager implements ITrayManager {
         const protocol = (server.protocol || '').toUpperCase();
         const latency = this.speedTestResults.get(server.id);
         const latencyStr =
-          latency !== undefined ? (latency !== null ? ` [${latency}ms]` : ' [超时]') : '';
+          latency !== undefined
+            ? latency !== null
+              ? ` [${latency}ms]`
+              : ` [${this.t('超时', 'Timeout')}]`
+            : '';
         let label = `${name}（${protocol}）${latencyStr}`;
 
         if (label.length > maxLabelLength) {
@@ -272,21 +295,24 @@ export class TrayManager implements ITrayManager {
       });
       serverSubmenu.push({ type: 'separator' });
     } else {
-      serverSubmenu.push({ label: '未配置服务器', enabled: false });
+      serverSubmenu.push({
+        label: this.t('未配置服务器', 'No Servers Configured'),
+        enabled: false,
+      });
       serverSubmenu.push({ type: 'separator' });
     }
 
     // 添加"管理服务器"选项
     serverSubmenu.push({
-      label: '管理服务器',
+      label: this.t('管理服务器', 'Manage Servers'),
       click: () => this.handleManageServers(),
     });
 
     // 代理模式标签映射
     const proxyModeLabels: Record<ProxyMode, string> = {
-      global: '全局代理',
-      smart: '智能分流',
-      direct: '直连模式',
+      global: this.t('全局代理', 'Global Proxy'),
+      smart: this.t('智能分流', 'Smart Routing'),
+      direct: this.t('直连模式', 'Direct Connection'),
     };
 
     // 构建代理模式子菜单
@@ -306,7 +332,9 @@ export class TrayManager implements ITrayManager {
       },
       { type: 'separator' },
       {
-        label: data.isProxyRunning ? '禁用代理' : '启用代理',
+        label: data.isProxyRunning
+          ? this.t('禁用代理', 'Disable Proxy')
+          : this.t('启用代理', 'Enable Proxy'),
         click: () => {
           if (data.isProxyRunning) {
             this.handleStopProxy();
@@ -317,32 +345,32 @@ export class TrayManager implements ITrayManager {
       },
       { type: 'separator' },
       {
-        label: '选择服务器',
+        label: this.t('选择服务器', 'Select Server'),
         submenu: serverSubmenu,
       },
       {
-        label: '代理模式',
+        label: this.t('代理模式', 'Proxy Mode'),
         submenu: proxyModeSubmenu,
       },
       { type: 'separator' },
       {
-        label: '打开主窗口',
+        label: this.t('打开主窗口', 'Open Main Window'),
         click: () => this.handleShowWindow(),
       },
       {
-        label: '进入轻量模式',
+        label: this.t('进入轻量模式', 'Enter Lightweight Mode'),
         click: () => this.handleLightweightMode(),
       },
       {
-        label: '进入隐私模式',
+        label: this.t('进入隐私模式', 'Enter Privacy Mode'),
         click: () => this.handleEnterPrivacyMode(),
       },
       {
-        label: '打开设置',
+        label: this.t('打开设置', 'Open Settings'),
         click: () => this.handleOpenSettings(),
       },
       {
-        label: '检查更新',
+        label: this.t('检查更新', 'Check for Updates'),
         click: () => this.handleCheckUpdate(),
       },
       { type: 'separator' },
@@ -353,7 +381,7 @@ export class TrayManager implements ITrayManager {
       },
       { type: 'separator' },
       {
-        label: '退出',
+        label: this.t('退出', 'Quit'),
         click: () => this.handleQuit(),
       },
     ]);
@@ -587,9 +615,9 @@ export class TrayManager implements ITrayManager {
    */
   private getSpeedTestLabel(): string {
     if (this.isSpeedTesting) {
-      return '测速中...';
+      return this.t('测速中...', 'Testing Speed...');
     }
-    return '服务器测速';
+    return this.t('服务器测速', 'Speed Test');
   }
 
   /**
@@ -625,12 +653,12 @@ export class TrayManager implements ITrayManager {
     if (!this.tray) return;
 
     const tooltips: Record<TrayIconState, string> = {
-      idle: 'FlowZ - 未连接',
-      connecting: 'FlowZ - 连接中...',
-      connected: 'FlowZ - 已连接',
+      idle: this.t('FlowZ - 未连接', 'FlowZ - Disconnected'),
+      connecting: this.t('FlowZ - 连接中...', 'FlowZ - Connecting...'),
+      connected: this.t('FlowZ - 已连接', 'FlowZ - Connected'),
     };
 
-    let tooltip = tooltips[this.currentState];
+    const tooltip = tooltips[this.currentState];
 
     this.tray.setToolTip(tooltip);
   }

@@ -11,6 +11,7 @@ import { useTheme } from '@/components/theme-provider';
 import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { useTranslation } from 'react-i18next';
+import { api } from '@/ipc';
 
 export function AppearanceSettings() {
   const { t } = useTranslation();
@@ -24,6 +25,7 @@ export function AppearanceSettings() {
   const handleLanguageChange = (value: string) => {
     i18n.changeLanguage(value);
     localStorage.setItem('app-language', value);
+    api.config.setLanguage(value).catch(console.error);
     toast.success(value === 'zh-CN' ? '语言已切换为简体中文' : 'Language switched to English');
   };
 

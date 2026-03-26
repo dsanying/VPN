@@ -893,6 +893,18 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       }
     );
 
+    // Mixed 端口（可选）：同时接受 HTTP 和 SOCKS5 请求
+    if (config.mixedPort && config.mixedPort > 0) {
+      inbounds.push({
+        type: 'mixed',
+        tag: 'mixed-in',
+        listen: '127.0.0.1',
+        listen_port: config.mixedPort,
+        sniff: true,
+        sniff_override_destination: true,
+      });
+    }
+
     // TUN 模式额外添加 TUN inbound
     if (modeType === 'tun') {
       const isIpv4 = (host: string) => /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);

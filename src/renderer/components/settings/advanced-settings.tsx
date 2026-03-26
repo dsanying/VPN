@@ -14,6 +14,10 @@ export function AdvancedSettings() {
 
   const [socksPort, setSocksPort] = useState(config?.socksPort?.toString() || '65534');
   const [httpPort, setHttpPort] = useState(config?.httpPort?.toString() || '65533');
+  const [mixedPortEnabled, setMixedPortEnabled] = useState((config?.mixedPort ?? 0) > 0);
+  const [mixedPort, setMixedPort] = useState(
+    config?.mixedPort && config.mixedPort > 0 ? config.mixedPort.toString() : '7890'
+  );
   const [isLoading, setIsLoading] = useState(false);
   const { t } = useTranslation();
 
@@ -39,12 +43,27 @@ export function AdvancedSettings() {
       return;
     }
 
+    // Validate mixed port only if enabled
+    let mixedPortNum: number | undefined = undefined;
+    if (mixedPortEnabled) {
+      mixedPortNum = parseInt(mixedPort, 10);
+      if (isNaN(mixedPortNum) || mixedPortNum < 1024 || mixedPortNum > 65535) {
+        toast.error(t('settings.advanced.mixedPortRange'));
+        return;
+      }
+      if (mixedPortNum === socksPortNum || mixedPortNum === httpPortNum) {
+        toast.error(t('settings.advanced.mixedPortConflict'));
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const updatedConfig = {
         ...config,
         socksPort: socksPortNum,
         httpPort: httpPortNum,
+        mixedPort: mixedPortEnabled ? mixedPortNum : 0,
       };
       await saveConfig(updatedConfig);
       toast.success(t('settings.advanced.portsSaved'));
@@ -196,6 +215,39 @@ export function AdvancedSettings() {
               />
             </div>
             <p className="text-xs text-muted-foreground">{t('settings.advanced.default')}: 65533</p>
+          </div>
+
+          {/* Mixed Port (Optional) */}
+          <div className="space-y-3 pt-2 border-t border-dashed">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="mixedPortEnabled"
+                checked={mixedPortEnabled}
+                onCheckedChange={(checked) => setMixedPortEnabled(checked as boolean)}
+              />
+              <Label htmlFor="mixedPortEnabled" className="cursor-pointer">
+                {t('settings.advanced.mixedPort')}
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground ml-6">
+              {t('settings.advanced.mixedPortDesc')}
+            </p>
+            {mixedPortEnabled && (
+              <div className="ml-6 space-y-2">
+                <Input
+                  id="mixedPort"
+                  type="number"
+                  min="1024"
+                  max="65535"
+                  value={mixedPort}
+                  onChange={(e) => setMixedPort(e.target.value)}
+                  className="max-w-[200px]"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('settings.advanced.default')}: 7890
+                </p>
+              </div>
+            )}
           </div>
 
           <Button onClick={handleSavePorts} disabled={isLoading}>

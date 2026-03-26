@@ -2,6 +2,9 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
+import type { DomainRule } from '../../../shared/types';
 
 interface Connection {
   id: string;
@@ -41,6 +44,7 @@ const POLL_INTERVAL = 2000;
 const FIXED_HEIGHT = 450; // Increased to match RealTimeLogs approximate height
 const PADDING_Y = 20;
 const PADDING_X = 20;
+const PADDING_LEFT = 70; // Extra left padding for source node label
 const NODE_WIDTH = 6; // Slightly thinner
 const NODE_GAP = 12; // Slightly tighter gap for sleeker look? Or larger for more breath? User said "chubby", usually means too tall/thick.
 // Actually user said "fat", often meaning the ribbons are very tall. Reducing height helps.
@@ -51,7 +55,12 @@ export function ConnectionTopology() {
   const [hovered, setHovered] = useState<{ type: 'node' | 'link'; id: string } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; domain: string } | null>(
+    null
+  );
   const { t } = useTranslation();
+  const config = useAppStore((state) => state.config);
+  const saveConfig = useAppStore((state) => state.saveConfig);
 
   // Responsive Container Logic
   const containerRef = useRef<HTMLDivElement>(null);
@@ -197,7 +206,7 @@ export function ConnectionTopology() {
       name: t('home.myDevice'),
       type: 'source',
       value: totalConnections,
-      x: PADDING_X,
+      x: PADDING_LEFT,
       y: PADDING_Y,
       height: Math.max(2, totalConnections * scale),
       color: '#6366f1', // Indigo-500
@@ -696,6 +705,67 @@ export function ConnectionTopology() {
     setHovered({ type, id });
   };
 
+  // -------- Right-click: Add domain to rule --------
+  const handleNodeContextMenu = (e: React.MouseEvent, node: Node) => {
+    // Only allow right-click on domain (middle/rule) nodes, not source or outbound
+    if (node.type !== 'rule') return;
+    // Skip 'Others' group node
+    if (node.name === t('home.others')) return;
+    // Only show menu for domain-like names (contains dots or is a valid host)
+    if (!node.name.includes('.') && !node.name.includes(':')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setContextMenu({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      domain: node.name,
+    });
+  };
+
+  const addDomainRule = async (domain: string, action: DomainRule['action']) => {
+    if (!config) return;
+    setContextMenu(null);
+
+    // Extract root domain (e.g. 'sub.example.com' -> 'example.com')
+    const parts = domain.split('.');
+    const rootDomain = parts.length > 2 ? parts.slice(-2).join('.') : domain;
+
+    // Check if a rule already covers this domain
+    const existing = config.customRules.find(
+      (r) => r.domains.includes(domain) || r.domains.includes(rootDomain)
+    );
+    if (existing) {
+      toast.info(t('home.domainAlreadyInRule', { domain }));
+      return;
+    }
+
+    const newRule: DomainRule = {
+      id: `topology-${Date.now()}`,
+      domains: [domain],
+      action,
+      enabled: true,
+    };
+
+    try {
+      await saveConfig({
+        ...config,
+        customRules: [...config.customRules, newRule],
+      });
+      const actionLabel =
+        action === 'proxy'
+          ? t('home.ruleProxy')
+          : action === 'direct'
+            ? t('home.ruleDirect')
+            : t('home.ruleBlock');
+      toast.success(t('home.domainRuleAdded', { domain, action: actionLabel }));
+    } catch {
+      toast.error(t('home.domainRuleAddFail'));
+    }
+  };
+
   return (
     <Card className="col-span-1">
       <CardHeader>
@@ -733,7 +803,7 @@ export function ConnectionTopology() {
           )}
 
           {/* Tooltip Layer */}
-          {hovered && (
+          {hovered && !contextMenu && (
             <div
               className="absolute pointer-events-none"
               style={{
@@ -743,6 +813,55 @@ export function ConnectionTopology() {
             >
               {getTooltipContent()}
             </div>
+          )}
+
+          {/* Right-click Context Menu */}
+          {contextMenu && (
+            <>
+              {/* Backdrop to close menu */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setContextMenu(null)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu(null);
+                }}
+              />
+              <div
+                className="absolute z-50 min-w-[180px] rounded-lg border border-border bg-popover shadow-lg text-popover-foreground text-sm overflow-hidden"
+                style={{ left: contextMenu.x, top: contextMenu.y }}
+              >
+                <div className="px-3 py-2 border-b border-border">
+                  <p className="font-medium truncate max-w-[160px]" title={contextMenu.domain}>
+                    {contextMenu.domain}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{t('home.addToRule')}</p>
+                </div>
+                <div className="py-1">
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-accent flex items-center gap-2 transition-colors"
+                    onClick={() => addDomainRule(contextMenu.domain, 'proxy')}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />
+                    {t('home.ruleProxy')}
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-accent flex items-center gap-2 transition-colors"
+                    onClick={() => addDomainRule(contextMenu.domain, 'direct')}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-green-500 inline-block" />
+                    {t('home.ruleDirect')}
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-accent flex items-center gap-2 transition-colors text-destructive"
+                    onClick={() => addDomainRule(contextMenu.domain, 'block')}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-red-500 inline-block" />
+                    {t('home.ruleBlock')}
+                  </button>
+                </div>
+              </div>
+            </>
           )}
 
           <svg
@@ -797,6 +916,8 @@ export function ConnectionTopology() {
                 opacity={getNodeOpacity(node.id)}
                 className="transition-opacity duration-300"
                 onMouseEnter={() => handleMouseEnter('node', node.id)}
+                onContextMenu={(e) => handleNodeContextMenu(e, node)}
+                style={node.type === 'rule' ? { cursor: 'context-menu' } : undefined}
               >
                 <rect width={NODE_WIDTH} height={node.height} fill={node.color} rx={1} />
                 <text

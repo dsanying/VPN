@@ -134,6 +134,13 @@ export const configApi = {
   async setPrivacyMode(value: boolean): Promise<void> {
     return ipcClient.invoke(IPC_CHANNELS.CONFIG_SET_PRIVACY_MODE, value);
   },
+
+  /**
+   * 设置应用语言 (同步给主进程)
+   */
+  async setLanguage(lang: string): Promise<void> {
+    return ipcClient.invoke(IPC_CHANNELS.APP_SET_LANGUAGE, lang);
+  },
 };
 
 /**

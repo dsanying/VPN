@@ -32,6 +32,7 @@ import { SpeedTestService } from './services/SpeedTestService';
 import { ipcEventEmitter } from './ipc/ipc-events';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
 import { initUserDataPath } from './utils/paths';
+import { IPC_CHANNELS } from '../shared/ipc-channels';
 
 // Windows LTSC / 精简版系统兼容处理
 // 如果用户是 LTSC 且黑屏，建议他们通过设置开启“禁用硬件加速”选项
@@ -612,6 +613,14 @@ app.whenReady().then(async () => {
   // 设置托盘状态更新回调
   setTrayStateCallback((isRunning: boolean, hasError?: boolean) => {
     updateTrayMenuState(isRunning, hasError);
+  });
+
+  // 监听渲染进程语言同步
+  const { ipcMain } = require('electron');
+  ipcMain.handle(IPC_CHANNELS.APP_SET_LANGUAGE, (_: any, lang: string) => {
+    if (trayManager) {
+      trayManager.setLanguage(lang);
+    }
   });
 
   // 创建托盘图标
