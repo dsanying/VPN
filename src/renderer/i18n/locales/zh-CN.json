@@ -147,6 +147,16 @@
       "successUpdate": "设置已保存",
       "failUpdate": "保存设置失败"
     },
+    "coreVersion": {
+      "changedTitle": "sing-box 内核已更新",
+      "changedDesc": "内核版本从 {{previousVersion}} 变更为 {{currentVersion}}。如出现连接问题，可回滚到上一个版本。",
+      "noBackupDesc": "内核版本已变更为 {{currentVersion}}，暂无可用备份，无法回滚。",
+      "rollback": "回滚内核",
+      "dismiss": "忽略",
+      "rollingBack": "回滚中...",
+      "rollbackSuccess": "回滚成功，重新启动应用后生效",
+      "rollbackFail": "回滚失败"
+    },
     "appearance": {
       "title": "外观",
       "description": "自定义应用程序的外观",
@@ -247,6 +257,8 @@
       "checkCoreUpdateFail": "检查核心更新失败",
       "foundCoreUpdate": "发现新核心版本 {{version}}",
       "clickToUpdate": "点击立即更新",
+      "manualReplace": "手动替换",
+      "coreManualReplaceSuccess": "手动替换核心成功",
       "coreAlreadyLatest": "核心已是最新版本",
       "currentVersion": "当前版本: {{version}}",
       "updatingCore": "正在更新核心至 {{version}}...",

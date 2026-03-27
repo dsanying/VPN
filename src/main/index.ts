@@ -557,6 +557,15 @@ app.whenReady().then(async () => {
     }
   });
 
+  proxyManager.on('started', async () => {
+    try {
+      await coreUpdateService.recordSuccessfulVersion();
+      logManager.addLog('info', '已记录当前运行的内核版本基线', 'Main');
+    } catch (e) {
+      logManager.addLog('warn', `记录内核基线版本失败: ${e}`, 'Main');
+    }
+  });
+
   proxyManager.on('stopped', async () => {
     // 正常停止时，重置错误状态
     updateTrayMenuState(false, false);
@@ -876,6 +885,27 @@ app.whenReady().then(async () => {
   setTimeout(async () => {
     try {
       const config = await configManager.loadConfig();
+
+      // 检查 sing-box 内核版本是否发生变化（检测更新是否破坏配置兼容性）
+      try {
+        const lastKnownVersion = coreUpdateService.getLastKnownGoodVersion();
+        const currentVersion = await coreUpdateService.getCurrentVersion();
+        if (lastKnownVersion && currentVersion !== '未知' && lastKnownVersion !== currentVersion) {
+          logManager.addLog(
+            'warn',
+            `sing-box 内核版本已变更: ${lastKnownVersion} → ${currentVersion}，通知用户`,
+            'Main'
+          );
+          ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_CORE_VERSION_CHANGED, {
+            previousVersion: lastKnownVersion,
+            currentVersion,
+            hasBackup: coreUpdateService.hasBackup(),
+          });
+        }
+      } catch (versionCheckError) {
+        logManager.addLog('warn', `版本检测失败: ${versionCheckError}`, 'Main');
+      }
+
       // 检查是否启用了启动时自动连接
       if (config.autoConnect && config.selectedServerId) {
         logManager.addLog('info', '启动时自动连接已启用，正在连接...', 'Main');

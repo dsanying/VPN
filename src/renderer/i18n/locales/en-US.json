@@ -148,6 +148,16 @@
       "successUpdate": "Settings saved",
       "failUpdate": "Failed to save settings"
     },
+    "coreVersion": {
+      "changedTitle": "sing-box Core Updated",
+      "changedDesc": "Core version changed from {{previousVersion}} to {{currentVersion}}. If you experience connection issues, you can roll back to the previous version.",
+      "noBackupDesc": "Core version changed to {{currentVersion}}. No backup is available for rollback.",
+      "rollback": "Roll Back",
+      "dismiss": "Dismiss",
+      "rollingBack": "Rolling back...",
+      "rollbackSuccess": "Rollback successful — reopen the app to apply the previous core",
+      "rollbackFail": "Rollback failed"
+    },
     "appearance": {
       "title": "Appearance",
       "description": "Customize the application's appearance",
@@ -248,6 +258,8 @@
       "checkCoreUpdateFail": "Core update check failed",
       "foundCoreUpdate": "New core version {{version}} available",
       "clickToUpdate": "Click to update now",
+      "manualReplace": "Manual Replace",
+      "coreManualReplaceSuccess": "Manual core replacement successful",
       "coreAlreadyLatest": "Core is already up to date",
       "currentVersion": "Current version: {{version}}",
       "updatingCore": "Updating core to {{version}}...",

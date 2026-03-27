@@ -29,4 +29,27 @@ export function registerCoreUpdateHandlers() {
     }
     return await coreUpdateService.getCurrentVersion();
   });
+
+  registerIpcHandler('core:getVersionInfo', async () => {
+    if (!coreUpdateService) {
+      throw new Error('CoreUpdateService not initialized');
+    }
+    return await coreUpdateService.getVersionInfo();
+  });
+
+  registerIpcHandler('core:rollback', async () => {
+    if (!coreUpdateService) {
+      throw new Error('CoreUpdateService not initialized');
+    }
+    await coreUpdateService.rollbackCore();
+    return true;
+  });
+
+  registerIpcHandler('core:replaceManual', async () => {
+    if (!coreUpdateService) {
+      throw new Error('CoreUpdateService not initialized');
+    }
+    await coreUpdateService.replaceManualCore();
+    return true;
+  });
 }

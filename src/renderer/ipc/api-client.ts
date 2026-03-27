@@ -525,6 +525,45 @@ export const coreUpdateApi = {
   async getVersion(): Promise<string> {
     return ipcClient.invoke('core-update:get-version');
   },
+
+  /**
+   * 获取核心版本信息（当前版本、备份版本、是否有备份）
+   */
+  async getVersionInfo(): Promise<{
+    currentVersion: string;
+    backupVersion: string | null;
+    hasBackup: boolean;
+    lastKnownVersion: string | null;
+  }> {
+    return ipcClient.invoke(IPC_CHANNELS.CORE_GET_VERSION_INFO);
+  },
+
+  /**
+   * 回滚核心到上一个备份版本
+   */
+  async rollback(): Promise<boolean> {
+    return ipcClient.invoke(IPC_CHANNELS.CORE_ROLLBACK);
+  },
+
+  /**
+   * 监听核心版本变更事件
+   */
+  onVersionChanged(
+    listener: (data: {
+      previousVersion: string;
+      currentVersion: string;
+      hasBackup: boolean;
+    }) => void
+  ): () => void {
+    return ipcClient.on(IPC_CHANNELS.EVENT_CORE_VERSION_CHANGED, listener);
+  },
+
+  /**
+   * 手动替换核心（打开文件选择器，用户选择 sing-box 二进制）
+   */
+  async replaceManual(): Promise<boolean> {
+    return ipcClient.invoke(IPC_CHANNELS.CORE_REPLACE_MANUAL);
+  },
 };
 
 /**

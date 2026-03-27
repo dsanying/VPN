@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { ExternalLink, Loader2, Download } from 'lucide-react';
+import { ExternalLink, Loader2, Download, FolderUp } from 'lucide-react';
 import {
   getVersionInfo,
   checkForUpdates,
@@ -16,6 +16,7 @@ import {
 import { api } from '@/ipc/api-client';
 import type { UpdateProgress } from '@/ipc/api-client';
 import { useTranslation } from 'react-i18next';
+import { CoreVersionBanner } from './core-version-banner';
 
 interface VersionInfo {
   appVersion: string;
@@ -240,6 +241,27 @@ export function AboutSettings() {
     }
   };
 
+  const handleReplaceManualCore = async () => {
+    try {
+      setUpdatingCore(true);
+      const result = await api.coreUpdate.replaceManual();
+      // 如果 result 为 true，说明用户选择了文件并且替换在主进程执行完成
+      if (result) {
+        toast.success(t('settings.about.coreManualReplaceSuccess', '手动替换核心成功'), {
+          description: t('settings.about.newCoreActive', '新核心已生效'),
+        });
+        // 重新加载版本信息
+        loadVersionInfo();
+      }
+    } catch (error) {
+      toast.error(t('settings.about.coreUpdateFail', '核心更新失败'), {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setUpdatingCore(false);
+    }
+  };
+
   const handleOpenGitHub = async () => {
     const url = versionInfo?.repositoryUrl || 'https://github.com/dododook/FlowZ';
     await openExternal(url);
@@ -256,128 +278,145 @@ export function AboutSettings() {
   }
 
   return (
-    <Card>
-      <CardContent className="space-y-6 pt-6">
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground">
-              {t('settings.about.appVersion')}
-            </h4>
-            <p className="text-lg font-semibold">
-              {versionInfo?.appName || 'FlowZ'} v{versionInfo?.appVersion || '1.0.0'}
-            </p>
-          </div>
-
-          <Separator />
-
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground">
-              sing-box {t('settings.about.version')}
-            </h4>
-            <div className="flex items-center gap-4">
-              <p className="text-lg font-semibold">{versionInfo?.singBoxVersion || 'Unknown'}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCheckCoreUpdate}
-                disabled={checkingCoreUpdate || updatingCore}
-              >
-                {(checkingCoreUpdate || updatingCore) && (
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                )}
-                {updatingCore
-                  ? t('settings.about.updating')
-                  : checkingCoreUpdate
-                    ? t('settings.about.checking')
-                    : t('settings.about.checkUpdate')}
-              </Button>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            {downloading ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Download className="h-4 w-4 animate-bounce text-primary" />
-                  <span className="text-sm font-medium">
-                    {t('settings.about.downloading')} {downloadProgress}%
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 ease-out"
-                    style={{ width: `${downloadProgress}%` }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <Button
-                onClick={handleCheckUpdate}
-                disabled={checkingUpdate}
-                className="w-full sm:w-auto"
-              >
-                {checkingUpdate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {checkingUpdate ? t('settings.about.checking') : t('settings.about.checkUpdate')}
-              </Button>
-            )}
-          </div>
-
-          <Separator />
-
+    <div className="space-y-4">
+      <CoreVersionBanner />
+      <Card>
+        <CardContent className="space-y-6 pt-6">
           <div className="space-y-4">
-            <h4 className="text-sm font-medium text-muted-foreground">
-              {t('settings.about.openSource')} & {t('settings.about.community', '社区')}
-            </h4>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button variant="outline" onClick={handleOpenGitHub} className="w-full sm:w-auto">
-                <svg
-                  className="mr-2 h-4 w-4 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground">
+                {t('settings.about.appVersion')}
+              </h4>
+              <p className="text-lg font-semibold">
+                {versionInfo?.appName || 'FlowZ'} v{versionInfo?.appVersion || '1.0.0'}
+              </p>
+            </div>
+
+            <Separator />
+
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground">
+                sing-box {t('settings.about.version')}
+              </h4>
+              <div className="flex items-center gap-4">
+                <p className="text-lg font-semibold">{versionInfo?.singBoxVersion || 'Unknown'}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCheckCoreUpdate}
+                  disabled={checkingCoreUpdate || updatingCore}
                 >
-                  <path
-                    d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <span className="flex-1 text-left">GitHub</span>
-                <ExternalLink className="ml-2 h-3.5 w-3.5 opacity-50 shrink-0" />
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => openExternal('https://t.me/flowz1234')}
-                className="w-full sm:w-auto text-[#2AABEE] hover:text-[#229ED9]"
-              >
-                <svg
-                  className="mr-2 h-5 w-5 shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
+                  {(checkingCoreUpdate || updatingCore) && (
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  )}
+                  {updatingCore
+                    ? t('settings.about.updating')
+                    : checkingCoreUpdate
+                      ? t('settings.about.checking')
+                      : t('settings.about.checkUpdate')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleReplaceManualCore}
+                  disabled={checkingCoreUpdate || updatingCore}
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title={t('settings.about.manualReplace', '手动替换核心')}
                 >
-                  <path
-                    d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.892-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <span className="flex-1 text-left">
-                  {t('settings.about.tgChannel', 'FLOWZ频道')}
-                </span>
-                <ExternalLink className="ml-2 h-3.5 w-3.5 opacity-50 shrink-0" />
-              </Button>
+                  {updatingCore ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FolderUp className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              {downloading ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Download className="h-4 w-4 animate-bounce text-primary" />
+                    <span className="text-sm font-medium">
+                      {t('settings.about.downloading')} {downloadProgress}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300 ease-out"
+                      style={{ width: `${downloadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleCheckUpdate}
+                  disabled={checkingUpdate}
+                  className="w-full sm:w-auto"
+                >
+                  {checkingUpdate && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {checkingUpdate ? t('settings.about.checking') : t('settings.about.checkUpdate')}
+                </Button>
+              )}
+            </div>
+
+            <Separator />
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium text-muted-foreground">
+                {t('settings.about.openSource')} & {t('settings.about.community', '社区')}
+              </h4>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button variant="outline" onClick={handleOpenGitHub} className="w-full sm:w-auto">
+                  <svg
+                    className="mr-2 h-4 w-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span className="flex-1 text-left">GitHub</span>
+                  <ExternalLink className="ml-2 h-3.5 w-3.5 opacity-50 shrink-0" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => openExternal('https://t.me/flowz1234')}
+                  className="w-full sm:w-auto text-[#2AABEE] hover:text-[#229ED9]"
+                >
+                  <svg
+                    className="mr-2 h-5 w-5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.892-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span className="flex-1 text-left">
+                    {t('settings.about.tgChannel', 'FLOWZ频道')}
+                  </span>
+                  <ExternalLink className="ml-2 h-3.5 w-3.5 opacity-50 shrink-0" />
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p>{versionInfo?.copyright || '© 2025 FlowZ. All rights reserved.'}</p>
+              <p>{t('settings.about.builtWith')}</p>
             </div>
           </div>
-
-          <Separator />
-
-          <div className="text-xs text-muted-foreground space-y-1">
-            <p>{versionInfo?.copyright || '© 2025 FlowZ. All rights reserved.'}</p>
-            <p>{t('settings.about.builtWith')}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

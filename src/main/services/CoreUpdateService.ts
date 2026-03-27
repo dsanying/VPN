@@ -3,7 +3,7 @@
  * 负责检查 Sing-box 核心更新、下载并替换
  */
 
-import { app, net } from 'electron';
+import { app, net, dialog } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -18,6 +18,13 @@ export interface CoreUpdateCheckResult {
   downloadUrl?: string;
   releaseNotes?: string;
   error?: string;
+}
+
+export interface CoreVersionInfo {
+  currentVersion: string;
+  backupVersion: string | null;
+  hasBackup: boolean;
+  lastKnownVersion: string | null;
 }
 
 export class CoreUpdateService {
@@ -264,7 +271,6 @@ export class CoreUpdateService {
   }
 
   /**
-
    * 获取当前核心版本
    */
   async getCurrentVersion(): Promise<string> {
@@ -272,6 +278,238 @@ export class CoreUpdateService {
       return await this.proxyManager.getCoreVersion();
     }
     return '未知';
+  }
+
+  /**
+   * 记录成功启动的版本（在代理成功启动后调用）
+   */
+  async recordSuccessfulVersion(): Promise<void> {
+    try {
+      const version = await this.getCurrentVersion();
+      const versionFilePath = this.getVersionFilePath();
+      const data = { version, recordedAt: new Date().toISOString() };
+      fs.writeFileSync(versionFilePath, JSON.stringify(data, null, 2), 'utf-8');
+      this.logManager.addLog('info', `已记录成功版本: ${version}`, 'CoreUpdateService');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logManager.addLog('warn', `记录版本失败: ${msg}`, 'CoreUpdateService');
+    }
+  }
+
+  /**
+   * 获取上次记录的可用版本
+   */
+  getLastKnownGoodVersion(): string | null {
+    try {
+      const versionFilePath = this.getVersionFilePath();
+      if (!fs.existsSync(versionFilePath)) return null;
+      const data = JSON.parse(fs.readFileSync(versionFilePath, 'utf-8'));
+      return data.version || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 检查是否存在备份版本
+   */
+  hasBackup(): boolean {
+    return fs.existsSync(this.getBackupPath());
+  }
+
+  /**
+   * 获取备份版本号（运行 sing-box.bak version）
+   */
+  async getBackupVersion(): Promise<string | null> {
+    const backupPath = this.getBackupPath();
+    if (!fs.existsSync(backupPath)) return null;
+    try {
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execAsync = util.promisify(exec);
+      const { stdout } = await execAsync(`"${backupPath}" version`);
+      const match = stdout.match(/version\s+(\S+)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 获取当前核心版本信息（用于 UI 展示）
+   */
+  async getVersionInfo(): Promise<CoreVersionInfo> {
+    const currentVersion = await this.getCurrentVersion();
+    const hasBackup = this.hasBackup();
+    const backupVersion = hasBackup ? await this.getBackupVersion() : null;
+    const lastKnownVersion = this.getLastKnownGoodVersion();
+    return { currentVersion, backupVersion, hasBackup, lastKnownVersion };
+  }
+
+  /**
+   * 用户触发的回滚：将 .bak 恢复为当前核心，并重新签名
+   */
+  async rollbackCore(): Promise<void> {
+    if (!this.hasBackup()) {
+      throw new Error('没有可用的备份版本');
+    }
+
+    if (this.proxyManager) {
+      const status = this.proxyManager.getStatus();
+      if (status.running) {
+        this.logManager.addLog('info', '回滚前停止代理服务...', 'CoreUpdateService');
+        await this.proxyManager.stop();
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+
+    const currentPath = resourceManager.getSingBoxPath();
+    const backupPath = this.getBackupPath();
+
+    this.logManager.addLog(
+      'info',
+      `正在回滚核心: ${backupPath} → ${currentPath}`,
+      'CoreUpdateService'
+    );
+
+    if (process.platform === 'win32') {
+      await this.copyFileElevatedWindows(backupPath, currentPath);
+    } else {
+      fs.copyFileSync(backupPath, currentPath);
+      fs.chmodSync(currentPath, 0o755);
+    }
+
+    // macOS: 重新签名
+    if (process.platform === 'darwin') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`xattr -cr "${currentPath}"`, { stdio: 'pipe' });
+        execSync(`codesign --force --deep -s - "${currentPath}"`, { stdio: 'pipe' });
+        this.logManager.addLog('info', '回滚：已完成 macOS 签名处理', 'CoreUpdateService');
+      } catch (signError: any) {
+        this.logManager.addLog(
+          'warn',
+          `回滚签名处理失败: ${signError.message}`,
+          'CoreUpdateService'
+        );
+      }
+    }
+
+    this.logManager.addLog('info', '核心回滚成功', 'CoreUpdateService');
+
+    // 删除备份（回滚后备份不再有意义）
+    try {
+      fs.unlinkSync(backupPath);
+    } catch {
+      // ignore
+    }
+
+    // 更新版本记录
+    await this.recordSuccessfulVersion();
+  }
+
+  /**
+   * 用户手动选择本地 sing-box 二进制并替换当前核心
+   * 通过系统文件选择器让用户选取文件
+   */
+  async replaceManualCore(): Promise<void> {
+    // 打开系统文件选择器
+    const result = await dialog.showOpenDialog({
+      title: '选择 sing-box 可执行文件',
+      filters:
+        process.platform === 'win32'
+          ? [{ name: 'Executable', extensions: ['exe'] }]
+          : [{ name: 'All Files', extensions: ['*'] }],
+      properties: ['openFile'],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return; // 用户取消
+    }
+
+    const sourcePath = result.filePaths[0];
+
+    // 停止代理（如果正在运行）
+    if (this.proxyManager) {
+      const status = this.proxyManager.getStatus();
+      if (status.running) {
+        this.logManager.addLog('info', '手动替换核心：停止代理服务...', 'CoreUpdateService');
+        await this.proxyManager.stop();
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+
+    // 备份当前核心
+    await this.backupCurrentCore();
+
+    const targetPath = resourceManager.getSingBoxPath();
+    const targetDir = path.dirname(targetPath);
+
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    this.logManager.addLog(
+      'info',
+      `手动替换核心: ${sourcePath} → ${targetPath}`,
+      'CoreUpdateService'
+    );
+
+    if (process.platform === 'win32') {
+      await this.copyFileElevatedWindows(sourcePath, targetPath);
+    } else {
+      fs.copyFileSync(sourcePath, targetPath);
+      fs.chmodSync(targetPath, 0o755);
+    }
+
+    // macOS: 清除隔离标记并重新签名
+    if (process.platform === 'darwin') {
+      try {
+        const { execSync } = require('child_process');
+        execSync(`xattr -cr "${targetPath}"`, { stdio: 'pipe' });
+        execSync(`codesign --force --deep -s - "${targetPath}"`, { stdio: 'pipe' });
+        this.logManager.addLog('info', '手动替换：已完成 macOS 签名处理', 'CoreUpdateService');
+      } catch (signError: any) {
+        this.logManager.addLog(
+          'warn',
+          `手动替换签名处理失败: ${signError.message}`,
+          'CoreUpdateService'
+        );
+      }
+    }
+
+    // 验证新核心是否可运行，防止用户错选了 .tar.gz 压缩包或者选错了架构 (amd64 vs arm64)
+    try {
+      const { exec } = require('child_process');
+      const util = require('util');
+      const execAsync = util.promisify(exec);
+      const { stdout } = await execAsync(`"${targetPath}" version`);
+      if (!stdout.includes('version')) {
+        throw new Error('执行结果不是有效的 sing-box');
+      }
+    } catch (e) {
+      this.logManager.addLog(
+        'error',
+        `所选文件无法执行。已自动回滚。错误详情: ${e}`,
+        'CoreUpdateService'
+      );
+      // 恢复备份
+      await this.restoreBackup();
+      throw new Error(
+        '您选择的文件无法被系统执行。Mac 用户请注意：\n1. 请务必先双击解压下载的 .tar.gz 压缩包，然后选择解压出来的名为 sing-box 的 UNIX 可执行文件。\n2. 请确保下载的架构 (arm64/amd64) 与您当前的 Mac 匹配。'
+      );
+    }
+
+    // 记录新版本
+    await this.recordSuccessfulVersion();
+    this.logManager.addLog('info', '手动替换核心成功', 'CoreUpdateService');
+  }
+
+  /**
+   * 版本记录文件路径
+   */
+  private getVersionFilePath(): string {
+    return path.join(app.getPath('userData'), 'core-version.json');
   }
 
   // --- 私有辅助方法 ---
@@ -595,18 +833,22 @@ export class CoreUpdateService {
       );
 
       // Fall back: use PowerShell with -Verb RunAs to elevate.
-      // We write a tiny ps1 script to temp so we don't have quoting nightmares.
       const scriptPath = path.join(app.getPath('temp'), `flowz-copy-${Date.now()}.ps1`);
+      // 使用 $ErrorActionPreference = 'Stop' 确保出错时非 0 退出
       fs.writeFileSync(
         scriptPath,
-        `Copy-Item -Path '${escapedSrc}' -Destination '${escapedDest}' -Force\n`
+        `$ErrorActionPreference = 'Stop'\nCopy-Item -Path '${escapedSrc}' -Destination '${escapedDest}' -Force\n`
       );
 
       try {
-        execSync(`powershell -ExecutionPolicy Bypass -NonInteractive -File "${scriptPath}"`, {
-          stdio: 'pipe',
-          timeout: 30000,
-        });
+        // 使用 Start-Process -Verb RunAs 触发 UAC 提权并用 -Wait 阻塞直到完成
+        execSync(
+          `powershell -Command "Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -WindowStyle Hidden -File \\"${scriptPath}\\"' -Verb RunAs -Wait"`,
+          {
+            stdio: 'pipe',
+            timeout: 60000,
+          }
+        );
       } finally {
         try {
           fs.unlinkSync(scriptPath);

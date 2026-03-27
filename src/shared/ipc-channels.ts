@@ -71,6 +71,11 @@ export const IPC_CHANNELS = {
   UPDATE_SKIP: 'update:skip',
   UPDATE_OPEN_RELEASES: 'update:openReleases',
 
+  // 核心管理
+  CORE_GET_VERSION_INFO: 'core:getVersionInfo',
+  CORE_ROLLBACK: 'core:rollback',
+  CORE_REPLACE_MANUAL: 'core:replaceManual',
+
   // Shell 操作
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
 
@@ -89,6 +94,7 @@ export const IPC_CHANNELS = {
   EVENT_STATS_UPDATED: 'event:statsUpdated',
   EVENT_CONNECTION_STATE_CHANGED: 'event:connectionStateChanged',
   EVENT_ENTER_PRIVACY_MODE: 'event:enterPrivacyMode',
+  EVENT_CORE_VERSION_CHANGED: 'event:coreVersionChanged',
 
   // 应用语言同步（渲染进程 -> 主进程）
   APP_SET_LANGUAGE: 'app:setLanguage',
