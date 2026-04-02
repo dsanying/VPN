@@ -44,7 +44,7 @@ const POLL_INTERVAL = 2000;
 const FIXED_HEIGHT = 450; // Increased to match RealTimeLogs approximate height
 const PADDING_Y = 20;
 const PADDING_X = 20;
-const PADDING_LEFT = 70; // Extra left padding for source node label
+const PADDING_LEFT = 20; // Reverted back to 20, keeping it 'blocked' as requested
 const NODE_WIDTH = 6; // Slightly thinner
 const NODE_GAP = 12; // Slightly tighter gap for sleeker look? Or larger for more breath? User said "chubby", usually means too tall/thick.
 // Actually user said "fat", often meaning the ribbons are very tall. Reducing height helps.
@@ -200,13 +200,15 @@ export function ConnectionTopology() {
     const MAX_SCALE = 30; // Max pixels per connection (prevents single connection from being massive)
     const scale = Math.min(autoScale > 0 ? autoScale : MAX_SCALE, MAX_SCALE);
 
+    const SHIFT_RIGHT = 35; // Shift the entire layout right to fill empty space
+
     // Source Node
     const sourceNode: Node = {
       id: 'source',
       name: t('home.myDevice'),
       type: 'source',
       value: totalConnections,
-      x: PADDING_LEFT,
+      x: PADDING_LEFT + SHIFT_RIGHT,
       y: PADDING_Y,
       height: Math.max(2, totalConnections * scale),
       color: '#6366f1', // Indigo-500
@@ -222,7 +224,7 @@ export function ConnectionTopology() {
 
     const midNodeParams = new Map<string, Node>();
     // Responsive X positions
-    const middleX = width * 0.45; // 45% of width
+    const middleX = width * 0.45 + SHIFT_RIGHT; // 45% of width + shift
 
     sortedMiddle.forEach(([name, data]) => {
       const h = Math.max(2, data.value * scale);
@@ -248,7 +250,7 @@ export function ConnectionTopology() {
 
     const outNodeParams = new Map<string, Node>();
     const outYCursorMap = new Map<string, number>();
-    const outboundX = width - PADDING_X - 120; // Right side with padding for text
+    const outboundX = width - PADDING_X - 120 + SHIFT_RIGHT; // Right side with padding for text + shift
 
     sortedOutbounds.forEach(([name, val]) => {
       const h = Math.max(2, val * scale);

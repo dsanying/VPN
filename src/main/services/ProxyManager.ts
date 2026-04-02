@@ -880,16 +880,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         tag: 'http-in',
         listen: '127.0.0.1',
         listen_port: config.httpPort || 65533,
-        sniff: true,
-        sniff_override_destination: true,
       },
       {
         type: 'socks',
         tag: 'socks-in',
         listen: '127.0.0.1',
         listen_port: config.socksPort || 65534,
-        sniff: true,
-        sniff_override_destination: true,
       }
     );
 
@@ -900,8 +896,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         tag: 'mixed-in',
         listen: '127.0.0.1',
         listen_port: config.mixedPort,
-        sniff: true,
-        sniff_override_destination: true,
       });
     }
 
@@ -943,8 +937,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         strict_route: config.tunConfig?.strictRoute ?? true,
         // macOS 默认使用 system 栈
         stack: config.tunConfig?.stack || 'system',
-        sniff: true,
-        sniff_override_destination: true,
         // 原版 Fork 甚至只排除了本地回环：
         // 对于 Windows：Windows 的 Wintun 机制能完美接管系统 DNS，且如果由于系统路由环路被 TUN 拦截本地网关，会导致无法上网。
         // 所以 Windows 必须排除局域网段。
@@ -1024,7 +1016,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 添加主节点
       const mainOutbound = this.generateProxyOutbound(selectedServer);
       // 主节点默认使用 'proxy' tag
-      if (selectedServer.detour) {
+      if (selectedServer.detour && config.servers.some((s) => s.id === selectedServer.detour)) {
         mainOutbound.detour = `proxy-${selectedServer.detour}`;
       }
       outbounds.push(mainOutbound);
@@ -1063,8 +1055,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           // 添加目标节点本身
           const targetOutbound = this.generateProxyOutbound(targetServer);
           targetOutbound.tag = `proxy-${targetServer.id}`; // 使用特定 tag
-          if (targetServer.detour) {
-            targetOutbound.detour = `proxy-${targetServer.detour}`;
+          if (targetServer.detour && config.servers.some((s) => s.id === targetServer.detour)) {
+            // 如果 detour 就是主选节点，它的 tag 是 'proxy'，而不是 'proxy-xxx'
+            targetOutbound.detour =
+              targetServer.detour === selectedServer.id ? 'proxy' : `proxy-${targetServer.detour}`;
           }
 
           // 避免重复添加
@@ -1380,6 +1374,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     };
     // 获取当前选中的服务器，用于排除代理服务器域名
     const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
+
+    // sing-box 1.13+ 将 sniff 从 inbound 移到了 route.rules 中（替代 legacy inbound fields）
+    // action: 'sniff' 会在路由流程的最开始嗅探流量的真实域名，并覆盖目标地址
+    rules.push({
+      action: 'sniff',
+    } as any);
 
     // 强制引导 DNS 直连，防止解析代理节点自身的域名时产生死循环
     rules.push({
