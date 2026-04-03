@@ -361,6 +361,13 @@ export class ConfigManager implements IConfigManager {
     if (typeof config.autoStart !== 'boolean') {
       throw new Error('autoStart must be a boolean');
     }
+    // silentStart 是新增字段，兼容旧配置
+    if (config.silentStart !== undefined && typeof config.silentStart !== 'boolean') {
+      throw new Error('silentStart must be a boolean');
+    }
+    if (config.silentStart === undefined) {
+      config.silentStart = false; // 默认值
+    }
     if (typeof config.autoConnect !== 'boolean') {
       throw new Error('autoConnect must be a boolean');
     }
@@ -428,6 +435,7 @@ export class ConfigManager implements IConfigManager {
       },
       customRules: [],
       autoStart: false,
+      silentStart: false,
       autoConnect: false,
       minimizeToTray: true,
       autoCheckUpdate: true, // 默认启用启动时自动检查更新
@@ -446,6 +454,7 @@ export class ConfigManager implements IConfigManager {
       },
 
       customRuleSets: [], // 默认空
+      appRules: [], // 应用分流规则（实验性）默认空
 
       socksPort: 65534,
       httpPort: 65533,

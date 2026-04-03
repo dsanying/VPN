@@ -5,6 +5,7 @@ import { useNativeEventListeners } from './hooks/use-native-events';
 import { HomePage } from './pages/home-page';
 import { ServerPage } from './pages/server-page';
 import { RulesPage } from './pages/rules-page';
+import { AppPolicyPage } from './pages/app-policy-page';
 import { SettingsPage } from './pages/settings-page';
 import { Toaster } from './components/ui/sonner';
 import { ErrorBoundary } from './components/error-boundary';
@@ -118,6 +119,7 @@ function App() {
       >
         {currentView === 'home' && <HomePage />}
         {currentView === 'server' && <ServerPage />}
+        {currentView === 'appPolicy' && <AppPolicyPage />}
         {currentView === 'rules' && <RulesPage />}
         {currentView === 'settings' && <SettingsPage activeSection={settingsSection} />}
       </MainLayout>

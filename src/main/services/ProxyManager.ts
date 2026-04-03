@@ -14,6 +14,7 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { resourceManager } from './ResourceManager';
 import { retry } from '../utils/retry';
 import { getUserDataPath } from '../utils/paths';
+import { getAppPreset } from '../../shared/app-rules-preset';
 
 /**
  * 私有 IP 地址段（CIDR 格式）
@@ -872,19 +873,21 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     console.log('[ProxyManager] generateInbounds - proxyModeType:', config.proxyModeType);
     console.log('[ProxyManager] generateInbounds - modeType (lowercase):', modeType);
 
+    const listenAddr = config.allowLan ? '::' : '127.0.0.1';
+
     // 无论哪种模式，都添加 HTTP + SOCKS inbound
     // 这样用户在终端配置的代理环境变量在切换模式后仍然可用
     inbounds.push(
       {
         type: 'http',
         tag: 'http-in',
-        listen: '127.0.0.1',
+        listen: listenAddr,
         listen_port: config.httpPort || 65533,
       },
       {
         type: 'socks',
         tag: 'socks-in',
-        listen: '127.0.0.1',
+        listen: listenAddr,
         listen_port: config.socksPort || 65534,
       }
     );
@@ -894,7 +897,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       inbounds.push({
         type: 'mixed',
         tag: 'mixed-in',
-        listen: '127.0.0.1',
+        listen: listenAddr,
         listen_port: config.mixedPort,
       });
     }
@@ -904,8 +907,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       const isIpv4 = (host: string) => /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(host);
       const isIpv6 = (host: string) => /^[0-9a-fA-F:]+$/.test(host) && host.includes(':');
 
+      const shouldBypassLAN = config.bypassLAN !== false; // 默认为 true
       const excludeAddr =
-        process.platform === 'win32' ? [...PRIVATE_IP_CIDRS] : ['127.0.0.0/8', '::1/128'];
+        process.platform === 'win32'
+          ? shouldBypassLAN
+            ? [...PRIVATE_IP_CIDRS]
+            : []
+          : ['127.0.0.0/8', '::1/128'];
 
       // 绝杀级修复：如果代理节点自身是一个纯 IP，在 TUN 模式（尤其是 Mac gvisor 和部分特定环境）下，
       // sing-box 可能无法正确通过 auto_route 将其动态绑出物理网卡，从而导致连接无限回流到 TUN causing timeout。
@@ -1022,49 +1030,56 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       outbounds.push(mainOutbound);
 
       // 2. 生成自定义规则中指定的目标节点的 Outbound
-      // 遍历所有启用且指定了 targetServerId 的规则
+      // 遍历所有启用且指定了 targetServerId 的规则（包括 customRules 和 appRules）
+      const targetServerIds = new Set<string>();
       if (config.customRules) {
-        const targetServerIds = new Set<string>();
         for (const rule of config.customRules) {
           if (rule.enabled && rule.action === 'proxy' && rule.targetServerId) {
             targetServerIds.add(rule.targetServerId);
           }
         }
-
-        for (const targetId of targetServerIds) {
-          // 如果目标节点就是主节点，不需要额外添加（主节点已有 'proxy' tag）
-          if (targetId === selectedServer.id) continue;
-
-          // 查找目标服务器配置
-          const targetServer = config.servers.find((s) => s.id === targetId);
-          if (!targetServer) continue;
-
-          // 获取目标节点的前置链
-          const targetChain = this.getDetourChain(targetServer, config.servers);
-
-          // 添加目标节点的前置节点
-          for (const detourServer of targetChain.reverse()) {
-            const detourOutbound = this.generateProxyOutbound(detourServer);
-            detourOutbound.tag = `proxy-${detourServer.id}`;
-            // 避免重复添加
-            if (!outbounds.some((o) => o.tag === detourOutbound.tag)) {
-              outbounds.push(detourOutbound);
-            }
+      }
+      if (config.appRules) {
+        for (const rule of config.appRules) {
+          if (rule.enabled && rule.action === 'proxy' && rule.targetServerId) {
+            targetServerIds.add(rule.targetServerId);
           }
+        }
+      }
 
-          // 添加目标节点本身
-          const targetOutbound = this.generateProxyOutbound(targetServer);
-          targetOutbound.tag = `proxy-${targetServer.id}`; // 使用特定 tag
-          if (targetServer.detour && config.servers.some((s) => s.id === targetServer.detour)) {
-            // 如果 detour 就是主选节点，它的 tag 是 'proxy'，而不是 'proxy-xxx'
-            targetOutbound.detour =
-              targetServer.detour === selectedServer.id ? 'proxy' : `proxy-${targetServer.detour}`;
-          }
+      for (const targetId of targetServerIds) {
+        // 如果目标节点就是主节点，不需要额外添加（主节点已有 'proxy' tag）
+        if (targetId === selectedServer.id) continue;
 
+        // 查找目标服务器配置
+        const targetServer = config.servers.find((s) => s.id === targetId);
+        if (!targetServer) continue;
+
+        // 获取目标节点的前置链
+        const targetChain = this.getDetourChain(targetServer, config.servers);
+
+        // 添加目标节点的前置节点
+        for (const detourServer of targetChain.reverse()) {
+          const detourOutbound = this.generateProxyOutbound(detourServer);
+          detourOutbound.tag = `proxy-${detourServer.id}`;
           // 避免重复添加
-          if (!outbounds.some((o) => o.tag === targetOutbound.tag)) {
-            outbounds.push(targetOutbound);
+          if (!outbounds.some((o) => o.tag === detourOutbound.tag)) {
+            outbounds.push(detourOutbound);
           }
+        }
+
+        // 添加目标节点本身
+        const targetOutbound = this.generateProxyOutbound(targetServer);
+        targetOutbound.tag = `proxy-${targetServer.id}`; // 使用特定 tag
+        if (targetServer.detour && config.servers.some((s) => s.id === targetServer.detour)) {
+          // 如果 detour 就是主选节点，它的 tag 是 'proxy'，而不是 'proxy-xxx'
+          targetOutbound.detour =
+            targetServer.detour === selectedServer.id ? 'proxy' : `proxy-${targetServer.detour}`;
+        }
+
+        // 避免重复添加
+        if (!outbounds.some((o) => o.tag === targetOutbound.tag)) {
+          outbounds.push(targetOutbound);
         }
       }
     } else {
@@ -1495,14 +1510,40 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         }
         routeConfig.rule_set.push(...customRuleSets);
       }
+
+      // 应用分流规则（实验性）
+      // geosite rule_set 已在下方 getRequiredGeoSiteCategories 中统一注册
+      // 这里只需生成路由规则
+      for (const appRule of config.appRules || []) {
+        if (!appRule.enabled) continue;
+        const preset = getAppPreset(appRule.appId);
+        if (!preset) continue;
+
+        const geositeTags = preset.geositeTags.map((tag) => `geosite-${tag}`);
+        let outbound = 'direct';
+        if (appRule.action === 'proxy') {
+          outbound = appRule.targetServerId ? `proxy-${appRule.targetServerId}` : 'proxy';
+        } else if (appRule.action === 'block') {
+          outbound = 'block';
+        }
+
+        rules.push({
+          rule_set: geositeTags,
+          action: 'route',
+          outbound,
+        });
+      }
     }
 
     // 私有 IP 段直连（内网地址不应该走代理）
-    rules.push({
-      ip_cidr: PRIVATE_IP_CIDRS,
-      action: 'route',
-      outbound: 'direct',
-    });
+    // 仅当用户不关闭"绕过局域网"时添加，以支持部分回家代理高级用户的需求
+    if (config.bypassLAN !== false) {
+      rules.push({
+        ip_cidr: PRIVATE_IP_CIDRS,
+        action: 'route',
+        outbound: 'direct',
+      });
+    }
 
     // 屏蔽 QUIC (UDP 443) 防止不支持 UDP 的节点导致 Chrome 疯狂等待：
     // 同时不能屏蔽 53/853，否则 sing-box 内部的 dns-remote 在尝试 UDP 降级解析时会全面瘫痪。
@@ -1573,8 +1614,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       );
     }
 
-    // 添加自定义规则所需的 Geosite rule_set
-    const customGeositeCategories = this.getRequiredGeoSiteCategories(config.customRules || []);
+    // 添加自定义规则所需的 Geosite rule_set（包括应用分流）
+    const customGeositeCategories = this.getRequiredGeoSiteCategories(
+      config.customRules || [],
+      config.appRules || []
+    );
     if (customGeositeCategories.size > 0) {
       if (!routeConfig.rule_set) {
         routeConfig.rule_set = [];
@@ -1598,12 +1642,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /**
-   * 收集自定义规则中使用的 Geosite 类别
+   * 收集自定义规则中使用的 Geosite 类别（同时扫描 customRules 和 appRules）
    */
   private getRequiredGeoSiteCategories(
-    customRules: import('../../shared/types').DomainRule[]
+    customRules: import('../../shared/types').DomainRule[],
+    appRules: import('../../shared/types').AppRule[] = []
   ): Set<string> {
     const categories = new Set<string>();
+    // 扫描手动定义的 geosite: 域名规则
     for (const rule of customRules) {
       if (!rule.enabled) continue;
       for (const domain of rule.domains) {
@@ -1611,6 +1657,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           const category = domain.slice(8);
           categories.add(category);
         }
+      }
+    }
+    // 扫描应用分流规则（实验性）
+    for (const appRule of appRules) {
+      if (!appRule.enabled) continue;
+      const preset = getAppPreset(appRule.appId);
+      if (preset) {
+        preset.geositeTags.forEach((tag) => categories.add(tag));
       }
     }
     return categories;

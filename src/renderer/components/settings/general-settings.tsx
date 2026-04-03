@@ -17,6 +17,7 @@ export function GeneralSettings() {
   const handleToggle = async (
     field:
       | 'autoStart'
+      | 'silentStart'
       | 'autoConnect'
       | 'minimizeToTray'
       | 'autoCheckUpdate'
@@ -53,7 +54,7 @@ export function GeneralSettings() {
       const updatedConfig = { ...config, privacyPassword: value };
       await saveConfig(updatedConfig);
       toast.success(t('settings.general.successUpdate'));
-    } catch (error) {
+    } catch {
       toast.error(t('settings.general.failUpdate'));
     }
   };
@@ -65,6 +66,20 @@ export function GeneralSettings() {
   return (
     <Card>
       <CardContent className="space-y-4 pt-6">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="silentStart"
+            checked={config.silentStart}
+            onCheckedChange={(checked) => handleToggle('silentStart', checked as boolean)}
+          />
+          <Label
+            htmlFor="silentStart"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+          >
+            {t('settings.general.silentStart')}
+          </Label>
+        </div>
+
         <div className="flex items-center space-x-2">
           <Checkbox
             id="autoStart"

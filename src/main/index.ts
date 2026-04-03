@@ -268,9 +268,23 @@ async function createWindow() {
   }
 
   // 窗口加载完成后显示
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
-    logManager.addLog('info', 'Main window shown', 'Main');
+  mainWindow.once('ready-to-show', async () => {
+    try {
+      const cfg = await configManager.loadConfig();
+      const isHiddenArg = process.argv.includes('--hidden');
+      const isMacHidden =
+        process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden;
+
+      if (!cfg.silentStart && !isHiddenArg && !isMacHidden) {
+        mainWindow?.show();
+        logManager.addLog('info', 'Main window shown', 'Main');
+      } else {
+        logManager.addLog('info', 'Main window kept hidden (Silent Start)', 'Main');
+      }
+    } catch {
+      // 如果配置加载失败，默认显示窗口
+      mainWindow?.show();
+    }
   });
 
   // 开发环境加载 Vite 开发服务器

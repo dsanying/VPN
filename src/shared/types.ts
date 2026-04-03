@@ -235,6 +235,18 @@ export interface CustomRuleSet {
   addedAt: string;
 }
 
+// 应用分流规则（实验性）- 映射到内置 geosite 规则集
+export interface AppRule {
+  /** 应用 ID，对应 APP_PRESETS 中的 id */
+  appId: string;
+  /** 流量策略 */
+  action: RuleAction;
+  /** 是否启用 */
+  enabled: boolean;
+  /** 目标代理服务器 ID (仅当 action === 'proxy' 时有效) */
+  targetServerId?: string;
+}
+
 // ============================================================================
 // 用户配置
 // ============================================================================
@@ -259,6 +271,7 @@ export interface UserConfig {
 
   // 应用设置
   autoStart: boolean;
+  silentStart: boolean;
   autoConnect: boolean;
   minimizeToTray: boolean;
   autoCheckUpdate: boolean;
@@ -278,10 +291,15 @@ export interface UserConfig {
   // 自定义规则集
   customRuleSets?: CustomRuleSet[];
 
+  // 应用分流规则（实验性）
+  appRules?: AppRule[];
+
   // 端口配置
   socksPort: number;
   httpPort: number;
   mixedPort?: number; // 混合端口（可选，同时支持 HTTP 和 SOCKS5，0 或 undefined 表示禁用）
+  allowLan?: boolean; // 局域网共享代理（允许其他设备连接）
+  bypassLAN?: boolean; // 绕过局域网（将内网 IP 设置为直连）
 
   // 日志设置
   logLevel: LogLevel;

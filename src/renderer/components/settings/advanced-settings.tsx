@@ -255,6 +255,46 @@ export function AdvancedSettings() {
           </Button>
         </div>
 
+        {/* 局域网设置区域 */}
+        <div className="space-y-4 pt-4 border-t">
+          <h4 className="text-sm font-medium mb-2">{t('settings.advanced.lanSettings')}</h4>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="allowLan"
+                checked={config.allowLan === true}
+                onCheckedChange={(checked) => {
+                  const updatedConfig = { ...config, allowLan: checked as boolean };
+                  saveConfig(updatedConfig);
+                }}
+              />
+              <Label htmlFor="allowLan" className="font-normal cursor-pointer">
+                {t('settings.advanced.allowLan')}
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground ml-6 mb-2">
+              {t('settings.advanced.allowLanDesc')}
+            </p>
+
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                id="bypassLAN"
+                checked={config.bypassLAN !== false} // 默认为 true
+                onCheckedChange={(checked) => {
+                  const updatedConfig = { ...config, bypassLAN: checked as boolean };
+                  saveConfig(updatedConfig);
+                }}
+              />
+              <Label htmlFor="bypassLAN" className="font-normal cursor-pointer">
+                {t('settings.advanced.bypassLAN')}
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground ml-6 mb-2">
+              {t('settings.advanced.bypassLANDesc')}
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-4 pt-4 border-t">
           <div>
             <h4 className="text-sm font-medium mb-2">{t('settings.advanced.terminalProxy')}</h4>

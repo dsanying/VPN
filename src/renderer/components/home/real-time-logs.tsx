@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store/app-store';
-import { Trash2, ArrowDown } from 'lucide-react';
+import { Trash2, ArrowDown, Search } from 'lucide-react';
 import { getLogs, clearLogs, addEventListener, removeEventListener } from '@/bridge/api-wrapper';
 import type { LogEntry } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 export function RealTimeLogs() {
   const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isAutoScroll, setIsAutoScroll] = useState(false); // 默认不自动滚动
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -133,33 +135,52 @@ export function RealTimeLogs() {
     }
   };
 
+  const filteredLogs = logs.filter(
+    (log) =>
+      log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.level.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>{t('home.realTimeLogs')}</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClearLogs}
-            disabled={logs.length === 0}
-          >
-            <Trash2 className="h-4 w-4 mr-1" />
-            {t('home.clear')}
-          </Button>
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder={t('home.searchLogs')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-8 w-[160px] pl-8 text-xs"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearLogs}
+              disabled={logs.length === 0}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {t('home.clear')}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <ScrollArea ref={scrollAreaRef} className="h-64 w-full rounded border bg-muted/30 p-3">
-          {logs.length === 0 ? (
+          {filteredLogs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {connectionStatus?.proxyCore?.running
-                ? t('home.waitingForLogs')
-                : t('home.plsStartProxy')}
+              {logs.length > 0 && searchTerm
+                ? t('home.noLogsMatch')
+                : connectionStatus?.proxyCore?.running
+                  ? t('home.waitingForLogs')
+                  : t('home.plsStartProxy')}
             </div>
           ) : (
             <div className="space-y-1 select-text cursor-text">
-              {logs.map((log, index) => {
+              {filteredLogs.map((log, index) => {
                 const timestamp = new Date(log.timestamp).toLocaleTimeString('zh-CN');
 
                 return (
