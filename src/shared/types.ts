@@ -202,6 +202,8 @@ export interface DomainRule {
   bypassFakeIP?: boolean;
   /** 目标代理服务器 ID (仅当 action === 'proxy' 时有效) */
   targetServerId?: string;
+  /** 规则备注说明 */
+  remarks?: string;
 }
 
 // ============================================================================

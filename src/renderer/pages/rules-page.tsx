@@ -91,6 +91,16 @@ export function RulesPage() {
                     </TableCell>
                     <TableCell className="font-mono">
                       <div className="flex flex-col gap-1 max-w-[400px]">
+                        {/* Remarks Row */}
+                        {rule.remarks && (
+                          <div
+                            className="text-sm font-semibold truncate text-foreground"
+                            title={rule.remarks}
+                          >
+                            {rule.remarks}
+                          </div>
+                        )}
+
                         {/* Domain rows */}
                         {rule.domains.length > 0 && (
                           <div className="text-sm truncate" title={rule.domains.join(', ')}>

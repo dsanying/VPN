@@ -21,6 +21,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -47,6 +48,10 @@ const getRuleFormSchema = (t: any) =>
       enabled: z.boolean(),
       bypassFakeIP: z.boolean(),
       targetServerId: z.string().optional(),
+      remarks: z
+        .string()
+        .max(100, { message: t('rules.remarksLengthError', '备注不能超过100个字符') })
+        .optional(),
     })
     .refine((data) => data.domains || data.ipCidr, {
       message: t('rules.errorEmpty', '域名和 IP CIDR 不能同时为空'),
@@ -79,6 +84,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
       enabled: true,
       bypassFakeIP: false,
       targetServerId: 'default',
+      remarks: '',
     },
   });
 
@@ -92,6 +98,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
           enabled: rule.enabled,
           bypassFakeIP: rule.bypassFakeIP ?? false,
           targetServerId: rule.targetServerId || 'default',
+          remarks: rule.remarks || '',
         });
       } else {
         form.reset({
@@ -101,6 +108,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
           enabled: true,
           bypassFakeIP: false,
           targetServerId: 'default',
+          remarks: '',
         });
       }
     }
@@ -165,6 +173,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
           enabled: values.enabled,
           bypassFakeIP: values.bypassFakeIP,
           targetServerId,
+          remarks: values.remarks,
         };
         await addCustomRule(newRule);
         toast.success(t('rules.ruleAdded', '规则已添加'));
@@ -177,6 +186,7 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
           enabled: values.enabled,
           bypassFakeIP: values.bypassFakeIP,
           targetServerId,
+          remarks: values.remarks,
         };
         await updateCustomRule(updatedRule);
         toast.success(t('rules.ruleUpdated', '规则已更新'));
@@ -244,6 +254,23 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
                   <FormDescription>
                     {t('rules.ipCidrTip', '每行输入一个 IP CIDR 网段')}
                   </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="remarks"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('rules.remarksLabel', '备注 (可选)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('rules.remarksPlaceholder', '例如：公司内网、奈飞服务器')}
+                      {...field}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
