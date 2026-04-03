@@ -892,6 +892,16 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       }
     );
 
+    // 如果开启了局域网共享，额外监听 53 端口提供 DNS 服务，让该电脑可以作为网关
+    if (config.allowLan) {
+      inbounds.push({
+        type: 'dns',
+        tag: 'dns-in',
+        listen: '::',
+        listen_port: 53,
+      } as any);
+    }
+
     // Mixed 端口（可选）：同时接受 HTTP 和 SOCKS5 请求
     if (config.mixedPort && config.mixedPort > 0) {
       inbounds.push({
@@ -1493,9 +1503,26 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       }
     }
 
-    // 自定义规则（优先级最高，必须放在智能分流规则之前）
-    // 这样用户可以覆盖任何默认的分流行为
-    // 仅在非直连模式下生效
+    // 1. 私有 IP 段直连（内网地址不应该经过代理，优先级最高）
+    // 仅当用户未关闭"绕过局域网"时添加
+    if (config.bypassLAN !== false) {
+      rules.push({
+        ip_cidr: PRIVATE_IP_CIDRS,
+        action: 'route',
+        outbound: 'direct',
+      });
+    }
+
+    // 2. 屏蔽 QUIC (UDP 443) 防止 Chrome 等流量降级等待
+    // 注意：不要屏蔽 53/853，否则 DNS 解析会失效
+    rules.push({
+      port: [443],
+      network: ['udp'],
+      action: 'route',
+      outbound: 'block',
+    });
+
+    // 3. 自定义规则（优先级次之，允许用户覆盖后续默认行为）
     if (proxyMode !== 'direct') {
       const { rules: customRules, ruleSets: customRuleSets } = this.generateCustomRules(
         config.customRules || [],
@@ -1512,56 +1539,48 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       }
 
       // 应用分流规则（实验性）
-      // geosite rule_set 已在下方 getRequiredGeoSiteCategories 中统一注册
+      // geosite/geoip rule_set 已在下方 getRequiredGeoCategories 中统一注册
       // 这里只需生成路由规则
       for (const appRule of config.appRules || []) {
         if (!appRule.enabled) continue;
-        const preset = getAppPreset(appRule.appId);
+        const preset = getAppPreset(appRule.appId, config.customAppPresets);
         if (!preset) continue;
 
-        const geositeTags = preset.geositeTags.map((tag) => `geosite-${tag}`);
+        const ruleSets = [
+          ...preset.geositeTags.map((tag) => `geosite-${tag}`),
+          ...(preset.geoipTags || []).map((tag) => `geoip-${tag}`),
+        ];
+
         let outbound = 'direct';
         if (appRule.action === 'proxy') {
-          outbound = appRule.targetServerId ? `proxy-${appRule.targetServerId}` : 'proxy';
+          if (appRule.targetServerId) {
+            // 校验目标节点是否依然存在，防止因节点删除导致的 outbound 不存在而启动失败
+            const serverExists = config.servers.some((s) => s.id === appRule.targetServerId);
+            outbound = serverExists ? `proxy-${appRule.targetServerId}` : 'proxy';
+          } else {
+            outbound = 'proxy';
+          }
         } else if (appRule.action === 'block') {
           outbound = 'block';
         }
 
         rules.push({
-          rule_set: geositeTags,
+          rule_set: ruleSets,
           action: 'route',
           outbound,
         });
       }
     }
 
-    // 私有 IP 段直连（内网地址不应该走代理）
-    // 仅当用户不关闭"绕过局域网"时添加，以支持部分回家代理高级用户的需求
-    if (config.bypassLAN !== false) {
-      rules.push({
-        ip_cidr: PRIVATE_IP_CIDRS,
-        action: 'route',
-        outbound: 'direct',
-      });
-    }
-
-    // 屏蔽 QUIC (UDP 443) 防止不支持 UDP 的节点导致 Chrome 疯狂等待：
-    // 同时不能屏蔽 53/853，否则 sing-box 内部的 dns-remote 在尝试 UDP 降级解析时会全面瘫痪。
-    rules.push({
-      port: [443],
-      network: ['udp'],
-      action: 'route',
-      outbound: 'block',
-    });
-
     // 智能分流规则（仅在智能分流模式下启用）
     if (proxyMode === 'smart') {
       // 已移除 ::/0 block，因为 block 是静默丢包，会导致 Chrome 等浏览器在发起 TCP SYN 包时陷入漫长的 21 秒重传等待（Happy Eyeballs 假死），
       // 从而让用户以为“所有的海外网站全都打不开了”。我们必须依靠浏览器的原生 fallback，或者直接让 Mac 本机关闭 IPv6 分配。
 
-      // 显式添加 Google 规则，确保其走代理 (防止被 IP 规则误判)
+      // 针对 Google 和 YouTube 的关键词兜底规则（仅在未专门设置应用分流时作为备份）
+      // 注意：这些规则在 AppRules 之后，所以不会覆盖用户手动指定的节点
       rules.push({
-        domain_keyword: ['google', 'gmail', 'youtube', 'gstatic', 'googleapis'],
+        domain_keyword: ['google', 'gmail', 'youtube', 'gstatic', 'googleapis', 'googlevideo'],
         action: 'route',
         outbound: 'proxy',
       });
@@ -1614,16 +1633,20 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       );
     }
 
-    // 添加自定义规则所需的 Geosite rule_set（包括应用分流）
-    const customGeositeCategories = this.getRequiredGeoSiteCategories(
-      config.customRules || [],
-      config.appRules || []
-    );
-    if (customGeositeCategories.size > 0) {
+    // 添加自定义规则和应用分流所需的 Geosite/GeoIP rule_set
+    const { geosite: customGeositeCategories, geoip: customGeoipCategories } =
+      this.getRequiredGeoCategories(
+        config.customRules || [],
+        config.appRules || [],
+        config.customAppPresets || []
+      );
+
+    if (customGeositeCategories.size > 0 || customGeoipCategories.size > 0) {
       if (!routeConfig.rule_set) {
         routeConfig.rule_set = [];
       }
 
+      // 添加 Geosite 远程规则集
       for (const category of customGeositeCategories) {
         routeConfig.rule_set.push({
           tag: `geosite-${category}`,
@@ -1634,7 +1657,18 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
               ? 'https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-category-ai-!cn.srs'
               : `https://github.com/SagerNet/sing-geosite/raw/refs/heads/rule-set/geosite-${category}.srs`,
           download_detour: proxyMode !== 'direct' ? 'proxy' : undefined,
-        } as any); // Type cast as necessary if SingBoxRuleSet interface doesn't match perfectly or update interface
+        } as any);
+      }
+
+      // 添加 GeoIP 远程规则集
+      for (const category of customGeoipCategories) {
+        routeConfig.rule_set.push({
+          tag: `geoip-${category}`,
+          type: 'remote',
+          format: 'binary',
+          url: `https://github.com/SagerNet/sing-geoip/raw/refs/heads/rule-set/geoip-${category}.srs`,
+          download_detour: proxyMode !== 'direct' ? 'proxy' : undefined,
+        } as any);
       }
     }
 
@@ -1644,30 +1678,39 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   /**
    * 收集自定义规则中使用的 Geosite 类别（同时扫描 customRules 和 appRules）
    */
-  private getRequiredGeoSiteCategories(
+  /**
+   * 收集自定义规则中使用的 Geosite 和 GeoIP 类别（同时扫描 customRules 和 appRules）
+   */
+  private getRequiredGeoCategories(
     customRules: import('../../shared/types').DomainRule[],
-    appRules: import('../../shared/types').AppRule[] = []
-  ): Set<string> {
-    const categories = new Set<string>();
+    appRules: import('../../shared/types').AppRule[] = [],
+    customAppPresets: import('../../shared/types').CustomAppPreset[] = []
+  ): { geosite: Set<string>; geoip: Set<string> } {
+    const geositeCategories = new Set<string>();
+    const geoipCategories = new Set<string>();
+
     // 扫描手动定义的 geosite: 域名规则
     for (const rule of customRules) {
       if (!rule.enabled) continue;
       for (const domain of rule.domains) {
         if (domain.startsWith('geosite:')) {
-          const category = domain.slice(8);
-          categories.add(category);
+          geositeCategories.add(domain.slice(8));
         }
       }
     }
-    // 扫描应用分流规则（实验性）
+
+    // 扫描应用分流规则
     for (const appRule of appRules) {
       if (!appRule.enabled) continue;
-      const preset = getAppPreset(appRule.appId);
+      const preset = getAppPreset(appRule.appId, customAppPresets);
       if (preset) {
-        preset.geositeTags.forEach((tag) => categories.add(tag));
+        preset.geositeTags.forEach((tag) => geositeCategories.add(tag));
+        if (preset.geoipTags) {
+          preset.geoipTags.forEach((tag) => geoipCategories.add(tag));
+        }
       }
     }
-    return categories;
+    return { geosite: geositeCategories, geoip: geoipCategories };
   }
 
   private generateCustomRules(
@@ -1911,13 +1954,22 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           const pidFile = path.join(getUserDataPath(), 'singbox.pid');
           const startupLogFile = path.join(getUserDataPath(), 'singbox_startup.log');
           command = '/usr/bin/osascript';
+
+          // 如果开启了局域网共享且是 TUN 模式，同时开启系统的 IP 转发功能
+          const forwardCmd = this.currentConfig?.allowLan
+            ? 'sysctl -w net.ipv4.ip_forward=1; sysctl -w net.ipv6.conf.all.forwarding=1; '
+            : '';
+
           // 使用 bash -c 来执行后台命令，确保 & 正常工作
           // 重定向 stdout 和 stderr 到日志文件，以便排查启动失败原因
           args = [
             '-e',
-            `do shell script "/bin/bash -c '\\"${this.singboxPath}\\" run -c \\"${this.configPath}\\" > \\"${startupLogFile}\\" 2>&1 & echo $! > \\"${pidFile}\\"'" with administrator privileges`,
+            `do shell script "/bin/bash -c '${forwardCmd}\\"${this.singboxPath}\\" run -c \\"${this.configPath}\\" > \\"${startupLogFile}\\" 2>&1 & echo $! > \\"${pidFile}\\"'" with administrator privileges`,
           ];
-          this.logToManager('info', 'TUN 模式需要管理员权限，正在请求...');
+          this.logToManager(
+            'info',
+            `TUN 模式需要管理员权限${this.currentConfig?.allowLan ? '及开启 IP 转发' : ''}，正在请求...`
+          );
         } else if (this.needsWindowsUAC()) {
           // Windows TUN 模式: 使用 PowerShell 请求 UAC 权限运行
           // 使用 Start-Process -Verb RunAs 来请求管理员权限
@@ -1933,6 +1985,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           const pidFileEsc = pidFile.replace(/'/g, "''");
           const logFileEsc = startupLogFile.replace(/'/g, "''");
 
+          // Windows 局域网转发支持
+          const forwardPsCmd = this.currentConfig?.allowLan
+            ? 'Set-NetIPInterface -Forwarding Enabled; Set-NetIPInterface -AddressFamily IPv6 -Forwarding Enabled; '
+            : '';
+
           const psScript = [
             "$ErrorActionPreference = 'Stop'",
             "$logFile = '" + logFileEsc + "'",
@@ -1941,6 +1998,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             "$configPath = '" + configPathEsc + "'",
             'try {',
             "  'Starting sing-box...' | Out-File -FilePath $logFile -Encoding UTF8",
+            forwardPsCmd
+              ? "  'Enabling IP Forwarding...' | Out-File -FilePath $logFile -Append -Encoding UTF8"
+              : '',
+            forwardPsCmd,
             "  'SingboxPath: ' + $singboxPath | Out-File -FilePath $logFile -Append -Encoding UTF8",
             "  'ConfigPath: ' + $configPath | Out-File -FilePath $logFile -Append -Encoding UTF8",
             "  if (-not (Test-Path $singboxPath)) { 'ERROR: sing-box not found' | Out-File -FilePath $logFile -Append -Encoding UTF8; exit 1 }",
@@ -1962,7 +2023,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           ].join('; ');
 
           args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript];
-          this.logToManager('info', 'TUN 模式需要管理员权限，正在请求 UAC 授权...');
+          this.logToManager(
+            'info',
+            `TUN 模式需要管理员权限${
+              this.currentConfig?.allowLan ? '及开启 IP 转发' : ''
+            }，正在请求 UAC 授权...`
+          );
         } else {
           // 系统代理模式或 Linux：直接运行
           command = this.singboxPath;

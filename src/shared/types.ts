@@ -239,7 +239,7 @@ export interface CustomRuleSet {
 
 // 应用分流规则（实验性）- 映射到内置 geosite 规则集
 export interface AppRule {
-  /** 应用 ID，对应 APP_PRESETS 中的 id */
+  /** 应用 ID，对应 APP_PRESETS 中的 id 或 customAppPresets 中的 id */
   appId: string;
   /** 流量策略 */
   action: RuleAction;
@@ -247,6 +247,17 @@ export interface AppRule {
   enabled: boolean;
   /** 目标代理服务器 ID (仅当 action === 'proxy' 时有效) */
   targetServerId?: string;
+}
+
+/** 自定义应用分流预设（用户手动添加） */
+export interface CustomAppPreset {
+  id: string;
+  name: string;
+  emoji: string;
+  /** 图标 URL（Qure Color 等彩色图标集的应用图标） */
+  iconUrl?: string;
+  geositeTags: string[];
+  geoipTags?: string[];
 }
 
 // ============================================================================
@@ -295,6 +306,9 @@ export interface UserConfig {
 
   // 应用分流规则（实验性）
   appRules?: AppRule[];
+
+  // 用户自定义的应用分流预设
+  customAppPresets?: CustomAppPreset[];
 
   // 端口配置
   socksPort: number;

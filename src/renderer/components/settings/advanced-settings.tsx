@@ -275,6 +275,11 @@ export function AdvancedSettings() {
             <p className="text-xs text-muted-foreground ml-6 mb-2">
               {t('settings.advanced.allowLanDesc')}
             </p>
+            {config.allowLan && (
+              <p className="text-xs text-orange-500 font-medium ml-6 mb-2">
+                {t('settings.advanced.allowLanGatewayTip')}
+              </p>
+            )}
 
             <div className="flex items-center space-x-2 pt-2">
               <Checkbox
