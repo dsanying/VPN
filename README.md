@@ -1,5 +1,7 @@
 # FlowZ
 
+原作者大佬开源地址：https://github.com/zhangjh/FlowZ
+
 简洁现代的跨平台代理客户端，基于 sing-box 核心。  
 支持 NaïveProxy、VLESS、VMess、Trojan、Shadowsocks、Hysteria2、Anytls、TUIC、Shadows-tls 协议。  
 
