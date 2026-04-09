@@ -643,6 +643,25 @@ export class CoreUpdateService {
     const file = fs.createWriteStream(tempPath);
 
     return new Promise((resolve, reject) => {
+      const handleError = (err: any) => {
+        file.close();
+        fs.unlink(tempPath, () => {});
+
+        // 遇到网络错误，且是第一次尝试，并且是 github 链接，尝试使用加速镜像
+        if (!isRetry && url.includes('github.com')) {
+          this.logManager.addLog(
+            'warn',
+            `下载出错，尝试使用加速镜像: ${err.message}`,
+            'CoreUpdateService'
+          );
+          const mirrorUrl = `https://ghp.ci/${url}`;
+          this.downloadFile(mirrorUrl, true).then(resolve).catch(reject);
+          return;
+        }
+
+        reject(err);
+      };
+
       const request = net.request(url);
       request.setHeader('User-Agent', 'FlowZ-Electron');
 
@@ -664,31 +683,10 @@ export class CoreUpdateService {
           });
         });
 
-        response.on('error', (err) => {
-          file.close();
-          fs.unlink(tempPath, () => {});
-          reject(err);
-        });
+        response.on('error', handleError);
       });
 
-      request.on('error', (err) => {
-        file.close();
-        fs.unlink(tempPath, () => {});
-
-        // 遇到网络错误，且是第一次尝试，并且是 github 链接，尝试使用加速镜像
-        if (!isRetry && url.includes('github.com')) {
-          this.logManager.addLog(
-            'warn',
-            `下载出错，尝试使用加速镜像: ${err.message}`,
-            'CoreUpdateService'
-          );
-          const mirrorUrl = `https://ghp.ci/${url}`;
-          this.downloadFile(mirrorUrl, true).then(resolve).catch(reject);
-          return;
-        }
-
-        reject(err);
-      });
+      request.on('error', handleError);
 
       request.end();
     });

@@ -620,6 +620,28 @@ open "${installerPath}"
       const file = fs.createWriteStream(destPath);
       let downloadedBytes = 0;
 
+      const handleError = (err: any) => {
+        file.close();
+        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+
+        if (!isRetry && url.includes('github.com')) {
+          this.logManager.addLog(
+            'warn',
+            `下载出错，尝试使用加速镜像: ${err.message}`,
+            'UpdateService'
+          );
+          const mirrorUrl = `https://ghp.ci/${url}`;
+          this.updateProgress({
+            status: 'downloading',
+            percentage: 0,
+            message: '正在尝试通过镜像下载...',
+          });
+          this.downloadFile(mirrorUrl, destPath, totalSize, true).then(resolve).catch(reject);
+          return;
+        }
+        reject(err);
+      };
+
       const request = net.request({
         url: url,
         method: 'GET',
@@ -669,34 +691,10 @@ open "${installerPath}"
           resolve();
         });
 
-        response.on('error', (err) => {
-          file.close();
-          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-          reject(err);
-        });
+        response.on('error', handleError);
       });
 
-      request.on('error', (err) => {
-        file.close();
-        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-
-        if (!isRetry && url.includes('github.com')) {
-          this.logManager.addLog(
-            'warn',
-            `下载出错，尝试使用加速镜像: ${err.message}`,
-            'UpdateService'
-          );
-          const mirrorUrl = `https://ghp.ci/${url}`;
-          this.updateProgress({
-            status: 'downloading',
-            percentage: 0,
-            message: '正在尝试通过镜像下载...',
-          });
-          this.downloadFile(mirrorUrl, destPath, totalSize, true).then(resolve).catch(reject);
-          return;
-        }
-        reject(err);
-      });
+      request.on('error', handleError);
 
       request.end();
     });
@@ -711,6 +709,26 @@ open "${installerPath}"
     return new Promise((resolve, reject) => {
       const file = fs.createWriteStream(destPath);
       let downloadedBytes = 0;
+
+      const handleError = (err: any) => {
+        file.close();
+        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+
+        if (!isRetry && url.includes('github.com')) {
+          this.logManager.addLog(
+            'warn',
+            `下载出错，尝试使用加速镜像: ${err.message}`,
+            'UpdateService'
+          );
+          const mirrorUrl = `https://ghp.ci/${url}`;
+          this.updateProgressWindow(0, '正在尝试通过镜像下载...');
+          this.downloadFileWithProgressWindow(mirrorUrl, destPath, totalSize, true)
+            .then(resolve)
+            .catch(reject);
+          return;
+        }
+        reject(err);
+      };
 
       const request = net.request({
         url: url,
@@ -759,32 +777,10 @@ open "${installerPath}"
           resolve();
         });
 
-        response.on('error', (err) => {
-          file.close();
-          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-          reject(err);
-        });
+        response.on('error', handleError);
       });
 
-      request.on('error', (err) => {
-        file.close();
-        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-
-        if (!isRetry && url.includes('github.com')) {
-          this.logManager.addLog(
-            'warn',
-            `下载出错，尝试使用加速镜像: ${err.message}`,
-            'UpdateService'
-          );
-          const mirrorUrl = `https://ghp.ci/${url}`;
-          this.updateProgressWindow(0, '正在尝试通过镜像下载...');
-          this.downloadFileWithProgressWindow(mirrorUrl, destPath, totalSize, true)
-            .then(resolve)
-            .catch(reject);
-          return;
-        }
-        reject(err);
-      });
+      request.on('error', handleError);
 
       request.end();
     });

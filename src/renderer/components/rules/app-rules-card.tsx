@@ -44,6 +44,19 @@ export function AppRulesCard() {
     () => (localStorage.getItem('flowz_app_view_mode') as 'comfortable' | 'compact') || 'compact'
   );
 
+  // -- Bug 3 修复：用 React state 追踪图标加载失败的 preset ID --
+  // 原先用 onError 直接操作 DOM (nextSibling.style.display)，React 重渲染时会重置 inline style，
+  // 导致图标时而正常时而变回 Emoji。改用 Set<string> 存储加载失败的图标 ID，通过条件渲染解决。
+  const [failedIcons, setFailedIcons] = useState<Set<string>>(new Set());
+
+  const handleIconError = (presetId: string) => {
+    setFailedIcons((prev) => {
+      const next = new Set(prev);
+      next.add(presetId);
+      return next;
+    });
+  };
+
   useEffect(() => {
     localStorage.setItem('flowz_app_view_mode', viewMode);
   }, [viewMode]);
@@ -286,24 +299,20 @@ export function AppRulesCard() {
                       <div
                         className={`${viewMode === 'comfortable' ? 'h-9 w-9' : 'h-6 w-6'} flex items-center justify-center bg-background/80 rounded-lg shadow-sm border border-white/${viewMode === 'comfortable' ? '10' : '5'} p-${viewMode === 'comfortable' ? '1' : '0.5'} shrink-0 transition-transform group-hover:scale-105`}
                       >
-                        {preset.iconUrl ? (
+                        {/* Bug 3 修复：基于 React state 条件渲染，避免 onError DOM 操作被重渲染覆盖 */}
+                        {preset.iconUrl && !failedIcons.has(preset.id) ? (
                           <img
                             src={preset.iconUrl}
                             alt=""
                             className="h-full w-full object-contain"
                             loading="lazy"
-                            onError={(e) => {
-                              (e.target as any).style.display = 'none';
-                              (e.target as any).nextSibling.style.display = 'block';
-                            }}
+                            onError={() => handleIconError(preset.id)}
                           />
-                        ) : null}
-                        <span
-                          className={viewMode === 'comfortable' ? 'text-xl' : 'text-xs'}
-                          style={{ display: preset.iconUrl ? 'none' : 'block' }}
-                        >
-                          {preset.emoji}
-                        </span>
+                        ) : (
+                          <span className={viewMode === 'comfortable' ? 'text-xl' : 'text-xs'}>
+                            {preset.emoji}
+                          </span>
+                        )}
                       </div>
                       <span
                         className={`text-[${viewMode === 'comfortable' ? '13px' : '12px'}] font-bold truncate tracking-tight transition-colors ${

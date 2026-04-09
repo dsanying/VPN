@@ -135,8 +135,10 @@ interface SingBoxOutbound {
   username?: string;
   plugin?: string;
   plugin_opts?: string;
-  // VLESS
+  // VLESS / VMess
   uuid?: string;
+  security?: string; // vmess specific
+  alter_id?: number; // vmess specific
   flow?: string;
   packet_encoding?: string;
   // Trojan and Hysteria2
@@ -824,6 +826,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       server: 'dns-bootstrap-udp',
     } as SingBoxDnsRule);
 
+    // 解决 mDNS 和本地反向解析导致的 context deadline exceeded 超时问题
+    // 拦截 .arpa 等反向解析请求交由本地系统 DNS 快速返回，防止泄漏到公网 DNS 而引起解析超时
+    dnsRules.push({
+      domain_suffix: ['.local', '.arpa', '.lan', '.home.arpa'],
+      server: 'dns-local',
+    } as SingBoxDnsRule);
+
     // 处理自定义规则中的 bypassFakeIP
     if (config.customRules && enableFakeIp) {
       const bypassDomains: string[] = [];
@@ -991,9 +1000,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         route_exclude_address: excludeAddr,
       };
 
-      // 核心修正：无论版本如何，TUN 入站都尝试开启 sniffing，确保最大限度的域名识别。
-      (tunInbound as any).sniff = true;
-      (tunInbound as any).sniff_override_destination = true;
+      // 核心修正：sing-box 1.13.0+ 不再允许在 inbound 中配置 sniff，
+      // sniff 逻辑已统一迁移至 route 模块中处理，保留此设置会导致 FATAL 崩溃。
 
       // macOS 平台特定配置
       if (process.platform === 'darwin') {
@@ -1200,7 +1208,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // sing-box 要求协议类型必须是小写
     const protocol = server.protocol.toLowerCase();
     const protocolLower = protocol;
-    const tlsProtocols = ['vless', 'vmess', 'trojan', 'anytls', 'hysteria2', 'tuic'];
+    const tlsProtocols = ['trojan', 'anytls', 'hysteria2', 'tuic'];
 
     const outbound: SingBoxOutbound = {
       type: protocol,
@@ -1217,6 +1225,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       if (server.flow) {
         outbound.flow = server.flow;
       }
+      outbound.packet_encoding = 'xudp';
+    }
+
+    // VMess 特定配置
+    if (protocol === 'vmess') {
+      outbound.uuid = server.uuid;
+      outbound.security = server.vmessSecurity || 'auto';
+      outbound.alter_id = server.alterId || 0;
       outbound.packet_encoding = 'xudp';
     }
 
@@ -1548,12 +1564,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       final: proxyMode === 'direct' ? 'direct' : selectedServerTag,
     };
 
-    // 【全域禁止 QUIC】：强迫浏览器回退到 TCP (TLS)
-    rules.push({
-      network: ['udp'],
-      port: [443],
-      action: 'reject',
-    } as any);
+    // 【QUIC 阻断规则已移至用户自定义规则和应用分流之后】
+    // 原先在此处全域拒绝 UDP 443 会导致问题：即使用户在应用分流中将游戏设为直连，
+    // 游戏的 UDP 443 流量在被应用分流规则匹配之前就已经被 reject 了。
+    // 移动到后面可以让用户的应用分流规则优先级更高。
 
     // 【DNS 引导与辅助直连】：
     // 确保以下公共 DNS IP 不会被后面的 block 规则拦截，从而保证 DoH 握手和初次域名解析。
@@ -1645,14 +1659,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       });
     }
 
-    // 2. 屏蔽 QUIC (UDP 443) 防止 Chrome 等流量降级等待
-    // 注意：不要屏蔽 53/853，否则 DNS 解析会失效
-    rules.push({
-      port: [443],
-      network: ['udp'],
-      action: 'route',
-      outbound: 'block',
-    });
+    // Bug 4 修复：删除此处重复的 QUIC 阻断规则
+    // 第一条 QUIC reject 规则已在上方（生成 routeConfig 之前）添加，此处重复添加会造成规则冗余
+    // reject 比 block 更合适（发 TCP RST 让浏览器立即回退到 TCP，而不是静默丢弃造成等待超时）
 
     // 3. 自定义规则（优先级次之，允许用户覆盖后续默认行为）
     if (proxyMode !== 'direct') {
@@ -1718,6 +1727,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         }
       }
     }
+
+    // 【QUIC 阻断】：放在自定义规则和应用分流之后，确保用户的 direct/proxy 规则优先级更高
+    // 这样游戏设为直连时，进程名匹配在前，游戏的 UDP 流量不会被误拒。
+    // 仅阻断未被上方规则匹配到的剩余浏览器 QUIC（UDP 443），迫使其回退到 TCP (TLS)。
+    rules.push({
+      network: ['udp'],
+      port: [443],
+      action: 'reject',
+    } as any);
 
     // 智能分流规则（仅在智能分流模式下启用）
     if (proxyMode === 'smart') {
@@ -1793,17 +1811,28 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         routeConfig.rule_set = [];
       }
 
+      // Bug 2 修复：
+      // 1. 使用 fastly.jsdelivr.net CDN 加速，替代直连 raw.githubusercontent.com（在中国大陆常被封锁）
+      // 2. download_detour 改为 'direct'，避免循环依赖（代理需要规则集才能启动，规则集需要代理才能下载）
+      //    sing-box 启动时规则集下载必须走直连，后续更新可以走代理
+      // 3. 注意：不是所有 geosite 标签都有独立的 .srs 文件（如 geosite-bbc.srs 不存在）
+      //    如果下载失败，sing-box 会使用缓存版本，如无缓存则跳过该规则集
+
       // 添加 Geosite 远程规则集
       for (const category of Array.from(customGeositeCategories)) {
+        // 构建镜像 URL：优先使用 fastly CDN，提升中国大陆可用性
+        const geositeUrl =
+          category === 'category-ai'
+            ? 'https://fastly.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-category-ai-!cn.srs'
+            : `https://fastly.jsdelivr.net/gh/SagerNet/sing-geosite@rule-set/geosite-${category}.srs`;
+
         routeConfig.rule_set.push({
           tag: `geosite-${category}`,
           type: 'remote',
           format: 'binary',
-          url:
-            category === 'category-ai'
-              ? 'https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ai-!cn.srs'
-              : `https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-${category}.srs`,
-          download_detour: proxyMode !== 'direct' ? selectedServerTag : undefined,
+          url: geositeUrl,
+          // 必须走直连下载，避免启动时循环依赖
+          download_detour: 'direct',
         } as any);
       }
 
@@ -1813,8 +1842,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           tag: `geoip-${category}`,
           type: 'remote',
           format: 'binary',
-          url: `https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-${category}.srs`,
-          download_detour: proxyMode !== 'direct' ? selectedServerTag : undefined,
+          url: `https://fastly.jsdelivr.net/gh/SagerNet/sing-geoip@rule-set/geoip-${category}.srs`,
+          // 必须走直连下载，避免启动时循环依赖
+          download_detour: 'direct',
         } as any);
       }
     }
@@ -1900,6 +1930,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         };
 
         if (domainSuffix.length > 0) {
+          // domain_suffix 匹配该域名及所有子域名（如 bbc.com 匹配 www.bbc.com）
           singboxRule.domain_suffix = domainSuffix;
         }
 
@@ -1907,7 +1938,16 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           singboxRule.ip_cidr = rule.ipCidr;
         }
 
-        this.applyRuleAction(singboxRule, rule.action, rule.targetServerId, selectedServerId);
+        // Bug 1 修复：必须传入 idToTagMap 和 selectedServerTag，
+        // 否则 selectedServerTag 默认为 'proxy'，而实际出站标签是节点名称，导致 sing-box 启动失败
+        this.applyRuleAction(
+          singboxRule,
+          rule.action,
+          rule.targetServerId,
+          selectedServerId,
+          idToTagMap,
+          selectedServerTag
+        );
         rules.push(singboxRule);
       }
 
@@ -1917,7 +1957,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           action: 'route',
           rule_set: geositeTags,
         };
-        this.applyRuleAction(singboxRule, rule.action, rule.targetServerId, selectedServerId);
+        // Bug 1 修复：同上，必须传入完整参数确保 outbound 标签正确
+        this.applyRuleAction(
+          singboxRule,
+          rule.action,
+          rule.targetServerId,
+          selectedServerId,
+          idToTagMap,
+          selectedServerTag
+        );
         rules.push(singboxRule);
       }
     }

@@ -230,8 +230,16 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>
-                    {t('rules.domainTip', '每行输入一个域名，会自动匹配该域名及其所有子域名')}
+                  <FormDescription className="space-y-1">
+                    <span className="block">
+                      {t('rules.domainTip', '每行输入一个域名，会自动匹配该域名及其所有子域名')}
+                    </span>
+                    <span className="block text-amber-600/80 dark:text-amber-400/80">
+                      {t(
+                        'rules.geositeTip',
+                        '输入 geosite:标签（如 geosite:youtube）可匹配整个网站分组。注意：标签必须存在于 sing-geosite 数据库（如资源包都没有 geosite:bbc，请直接输入 bbc.com）'
+                      )}
+                    </span>
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
