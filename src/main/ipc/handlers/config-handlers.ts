@@ -31,8 +31,15 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
 
       // 同步主题到原生系统
       if (config.uiTheme) {
-        const { nativeTheme } = require('electron');
+        const { nativeTheme, BrowserWindow } = require('electron');
         nativeTheme.themeSource = config.uiTheme;
+        // 同步原生窗口背景色，防止 GPU 待机后圆角处黑色伪影
+        const isDark = nativeTheme.shouldUseDarkColors;
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) {
+            win.setBackgroundColor(process.platform === 'darwin' ? '#00000000' : (isDark ? '#121217' : '#f1f5f9'));
+          }
+        }
       }
 
       // 广播配置变更事件到渲染进程
@@ -71,8 +78,15 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
 
       // 同步主题到原生系统
       if (args.key === 'uiTheme') {
-        const { nativeTheme } = require('electron');
+        const { nativeTheme, BrowserWindow } = require('electron');
         nativeTheme.themeSource = args.value;
+        // 同步原生窗口背景色，防止 GPU 待机后圆角处黑色伪影
+        const isDark = nativeTheme.shouldUseDarkColors;
+        for (const win of BrowserWindow.getAllWindows()) {
+          if (!win.isDestroyed()) {
+            win.setBackgroundColor(process.platform === 'darwin' ? '#00000000' : (isDark ? '#121217' : '#f1f5f9'));
+          }
+        }
       }
 
       // 广播和触发事件

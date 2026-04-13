@@ -51,7 +51,11 @@ export class ProtocolParser implements IProtocolParser {
       url.startsWith('tuic://') ||
       url.startsWith('http2://') ||
       url.startsWith('naive+https://') ||
-      url.startsWith('vmess://')
+      url.startsWith('vmess://') ||
+      url.startsWith('socks5://') ||
+      url.startsWith('socks://') ||
+      url.startsWith('http://') ||
+      url.startsWith('https://')
     );
   }
 
@@ -137,6 +141,10 @@ export class ProtocolParser implements IProtocolParser {
         return this.parseNaive(urlObj);
       } else if (protocol === 'vmess') {
         return this.parseVmess(url);
+      } else if (protocol === 'socks' || protocolStr === 'socks5') {
+        return this.parseSocks(urlObj);
+      } else if (protocol === 'http' || protocolStr === 'https') {
+        return this.parseHttp(urlObj);
       }
 
       throw new Error(`不支持的协议: ${protocol}`);
@@ -733,6 +741,74 @@ export class ProtocolParser implements IProtocolParser {
   }
 
   /**
+   * 解析 SOCKS URL
+   * 格式: socks5://username:password@address:port#name
+   */
+  private parseSocks(urlObj: URL): ServerConfig {
+    const address = this.stripIpv6Brackets(urlObj.hostname);
+    const port = parseInt(urlObj.port) || 1080;
+    const name = decodeURIComponent(urlObj.hash.slice(1)) || `${address}:${port}`;
+    
+    // Credentials 
+    const credentials = decodeURIComponent(urlObj.username + (urlObj.password ? ':' + urlObj.password : ''));
+    const username = urlObj.username ? credentials.split(':')[0] : undefined;
+    const password = urlObj.password ? credentials.split(':').slice(1).join(':') : undefined;
+
+    const config: ServerConfig = {
+      id: randomUUID(),
+      name,
+      protocol: 'socks',
+      address,
+      port,
+      username,
+      password,
+      network: 'tcp',
+      security: 'none',
+    };
+    return config;
+  }
+
+  /**
+   * 解析 HTTP/HTTPS URL
+   * 格式: http://username:password@address:port#name  或者 https://...
+   */
+  private parseHttp(urlObj: URL): ServerConfig {
+    const address = this.stripIpv6Brackets(urlObj.hostname);
+    // https 默认 443, http 默认 1080 / 80
+    const defaultPort = urlObj.protocol.includes('https') ? 443 : 80;
+    const port = parseInt(urlObj.port) || defaultPort;
+    const name = decodeURIComponent(urlObj.hash.slice(1)) || `${address}:${port}`;
+    
+    // Credentials 
+    const credentials = decodeURIComponent(urlObj.username + (urlObj.password ? ':' + urlObj.password : ''));
+    const username = urlObj.username ? credentials.split(':')[0] : undefined;
+    const password = urlObj.password ? credentials.split(':').slice(1).join(':') : undefined;
+
+    const isHttps = urlObj.protocol.includes('https');
+
+    const config: ServerConfig = {
+      id: randomUUID(),
+      name,
+      protocol: 'http',
+      address,
+      port,
+      username,
+      password,
+      network: 'tcp',
+      security: isHttps ? 'tls' : 'none',
+    };
+
+    if (isHttps) {
+      config.tlsSettings = {
+        serverName: address,
+        allowInsecure: false,
+      };
+    }
+
+    return config;
+  }
+
+  /**
    * 解析传输层配置
    */
   private parseTransportSettings(
@@ -903,6 +979,10 @@ export class ProtocolParser implements IProtocolParser {
       return this.generateNaiveUrl(config);
     } else if (protocol === 'vmess') {
       return this.generateVmessUrl(config);
+    } else if (protocol === 'socks') {
+      return this.generateSocksUrl(config);
+    } else if (protocol === 'http') {
+      return this.generateHttpUrl(config);
     }
     throw new Error(`不支持的协议: ${config.protocol}`);
   }
@@ -935,6 +1015,32 @@ export class ProtocolParser implements IProtocolParser {
     const queryPart = queryString ? `?${queryString}` : '';
     return `anytls://${password}@${config.address}:${config.port}${queryPart}#${name}`;
   }
+
+  /**
+   * 生成 SOCKS URL
+   */
+  private generateSocksUrl(config: ServerConfig): string {
+    const name = encodeURIComponent(config.name || `${config.address}:${config.port}`);
+    const username = encodeURIComponent(config.username || '');
+    const password = encodeURIComponent(config.password || '');
+    const credentials = username || password ? `${username}:${password}@` : '';
+    return `socks5://${credentials}${config.address}:${config.port}#${name}`;
+  }
+
+  /**
+   * 生成 HTTP URL
+   */
+  private generateHttpUrl(config: ServerConfig): string {
+    const isHttps = config.security === 'tls';
+    const protocolPrefix = isHttps ? 'https://' : 'http://';
+    const name = encodeURIComponent(config.name || `${config.address}:${config.port}`);
+    const username = encodeURIComponent(config.username || '');
+    const password = encodeURIComponent(config.password || '');
+    const credentials = username || password ? `${username}:${password}@` : '';
+    return `${protocolPrefix}${credentials}${config.address}:${config.port}#${name}`;
+  }
+
+
 
   /**
    * 生成 VLESS URL

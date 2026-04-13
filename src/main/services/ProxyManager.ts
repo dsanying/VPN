@@ -49,6 +49,38 @@ const PRIVATE_IP_PATTERNS = [
 ];
 
 /**
+ * 国内常见网银 U盾插件及本地证券/炒股软件的专属域名
+ * 用于绕过代理，防止被 FakeIP 劫持或因协议不兼容（如二进制协议通过 HTTP 代理）被阻断
+ */
+const DOMESTIC_BANK_AND_STOCK_DOMAINS = [
+  // U盾及网银相关（通常指向 127.0.0.1）
+  '.microdone.cn', // 微动（杭州银行、中信银行等地方和股份制网银插件常用）
+  '.icbc.com.cn', // 工商银行
+  '.boc.cn', // 中国银行
+  '.ccb.com', // 建设银行
+  '.abchina.com', '.abchina.com.cn', // 农业银行
+  '.bankcomm.com', // 交通银行
+  '.cmbchina.com', // 招商银行
+  '.psbc.com', // 邮储银行
+  '.spdb.com.cn', // 浦发银行
+  '.cebbank.com', // 光大银行
+  '.citicbank.com', // 中信银行
+  '.pingan.com', // 平安银行
+  '.cib.com.cn', // 兴业银行
+  '.hxb.com.cn', // 华夏银行
+  '.cmbc.com.cn', // 民生银行
+  '.hzbank.com.cn', // 杭州银行
+
+  // 证券炒股软件相关（经常使用定制化的 TCP 二进制协议通信，在 SOCKS/HTTP 系统代理模式下会导致握手失败并被代理核心主动断开）
+  '.10jqka.com.cn', '.thsi.cn', // 同花顺
+  '.eastmoney.com', '.1234567.com.cn', // 东方财富
+  '.gw.com.cn', // 大智慧
+  '.tdx.com.cn', // 通达信
+];
+
+
+
+/**
  * sing-box 1.12.x / 1.13.x 配置类型定义
  */
 
@@ -129,6 +161,7 @@ interface SingBoxOutbound {
   detour?: string; // 代理链
   server?: string;
   server_port?: number;
+  override_address?: string;
   // Shadowsocks
   method?: string;
   password?: string;
@@ -192,6 +225,8 @@ interface SingBoxOutbound {
     enabled: boolean;
     version: number;
   };
+  // Direct outbound: UDP fragmentation (also used to mark outbound as "non-empty" for sing-box 1.13+ validation)
+  udp_fragment?: boolean;
 }
 
 interface SingBoxRouteRule {
@@ -212,6 +247,8 @@ interface SingBoxRouteRule {
   sniffer?: string[];
   rewrite_target?: boolean; // sing-box 1.12+
   timeout?: string;
+  domain_resolver?: string; // sing-box 1.13+: 指定该规则使用的 DNS 解析器
+  override_address?: string; // sing-box 1.13+: 在规则层强制修改目标地址
 }
 
 interface SingBoxRuleSet {
@@ -753,7 +790,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         server: '223.5.5.5',
         server_port: 443,
         path: '/dns-query',
-        // 使用 IP 引导解析器来解析 DoH 域名（虽然这里是 IP，但为了结构统一）
         domain_resolver: 'dns-bootstrap-udp',
       },
       {
@@ -828,8 +864,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 解决 mDNS 和本地反向解析导致的 context deadline exceeded 超时问题
     // 拦截 .arpa 等反向解析请求交由本地系统 DNS 快速返回，防止泄漏到公网 DNS 而引起解析超时
+    // 拦截国内常见网银 U盾 驱动的本地环回解析，防止 FakeIP 拦截产生 NXDOMAIN
     dnsRules.push({
-      domain_suffix: ['.local', '.arpa', '.lan', '.home.arpa'],
+      domain_suffix: ['.local', '.arpa', '.lan', '.home.arpa', ...DOMESTIC_BANK_AND_STOCK_DOMAINS],
       server: 'dns-local',
     } as SingBoxDnsRule);
 
@@ -952,8 +989,13 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       const isIpv6 = (host: string) => /^[0-9a-fA-F:]+$/.test(host) && host.includes(':');
 
       const shouldBypassLAN = config.bypassLAN !== false; // 默认为 true
-      // macOS 必须显式排除局域网段，否则当开启 strict_route 时，发往网关的 DNS 请求会被回流导致断网
-      const excludeAddr = shouldBypassLAN ? [...PRIVATE_IP_CIDRS] : ['127.0.0.0/8', '::1/128'];
+      // 恢复 3.3.18 能完美工作的排除列表。
+      // 注意：macOS 下绝对不能在底层排除物理局域网段，否则 macOS NetworkExtension 的路由逆向拦截机制会导致从 TUN (172.19.0.1) 发回 192.168.x.x 的 TCP 回执包被当作非法源 IP 丢弃，导致网页无限 HANG。
+      // 但是在 Windows 下，Wintun 如果不排除局域网物理网关，发往本地路由器的 DHCP/网关查询会被死循环拦截，导致全局断网。
+      const excludeAddr =
+        process.platform === 'win32' && shouldBypassLAN
+          ? [...PRIVATE_IP_CIDRS]
+          : ['127.0.0.0/8', '::1/128'];
 
       // 绝杀级修复（多服务器版本）：如果在 应用分流 (App Policy) 中选择了其他节点，那么这些节点的 IP 也必须被排除。
       // 否则，FlowZ 去连接这些次选节点的流量也会回流进入 TUN 产生死循环。
@@ -962,6 +1004,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         ...(config.appRules || []).map((r) => r.targetServerId),
       ]);
 
+      // 去除会导致 macOS 崩溃的 shouldBypassLAN 全局排除逻辑，回到 3.3.18 时代的精简状态
       for (const serverId of allServerIds) {
         if (!serverId) continue;
         const server = config.servers.find((s) => s.id === serverId);
@@ -974,14 +1017,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         }
       }
 
-      // 核心修复：大幅精简排除列表，仅排除必须物理直连的引导 DNS。
-      // 如果排除 8.8.8.8 等公网 DNS，则浏览器对这些 IP 的查询将绕过 TUN 导致 DNS 泄漏。
-      const dnsExcludes = ['223.5.5.5/32', '223.6.6.6/32'];
-      excludeAddr.push(...dnsExcludes);
-
-      const tunAddress = [config.tunConfig?.inet4Address || '172.19.0.1/16'];
-      // macOS 暂时关闭 IPv6 分配以隔离干扰，除非用户显式要求并处于稳定环境
+      // 恢复至对应平台最稳定的网段。Windows 在 v3.4.0 使用 /16 时非常完美；Mac 在 v3.3.18 使用 /30 时最完美。
+      const tunAddress = [
+        config.tunConfig?.inet4Address || (process.platform === 'darwin' ? '172.19.0.1/30' : '172.19.0.1/16'),
+      ];
+      // macOS 默认分配 IPv6 以提高与本地网络服务的兼容性，与 3.3.18 保持一致
       if (config.enableIPv6 && process.platform !== 'darwin') {
+        tunAddress.push(config.tunConfig?.inet6Address || 'fdfe:dcba:9876::1/126');
+      } else if (config.enableIPv6 && process.platform === 'darwin') {
         tunAddress.push(config.tunConfig?.inet6Address || 'fdfe:dcba:9876::1/126');
       }
 
@@ -989,19 +1032,22 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         type: 'tun',
         tag: 'tun-in',
         address: tunAddress,
+        // macOS (3.3.18) 最稳定 MTU 为 1400。Windows (3.4.0) 下 MTU=1350 最完美。
+        mtu: config.tunConfig?.mtu || (process.platform === 'darwin' ? 1400 : 1350),
         auto_route: config.tunConfig?.autoRoute ?? true,
         strict_route: config.tunConfig?.strictRoute ?? true,
-        // macOS ARM 下 gvisor 栈在识别进程时偶发“invalid argument”报错，切换为 mixed 栈以获得极致物理兼容性。
-        // Windows/Linux 下 system 栈配合 WinTun/NFTables 性能最强且稳定。
-        stack: config.tunConfig?.stack || (process.platform === 'darwin' ? 'mixed' : 'system'),
-        // 恢复至 1380：在大带宽环境下更均衡
-        // 降低 MTU 到 1350：显著提高在复杂网络（如部分校园网、宽带 PPPoE）下的连接成功率和稳定性
-        mtu: process.platform === 'darwin' ? 1380 : config.tunConfig?.mtu || 1350,
+        // macOS 必须使用 gvisor 栈(3.3.18)。Windows 下 system 栈配合 Wintun 性能最强且稳定(3.4.0)。
+        stack: config.tunConfig?.stack || (process.platform === 'darwin' ? 'gvisor' : 'system'),
         route_exclude_address: excludeAddr,
       };
 
-      // 核心修正：sing-box 1.13.0+ 不再允许在 inbound 中配置 sniff，
-      // sniff 逻辑已统一迁移至 route 模块中处理，保留此设置会导致 FATAL 崩溃。
+      // 兼容 sing-box 1.12.x 版本 (即 Windows 上的 1.12.13)，必须在 inbound 定义 sniff 否则无法域名分流。
+      // 对于 1.13.0+，嗅探逻辑已经统一由后方 route.rules 承担，但在入站开启会报错，因此需精准版本判断。
+      const inboundVersionMatch = this.coreVersion.match(/^(\d+\.\d+)/);
+      const inboundVersionNum = inboundVersionMatch ? parseFloat(inboundVersionMatch[1]) : 1.13;
+      if (!isNaN(inboundVersionNum) && inboundVersionNum < 1.13) {
+        (tunInbound as any).sniff = true;
+      }
 
       // macOS 平台特定配置
       if (process.platform === 'darwin') {
@@ -1147,6 +1193,19 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       type: 'direct',
       tag: 'direct',
     });
+
+    // 版本条件：sing-box 1.12.x 需要在 outbound 层面做 override_address
+    // 因为 1.12 的路由规则不支持 override_address 字段（会被静默忽略）。
+    // 1.13+ 已将此功能迁移到路由规则，不需要额外的 outbound。
+    const vArr = this.coreVersion.split('.');
+    const vNum = parseFloat(vArr[0] + '.' + (vArr[1] || '0'));
+    if (isNaN(vNum) || vNum < 1.13) {
+      outbounds.push({
+        type: 'direct',
+        tag: 'direct-loopback',
+        override_address: '127.0.0.1',
+      });
+    }
 
     // 阻断出站
     outbounds.push({
@@ -1335,6 +1394,30 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 3. Naive handles its own fingerprint/transport, typically does not use uTLS settings
     }
 
+    // SOCKS 特定配置
+    if (server.protocol === 'socks') {
+      if (server.username) outbound.username = server.username;
+      if (server.password) outbound.password = server.password;
+      // 默认 SOCKS 版本
+      (outbound as any).version = '5';
+    }
+
+    // HTTP 特定配置
+    if (server.protocol === 'http') {
+      if (server.username) outbound.username = server.username;
+      if (server.password) outbound.password = server.password;
+      
+      // HTTP outbound headers mapping can be added if needed via server.httpSettings.headers
+      if (server.httpSettings?.headers) {
+        if (!outbound.transport) outbound.transport = { type: 'http' };
+        outbound.transport.headers = server.httpSettings.headers;
+      }
+      if (server.httpSettings?.path) {
+        if (!outbound.transport) outbound.transport = { type: 'http' };
+        outbound.transport.path = server.httpSettings.path;
+      }
+    }
+
     // TLS 配置 (非 Naive 协议，因为 Naive 已在前一段处理了 tls 结构)
     if (
       server.protocol !== 'naive' &&
@@ -1456,12 +1539,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // A. 嗅探规则（必须在前，用于识别域名）
     if (!isNaN(versionNum) && versionNum >= 1.13) {
       rules.push({
-        inbound: ['tun-in', 'mixed-in', 'socks-in', 'http-in'],
         action: 'sniff',
-        // 关键核心：增加 dns 嗅探，这对识别 FakeIP 连接至关重要。
-        sniffer: ['http', 'tls', 'quic', 'dns'],
-        timeout: '500ms',
-      });
+      } as any);
     }
 
     // 1. 强制放行 FlowZ 及其核心进程：防止 DNS 回流死循环
@@ -1648,6 +1727,45 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         });
       }
     }
+
+    // 0a. U盾/安全插件的本地伪域名 → 强制 127.0.0.1，完全跳过 DNS
+    // windows10.microdone.cn 等域名是 U盾厂商注册在本地的专用域名，公网 DNS 中不存在。
+    // 普通 direct outbound 会先做 DNS 解析 → NXDOMAIN → 连接失败。
+    // 版本分支：
+    //   1.12.x → 使用 direct-loopback outbound（outbound 层面 override_address）
+    //   1.13+  → 使用路由规则层面的 override_address（outbound 层面已移除此功能）
+    const UKEY_LOCAL_DOMAINS = ['.microdone.cn'];
+    const otherBankDomains = DOMESTIC_BANK_AND_STOCK_DOMAINS.filter(
+      (d) => !UKEY_LOCAL_DOMAINS.includes(d)
+    );
+
+    if (!isNaN(versionNum) && versionNum >= 1.13) {
+      // 1.13+：路由规则支持 override_address
+      rules.push({
+        domain_suffix: UKEY_LOCAL_DOMAINS,
+        action: 'route',
+        outbound: 'direct',
+        override_address: '127.0.0.1',
+      });
+    } else {
+      // 1.12.x：使用专用的 direct-loopback outbound
+      rules.push({
+        domain_suffix: UKEY_LOCAL_DOMAINS,
+        action: 'route',
+        outbound: 'direct-loopback',
+      });
+    }
+
+    // 0b. 其余银行/证券域名 → 普通 direct（正常 DNS 解析，这些域名在公网真实存在）
+    if (otherBankDomains.length > 0) {
+      rules.push({
+        domain_suffix: otherBankDomains,
+        action: 'route',
+        outbound: 'direct',
+      });
+    }
+
+
 
     // 1. 私有 IP 段直连（内网地址不应该经过代理，优先级最高）
     // 仅当用户未关闭"绕过局域网"时添加
@@ -2244,8 +2362,19 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         }
 
         // 启动进程
+        // 关键：为 sing-box 1.12.x 注入环境变量以启用已弃用的 override_address 功能
+        // 这是银行 U盾本地域名（如 windows10.microdone.cn → 127.0.0.1）正常工作的前提。
+        // 1.13+ 已将此功能迁移到路由规则，不需要此环境变量。
+        const spawnEnv = { ...process.env };
+        const cvArr = this.coreVersion.split('.');
+        const cvNum = parseFloat(cvArr[0] + '.' + (cvArr[1] || '0'));
+        if (isNaN(cvNum) || cvNum < 1.13) {
+          spawnEnv['ENABLE_DEPRECATED_DESTINATION_OVERRIDE_FIELDS'] = 'true';
+        }
+
         this.singboxProcess = spawn(command, args, {
           stdio: ['ignore', 'pipe', 'pipe'],
+          env: spawnEnv,
         });
 
         // 记录启动信息
@@ -3772,8 +3901,29 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         await runCommand(
           `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer /t REG_SZ /d "${host}:${port}" /f`
         );
+        // 设置代理忽略列表（例外），对每个域名同时生成三种格式以最大化兼容性：
+        //   *.domain.com → WinINet 标准格式（传统 C++ 应用如同花顺/网银客户端）
+        //   *domain.com  → Chrome/Chromium 内核专用格式（无点前缀，解决 Chrome 不认带点通配符的问题）
+        //   domain.com   → 精确根域名匹配（兜底，确保根域名本身也被旁路）
+        const domainBypassEntries = DOMESTIC_BANK_AND_STOCK_DOMAINS.flatMap(d => {
+          const base = d.startsWith('.') ? d.slice(1) : d;
+          return [`*.${base}`, `*${base}`, base];
+        }).join(';');
+        const bypassDomains = '<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;' +
+          domainBypassEntries;
+        await runCommand(
+          `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyOverride /t REG_SZ /d "${bypassDomains}" /f`
+        );
 
-        this.logToManager('info', 'Windows 系统代理已设置');
+        // 核心修复：修改注册表后必须通过 WinINet API 向操作系统发送刷新广播，否则各大浏览器和后台服务（包括网银插件）会一直使用旧的代理缓存，遇到重启必失效。
+        const refreshCmd = `powershell -NoProfile -Command "$sig = '[DllImport(\\"wininet.dll\\")] public static extern bool InternetSetOption(int hInternet, int dwOption, int lpBuffer, int dwBufferLength);'; $type = Add-Type -MemberDefinition $sig -Name 'WinInet' -Namespace 'Proxy' -PassThru; $type::InternetSetOption(0, 39, 0, 0); $type::InternetSetOption(0, 37, 0, 0);"`;
+        try {
+          await runCommand(refreshCmd);
+        } catch (e) {
+          this.logToManager('warn', `WinINet 代理缓存刷新失败 (可能被阻止): ${e}`);
+        }
+
+        this.logToManager('info', 'Windows 系统代理已设置 (附带例外清单并刷新缓存)');
       } catch (error) {
         this.logToManager('error', `设置 Windows 系统代理失败: ${error}`);
       }
@@ -3831,7 +3981,16 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         await runCommand(
           `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable /t REG_DWORD /d 0 /f`
         );
-        this.logToManager('info', 'Windows 系统代理已取消');
+
+        // 核心修复：修改注册表后必须通过 WinINet API 向操作系统发送刷新广播
+        const refreshCmd = `powershell -NoProfile -Command "$sig = '[DllImport(\\"wininet.dll\\")] public static extern bool InternetSetOption(int hInternet, int dwOption, int lpBuffer, int dwBufferLength);'; $type = Add-Type -MemberDefinition $sig -Name 'WinInet' -Namespace 'Proxy' -PassThru; $type::InternetSetOption(0, 39, 0, 0); $type::InternetSetOption(0, 37, 0, 0);"`;
+        try {
+          await runCommand(refreshCmd);
+        } catch (e) {
+          // ignore
+        }
+
+        this.logToManager('info', 'Windows 系统代理已取消 (并刷新系统缓存)');
       } catch (error) {
         this.logToManager('error', `取消 Windows 系统代理失败: ${error}`);
       }

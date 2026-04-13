@@ -227,10 +227,21 @@
   }
 
   /* Main content card */
+  /* 核心修复：使用 ::before 伪元素替代 box-shadow 做圆角遮罩。
+     box-shadow 和元素共享同一个 GPU 合成器层，待机后同时失效。
+     ::before + will-change:transform 创建独立的 GPU 层，
+     即使主元素的纹理缓存失效，伪元素仍然保持渲染。 */
   .main-content-card {
     background-color: #ffffff;
     border-radius: 12px 0 0 12px;
+    position: relative;
+    /* 仍然保留 GPU 加速以减少普通渲染闪烁 */
+    transform: translateZ(0);
+    isolation: isolate;
   }
+
+  /* 删除了冗余的 main-content-card::before 角落填充层 */
+  /* 因为当前的 .app-shell 背景已经在底部做到了与 Sidebar 的颜色完全一致，自然完美填充圆角背后的缝隙 */
 
   .dark .main-content-card {
     background-color: hsl(0 0% 7.5%);
@@ -244,29 +255,32 @@
      from a long background session on Windows.                    */
 
   .app-shell {
-    will-change: background; /* keep on a GPU compositing layer */
+    will-change: background;
+    transform: translateZ(0);
   }
 
-  /* macOS light: transparent keeps native vibrancy behind the sidebar */
   html.platform-darwin .app-shell {
     background: transparent;
   }
 
-  /* macOS dark: transparent app-shell but solid sidebar if needed? 
-     Actually, app-shell should be transparent so sidebar vibrancy works. */
   html.platform-darwin.dark .app-shell {
     background: transparent;
   }
 
-  /* Windows / Linux light – hardcoded equivalent of --muted (210 40% 96.1%) */
   html.platform-win32 .app-shell,
   html.platform-linux .app-shell {
     background: #f1f5f9;
   }
 
-  /* Windows / Linux dark */
+  /* Must be fully opaque (no rgba) to prevent GPU semi-transparent layer repaint artifacts */
   html.platform-win32.dark .app-shell,
   html.platform-linux.dark .app-shell {
-    background: rgba(18, 18, 23, 0.95);
+    background: #121217;
+  }
+
+  /* Dark sidebar must exactly match app-shell bg so box-shadow corner masking is seamless */
+  html.platform-win32.dark .sidebar,
+  html.platform-linux.dark .sidebar {
+    background: #121217;
   }
 }

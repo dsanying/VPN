@@ -201,10 +201,12 @@ export class ConfigManager implements IConfigManager {
           'anytls',
           'tuic',
           'naive',
+          'socks',
+          'http',
         ].includes(protocolLower)
       ) {
         throw new Error(
-          'Server protocol must be vless, vmess, trojan, hysteria2, shadowsocks, anytls, tuic, or naive'
+          'Server protocol must be vless, vmess, trojan, hysteria2, shadowsocks, anytls, tuic, naive, socks, or http'
         );
       }
       if (!server.address || typeof server.address !== 'string') {

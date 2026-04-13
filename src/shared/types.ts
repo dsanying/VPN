@@ -17,7 +17,9 @@ export type Protocol =
   | 'anytls'
   | 'tuic'
   | 'vmess'
-  | 'naive';
+  | 'naive'
+  | 'socks'
+  | 'http';
 export type Network = 'tcp' | 'ws' | 'grpc' | 'http';
 export type Hysteria2Network = 'tcp' | 'udp';
 export type Security = 'none' | 'tls' | 'reality';

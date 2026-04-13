@@ -67,6 +67,9 @@ export function ProxyModeSelector() {
         selectedServer.password &&
         selectedServer.password.trim() !== ''
       );
+    } else if (protocol === 'socks' || protocol === 'http') {
+      // SOCKS and HTTP can just have address and port, username/pass are optional
+      return true;
     }
 
     return false;

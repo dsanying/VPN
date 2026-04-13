@@ -218,7 +218,7 @@ async function createWindow() {
     title: 'FlowZ',
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成
-    backgroundColor: isMac ? '#00000000' : '#1e1e2e',
+    backgroundColor: isMac ? '#00000000' : (cfg.uiTheme === 'dark' ? '#121217' : '#f1f5f9'),
     transparent: isMac,
     autoHideMenuBar: true, // 自动隐藏菜单栏
     webPreferences: {
@@ -235,6 +235,20 @@ async function createWindow() {
       visualEffectState: 'active',
     }),
   });
+
+  // Windows: 监听系统主题变化，同步原生窗口背景色
+  // 这是修复 GPU 待机后圆角处出现黑色伪影的关键：
+  // 当 Chromium 合成器层缓存失效时，原生窗口背景会短暂露出，
+  // 如果颜色和 sidebar 不匹配就会看到黑点。
+  if (!isMac && mainWindow) {
+    const { nativeTheme } = require('electron');
+    nativeTheme.on('updated', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const isDark = nativeTheme.shouldUseDarkColors;
+        mainWindow.setBackgroundColor(isDark ? '#121217' : '#f1f5f9');
+      }
+    });
+  }
 
   // ── 窗口尺寸记忆：监听 resize 并防抖保存 ──
   let resizeTimer: NodeJS.Timeout | null = null;

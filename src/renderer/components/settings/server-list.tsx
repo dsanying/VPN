@@ -66,6 +66,8 @@ const ALL_PROTOCOLS = [
   'anytls',
   'tuic',
   'naive',
+  'socks',
+  'http',
 ] as const;
 
 const getCountryCode = (name: string): string | null => {
@@ -320,6 +322,8 @@ export function ServerList({
       anytls: 'bg-teal-500/15 text-teal-600 border-teal-300/30',
       tuic: 'bg-indigo-500/15 text-indigo-600 border-indigo-300/30',
       naive: 'bg-rose-500/15 text-rose-600 border-rose-300/30',
+      socks: 'bg-slate-500/15 text-slate-600 border-slate-300/30',
+      http: 'bg-sky-500/15 text-sky-600 border-sky-300/30',
     };
     return colors[protocol.toLowerCase()] || 'bg-muted text-muted-foreground';
   };

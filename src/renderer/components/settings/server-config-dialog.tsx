@@ -23,6 +23,8 @@ import { AnyTlsForm } from './anytls-form';
 import { TuicForm } from './tuic-form';
 import { NaiveForm } from './naive-form';
 import { VmessForm } from './vmess-form';
+import { SocksForm } from './socks-form';
+import { HttpForm } from './http-form';
 import type { ServerConfig, ProtocolType } from '@/bridge/types';
 import { useTranslation } from 'react-i18next';
 
@@ -141,6 +143,8 @@ export function ServerConfigDialog({
                 <SelectItem value="tuic">TUIC</SelectItem>
                 <SelectItem value="vmess">VMess</SelectItem>
                 <SelectItem value="naive">NaiveProxy</SelectItem>
+                <SelectItem value="socks">SOCKS5</SelectItem>
+                <SelectItem value="http">HTTP(S)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
@@ -261,6 +265,28 @@ export function ServerConfigDialog({
                 key={currentServerConfig?.id || 'new'}
                 serverConfig={
                   currentServerConfig?.protocol?.toLowerCase() === 'vmess'
+                    ? currentServerConfig
+                    : undefined
+                }
+                onSubmit={handleSave}
+              />
+            )}
+            {selectedProtocol === 'socks' && (
+              <SocksForm
+                key={currentServerConfig?.id || 'new'}
+                serverConfig={
+                  currentServerConfig?.protocol?.toLowerCase() === 'socks'
+                    ? currentServerConfig
+                    : undefined
+                }
+                onSubmit={handleSave}
+              />
+            )}
+            {selectedProtocol === 'http' && (
+              <HttpForm
+                key={currentServerConfig?.id || 'new'}
+                serverConfig={
+                  currentServerConfig?.protocol?.toLowerCase() === 'http'
                     ? currentServerConfig
                     : undefined
                 }
