@@ -16,7 +16,7 @@
 
 ## ✨ 功能特性
 
-- ✅ 支持 NaïveProxy、VLESS、VMess、Trojan、Hysteria2、Shadowsocks、Anytls、TUIC、Shadows-tls协议。
+- ✅ 支持 NaïveProxy、VLESS、VMess、Trojan、Hysteria2、Shadowsocks、Anytls、TUIC、Shadows-tls协议等。
 - ✅ 强大的路由规则系统（支持 geosite / geoip 规则集）
 - ✅ 多种代理模式（全局 / 智能 / 直连）
 - ✅ 应用分流策略组模块
