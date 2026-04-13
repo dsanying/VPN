@@ -54,6 +54,7 @@ export class ProtocolParser implements IProtocolParser {
       url.startsWith('vmess://') ||
       url.startsWith('socks5://') ||
       url.startsWith('socks://') ||
+      url.startsWith('s5://') ||
       url.startsWith('http://') ||
       url.startsWith('https://')
     );
@@ -141,7 +142,7 @@ export class ProtocolParser implements IProtocolParser {
         return this.parseNaive(urlObj);
       } else if (protocol === 'vmess') {
         return this.parseVmess(url);
-      } else if (protocol === 'socks' || protocolStr === 'socks5') {
+      } else if (protocol === 'socks' || protocolStr === 'socks5' || protocolStr === 's5') {
         return this.parseSocks(urlObj);
       } else if (protocol === 'http' || protocolStr === 'https') {
         return this.parseHttp(urlObj);
