@@ -21,6 +21,11 @@ import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useEffect } from 'react';
 
+// 模块级缓存：记录图标加载失败的 preset ID
+// 使用模块级而非组件 state，确保组件重新挂载（主题切换/config 更新）时不会重置，
+// 避免图标在「显示 img」→「加载失败」→「显示 emoji」之间反复闪变。
+const _failedIconsCache = new Set<string>();
+
 export function AppRulesCard() {
   const { t } = useTranslation();
   const config = useAppStore((state) => state.config);
@@ -44,17 +49,14 @@ export function AppRulesCard() {
     () => (localStorage.getItem('flowz_app_view_mode') as 'comfortable' | 'compact') || 'compact'
   );
 
-  // -- Bug 3 修复：用 React state 追踪图标加载失败的 preset ID --
-  // 原先用 onError 直接操作 DOM (nextSibling.style.display)，React 重渲染时会重置 inline style，
-  // 导致图标时而正常时而变回 Emoji。改用 Set<string> 存储加载失败的图标 ID，通过条件渲染解决。
-  const [failedIcons, setFailedIcons] = useState<Set<string>>(new Set());
+  // 使用模块级缓存（_failedIconsCache）+ React state 联动：
+  // state 用于触发重渲染，cache 用于跨挂载持久化，两者保持同步。
+  const [failedIcons, setFailedIcons] = useState<Set<string>>(() => new Set(_failedIconsCache));
 
   const handleIconError = (presetId: string) => {
-    setFailedIcons((prev) => {
-      const next = new Set(prev);
-      next.add(presetId);
-      return next;
-    });
+    if (_failedIconsCache.has(presetId)) return; // 已记录过，无需重复 setState
+    _failedIconsCache.add(presetId);
+    setFailedIcons(new Set(_failedIconsCache));
   };
 
   useEffect(() => {
@@ -67,17 +69,17 @@ export function AppRulesCard() {
     const fetchIcons = async () => {
       setIsLoadingIcons(true);
       try {
-        // 尝试多个源，提高在不同网络环境下的成功率
+        // 按优先级依次尝试多个 CDN 源（国内网络对 jsdelivr/github 访问不稳定）
         const fetchWithFallback = async (urls: string[]) => {
           for (const url of urls) {
             try {
-              const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+              const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
               if (res.ok) return await res.json();
             } catch {
               console.warn(`Failed to fetch from ${url}, trying next...`);
             }
           }
-          throw new Error('All icon sources failed');
+          return null; // 所有源均失败时返回 null，不抛异常
         };
 
         const [qureData, edcData] = await Promise.all([
@@ -94,10 +96,11 @@ export function AppRulesCard() {
         ]);
 
         const allIcons = [...(qureData?.icons || []), ...(edcData?.icons || [])];
+        // 无论是否拿到数据都正常结束，失败时 allIcons 为空数组，UI 会显示手动输入兜底
         setIconGalleries(allIcons);
       } catch (e) {
         console.error('Failed to fetch icon galleries:', e);
-        toast.error('图标库加载失败，请检查网络连接');
+        setIconGalleries([]); // 保证 isLoading 能结束，并显示兜底 UI
       } finally {
         setIsLoadingIcons(false);
       }
@@ -522,17 +525,39 @@ export function AppRulesCard() {
                     )}
                   </div>
                   {!isLoadingIcons && iconGalleries.length === 0 && (
-                    <div className="py-10 text-center space-y-2">
-                      <p className="text-xs text-muted-foreground">加载失败或网络受限</p>
+                    <div className="py-6 px-2 space-y-3">
+                      <p className="text-xs text-center text-muted-foreground">
+                        云端图标库加载失败（网络受限）
+                      </p>
+                      {/* 兜底方案：手动输入图标 URL */}
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-muted-foreground">
+                          可手动粘贴图标图片地址（支持 .png / .webp 等）：
+                        </p>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="https://example.com/icon.png"
+                            value={newAppIconUrl}
+                            onChange={(e) => setNewAppIconUrl(e.target.value)}
+                            className="h-9 text-xs bg-muted/30 border-none focus-visible:ring-1"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0 h-9"
+                            onClick={() => setShowIconGallery(false)}
+                          >
+                            确定
+                          </Button>
+                        </div>
+                      </div>
                       <Button
                         variant="link"
                         size="sm"
-                        className="text-[10px]"
-                        onClick={() => {
-                          setIconGalleries([]); // 触发 useEffect 重试
-                        }}
+                        className="text-[10px] w-full"
+                        onClick={() => setIconGalleries([])}
                       >
-                        点击重试
+                        重新尝试加载
                       </Button>
                     </div>
                   )}

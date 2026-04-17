@@ -42,6 +42,14 @@ if (process.platform === 'win32') {
   app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 
+// 开启 V8 手动 GC 能力，用于进入轻量模式时主动释放主进程堆内存
+// 不影响正常运行，仅在 enterLightweightMode 时调用一次
+try {
+  require('v8').setFlagsFromString('--expose-gc');
+} catch {
+  // 部分环境不支持，忽略
+}
+
 let mainWindow: BrowserWindow | null = null;
 let trayManager: TrayManager | null = null;
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -342,6 +350,7 @@ async function createWindow() {
           );
           if (trayManager) {
             trayManager.enterLightweightMode();
+            // TrayManager.enterLightweightMode 内部已包含 GC + 日志清理
           }
           inactivityTimer = null;
         }, INACTIVITY_TIMEOUT);

@@ -478,20 +478,26 @@ export class TrayManager implements ITrayManager {
     if (this.onLightweightMode) {
       this.onLightweightMode();
     } else if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      // 发送 IPC 消息给主进程（也就是给自己，但在 index.ts 中监听）
-      // 或者直接修改 index.ts 中的逻辑。
-      // 为了解耦，我们通过 mainWindow 发送一个特殊的事件
       this.mainWindow.webContents.send('lightweight-mode-active');
 
-      // 实际上，最简单的办法是：
-      // 我们在 index.ts 中增加一个导出方法 forceCloseWindow()，或者
-      // 我们在 window 对象上附加一个属性。
-
-      // 但由于架构限制，我们这里采用一种变通方法：
-      // 我们使用 destroy() 来强制关闭，但这会跳过 beforeunload 等事件。
-      // 对于轻量模式，我们确实希望彻底释放资源。
+      // 销毁窗口，释放整个 Chromium 渲染进程（最大内存释放）
       this.mainWindow.destroy();
       this.logManager.addLog('info', 'Main window destroyed for lightweight mode', 'TrayManager');
+
+      // 窗口销毁后执行主进程内存清理：
+      // 1. 清空日志缓冲区（释放 5-10MB 内存中积累的日志对象）
+      // 2. 触发 V8 GC（回收孤立的闭包、IPC handler 引用、缓存 config 对象等，约 15-25MB）
+      // 延迟 500ms 等待窗口销毁事件完全传播
+      setTimeout(() => {
+        // 清空内存日志缓冲区（只清内存，不删磁盘日志文件）
+        this.logManager.clearLogs();
+
+        // 手动触发 V8 GC（需要启动时已调用 v8.setFlagsFromString('--expose-gc')）
+        if (typeof (global as any).gc === 'function') {
+          (global as any).gc();
+          console.log('[LightweightMode] V8 GC triggered');
+        }
+      }, 500);
     }
   }
 

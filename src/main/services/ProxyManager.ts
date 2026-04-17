@@ -947,31 +947,54 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 无论哪种模式，都添加 HTTP + SOCKS inbound
     // 这样用户在终端配置的代理环境变量在切换模式后仍然可用
-    inbounds.push(
-      {
-        type: 'http',
-        tag: 'http-in',
-        listen: listenAddr,
-        listen_port: config.httpPort || 2080,
-      },
-      {
-        type: 'socks',
-        tag: 'socks-in',
-        listen: listenAddr,
-        listen_port: config.socksPort || 2081,
-      }
-    );
+    //
+    // 关键修复：必须启用流量嗅探（sniff），否则 sing-box 无法从 TLS ClientHello 中
+    // 提取域名（SNI），导致路由引擎只看到 IP 地址，无法匹配 geosite 规则正确分流。
+    // 症状：Instagram 消息中心无网络、WhatsApp 二维码无法扫码等 WebSocket 类应用异常。
+    // NekoBox 等 sing-box 客户端默认开启 sniff，FlowZ 之前遗漏了。
+    //
+    // 版本兼容：
+    //   1.12.x → sniff/sniff_override_destination 是 inbound 级别字段
+    //   1.13.x → 这些字段已移除，改由路由层 action: 'sniff' + override_destination: true 实现
+    const inboundVer = this.coreVersion.match(/^(\d+\.\d+)/);
+    const inboundVerNum = inboundVer ? parseFloat(inboundVer[1]) : 1.13;
+    const useLegacySniff = !isNaN(inboundVerNum) && inboundVerNum < 1.13;
 
+    const httpInbound: SingBoxInbound = {
+      type: 'http',
+      tag: 'http-in',
+      listen: listenAddr,
+      listen_port: config.httpPort || 2080,
+    };
+    const socksInbound: SingBoxInbound = {
+      type: 'socks',
+      tag: 'socks-in',
+      listen: listenAddr,
+      listen_port: config.socksPort || 2081,
+    };
 
+    if (useLegacySniff) {
+      httpInbound.sniff = true;
+      httpInbound.sniff_override_destination = true;
+      socksInbound.sniff = true;
+      socksInbound.sniff_override_destination = true;
+    }
+
+    inbounds.push(httpInbound, socksInbound);
 
     // Mixed 端口（可选）：同时接受 HTTP 和 SOCKS5 请求
     if (config.mixedPort && config.mixedPort > 0) {
-      inbounds.push({
+      const mixedInbound: SingBoxInbound = {
         type: 'mixed',
         tag: 'mixed-in',
         listen: listenAddr,
         listen_port: config.mixedPort,
-      });
+      };
+      if (useLegacySniff) {
+        mixedInbound.sniff = true;
+        mixedInbound.sniff_override_destination = true;
+      }
+      inbounds.push(mixedInbound);
     }
 
     // TUN 模式额外添加 TUN inbound
@@ -1528,6 +1551,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     const versionNum = parseFloat(versionArr[0] + '.' + (versionArr[1] || '0'));
 
     // A. 嗅探规则（必须在前，用于识别域名）
+    // 1.13+ 必须在路由层开启 sniff，替代已移除的 inbound 级别 sniff 字段
+    // sing-box 1.13.x 嗅探后自动将域名用于路由匹配（等效旧版 sniff_override_destination）
     if (!isNaN(versionNum) && versionNum >= 1.13) {
       rules.push({
         action: 'sniff',

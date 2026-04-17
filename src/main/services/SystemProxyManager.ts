@@ -62,7 +62,7 @@ export class WindowsSystemProxy extends SystemProxyBase {
    * 启用系统代理
    */
   async enableProxy(address: string, httpPort: number, socksPort: number): Promise<void> {
-    console.log(`正在设置 Windows 系统代理: ${address}:${httpPort}`);
+    console.log(`正在设置 Windows 系统代理: ${address}:${httpPort} (SOCKS 端口 ${socksPort} 仅供手动配置)`);
 
     // 保存原始设置
     try {
@@ -78,7 +78,13 @@ export class WindowsSystemProxy extends SystemProxyBase {
       await retry(
         async () => {
           // 设置代理服务器地址
-          const proxyServer = `http=${address}:${httpPort};https=${address}:${httpPort};socks=${address}:${socksPort}`;
+          // 关键修复：只设置 HTTP/HTTPS 代理，不设置 socks=
+          // 原因：当 Windows 注册表包含 socks= 时，部分应用（尤其是 Chromium 内核）
+          // 会将 WebSocket 等连接通过 SOCKS5 发送，而 SOCKS5 客户端可能先本地解析 DNS
+          //（被 GFW 污染），再将污染后的 IP 发给代理 → 路由失败。
+          // NekoBox 等工具也不在系统代理中设置 socks=。
+          // SOCKS5 代理仍在 ${socksPort} 端口可用，供需要的应用主动配置。
+          const proxyServer = `http=${address}:${httpPort};https=${address}:${httpPort}`;
           await execAsync(
             `reg add "${this.regPath}" /v ProxyServer /t REG_SZ /d "${proxyServer}" /f`
           );

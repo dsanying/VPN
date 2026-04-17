@@ -163,9 +163,10 @@
   }
 
   /* Windows / Linux: solid sidebar background (no vibrancy available) */
+  /* 内容卡片对应的边角处需要展示 sidebar 背景颜色，必须与 app-shell 完全一致 */
   html.platform-win32 .sidebar,
   html.platform-linux .sidebar {
-    background: hsl(var(--muted));
+    background: #f1f5f9; /* 硬编码和 app-shell 保持一致，避免 CSS 变量在 GPU 缓存失效时出现色差 */
   }
 
   html.platform-darwin.dark .sidebar {
@@ -174,7 +175,7 @@
 
   html.platform-win32.dark .sidebar,
   html.platform-linux.dark .sidebar {
-    background: rgba(18, 18, 23, 0.95); /* solid background for non-macOS */
+    background: #121217; /* 硬编码，和 app-shell dark 一致 */
   }
 
   .nav-item {
@@ -227,21 +228,36 @@
   }
 
   /* Main content card */
-  /* 核心修复：使用 ::before 伪元素替代 box-shadow 做圆角遮罩。
-     box-shadow 和元素共享同一个 GPU 合成器层，待机后同时失效。
-     ::before + will-change:transform 创建独立的 GPU 层，
-     即使主元素的纹理缓存失效，伪元素仍然保持渲染。 */
   .main-content-card {
     background-color: #ffffff;
     border-radius: 12px 0 0 12px;
     position: relative;
-    /* 仍然保留 GPU 加速以减少普通渲染闪烁 */
     transform: translateZ(0);
     isolation: isolate;
   }
 
-  /* 删除了冗余的 main-content-card::before 角落填充层 */
-  /* 因为当前的 .app-shell 背景已经在底部做到了与 Sidebar 的颜色完全一致，自然完美填充圆角背后的缝隙 */
+  /* 修复圆角连接处的黑点伪影：
+     Chromium GPU 合成层在渲染 border-radius 时，圆角之外的遇角区域会暂时暴露出底层颜色。
+     ::before 伪元素在圆角连接处插入与 sidebar 完全相同的颜色块，覆盖可能的黑色缝隙。
+     top: -2px / bottom: -2px 确保完全覆盖圆角外的那上一两个象素。 */
+  html.platform-win32 .main-content-card::before,
+  html.platform-linux .main-content-card::before {
+    content: '';
+    position: absolute;
+    left: -1px;   /* 少量超出自身边界，算上 sidebar 的区域 */
+    top: -2px;
+    bottom: -2px;
+    width: 14px;  /* 圆角半径 12px + 超出量 */
+    background: #f1f5f9; /* 必须与 sidebar light 颜色完全一致 */
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  html.platform-win32.dark .main-content-card::before,
+  html.platform-linux.dark .main-content-card::before {
+    background: #121217; /* 必须与 sidebar dark 颜色完全一致 */
+    outline: 1px solid #121217; /* 覆盖 sub-pixel gaps */
+  }
 
   .dark .main-content-card {
     background-color: hsl(0 0% 7.5%);
