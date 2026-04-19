@@ -98,6 +98,11 @@ export const IPC_CHANNELS = {
 
   // 应用语言同步（渲染进程 -> 主进程）
   APP_SET_LANGUAGE: 'app:setLanguage',
+
+  // 数据备份与恢复
+  BACKUP_EXPORT: 'backup:export',
+  BACKUP_IMPORT: 'backup:import',
+  BACKUP_GET_INFO: 'backup:getInfo',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

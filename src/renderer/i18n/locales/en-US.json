@@ -241,7 +241,32 @@
       "tipPermanent": "For permanent settings, add the command to ~/.bashrc or ~/.zshrc",
       "tipHttpPort": "HTTP proxy port: {{port}} (recommended, best compatibility)",
       "tipSocksPort": "SOCKS5 proxy port: {{port}} (supported by some tools)",
-      "tipDisable": "To disable proxy: delete or comment out the relevant environment variables"
+      "tipDisable": "To disable proxy: delete or comment out the relevant environment variables",
+      "backup": {
+        "title": "Data Backup & Restore",
+        "desc": "Protect your nodes, rules, and subscriptions from being lost after reinstalling the OS or migrating to a new machine",
+        "export": "Export Backup",
+        "exporting": "Exporting...",
+        "import": "Import & Restore",
+        "importing": "Importing...",
+        "lastExport": "Last exported",
+        "manualNodes": "Manual Nodes",
+        "subscriptions": "Subscriptions",
+        "subNodes": "{{count}} nodes included",
+        "rules": "Custom Rules",
+        "appRules": "App Policy",
+        "noData": "No configuration data yet",
+        "exportSuccess": "Backup exported",
+        "exportSuccessDesc": "Configuration saved to file. Keep it safe (it contains passwords and sensitive data).",
+        "exportFail": "Export failed",
+        "importSuccess": "Configuration restored",
+        "importSuccessDesc": "Restored {{servers}} nodes, {{subs}} subscriptions, {{rules}} rules",
+        "importFail": "Import failed",
+        "importInvalidFile": "Invalid file. Please select a valid FlowZ backup file.",
+        "importConfirmTitle": "Confirm Restore",
+        "importConfirmDesc": "This will completely overwrite your current nodes, subscriptions, and rules. This action cannot be undone. Please confirm before proceeding.",
+        "importConfirmBtn": "Confirm & Restore"
+      }
     },
     "about": {
       "title": "About",

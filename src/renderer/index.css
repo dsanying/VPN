@@ -234,33 +234,67 @@
     position: relative;
     transform: translateZ(0);
     isolation: isolate;
+    /* 恢复原有的边框和阴影，创造立体的卡片感 */
+    border-left: 1px solid hsl(var(--border));
+    border-top: 1px solid hsl(var(--border));
+    border-bottom: 1px solid hsl(var(--border));
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.04);
   }
 
-  /* 修复圆角连接处的黑点伪影：
-     Chromium GPU 合成层在渲染 border-radius 时，圆角之外的遇角区域会暂时暴露出底层颜色。
-     ::before 伪元素在圆角连接处插入与 sidebar 完全相同的颜色块，覆盖可能的黑色缝隙。
-     top: -2px / bottom: -2px 确保完全覆盖圆角外的那上一两个象素。 */
-  html.platform-win32 .main-content-card::before,
-  html.platform-linux .main-content-card::before {
+  /* 内切角装饰（正确实现：填充方块 + 单边圆角）
+     原理：在卡片左边框外侧各放一个 12×12 的方块，
+           填充与侧边栏完全相同的颜色，并对朝向卡片的那个角
+           做半径 12px 的圆角，从而"咬合"出卡片圆角对应的凹弧。
+     效果：侧边栏与内容卡片连接处出现平滑的椭圆内切角，
+           同时圆弧像素区域完全被遮盖，消除 GPU 黑点伪影。  */
+  .main-content-card::before,
+  .main-content-card::after {
     content: '';
     position: absolute;
-    left: -1px;   /* 少量超出自身边界，算上 sidebar 的区域 */
-    top: -2px;
-    bottom: -2px;
-    width: 14px;  /* 圆角半径 12px + 超出量 */
-    background: #f1f5f9; /* 必须与 sidebar light 颜色完全一致 */
-    z-index: -1;
+    /* 元素宽度 = border-radius，紧贴卡片左 border 之外 */
+    /* left: -(12px宽度 + 1px border) = -13px */
+    left: -13px;
+    width: 12px;
+    height: 12px;
     pointer-events: none;
+    z-index: 1;
+    /* 默认：Windows/Linux 使用 sidebar 亮色 */
+    background: #f1f5f9;
   }
 
+  /* 顶部内切角：方块右下角圆弧 = 卡片左上角圆弧的镜像 */
+  .main-content-card::before {
+    top: -1px; /* 与卡片顶 border 外边缘对齐 */
+    border-bottom-right-radius: 12px;
+  }
+
+  /* 底部内切角：方块右上角圆弧 = 卡片左下角圆弧的镜像 */
+  .main-content-card::after {
+    bottom: -1px; /* 与卡片底 border 外边缘对齐 */
+    border-top-right-radius: 12px;
+  }
+
+  /* Dark 模式：改为深色 sidebar 背景 */
   html.platform-win32.dark .main-content-card::before,
-  html.platform-linux.dark .main-content-card::before {
-    background: #121217; /* 必须与 sidebar dark 颜色完全一致 */
-    outline: 1px solid #121217; /* 覆盖 sub-pixel gaps */
+  html.platform-win32.dark .main-content-card::after,
+  html.platform-linux.dark .main-content-card::before,
+  html.platform-linux.dark .main-content-card::after {
+    background: #121217;
+  }
+
+  /* macOS：sidebar 是透明毛玻璃，内切角透明让 vibrancy 穿透
+     vibrancy 已经由系统渲染，不会出现黑点，无需填色 */
+  html.platform-darwin .main-content-card::before,
+  html.platform-darwin .main-content-card::after {
+    background: transparent;
   }
 
   .dark .main-content-card {
     background-color: hsl(0 0% 7.5%);
+    border-left-color: hsl(var(--border));
+    border-top-color: hsl(var(--border));
+    border-bottom-color: hsl(var(--border));
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
   }
 
   /* Outer shell – background must match the sidebar so that the

@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { BackupRestoreSection } from './backup-restore-section';
 
 export function AdvancedSettings() {
   const config = useAppStore((state) => state.config);
@@ -590,6 +591,9 @@ export function AdvancedSettings() {
             </div>
           </div>
         </div>
+
+        {/* 数据备份与恢复 */}
+        <BackupRestoreSection />
       </CardContent>
     </Card>
   );

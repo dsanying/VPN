@@ -24,6 +24,7 @@ import {
   setTrayStateCallback,
   registerCoreUpdateHandlers,
   setCoreUpdateService,
+  registerBackupHandlers,
 } from './ipc/handlers';
 import { createAutoStartManager } from './services/AutoStartManager';
 import { UpdateService } from './services/UpdateService';
@@ -226,7 +227,7 @@ async function createWindow() {
     title: 'FlowZ',
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成
-    backgroundColor: isMac ? '#00000000' : (cfg.uiTheme === 'dark' ? '#121217' : '#f1f5f9'),
+    backgroundColor: isMac ? '#00000000' : cfg.uiTheme === 'dark' ? '#121217' : '#f1f5f9',
     transparent: isMac,
     autoHideMenuBar: true, // 自动隐藏菜单栏
     webPreferences: {
@@ -640,6 +641,9 @@ app.whenReady().then(async () => {
 
   // 注册订阅处理器
   registerSubscriptionHandlers(subscriptionService, configManager);
+
+  // 注册备份与恢复处理器
+  registerBackupHandlers(configManager);
 
   // 同步自启动状态
   const autoStartManager = createAutoStartManager();

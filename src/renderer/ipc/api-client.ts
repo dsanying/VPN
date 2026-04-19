@@ -608,6 +608,44 @@ export const subscriptionApi = {
 };
 
 /**
+ * 数据备份与恢复摘要信息
+ */
+export interface BackupInfo {
+  serverCount: number;
+  manualServerCount: number;
+  subscriptionCount: number;
+  ruleCount: number;
+  ruleSetCount: number;
+  appRuleCount: number;
+}
+
+/**
+ * 数据备份与恢复 API
+ */
+export const backupApi = {
+  /**
+   * 导出备份（弹出系统文件保存对话框）
+   */
+  async export(): Promise<{ success: boolean; filePath?: string; error?: string }> {
+    return ipcClient.invoke(IPC_CHANNELS.BACKUP_EXPORT);
+  },
+
+  /**
+   * 导入并恢复备份（弹出系统文件打开对话框）
+   */
+  async import(): Promise<{ success: boolean; info?: BackupInfo; error?: string }> {
+    return ipcClient.invoke(IPC_CHANNELS.BACKUP_IMPORT);
+  },
+
+  /**
+   * 获取当前配置摘要（节点数、订阅数、规则数等）
+   */
+  async getInfo(): Promise<BackupInfo> {
+    return ipcClient.invoke(IPC_CHANNELS.BACKUP_GET_INFO);
+  },
+};
+
+/**
  * 统一的 API 客户端
  */
 export const api = {
@@ -625,6 +663,7 @@ export const api = {
   update: updateApi,
   coreUpdate: coreUpdateApi,
   subscription: subscriptionApi,
+  backup: backupApi,
 };
 
 /**
