@@ -298,6 +298,24 @@ export function AdvancedSettings() {
             <p className="text-xs text-muted-foreground ml-6 mb-2">
               {t('settings.advanced.bypassLANDesc')}
             </p>
+
+            {/* 自动换节点 */}
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                id="autoSwitchNode"
+                checked={config.autoSwitchNode === true}
+                onCheckedChange={(checked) => {
+                  saveConfig({ ...config, autoSwitchNode: checked as boolean });
+                }}
+              />
+              <Label htmlFor="autoSwitchNode" className="font-normal cursor-pointer">
+                {t('settings.advanced.autoSwitchNode' as any) || '节点故障自动切换'}
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground ml-6 mb-2">
+              {t('settings.advanced.autoSwitchNodeDesc' as any) ||
+                '当前节点断线或崩溃时，自动测速并切换到延迟最低的可用节点（每次切换冷却 60 秒）'}
+            </p>
           </div>
         </div>
 

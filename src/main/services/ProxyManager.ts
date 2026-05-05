@@ -58,7 +58,8 @@ const DOMESTIC_BANK_AND_STOCK_DOMAINS = [
   '.icbc.com.cn', // 工商银行
   '.boc.cn', // 中国银行
   '.ccb.com', // 建设银行
-  '.abchina.com', '.abchina.com.cn', // 农业银行
+  '.abchina.com',
+  '.abchina.com.cn', // 农业银行
   '.bankcomm.com', // 交通银行
   '.cmbchina.com', // 招商银行
   '.psbc.com', // 邮储银行
@@ -72,13 +73,13 @@ const DOMESTIC_BANK_AND_STOCK_DOMAINS = [
   '.hzbank.com.cn', // 杭州银行
 
   // 证券炒股软件相关（经常使用定制化的 TCP 二进制协议通信，在 SOCKS/HTTP 系统代理模式下会导致握手失败并被代理核心主动断开）
-  '.10jqka.com.cn', '.thsi.cn', // 同花顺
-  '.eastmoney.com', '.1234567.com.cn', // 东方财富
+  '.10jqka.com.cn',
+  '.thsi.cn', // 同花顺
+  '.eastmoney.com',
+  '.1234567.com.cn', // 东方财富
   '.gw.com.cn', // 大智慧
   '.tdx.com.cn', // 通达信
 ];
-
-
 
 /**
  * sing-box 1.12.x / 1.13.x 配置类型定义
@@ -301,7 +302,7 @@ export interface IProxyManager {
   stop(): Promise<void>;
   restart(config: UserConfig): Promise<void>;
   getStatus(): ProxyStatus;
-  generateSingBoxConfig(config: UserConfig): SingBoxConfig;
+  generateSingBoxConfig(config: UserConfig, resolvedIps?: Record<string, string>): SingBoxConfig;
   on(event: 'started' | 'stopped' | 'error', listener: (...args: any[]) => void): void;
   off(event: 'started' | 'stopped' | 'error', listener: (...args: any[]) => void): void;
   getCoreVersion(): Promise<string>;
@@ -406,8 +407,37 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 3. 准备规则文件（必须在生成配置前完成）
     await this.copyRuleSetsToUserData();
 
+    // 3.5. 预解析所有节点的域名为 IP（仅针对 TUN 模式），防止 Windows 下回流死循环
+    const resolvedServerIps: Record<string, string> = {};
+    if (isTunMode && process.platform === 'win32') {
+      this.logToManager('info', '正在预解析节点域名以防止 TUN 回流...');
+      const dns = require('dns').promises;
+      const allServerIds = new Set([
+        config.selectedServerId as string,
+        ...(config.appRules || []).map((r) => r.targetServerId),
+      ]);
+
+      const resolvePromises = Array.from(allServerIds).map(async (serverId) => {
+        if (!serverId) return;
+        const server = config.servers.find((s) => s.id === serverId);
+        if (
+          server?.address &&
+          !/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(server.address) &&
+          !server.address.includes(':')
+        ) {
+          try {
+            const { address } = await dns.lookup(server.address);
+            if (address) {
+              resolvedServerIps[serverId] = address;
+            }
+          } catch (e) {}
+        }
+      });
+      await Promise.all(resolvePromises);
+    }
+
     // 4. 生成 sing-box 配置文件
-    const singboxConfig = this.generateSingBoxConfig(config);
+    const singboxConfig = this.generateSingBoxConfig(config, resolvedServerIps);
 
     // 写入配置文件
     await this.writeSingBoxConfig(singboxConfig);
@@ -615,17 +645,17 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
       // 备选方案：尝试直接取第一组连续的数字版本号
       const secondMatch = stdout.match(/(\d+\.\d+\.\d+)/);
-      return secondMatch ? secondMatch[1] : '未知';
+      return secondMatch ? secondMatch[1] : '1.13.0';
     } catch (error) {
       this.logToManager('error', `获取核心版本失败: ${(error as any).message}`);
-      return '未知';
+      return '1.13.0';
     }
   }
 
   /**
    * 生成 sing-box 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
-  generateSingBoxConfig(config: UserConfig): SingBoxConfig {
+  generateSingBoxConfig(config: UserConfig, resolvedIps?: Record<string, string>): SingBoxConfig {
     const selectedServer = config.servers.find((s) => s.id === config.selectedServerId);
     if (!selectedServer) {
       throw new Error('Selected server not found');
@@ -671,7 +701,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         config,
         idToTagMap.get(config.selectedServerId as string) || 'proxy'
       ),
-      inbounds: this.generateInbounds(config),
+      inbounds: this.generateInbounds(config, resolvedIps),
       outbounds: this.generateOutbounds(selectedServer, config, idToTagMap),
       route: this.generateRouteConfig(config, idToTagMap),
       experimental: {
@@ -937,7 +967,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   /**
    * 生成 Inbound 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
-  private generateInbounds(config: UserConfig): SingBoxInbound[] {
+  private generateInbounds(
+    config: UserConfig,
+    resolvedIps?: Record<string, string>
+  ): SingBoxInbound[] {
     const inbounds: SingBoxInbound[] = [];
 
     // 使用小写比较，兼容 SystemProxy/systemProxy 和 Tun/tun
@@ -1011,6 +1044,19 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           ? [...PRIVATE_IP_CIDRS]
           : ['127.0.0.0/8', '::1/128'];
 
+      // Windows 下额外排除核心 DNS IP，防止 WFP 进程匹配失效时产生回流死循环
+      if (process.platform === 'win32') {
+        excludeAddr.push(
+          '223.5.5.5/32',
+          '223.6.6.6/32',
+          '119.29.29.29/32',
+          '119.28.28.28/32',
+          '114.114.114.114/32',
+          '8.8.8.8/32',
+          '1.1.1.1/32'
+        );
+      }
+
       // 绝杀级修复（多服务器版本）：如果在 应用分流 (App Policy) 中选择了其他节点，那么这些节点的 IP 也必须被排除。
       // 否则，FlowZ 去连接这些次选节点的流量也会回流进入 TUN 产生死循环。
       const allServerIds = new Set([
@@ -1027,13 +1073,18 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             excludeAddr.push(`${server.address}/32`);
           } else if (isIpv6(server.address)) {
             excludeAddr.push(`${server.address}/128`);
+          } else if (resolvedIps && resolvedIps[serverId]) {
+            // 使用预解析的 IP
+            const addr = resolvedIps[serverId];
+            excludeAddr.push(isIpv6(addr) ? `${addr}/128` : `${addr}/32`);
           }
         }
       }
 
       // 恢复至对应平台最稳定的网段。Windows 在 v3.4.0 使用 /16 时非常完美；Mac 在 v3.3.18 使用 /30 时最完美。
       const tunAddress = [
-        config.tunConfig?.inet4Address || (process.platform === 'darwin' ? '172.19.0.1/30' : '172.19.0.1/16'),
+        config.tunConfig?.inet4Address ||
+          (process.platform === 'darwin' ? '172.19.0.1/30' : '172.19.0.1/16'),
       ];
       // macOS 默认分配 IPv6 以提高与本地网络服务的兼容性，与 3.3.18 保持一致
       if (config.enableIPv6 && process.platform !== 'darwin') {
@@ -1420,7 +1471,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     if (server.protocol === 'http') {
       if (server.username) outbound.username = server.username;
       if (server.password) outbound.password = server.password;
-      
+
       // HTTP outbound headers mapping can be added if needed via server.httpSettings.headers
       if (server.httpSettings?.headers) {
         if (!outbound.transport) outbound.transport = { type: 'http' };
@@ -1576,23 +1627,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       outbound: 'direct',
     });
 
-    // 绝杀级修复 E -> Top：DNS 劫持必须具有至高无上的优先级。
-    // 如果被 D 部分的 direct 规则抢先匹配，DNS 请求将直接泄漏出公网从而被 GFW 污染。
-    rules.push({
-      port: [53],
-      action: 'hijack-dns',
-    });
-
-    // B. 强制本地直连规则（解决拓扑空白、局域网访问问题）
-    // 优先级极高，确保 127.0.0.1 和局域网流量永不进代理
-    rules.push({
-      ip_cidr: ['127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '::1/128'],
-      action: 'route',
-      outbound: 'direct',
-    });
-    // D. 强制引导核心 DNS 直连 (阿里/腾讯/114)，防止解析代理节点域名时产生死循环
-    // 覆盖了常见的 DNS IP 以及 53/443 端口
-    // 注意：必须在任何代理规则之前，确保 bootstrap dns 永远走物理网卡
+    // C. 强制引导核心 DNS 直连（必须在 hijack-dns 之前！）
+    // 把已知 bootstrap DNS IP 放在 hijack-dns 之前，无论哪个进程发包都走直连，彻底断环。
     rules.push({
       ip_cidr: [
         '223.5.5.5/32',
@@ -1600,10 +1636,19 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         '119.29.29.29/32',
         '119.28.28.28/32',
         '114.114.114.114/32',
+        '8.8.8.8/32',
+        '1.1.1.1/32',
       ],
       port: [53, 443],
       action: 'route',
       outbound: 'direct',
+    });
+
+    // D. DNS 劫持（必须在引导 DNS IP 直连之后）
+    // 劫持所有其余 port 53 流量（浏览器/系统 DNS），返回 FakeIP
+    rules.push({
+      port: [53],
+      action: 'hijack-dns',
     });
 
     // F. 静默屏蔽 ICMP 流量（FakeIP 下常见，但代理节点通常不支持）
@@ -1780,8 +1825,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         outbound: 'direct',
       });
     }
-
-
 
     // 1. 私有 IP 段直连（内网地址不应该经过代理，优先级最高）
     // 仅当用户未关闭"绕过局域网"时添加
@@ -3930,11 +3973,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         //   *.domain.com → WinINet 标准格式（传统 C++ 应用如同花顺/网银客户端）
         //   *domain.com  → Chrome/Chromium 内核专用格式（无点前缀，解决 Chrome 不认带点通配符的问题）
         //   domain.com   → 精确根域名匹配（兜底，确保根域名本身也被旁路）
-        const domainBypassEntries = DOMESTIC_BANK_AND_STOCK_DOMAINS.flatMap(d => {
+        const domainBypassEntries = DOMESTIC_BANK_AND_STOCK_DOMAINS.flatMap((d) => {
           const base = d.startsWith('.') ? d.slice(1) : d;
           return [`*.${base}`, `*${base}`, base];
         }).join(';');
-        const bypassDomains = '<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;' +
+        const bypassDomains =
+          '<local>;localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;' +
           domainBypassEntries;
         await runCommand(
           `reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyOverride /t REG_SZ /d "${bypassDomains}" /f`

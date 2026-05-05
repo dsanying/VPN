@@ -71,6 +71,15 @@ export const proxyApi = {
   onError(listener: (data: { error: string; timestamp: string }) => void): () => void {
     return ipcClient.on(IPC_CHANNELS.EVENT_PROXY_ERROR, listener);
   },
+
+  /**
+   * 监听自动换节点成功事件
+   */
+  onAutoNodeSwitched(
+    listener: (data: { reason: string; newServerName: string; latency: number }) => void
+  ): () => void {
+    return ipcClient.on(IPC_CHANNELS.EVENT_AUTO_NODE_SWITCHED, listener);
+  },
 };
 
 /**

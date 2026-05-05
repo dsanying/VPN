@@ -34,6 +34,11 @@ export interface ISystemProxyManager {
   disableProxy(): Promise<void>;
 
   /**
+   * 同步禁用系统代理（用于关机/退出等紧急场景）
+   */
+  disableProxySync(): void;
+
+  /**
    * 获取代理状态
    */
   getProxyStatus(): Promise<SystemProxyStatus>;
@@ -47,6 +52,7 @@ export abstract class SystemProxyBase implements ISystemProxyManager {
 
   abstract enableProxy(address: string, httpPort: number, socksPort: number): Promise<void>;
   abstract disableProxy(): Promise<void>;
+  abstract disableProxySync(): void;
   abstract getProxyStatus(): Promise<SystemProxyStatus>;
 }
 
@@ -62,7 +68,9 @@ export class WindowsSystemProxy extends SystemProxyBase {
    * 启用系统代理
    */
   async enableProxy(address: string, httpPort: number, socksPort: number): Promise<void> {
-    console.log(`正在设置 Windows 系统代理: ${address}:${httpPort} (SOCKS 端口 ${socksPort} 仅供手动配置)`);
+    console.log(
+      `正在设置 Windows 系统代理: ${address}:${httpPort} (SOCKS 端口 ${socksPort} 仅供手动配置)`
+    );
 
     // 保存原始设置
     try {
@@ -97,29 +105,31 @@ export class WindowsSystemProxy extends SystemProxyBase {
           // 如果走 HTTP 代理会导致协议解析失败和连接超时。
           // 将金融域名加入旁路名单，使其完全绕过代理直连物理网卡。
           const financialBypass = [
-            '*.10jqka.com.cn', '*.thsi.cn',        // 同花顺
-            '*.eastmoney.com', '*.1234567.com.cn',  // 东方财富
-            '*.gw.com.cn',                          // 大智慧
-            '*.tdx.com.cn',                         // 通达信
-            '*.microdone.cn',                       // U盾插件
-            '*.icbc.com.cn',                        // 工商银行
-            '*.boc.cn',                             // 中国银行
-            '*.ccb.com',                            // 建设银行
-            '*.abchina.com', '*.abchina.com.cn',    // 农业银行
-            '*.bankcomm.com',                       // 交通银行
-            '*.cmbchina.com',                       // 招商银行
-            '*.psbc.com',                           // 邮储银行
-            '*.spdb.com.cn',                        // 浦发银行
-            '*.cebbank.com',                        // 光大银行
-            '*.citicbank.com',                      // 中信银行
-            '*.pingan.com',                         // 平安银行
-            '*.cib.com.cn',                         // 兴业银行
-            '*.hxb.com.cn',                         // 华夏银行
-            '*.cmbc.com.cn',                        // 民生银行
-            '*.hzbank.com.cn',                      // 杭州银行
+            '*.10jqka.com.cn',
+            '*.thsi.cn', // 同花顺
+            '*.eastmoney.com',
+            '*.1234567.com.cn', // 东方财富
+            '*.gw.com.cn', // 大智慧
+            '*.tdx.com.cn', // 通达信
+            '*.microdone.cn', // U盾插件
+            '*.icbc.com.cn', // 工商银行
+            '*.boc.cn', // 中国银行
+            '*.ccb.com', // 建设银行
+            '*.abchina.com',
+            '*.abchina.com.cn', // 农业银行
+            '*.bankcomm.com', // 交通银行
+            '*.cmbchina.com', // 招商银行
+            '*.psbc.com', // 邮储银行
+            '*.spdb.com.cn', // 浦发银行
+            '*.cebbank.com', // 光大银行
+            '*.citicbank.com', // 中信银行
+            '*.pingan.com', // 平安银行
+            '*.cib.com.cn', // 兴业银行
+            '*.hxb.com.cn', // 华夏银行
+            '*.cmbc.com.cn', // 民生银行
+            '*.hzbank.com.cn', // 杭州银行
           ].join(';');
-          const proxyOverride =
-            `localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;${financialBypass};<local>`;
+          const proxyOverride = `localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;${financialBypass};<local>`;
           await execAsync(
             `reg add "${this.regPath}" /v ProxyOverride /t REG_SZ /d "${proxyOverride}" /f`
           );
@@ -127,7 +137,9 @@ export class WindowsSystemProxy extends SystemProxyBase {
           // 核心特性：阻断 QUIC (UDP 443)，迫使浏览器回退到 TCP 以完美兼容系统代理
           // 很多应用（如 Instagram 的站内信）使用 QUIC，会无视系统 HTTP 代理直连导致被墙。
           // 利用 Windows 防火墙精准屏蔽出站 UDP 443，可实现类似 TUN 模式的稳定体验。
-          await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(() => {});
+          await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(
+            () => {}
+          );
           await execAsync(
             'netsh advfirewall firewall add rule name="FlowZ_Block_QUIC" dir=out action=block protocol=UDP remoteport=443'
           ).catch((e) => console.log('添加 QUIC 阻断防火墙规则失败:', e));
@@ -160,8 +172,10 @@ export class WindowsSystemProxy extends SystemProxyBase {
       if (this.originalSettings) {
         console.log('正在回滚到原始代理设置...');
         try {
-           // 清除可能残留的防火墙规则
-          await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(() => {});
+          // 清除可能残留的防火墙规则
+          await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(
+            () => {}
+          );
           await this.restoreProxySettings(this.originalSettings);
           console.log('已成功回滚到原始代理设置');
         } catch (rollbackError) {
@@ -182,9 +196,11 @@ export class WindowsSystemProxy extends SystemProxyBase {
    */
   async disableProxy(): Promise<void> {
     console.log('正在禁用 Windows 系统代理...');
-    
+
     // 禁用代理时务必清除 QUIC 阻断规则
-    await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(() => {});
+    await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(
+      () => {}
+    );
 
     try {
       if (this.originalSettings) {
@@ -203,6 +219,29 @@ export class WindowsSystemProxy extends SystemProxyBase {
       console.error('禁用 Windows 系统代理失败:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`禁用 Windows 系统代理失败: ${errorMessage}\n\n建议手动检查系统代理设置`);
+    }
+  }
+
+  /**
+   * 同步禁用系统代理（用于关机/退出等紧急场景）
+   */
+  disableProxySync(): void {
+    const { execSync } = require('child_process');
+    try {
+      // 禁用代理时务必清除 QUIC 阻断规则
+      execSync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"', {
+        stdio: 'ignore',
+      });
+    } catch {}
+
+    try {
+      execSync(`reg add "${this.regPath}" /v ProxyEnable /t REG_DWORD /d 0 /f`, {
+        stdio: 'ignore',
+      });
+      // 尝试刷新设置
+      execSync('ipconfig /flushdns', { stdio: 'ignore' });
+    } catch (error) {
+      console.error('同步禁用 Windows 系统代理失败:', error);
     }
   }
 
@@ -273,7 +312,9 @@ export class WindowsSystemProxy extends SystemProxyBase {
     } else {
       // 禁用代理
       await execAsync(`reg add "${this.regPath}" /v ProxyEnable /t REG_DWORD /d 0 /f`);
-      await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(() => {});
+      await execAsync('netsh advfirewall firewall delete rule name="FlowZ_Block_QUIC"').catch(
+        () => {}
+      );
     }
 
     await this.notifyProxyChange();
@@ -366,17 +407,28 @@ export class MacOSSystemProxy extends SystemProxyBase {
               '172.16.0.0/12',
               '192.168.0.0/16',
               // 金融软件旁路：使其完全绕过代理直连
-              '*.10jqka.com.cn', '*.thsi.cn',
-              '*.eastmoney.com', '*.1234567.com.cn',
-              '*.gw.com.cn', '*.tdx.com.cn',
+              '*.10jqka.com.cn',
+              '*.thsi.cn',
+              '*.eastmoney.com',
+              '*.1234567.com.cn',
+              '*.gw.com.cn',
+              '*.tdx.com.cn',
               '*.microdone.cn',
-              '*.icbc.com.cn', '*.boc.cn', '*.ccb.com',
-              '*.abchina.com', '*.abchina.com.cn',
-              '*.bankcomm.com', '*.cmbchina.com',
-              '*.psbc.com', '*.spdb.com.cn',
-              '*.cebbank.com', '*.citicbank.com',
-              '*.pingan.com', '*.cib.com.cn',
-              '*.hxb.com.cn', '*.cmbc.com.cn',
+              '*.icbc.com.cn',
+              '*.boc.cn',
+              '*.ccb.com',
+              '*.abchina.com',
+              '*.abchina.com.cn',
+              '*.bankcomm.com',
+              '*.cmbchina.com',
+              '*.psbc.com',
+              '*.spdb.com.cn',
+              '*.cebbank.com',
+              '*.citicbank.com',
+              '*.pingan.com',
+              '*.cib.com.cn',
+              '*.hxb.com.cn',
+              '*.cmbc.com.cn',
               '*.hzbank.com.cn',
             ];
             await execAsync(
@@ -454,6 +506,31 @@ export class MacOSSystemProxy extends SystemProxyBase {
       console.error('禁用 macOS 系统代理失败:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`禁用 macOS 系统代理失败: ${errorMessage}\n\n建议手动检查系统代理设置`);
+    }
+  }
+
+  /**
+   * 同步禁用系统代理
+   */
+  disableProxySync(): void {
+    const { execSync } = require('child_process');
+    try {
+      const activeInterfaces = execSync('networksetup -listallnetworkservices')
+        .toString()
+        .split('\n')
+        .filter((s: string) => s && !s.includes('*') && !s.includes('Bluetooth'));
+
+      for (const service of activeInterfaces) {
+        try {
+          execSync(`networksetup -setwebproxystate "${service}" off`, { stdio: 'ignore' });
+          execSync(`networksetup -setsecurewebproxystate "${service}" off`, { stdio: 'ignore' });
+          execSync(`networksetup -setsocksfirewallproxystate "${service}" off`, {
+            stdio: 'ignore',
+          });
+        } catch {}
+      }
+    } catch (error) {
+      console.error('同步禁用 macOS 系统代理失败:', error);
     }
   }
 
@@ -670,6 +747,23 @@ export class LinuxSystemProxy extends SystemProxyBase {
     } catch {
       return { enabled: false };
     }
+  }
+
+  /**
+   * 同步禁用系统代理
+   */
+  disableProxySync(): void {
+    const { execSync } = require('child_process');
+    try {
+      // GNOME
+      execSync('gsettings set org.gnome.system.proxy mode "none"', { stdio: 'ignore' });
+    } catch {}
+    try {
+      // KDE
+      execSync('kwriteconfig5 --file kioslaverc --group "Proxy Settings" --key "ProxyType" 0', {
+        stdio: 'ignore',
+      });
+    } catch {}
   }
 }
 

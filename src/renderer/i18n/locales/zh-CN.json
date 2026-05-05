@@ -6,7 +6,8 @@
     "save": "保存",
     "reset": "重置",
     "actions": "操作",
-    "copyFail": "复制失败"
+    "copyFail": "复制失败",
+    "loading": "加载中..."
   },
   "sidebar": {
     "home": "首页",
@@ -207,6 +208,9 @@
       "foreignDnsDesc": "用于解析海外域名，防止 DNS 污染 (将通过代理发送)",
       "enableFakeIp": "启用 FakeIP (仅 TUN 模式有效)",
       "fakeIpDesc": "能显著降低首次连接延迟，但可能导致某些依赖真实 IP 的应用异常",
+      "updateMirror": "更新镜像",
+      "updateMirrorPlaceholder": "例如: https://gh-proxy.org/ 或 https://mirror.example.com/{url}",
+      "updateMirrorDesc": "用于应用/核心更新下载。留空表示禁用镜像并使用 GitHub 直连。",
       "portSettings": "端口设置",
       "socksPort": "本地 SOCKS 端口",
       "httpPort": "本地 HTTP 端口",
@@ -265,7 +269,9 @@
         "importConfirmTitle": "确认恢复配置",
         "importConfirmDesc": "此操作将完全覆盖当前的节点、订阅和规则配置，且无法撤销。请确认您已了解风险后再继续。",
         "importConfirmBtn": "确认覆盖恢复"
-      }
+      },
+      "autoSwitchNode": "节点故障自动切换",
+      "autoSwitchNodeDesc": "当当前代理连接失败时，自动切换到可用节点"
     },
     "about": {
       "title": "关于",
@@ -465,6 +471,10 @@
     "random": "随机",
     "upMbps": "上行带宽 (Mbps)",
     "downMbps": "下行带宽 (Mbps)",
+    "serverPorts": "端口跳跃",
+    "serverPortsDesc": "Hysteria2 端口范围例如 47000-48000 (或 47000:48000)",
+    "hopInterval": "跳跃间隔",
+    "hopIntervalDesc": "端口跳跃间隔",
     "bbrDesc": "启用 BBR 拥塞控制",
     "obfsEnabled": "启用混淆",
     "obfsEnabledDesc": "使用 Salamander 混淆",

@@ -42,6 +42,8 @@ export const APP_PRESETS: AppPreset[] = [
     emoji: '🎬',
     iconUrl: `${QURE_BASE}/Netflix.png`,
     geositeTags: ['netflix'],
+    // geoip-netflix 覆盖 Netflix 的 CDN 直连 IP（如 AWS/Akamai 上的 Netflix 专属 IP 段）
+    geoipTags: ['netflix'],
     processNames: ['Netflix', 'Netflix.exe'],
     category: 'video',
   },
@@ -70,6 +72,8 @@ export const APP_PRESETS: AppPreset[] = [
     emoji: '✈️',
     iconUrl: `${QURE_BASE}/Telegram.png`,
     geositeTags: ['telegram'],
+    // geoip-telegram 覆盖 Telegram DC（数据中心）的 IP 段，确保 DC IP 直连也走代理
+    geoipTags: ['telegram'],
     processNames: ['Telegram', 'Telegram.exe', 'Telegram Desktop'],
     category: 'social',
   },
@@ -79,6 +83,8 @@ export const APP_PRESETS: AppPreset[] = [
     emoji: '🐦',
     iconUrl: `${QURE_BASE}/X.png`,
     geositeTags: ['twitter'],
+    // geoip-twitter 覆盖 Twitter/X 使用 QUIC 协议时直连的 IP 段
+    // 这是修复 Twitter 在系统代理模式下 UDP 流量不走代理的关键
     geoipTags: ['twitter'],
     processNames: ['Twitter', 'X', 'Twitter.exe'],
     category: 'social',
@@ -108,7 +114,10 @@ export const APP_PRESETS: AppPreset[] = [
     emoji: '🧠',
     iconUrl:
       'https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/04ProxySoft/claude.png',
-    geositeTags: ['anthropic'],
+    // 注意：SagerNet geosite 数据库中没有独立的 geosite-anthropic.srs
+    // 使用 geosite-category-ai 兜底（包含 OpenAI/Anthropic/Gemini 等主流 AI 服务）
+    // 同时加入 claude.ai 域名通过自定义规则覆盖
+    geositeTags: ['anthropic', 'category-ai'],
     processNames: ['Claude', 'Claude.exe'],
     category: 'ai',
   },
@@ -118,6 +127,9 @@ export const APP_PRESETS: AppPreset[] = [
     emoji: '✨',
     iconUrl:
       'https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/04ProxySoft/gemini.png',
+    // 使用 geosite-google 同时覆盖 Gemini 所有相关域名（gemini.google.com 等）
+    // 注意：如果用户同时启用了 Google 应用分流，两者共享同一个 rule_set 不会冲突
+    // sing-box 会自动去重，不会重复下载
     geositeTags: ['google'],
     category: 'ai',
   },
@@ -168,26 +180,36 @@ export const APP_PRESETS: AppPreset[] = [
     // 游戏通过 Steam 启动后是独立进程，仅匹配 "Steam" 无法覆盖游戏本体的 UDP 流量
     processNames: [
       // Steam 客户端及辅助进程
-      'Steam', 'steam.exe',
-      'steamwebhelper', 'steamwebhelper.exe',
-      'GameOverlayUI.exe', 'GameOverlayUI',
+      'Steam',
+      'steam.exe',
+      'steamwebhelper',
+      'steamwebhelper.exe',
+      'GameOverlayUI.exe',
+      'GameOverlayUI',
       'steam_osx', // macOS Steam binary
       // 热门 FPS / 竞技游戏
-      'cs2', 'cs2.exe',                   // CS2 (Counter-Strike 2)
-      'dota2', 'dota2.exe',               // Dota 2
-      'TslGame.exe', 'TslGame',           // PUBG
-      'r5apex.exe', 'r5apex',             // Apex Legends
-      'EscapeFromTarkov.exe',             // Escape from Tarkov
+      'cs2',
+      'cs2.exe', // CS2 (Counter-Strike 2)
+      'dota2',
+      'dota2.exe', // Dota 2
+      'TslGame.exe',
+      'TslGame', // PUBG
+      'r5apex.exe',
+      'r5apex', // Apex Legends
+      'EscapeFromTarkov.exe', // Escape from Tarkov
       'FortniteClient-Win64-Shipping.exe', // Fortnite (via Epic on Steam)
       // MOBA / RPG
-      'Hearthstone.exe', 'Hearthstone',   // 炉石传说
-      'GenshinImpact.exe', 'YuanShen.exe', // 原神
-      'StarRail.exe',                     // 崩坏：星穹铁道
-      'ZenlessZoneZero.exe',              // 绝区零
+      'Hearthstone.exe',
+      'Hearthstone', // 炉石传说
+      'GenshinImpact.exe',
+      'YuanShen.exe', // 原神
+      'StarRail.exe', // 崩坏：星穹铁道
+      'ZenlessZoneZero.exe', // 绝区零
       // 生存 / 沙盒
-      'valheim.exe', 'valheim',           // Valheim
-      'RustClient.exe',                   // Rust
-      'Palworld-Win64-Shipping.exe',      // Palworld 幻兽帕鲁
+      'valheim.exe',
+      'valheim', // Valheim
+      'RustClient.exe', // Rust
+      'Palworld-Win64-Shipping.exe', // Palworld 幻兽帕鲁
     ],
     category: 'game',
   },
@@ -199,7 +221,8 @@ export const APP_PRESETS: AppPreset[] = [
       'https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/07Game/epicgames.png',
     geositeTags: ['epicgames'],
     processNames: [
-      'EpicGamesLauncher', 'EpicGamesLauncher.exe',
+      'EpicGamesLauncher',
+      'EpicGamesLauncher.exe',
       'EpicWebHelper.exe',
       'FortniteClient-Win64-Shipping.exe',
       'UnrealEngineLauncher.exe',
@@ -210,15 +233,17 @@ export const APP_PRESETS: AppPreset[] = [
     id: 'riot',
     labelKey: 'riot',
     emoji: '⚔️',
-    iconUrl:
-      'https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/07Game/riot.png',
+    iconUrl: 'https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/07Game/riot.png',
     geositeTags: ['riot'],
     processNames: [
-      'RiotClientServices.exe', 'RiotClientServices',
-      'LeagueClient.exe', 'LeagueClient',       // 英雄联盟客户端
-      'League of Legends.exe', 'League of Legends', // 英雄联盟游戏
-      'VALORANT-Win64-Shipping.exe',             // Valorant
-      'LoR.exe',                                 // Legends of Runeterra
+      'RiotClientServices.exe',
+      'RiotClientServices',
+      'LeagueClient.exe',
+      'LeagueClient', // 英雄联盟客户端
+      'League of Legends.exe',
+      'League of Legends', // 英雄联盟游戏
+      'VALORANT-Win64-Shipping.exe', // Valorant
+      'LoR.exe', // Legends of Runeterra
     ],
     category: 'game',
   },

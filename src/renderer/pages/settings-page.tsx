@@ -5,6 +5,7 @@ import {
   AboutSettings,
   ProxyModeSettings,
 } from '@/components/settings';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { useTranslation } from 'react-i18next';
 
 interface SettingsPageProps {
@@ -59,11 +60,13 @@ export function SettingsPage({ activeSection }: SettingsPageProps) {
       </div>
 
       <div>
-        {activeSection === 'general' && <GeneralSettings />}
-        {activeSection === 'proxyMode' && <ProxyModeSettings />}
-        {activeSection === 'appearance' && <AppearanceSettings />}
-        {activeSection === 'advanced' && <AdvancedSettings />}
-        {activeSection === 'about' && <AboutSettings />}
+        <ErrorBoundary>
+          {activeSection === 'general' && <GeneralSettings />}
+          {activeSection === 'proxyMode' && <ProxyModeSettings />}
+          {activeSection === 'appearance' && <AppearanceSettings />}
+          {activeSection === 'advanced' && <AdvancedSettings />}
+          {activeSection === 'about' && <AboutSettings />}
+        </ErrorBoundary>
       </div>
     </div>
   );

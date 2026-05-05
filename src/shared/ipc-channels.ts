@@ -95,6 +95,7 @@ export const IPC_CHANNELS = {
   EVENT_CONNECTION_STATE_CHANGED: 'event:connectionStateChanged',
   EVENT_ENTER_PRIVACY_MODE: 'event:enterPrivacyMode',
   EVENT_CORE_VERSION_CHANGED: 'event:coreVersionChanged',
+  EVENT_AUTO_NODE_SWITCHED: 'event:autoNodeSwitched', // 自动换节点成功通知
 
   // 应用语言同步（渲染进程 -> 主进程）
   APP_SET_LANGUAGE: 'app:setLanguage',

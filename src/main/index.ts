@@ -30,6 +30,7 @@ import { createAutoStartManager } from './services/AutoStartManager';
 import { UpdateService } from './services/UpdateService';
 import { CoreUpdateService } from './services/CoreUpdateService';
 import { SpeedTestService } from './services/SpeedTestService';
+import { AutoSwitchService } from './services/AutoSwitchService';
 import { ipcEventEmitter } from './ipc/ipc-events';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
 import { initUserDataPath } from './utils/paths';
@@ -92,6 +93,7 @@ let updateService: UpdateService;
 let coreUpdateService: CoreUpdateService;
 let subscriptionService: SubscriptionService;
 let speedTestService: SpeedTestService;
+let autoSwitchService: AutoSwitchService;
 
 // 全局异常捕获 - 主进程
 process.on('uncaughtException', (error: Error) => {
@@ -570,11 +572,33 @@ app.whenReady().then(async () => {
   proxyManager = new ProxyManager(logManager, mainWindow || undefined);
   coreUpdateService.setProxyManager(proxyManager);
 
+  // 初始化自动换节点服务
+  autoSwitchService = new AutoSwitchService(
+    configManager,
+    proxyManager,
+    logManager,
+    () => mainWindow
+  );
+  // 根据当前配置决定是否启用
+  {
+    const cfg = await configManager.loadConfig().catch(() => null);
+    if (cfg?.autoSwitchNode) {
+      autoSwitchService.enable();
+    }
+  }
+
   // 监听代理管理器事件，更新托盘状态
   proxyManager.on('error', async (error: Error) => {
     logManager.addLog('error', `Proxy error: ${error.message}`, 'Main');
     // 发生错误时，更新托盘显示为"连接异常"
     updateTrayMenuState(false, true);
+
+    // 触发自动换节点（如果已启用）
+    if (autoSwitchService) {
+      autoSwitchService.onProxyError(error.message).catch((e) => {
+        logManager.addLog('warn', `自动换节点处理异常: ${e}`, 'Main');
+      });
+    }
 
     // 进程意外退出时，清理系统代理设置，避免网络不可用
     try {
@@ -602,9 +626,28 @@ app.whenReady().then(async () => {
     } catch (e) {
       logManager.addLog('warn', `记录内核基线版本失败: ${e}`, 'Main');
     }
+
+    try {
+      const config = await configManager.loadConfig();
+      const proxyUrl = `http://127.0.0.1:${config.httpPort || 2080}`;
+      const { session } = require('electron');
+      await session.defaultSession.setProxy({
+        proxyRules: proxyUrl,
+        proxyBypassRules: '127.0.0.1,localhost,::1',
+      });
+      logManager.addLog('info', `已强制 Electron 主进程(更新检查/测速)走代理: ${proxyUrl}`, 'Main');
+    } catch (err) {
+      logManager.addLog('warn', `设置 Electron 主进程代理失败: ${err}`, 'Main');
+    }
   });
 
   proxyManager.on('stopped', async () => {
+    try {
+      const { session } = require('electron');
+      await session.defaultSession.setProxy({});
+      logManager.addLog('info', '已恢复 Electron 主进程直连状态', 'Main');
+    } catch (err) {}
+
     // 正常停止时，重置错误状态
     updateTrayMenuState(false, false);
 
@@ -827,75 +870,8 @@ app.whenReady().then(async () => {
           'Main'
         );
 
-        const net = require('net');
-        const dgram = require('dgram');
-        const results = new Map<string, number | null>();
-
-        const testServer = (server: (typeof config.servers)[0]): Promise<void> => {
-          return new Promise((resolve) => {
-            const startTime = Date.now();
-            const protocol = server.protocol?.toLowerCase();
-
-            if (protocol === 'hysteria2') {
-              // Hysteria2 使用 UDP
-              const client = dgram.createSocket('udp4');
-              const timeout = setTimeout(() => {
-                client.close();
-                results.set(server.id, null);
-                resolve();
-              }, 5000);
-
-              client.on('error', () => {
-                clearTimeout(timeout);
-                client.close();
-                results.set(server.id, null);
-                resolve();
-              });
-
-              // 发送一个空包探测
-              const message = Buffer.alloc(1);
-              client.send(message, server.port, server.address, (err: Error | null) => {
-                clearTimeout(timeout);
-                client.close();
-                if (err) {
-                  results.set(server.id, null);
-                } else {
-                  // UDP 是无连接的，send 成功只表示包已发出
-                  const latency = Date.now() - startTime;
-                  results.set(server.id, latency);
-                }
-                resolve();
-              });
-            } else {
-              // VLESS/Trojan/Shadowsocks 使用 TCP
-              const socket = new net.Socket();
-              socket.setTimeout(5000);
-
-              socket.on('connect', () => {
-                const latency = Date.now() - startTime;
-                socket.destroy();
-                results.set(server.id, latency);
-                resolve();
-              });
-
-              socket.on('timeout', () => {
-                socket.destroy();
-                results.set(server.id, null);
-                resolve();
-              });
-
-              socket.on('error', () => {
-                socket.destroy();
-                results.set(server.id, null);
-                resolve();
-              });
-
-              socket.connect(server.port, server.address);
-            }
-          });
-        };
-
-        await Promise.all(config.servers.map(testServer));
+        // 复用 SpeedTestService，自动处理 TCP 和 UDP 协议
+        const results = await speedTestService.testAllServers(config.servers);
 
         logManager.addLog('info', 'Speed test completed for all servers', 'Main');
 
@@ -1119,6 +1095,16 @@ app.whenReady().then(async () => {
         updateTrayMenuState(false, true);
       }
     }
+
+    // 3. 同步自动换节点服务状态
+    if (autoSwitchService) {
+      const latestCfg = await configManager.loadConfig().catch(() => null);
+      if (latestCfg?.autoSwitchNode) {
+        autoSwitchService.enable();
+      } else {
+        autoSwitchService.disable();
+      }
+    }
   });
 
   app.on('activate', async () => {
@@ -1171,4 +1157,27 @@ process.on('SIGTERM', async () => {
   console.log('Received SIGTERM, cleaning up...');
   await cleanupResources();
   process.exit(0);
+});
+
+// 核心兜底修复：系统关机/注销时的同步清理
+// 解决 Windows 下系统代理在重启后依然残留的问题
+(app as any).on('session-end', () => {
+  console.log('Detected OS session-end, executing synchronous cleanup...');
+  if (proxyManager) {
+    proxyManager.stop().catch(() => {});
+  }
+  try {
+    const { createSystemProxyManager } = require('./services/SystemProxyManager');
+    const sysProxy = createSystemProxyManager();
+    sysProxy.disableProxySync();
+  } catch (e) {}
+});
+
+// 进程退出时的最后兜底（同步执行）
+process.on('exit', () => {
+  try {
+    const { createSystemProxyManager } = require('./services/SystemProxyManager');
+    const sysProxy = createSystemProxyManager();
+    sysProxy.disableProxySync();
+  } catch (e) {}
 });

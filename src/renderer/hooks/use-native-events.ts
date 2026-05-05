@@ -5,6 +5,7 @@
 import { useEffect } from 'react';
 import { api } from '../ipc';
 import { ErrorHandler, ErrorCategory } from '../lib/error-handler';
+import { toast } from 'sonner';
 
 // 定义事件数据类型
 interface NativeEventData {
@@ -16,6 +17,7 @@ interface NativeEventData {
   navigateToPage: string;
   proxyModeSwitched: { success: boolean; newMode: string };
   proxyModeSwitchFailed: { success: boolean; error: string };
+  autoNodeSwitched: { reason: string; newServerName: string; latency: number };
 }
 
 type NativeEventListener<K extends keyof NativeEventData> = (data: NativeEventData[K]) => void;
@@ -43,6 +45,9 @@ export function useNativeEvent<K extends keyof NativeEventData>(
         break;
       case 'statsUpdated':
         unsubscribe = api.stats.onUpdated(callback as any);
+        break;
+      case 'autoNodeSwitched':
+        unsubscribe = api.proxy.onAutoNodeSwitched(callback as any);
         break;
       default:
         console.warn(`Unknown event: ${eventName}`);
@@ -159,4 +164,19 @@ export function useNativeEventListeners() {
   useNativeEvent('processError', handleProcessError);
   useNativeEvent('configChanged', handleConfigChanged);
   useNativeEvent('statsUpdated', handleStatsUpdated);
+
+  const handleAutoNodeSwitched = (data: NativeEventData['autoNodeSwitched']) => {
+    // 刷新连接状态和配置，以反映新节点
+    import('../store/app-store').then(({ useAppStore }) => {
+      useAppStore.getState().refreshConnectionStatus();
+      useAppStore.getState().loadConfig();
+    });
+    // 显示 toast 通知
+    toast.success(`已自动切换到 ${data.newServerName}（${data.latency}ms）`, {
+      description: `触发原因：${data.reason === '崩溃检测' ? '节点崩溃' : '心跳检测连续失败'}`,
+      duration: 5000,
+    });
+  };
+
+  useNativeEvent('autoNodeSwitched', handleAutoNodeSwitched);
 }

@@ -296,6 +296,7 @@ export interface UserConfig {
   enableIPv6?: boolean; // 启用系统全局 IPv6 解析及路由 (不建议开启)
   autoPrivacyMode?: boolean; // 自动进入隐私模式
   privacyPassword?: string; // 隐私模式解锁密码
+  autoSwitchNode?: boolean; // 节点故障时自动切换到可用节点
 
   // 窗口尺寸（仅在 rememberWindowSize 启用时使用）
   windowBounds?: { width: number; height: number };

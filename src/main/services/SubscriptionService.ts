@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { net } from 'electron';
 import type { ServerConfig, SubscriptionConfig } from '../../shared/types';
 import { ProtocolParser } from './ProtocolParser';
 import { LogManager } from './LogManager';
@@ -195,7 +196,7 @@ export class SubscriptionService {
     try {
       this.logManager.addLog('info', `正在拉取订阅: ${url}`, 'Subscription');
 
-      const response = await fetch(url, {
+      const response = await net.fetch(url, {
         headers: { 'User-Agent': 'FlowZ-Client' },
       });
 

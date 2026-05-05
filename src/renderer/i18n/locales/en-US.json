@@ -6,7 +6,8 @@
     "save": "Save",
     "reset": "Reset",
     "actions": "Actions",
-    "copyFail": "Copy failed"
+    "copyFail": "Copy failed",
+    "loading": "Loading..."
   },
   "sidebar": {
     "home": "Home",
@@ -208,6 +209,9 @@
       "foreignDnsDesc": "Used to resolve foreign domains, prevents DNS poisoning (sent through proxy)",
       "enableFakeIp": "Enable FakeIP (TUN mode only)",
       "fakeIpDesc": "Significantly reduces first-connection latency, but may break apps that depend on real IPs",
+      "updateMirror": "Update Mirror",
+      "updateMirrorPlaceholder": "e.g. https://gh-proxy.org/ or https://mirror.example.com/{url}",
+      "updateMirrorDesc": "Used for app/core update downloads. Leave empty to disable mirror and use direct GitHub links.",
       "portSettings": "Port Settings",
       "socksPort": "Local SOCKS Port",
       "httpPort": "Local HTTP Port",
@@ -266,7 +270,9 @@
         "importConfirmTitle": "Confirm Restore",
         "importConfirmDesc": "This will completely overwrite your current nodes, subscriptions, and rules. This action cannot be undone. Please confirm before proceeding.",
         "importConfirmBtn": "Confirm & Restore"
-      }
+      },
+      "autoSwitchNode": "Auto-Switch Node on Failure",
+      "autoSwitchNodeDesc": "Automatically switch to an available node if the current proxy connection fails"
     },
     "about": {
       "title": "About",
@@ -465,6 +471,10 @@
     "random": "Random",
     "upMbps": "Upload (Mbps)",
     "downMbps": "Download (Mbps)",
+    "serverPorts": "Port Hopping",
+    "serverPortsDesc": "Hysteria2 server port range 47000-48000 (or 47000:48000)",
+    "hopInterval": "Hop Interval",
+    "hopIntervalDesc": "Port hopping interval, numbers are accepted and treated as seconds",
     "bbrDesc": "Enable BBR congestion control",
     "obfsEnabled": "Enable Obfuscation",
     "obfsEnabledDesc": "Use Salamander obfuscation",
