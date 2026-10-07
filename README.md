@@ -24,7 +24,7 @@ npm run test:core-gate
 npm run lint
 npx tsc --noEmit -p tsconfig.renderer.json
 npm run build
-npm run package:mac:local
+npm run dev
 ```
 
 真实订阅测试须显式指定仓库外的私有输入文件，其中 `subscriptions` 是含 `url` 的数组。脚本读取供应商原始 URL，不生成中间迁移订阅：
