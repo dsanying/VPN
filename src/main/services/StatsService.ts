@@ -172,6 +172,8 @@ export class StatsService {
       if (!this.started) return;
       this.resubscribeStreamsOnly();
     }, STREAM_RESUBSCRIBE_INTERVAL_MS);
+    // Periodic maintenance must not keep a headless/test/closing process alive.
+    this.resubscribeTimer.unref();
   }
 
   /** 停止周期重建定时器（幂等）。 */

@@ -173,23 +173,20 @@ export function AboutSettings() {
   };
 
   const handleOpenGitHub = async () => {
-    const url = versionInfo?.repositoryUrl || 'https://github.com/dododook/FlowZ';
+    const url = versionInfo?.repositoryUrl || 'https://github.com/dsanying/VPN';
     await openExternal(url);
   };
 
   // 打开 GitHub 新建 issue 页，正文已自动带上版本/系统/架构/内核/代理模式，报告者只需补问题描述与日志。
   const handleReportIssue = async () => {
-    const url = buildBugReportUrl(
-      versionInfo?.repositoryUrl || 'https://github.com/dododook/FlowZ',
-      {
-        appVersion: versionInfo?.appVersion,
-        platform: versionInfo?.platform,
-        arch: versionInfo?.arch,
-        osVersion: versionInfo?.osVersion,
-        singBoxVersion: versionInfo?.singBoxVersion,
-        proxyModeType,
-      }
-    );
+    const url = buildBugReportUrl(versionInfo?.repositoryUrl || 'https://github.com/dsanying/VPN', {
+      appVersion: versionInfo?.appVersion,
+      platform: versionInfo?.platform,
+      arch: versionInfo?.arch,
+      osVersion: versionInfo?.osVersion,
+      singBoxVersion: versionInfo?.singBoxVersion,
+      proxyModeType,
+    });
     await openExternal(url);
   };
 
@@ -219,10 +216,10 @@ export function AboutSettings() {
         <div className="about-brand">
           {/* FlowZ 自有应用图标（ui/icon.svg，F/Z 导流单色渐变）——替换原通用占位 SVG（用户反馈）。 */}
           <div className="about-logo overflow-hidden !bg-transparent !p-0">
-            <img src={flowzIcon} alt="FlowZ" className="h-full w-full object-cover" />
+            <img src={flowzIcon} alt="暗影VPN" className="h-full w-full object-cover" />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="about-name">{versionInfo?.appName || 'FlowZ'}</div>
+            <div className="about-name">{versionInfo?.appName || '暗影VPN'}</div>
             <div className="about-ver">
               {t('settings.about.version', '版本')}{' '}
               <span className="mono tnum">{versionInfo?.appVersion || '—'}</span>
@@ -322,7 +319,7 @@ export function AboutSettings() {
               <br />
             </>
           )}
-          {versionInfo?.copyright || '© 2025 FlowZ. All rights reserved.'}
+          {versionInfo?.copyright || 'Based on FlowZ; MIT License'}
         </div>
       </div>
     </div>

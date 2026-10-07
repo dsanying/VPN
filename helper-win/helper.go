@@ -274,7 +274,7 @@ func handle(conn net.Conn) {
 		}
 		fmt.Fprintln(conn, "OK iface-metric")
 	case "uninstall":
-		// 自卸载（app 卸载/更新时调用）：收割 child → 派生脱离本进程的 SYSTEM 旁路（停删 FlowZHelper 服务 +
+		// 自卸载（app 卸载/更新时调用）：收割 child → 派生脱离本进程的 SYSTEM 旁路（停删 ShadowVPNHelper 服务 +
 		// 删 supportDir，含外置的 helper.exe 自身 + helper.token）→ 回 OK → 自退。
 		// 镜像 macOS HelperManager 卸载语义（bootout + rm plist/helper/support），但 Windows 须借旁路进程完成
 		// 两件本进程无法自完成的事：① 自删「正在运行因而被锁定」的 helper.exe；② 停删「自身所属」的 SCM 服务

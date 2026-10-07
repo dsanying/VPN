@@ -8,7 +8,7 @@
 //     残余风险：能读到 app 配置目录内 token 的同用户进程可驱动本 helper（FlowZ 未签名，无法做 SMJobBless 客户端校验）。
 //     此为「未签名应用 + 免提权 helper」的固有取舍；token + 二进制锁定 + 配置目录约束为现实可行的缓解。
 //
-// 协议（每行以 \n 结尾，路径整行传递 → 容忍含空格的路径，如 "Application Support/FlowZ"）：
+// 协议（每行以 \n 结尾，路径整行传递 → 容忍含空格的路径，如 "Application Support/ShadowVPN"）：
 //
 //	行1: <token>
 //	行2: <command>           ping | version | start | stop | status | cleanup | freeport | install-core |
@@ -591,7 +591,7 @@ func handle(conn net.Conn) {
 func main() {
 	flag.StringVar(&singboxBin, "singbox", "", "path to sing-box binary (locked at install time)")
 	flag.StringVar(&confDir, "confdir", "", "allowed config directory")
-	flag.StringVar(&supportDir, "support", "/Library/Application Support/FlowZ", "dir holding helper.sock + helper.token")
+	flag.StringVar(&supportDir, "support", "/Library/Application Support/ShadowVPN", "dir holding helper.sock + helper.token")
 	flag.StringVar(&coreDir, "coredir", "", "locked protected core dir for install-core (proto v5)")
 	flag.Parse()
 

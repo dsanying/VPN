@@ -892,7 +892,7 @@
     "resetSort": "Reset Sort",
     "protocol": "Protocol",
     "multiSelect": "Multi-select",
-    "timeout": "Timeout",
+    "timeout": "Unreachable",
     "edit": "Edit",
     "importSuccess": "Servers imported successfully",
     "lastUpdated": "Last updated: ",
@@ -1597,7 +1597,10 @@
       "unknownTitle": "Failed to add",
       "unknownDetail": "Could not verify the subscription. Try again later or contact your provider."
     },
-    "advancedSection": "Advanced"
+    "advancedSection": "Advanced",
+    "protocol": "Node protocol",
+    "protocolAuto": "Auto-detect",
+    "protocolDesc": "Detect all supported protocols by default. Select one protocol to import matching nodes only."
   },
   "localImport": {
     "title": "Manual Import",

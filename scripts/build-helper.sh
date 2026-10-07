@@ -6,7 +6,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/helper"
-OUT_NAME="com.flowz.helper"
+OUT_NAME="com.dsanying.shadowvpn.helper"
 
 if ! command -v go >/dev/null 2>&1; then
   if [ -n "${REQUIRE_HELPER:-}" ]; then
@@ -34,7 +34,7 @@ build x64 amd64
 # getPlatformResourceDir 的 win 分支）。GOOS=windows 从任意宿主交叉编译（纯 Go + winio/x-sys，CGO 关）。
 WIN_SRC="$ROOT/helper-win"
 if [ -d "$WIN_SRC" ]; then
-  WIN_OUT="$ROOT/resources/win/com.flowz.helper.exe"
+  WIN_OUT="$ROOT/resources/win/com.dsanying.shadowvpn.helper.exe"
   echo "[build-helper] win-x64 (amd64) → $WIN_OUT"
   mkdir -p "$ROOT/resources/win"
   ( cd "$WIN_SRC" && GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
@@ -47,7 +47,7 @@ fi
 # 构建另行 GOARCH=arm64 交叉编译（AmbientCaps/SO_PEERCRED 为 linux 通用，无 CGO）。
 LINUX_SRC="$ROOT/helper-linux"
 if [ -d "$LINUX_SRC" ]; then
-  LINUX_OUT="$ROOT/resources/linux/flowz-helper-linux"
+  LINUX_OUT="$ROOT/resources/linux/shadowvpn-helper-linux"
   # 钉 amd64 匹配 package:linux/dist:linux 的 electron-builder --x64（否则 arm64 主机构建会打进不可执行的二进制）。
   # 纯 Go + linux-only syscall、无 CGO → 交叉编译零依赖；将来出 arm64 发布另加 GOARCH=arm64 腿即可。
   LINUX_GOARCH="${LINUX_GOARCH:-amd64}"

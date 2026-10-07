@@ -156,10 +156,11 @@ describe('T10 VersionInfo 完整结构', () => {
       })
     );
     expect(result.appVersion).toBe('1.2.3');
-    expect(result.appName).toBe('FlowZ');
-    expect(result.repositoryUrl).toBe('https://github.com/dododook/FlowZ');
-    // copyright 含当前年份
-    expect(result.copyright).toContain(String(new Date().getFullYear()));
+    expect(result.appName).toBe('暗影VPN');
+    expect(result.repositoryUrl).toBe('https://github.com/dsanying/VPN');
+    // 保留上游 MIT 署名
+    expect(result.copyright).toContain('FlowZ');
+    expect(result.copyright).toContain('MIT');
   });
 
   it('app.getVersion 变化 → appVersion 跟随', async () => {

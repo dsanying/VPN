@@ -14,12 +14,12 @@ import {
 } from '../speed-test';
 
 describe('parseSpeedTestUrl（测速 URL 解析）', () => {
-  it('默认 generate_204 (http) → host/path/port 正确', () => {
+  it('默认 generate_204 (https) → host/path/port 正确', () => {
     const r = parseSpeedTestUrl(DEFAULT_SPEED_TEST_URL);
     expect(r).toEqual({
-      https: false,
+      https: true,
       host: 'www.gstatic.com',
-      port: 80,
+      port: 443,
       path: '/generate_204',
       hostHeader: 'www.gstatic.com',
       absoluteUri: 'http://www.gstatic.com/generate_204',
@@ -83,7 +83,7 @@ describe('resolveSpeedTestTarget（非法回落默认）', () => {
 
   it('非法 → 默认', () => {
     expect(resolveSpeedTestTarget('garbage').host).toBe('www.gstatic.com');
-    expect(resolveSpeedTestTarget('').https).toBe(false);
+    expect(resolveSpeedTestTarget('').https).toBe(true);
   });
 
   it('合法 https → 用该端点（不回落）', () => {

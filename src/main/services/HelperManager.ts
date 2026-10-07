@@ -28,10 +28,10 @@ import { sha256File } from '../../shared/file-hash';
 
 const plist: { parse(xml: string): unknown } = require('plist');
 
-const LABEL = 'com.flowz.helper';
+const LABEL = 'com.dsanying.shadowvpn.helper';
 const HELPER_DEST = `/Library/PrivilegedHelperTools/${LABEL}`;
 const PLIST_PATH = `/Library/LaunchDaemons/${LABEL}.plist`;
-const SYSTEM_SUPPORT = '/Library/Application Support/FlowZ';
+const SYSTEM_SUPPORT = '/Library/Application Support/ShadowVPN';
 const SOCKET_PATH = `${SYSTEM_SUPPORT}/helper.sock`;
 /** 与 helper.go 的 protoVersion 对应。**分级**（v5 起）：proto ≥ MIN_USABLE 即 TUN 功能齐全（可用，不报需修复）；
  *  MIN_USABLE ≤ proto < EXPECTED → upgradeable（旧版仍能 TUN，仅温和提示可升级、不强制重装）；proto < MIN_USABLE 才 needsRepair。
@@ -503,7 +503,7 @@ export class HelperManager implements IPrivilegedHelper {
         resourceManager.getProtectedCoreDir()
       );
 
-      const result = await this.runRootScript('flowz-helper-install.sh', script);
+      const result = await this.runRootScript('shadowvpn-helper-install.sh', script);
       if (!result.success) {
         return { success: false, error: result.error, status: await this.computeStatus() };
       }
@@ -545,7 +545,7 @@ export class HelperManager implements IPrivilegedHelper {
     this.mutationEpoch++;
     try {
       const result = await this.runRootScript(
-        'flowz-helper-uninstall.sh',
+        'shadowvpn-helper-uninstall.sh',
         this.buildUninstallScript()
       );
       if (!result.success) {

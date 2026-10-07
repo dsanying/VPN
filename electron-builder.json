@@ -1,30 +1,23 @@
 {
-  "appId": "com.flowz.app",
-  "productName": "FlowZ",
+  "appId": "com.dsanying.shadowvpn.app",
+  "productName": "暗影VPN",
   "copyright": "Copyright © 2025",
   "directories": {
     "output": "dist-package",
     "buildResources": "build"
   },
-  "files": [
-    "dist/**/*",
-    "package.json"
-  ],
+  "files": ["dist/**/*", "package.json", "LICENSE.txt", "NOTICE.md"],
   "electronLanguages": ["zh-CN", "zh-TW", "en-US", "ru", "fa"],
   "asar": true,
   "win": {
     "target": [
       {
         "target": "nsis",
-        "arch": [
-          "x64"
-        ]
+        "arch": ["x64"]
       },
       {
         "target": "portable",
-        "arch": [
-          "x64"
-        ]
+        "arch": ["x64"]
       }
     ],
     "icon": "build/icon.ico",
@@ -33,31 +26,22 @@
       {
         "from": "resources",
         "to": ".",
-        "filter": [
-          "app.png",
-          "app-gray.png"
-        ]
+        "filter": ["app.png", "app-gray.png"]
       },
       {
         "from": "resources/win",
         "to": "win",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources/data",
         "to": "data",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources/dashboard",
         "to": "dashboard",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       }
     ]
   },
@@ -67,7 +51,7 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "FlowZ",
+    "shortcutName": "暗影VPN",
     "installerIcon": "build/icon.ico",
     "uninstallerIcon": "build/icon.ico",
     "installerHeaderIcon": "build/icon.ico",
@@ -76,16 +60,13 @@
   },
   "portable": {
     "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}",
-    "unpackDirName": "FlowZ"
+    "unpackDirName": "ShadowVPN"
   },
   "mac": {
     "target": [
       {
         "target": "dir",
-        "arch": [
-          "arm64",
-          "x64"
-        ]
+        "arch": ["arm64", "x64"]
       }
     ],
     "icon": "build/icon.icns",
@@ -101,31 +82,22 @@
       {
         "from": "resources/mac-${arch}",
         "to": "mac",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources/data",
         "to": "data",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources/dashboard",
         "to": "dashboard",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources",
         "to": ".",
-        "filter": [
-          "app.png",
-          "app-gray.png"
-        ]
+        "filter": ["app.png", "app-gray.png"]
       }
     ]
   },
@@ -151,14 +123,11 @@
     }
   },
   "linux": {
-    "target": [
-      "AppImage",
-      "deb"
-    ],
+    "target": ["AppImage", "deb"],
     "category": "Network",
     "icon": "build/icons",
     "synopsis": "Clean, modern cross-platform proxy client",
-    "description": "FlowZ - a clean, modern cross-platform proxy client.",
+    "description": "暗影VPN — 基于 FlowZ 的代理客户端",
     "desktop": {
       "entry": {
         "Comment[zh_CN]": "简洁现代的跨平台代理客户端",
@@ -173,31 +142,22 @@
       {
         "from": "resources/linux",
         "to": "linux",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources/data",
         "to": "data",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources/dashboard",
         "to": "dashboard",
-        "filter": [
-          "**/*"
-        ]
+        "filter": ["**/*"]
       },
       {
         "from": "resources",
         "to": ".",
-        "filter": [
-          "app.png",
-          "app-gray.png"
-        ]
+        "filter": ["app.png", "app-gray.png"]
       }
     ]
   },

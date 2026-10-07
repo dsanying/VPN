@@ -42,11 +42,11 @@ export function registerVersionHandlers(coreUpdateService?: CoreUpdateService): 
 
       return {
         appVersion: app.getVersion(),
-        appName: 'FlowZ',
+        appName: '暗影VPN',
         buildDate: BUILD_DATE,
         singBoxVersion: currentSingBoxVersion,
-        copyright: `© ${new Date().getFullYear()} FlowZ. All rights reserved.`,
-        repositoryUrl: 'https://github.com/dododook/FlowZ',
+        copyright: 'Based on FlowZ © dododook; MIT License',
+        repositoryUrl: 'https://github.com/dsanying/VPN',
         platform: process.platform,
         arch: process.arch,
         osVersion: release(),

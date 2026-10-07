@@ -19,9 +19,9 @@ macOS 下 TUN 模式需以 root 运行 sing-box。未签名应用无法用 `SMJo
 ## 构建
 
 ```bash
-npm run build:helper          # 交叉编译 arm64 + x64 → resources/mac-*/com.flowz.helper
+npm run build:helper          # 交叉编译 arm64 + x64 → resources/mac-*/com.dsanying.shadowvpn.helper
 ```
 
 构建产物随 `electron-builder` 的 `extraResources`（`resources/mac-${arch}` → `mac`）打进 app 包，
-运行时位于 `<App>/Contents/Resources/mac/com.flowz.helper`，安装时复制到
-`/Library/PrivilegedHelperTools/com.flowz.helper`。
+运行时位于 `<App>/Contents/Resources/mac/com.dsanying.shadowvpn.helper`，安装时复制到
+`/Library/PrivilegedHelperTools/com.dsanying.shadowvpn.helper`。

@@ -2,6 +2,7 @@ import type { ServerConfig, Protocol, UserConfig } from './types';
 import { dedupe, dedupeTrim } from './collections';
 import { isWarpServer } from './warp';
 import { isDirectSelection } from './direct-selection';
+import { isSubscriptionNotice } from './subscription-notice';
 
 /** sing-box endpoint 协议（顶层 endpoints[]、非 outbound）：WireGuard / Tailscale。单一真值，杜绝多处枚举漂移。 */
 export const ENDPOINT_PROTOCOLS: readonly Protocol[] = ['wireguard', 'tailscale'];
@@ -284,6 +285,7 @@ export interface SpeedTestCaps {
  * WireGuard（非 reverseMesh）仍可测。
  */
 export function isSpeedTestable(server: ServerConfig, caps?: SpeedTestCaps): boolean {
+  if (server.subscriptionId && isSubscriptionNotice(server.name)) return false;
   const p = server.protocol?.toLowerCase();
   if (p === 'tailscale') {
     return (

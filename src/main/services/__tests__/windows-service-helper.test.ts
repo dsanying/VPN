@@ -56,13 +56,13 @@ describe('WindowsServiceHelper', () => {
 
     it('install 脚本锁定 exe + flags、设 token ACL、sc create LocalSystem auto-start', () => {
       const script = helper.buildInstallScript(
-        'C:\\Program Files\\FlowZ\\com.flowz.helper.exe',
+        'C:\\Program Files\\FlowZ\\com.dsanying.shadowvpn.helper.exe',
         'C:\\Program Files\\FlowZ\\sing-box.exe',
         'C:\\Users\\doveh\\AppData\\Roaming\\FlowZ',
         'deadbeefdeadbeef'
       );
       // New-Service（非 sc create binPath=）：BinaryPathName 单一字符串直达 CreateService，绕开 CommandLineToArgvW 碎裂
-      expect(script).toContain('New-Service -Name FlowZHelper -BinaryPathName $bp');
+      expect(script).toContain('New-Service -Name ShadowVPNHelper -BinaryPathName $bp');
       expect(script).toContain('-StartupType Automatic');
       expect(script).not.toContain('binPath='); // 不得再用 sc create binPath= 的脆弱引号路径
       expect(script).not.toContain('-Credential'); // 锁定默认账户=LocalSystem 不变量（防误加凭据改成 NetworkService）
@@ -75,13 +75,19 @@ describe('WindowsServiceHelper', () => {
       expect(script).toContain('--support');
       // U1 外置：binPath 的引导 exe 必须指向 ProgramData 外置副本、而非 app 安装目录内的 helper.exe（根因修复——
       // 否则服务锁定 app 内文件 → 更新覆盖失败 + 卸载留孤儿）。slash 方向随测试宿主不同，故用 ProgramData 子串判定。
-      expect(script).toMatch(/\$bp = '"[^']*ProgramData[^']*com\.flowz\.helper\.exe" --singbox/);
-      // 反向不变量：binPath 引导 exe 绝不再是 app 的 Program Files 路径（防回归到「锁 app 内二进制」）。
-      expect(script).not.toMatch(/\$bp = '"[^']*Program Files[^']*com\.flowz\.helper\.exe"/);
-      // 复制源是 app 内置 helper.exe；目的是 ProgramData\FlowZ；带 -Force 覆盖 + 退避重试兜解锁窗口竞态。
-      expect(script).toContain("$helperSrc = 'C:\\Program Files\\FlowZ\\com.flowz.helper.exe'");
       expect(script).toMatch(
-        /\$helperDst = '[^']*ProgramData[^']*FlowZ[^']*com\.flowz\.helper\.exe'/
+        /\$bp = '"[^']*ProgramData[^']*com\.dsanying\.shadowvpn\.helper\.exe" --singbox/
+      );
+      // 反向不变量：binPath 引导 exe 绝不再是 app 的 Program Files 路径（防回归到「锁 app 内二进制」）。
+      expect(script).not.toMatch(
+        /\$bp = '"[^']*Program Files[^']*com\.dsanying\.shadowvpn\.helper\.exe"/
+      );
+      // 复制源是 app 内置 helper.exe；目的是 ProgramData\ShadowVPN；带 -Force 覆盖 + 退避重试兜解锁窗口竞态。
+      expect(script).toContain(
+        "$helperSrc = 'C:\\Program Files\\FlowZ\\com.dsanying.shadowvpn.helper.exe'"
+      );
+      expect(script).toMatch(
+        /\$helperDst = '[^']*ProgramData[^']*ShadowVPN[^']*com\.dsanying\.shadowvpn\.helper\.exe'/
       );
       expect(script).toContain('Copy-Item -LiteralPath $helperSrc -Destination $helperDst -Force');
       expect(script).toContain('复制 helper.exe 到 ProgramData 失败'); // 复制失败 fail-loud（不静默留旧副本）
@@ -101,10 +107,10 @@ describe('WindowsServiceHelper', () => {
       expect(script).not.toContain('Users:(RX)');
       expect(script).not.toContain('"Users');
       // 启动服务（sc.exe 经 System32 绝对路径调）
-      expect(script).toContain(`& '${system32('sc.exe')}' start FlowZHelper`);
+      expect(script).toContain(`& '${system32('sc.exe')}' start ShadowVPNHelper`);
       // 幂等：重装先停删旧服务
-      expect(script).toContain(`& '${system32('sc.exe')}' stop FlowZHelper`);
-      expect(script).toContain(`& '${system32('sc.exe')}' delete FlowZHelper`);
+      expect(script).toContain(`& '${system32('sc.exe')}' stop ShadowVPNHelper`);
+      expect(script).toContain(`& '${system32('sc.exe')}' delete ShadowVPNHelper`);
       // token 值写入
       expect(script).toContain('deadbeefdeadbeef');
       // 重装可重入：写 token 前先删旧 token（自愈旧版「Admin 只读」残留——否则 Set-Content 覆盖只读文件被拒，真机根因）。
@@ -116,16 +122,16 @@ describe('WindowsServiceHelper', () => {
       expect(script.indexOf('Remove-Item -Force -Path $tokenFile')).toBeLessThan(
         script.indexOf('Set-Content -Path $tokenFile')
       );
-      // 受保护目录（默认 ProgramData\FlowZ）
-      expect(script).toContain('FlowZ');
+      // 受保护目录（默认 ProgramData\ShadowVPN）
+      expect(script).toContain('ShadowVPN');
     });
 
     it('uninstall 脚本停 + 删服务 + 清受保护目录', () => {
       const script = helper.buildUninstallScript();
-      expect(script).toContain(`& '${system32('sc.exe')}' stop FlowZHelper`);
-      expect(script).toContain(`& '${system32('sc.exe')}' delete FlowZHelper`);
+      expect(script).toContain(`& '${system32('sc.exe')}' stop ShadowVPNHelper`);
+      expect(script).toContain(`& '${system32('sc.exe')}' delete ShadowVPNHelper`);
       expect(script).toContain('Remove-Item');
-      expect(script).toContain('FlowZ');
+      expect(script).toContain('ShadowVPN');
     });
   });
 });

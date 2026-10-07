@@ -18,7 +18,7 @@ import type { ServerConfig } from './types';
  * 故各节点拿到本区域 IP，目标是否任播 / 有无国内镜像均与测速无关，海外出口绝不会被钉到国内镜像 IP。
  * 端点选择由此从「必须任播的脆弱依赖」降级为「次要、用户可在设置自配」。
  */
-export const DEFAULT_SPEED_TEST_URL = 'http://www.gstatic.com/generate_204';
+export const DEFAULT_SPEED_TEST_URL = 'https://www.gstatic.com/generate_204';
 
 export interface SpeedTestTarget {
   https: boolean;

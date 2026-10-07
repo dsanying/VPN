@@ -48,9 +48,9 @@ describe('LinuxServiceHelper', () => {
 
     it('unit：helper root 跑（无 User=）、ExecStart 带 socket/authfile/coredir(路径锁)、cap 不在 unit 层', () => {
       const unit = helper.buildUnit();
-      expect(unit).toContain('ExecStart=/usr/local/lib/flowz/flowz-helper');
-      expect(unit).toContain('--coredir=/usr/local/lib/flowz/core'); // 路径锁：helper 只跑此目录内的核
-      expect(unit).toContain('RuntimeDirectory=flowz');
+      expect(unit).toContain('ExecStart=/usr/local/lib/shadowvpn/shadowvpn-helper');
+      expect(unit).toContain('--coredir=/usr/local/lib/shadowvpn/core'); // 路径锁：helper 只跑此目录内的核
+      expect(unit).toContain('RuntimeDirectory=shadowvpn');
       expect(unit).toContain('WantedBy=multi-user.target');
       expect(unit).not.toContain('User='); // root 跑（setuid 拉 child + 穿越 userData）
       expect(unit).not.toContain('AmbientCapabilities'); // child cap 由代码赋，不在 unit
@@ -58,21 +58,23 @@ describe('LinuxServiceHelper', () => {
 
     it('install：拷 helper + 播种 root 受管核(仅缺时) + 授权 uid 合并追加 + enable --now', () => {
       const s = helper.buildInstallScript(
-        '/pkg/resources/linux/flowz-helper-linux',
+        '/pkg/resources/linux/shadowvpn-helper-linux',
         1000,
         '/pkg/resources/linux/sing-box'
       );
       expect(s).toContain(
-        "install -D -o root -g root -m 0755 '/pkg/resources/linux/flowz-helper-linux' '/usr/local/lib/flowz/flowz-helper'"
+        "install -D -o root -g root -m 0755 '/pkg/resources/linux/shadowvpn-helper-linux' '/usr/local/lib/shadowvpn/shadowvpn-helper'"
       );
       // 播种 root 受管核：仅当尚无核（重装/修复不覆盖已 install-core 更新的核）
-      expect(s).toContain("if [ ! -x '/usr/local/lib/flowz/core/sing-box' ]");
-      expect(s).toContain("'/pkg/resources/linux/sing-box' '/usr/local/lib/flowz/core/sing-box'");
+      expect(s).toContain("if [ ! -x '/usr/local/lib/shadowvpn/core/sing-box' ]");
+      expect(s).toContain(
+        "'/pkg/resources/linux/sing-box' '/usr/local/lib/shadowvpn/core/sing-box'"
+      );
       expect(s).toContain('libcronet.so'); // 配套随核播种
       // 授权 uid **合并追加**（不覆写 → 多用户/repair 不互抹）
       expect(s).toContain("grep -qxF '1000'");
-      expect(s).toContain(">> '/var/lib/flowz/authorized-uids'");
-      expect(s).toContain('systemctl enable --now flowz-helper.service');
+      expect(s).toContain(">> '/var/lib/shadowvpn/authorized-uids'");
+      expect(s).toContain('systemctl enable --now shadowvpn-helper.service');
       // 第一性不变量
       expect(s).not.toContain('setcap'); // 能力挂进程 ambient，不 setcap 二进制
       expect(s).not.toContain('/opt/FlowZ'); // 避开 electron-builder deb 应用目录
@@ -81,11 +83,11 @@ describe('LinuxServiceHelper', () => {
 
     it('uninstall：disable --now + 删受管安装根/状态/运行目录（对称、不碰 /opt/FlowZ）', () => {
       const s = helper.buildUninstallScript();
-      expect(s).toContain('systemctl disable --now flowz-helper.service');
-      expect(s).toContain('/etc/systemd/system/flowz-helper.service');
-      expect(s).toContain("rm -rf '/usr/local/lib/flowz'"); // 整删受管安装根(helper+root 核)
-      expect(s).toContain('/var/lib/flowz');
-      expect(s).toContain('/run/flowz');
+      expect(s).toContain('systemctl disable --now shadowvpn-helper.service');
+      expect(s).toContain('/etc/systemd/system/shadowvpn-helper.service');
+      expect(s).toContain("rm -rf '/usr/local/lib/shadowvpn'"); // 整删受管安装根(helper+root 核)
+      expect(s).toContain('/var/lib/shadowvpn');
+      expect(s).toContain('/run/shadowvpn');
       expect(s).toContain('systemctl daemon-reload');
       expect(s).not.toContain('/opt/FlowZ');
     });

@@ -747,12 +747,17 @@ export const subscriptionApi = {
    */
   async preview(
     url: string,
-    opts: { viaProxy?: boolean; userAgent?: string }
+    opts: {
+      viaProxy?: boolean;
+      userAgent?: string;
+      protocolPreference?: SubscriptionConfig['protocolPreference'];
+    }
   ): Promise<SubscriptionPreviewResult> {
     return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_PREVIEW, {
       url,
       viaProxy: opts.viaProxy,
       userAgent: opts.userAgent,
+      protocolPreference: opts.protocolPreference,
     });
   },
 };

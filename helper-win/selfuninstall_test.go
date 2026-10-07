@@ -5,11 +5,11 @@ import "strings"
 import "testing"
 
 func TestSelfUninstallCmdLine(t *testing.T) {
-	cl := selfUninstallCmdLine("FlowZHelper", `C:\ProgramData\FlowZ`)
+	cl := selfUninstallCmdLine("ShadowVPNHelper", `C:\ProgramData\ShadowVPN`)
 
 	// 必须用**真双引号**包裹 rmdir 路径（非 EscapeArg 的 \"…\"）：cmd 不识别 \" 反转义，转义版会令 rmdir 收到
 	// 非法路径 \C:\…\ → 目录删不掉。断言出现真引号、且绝不出现反斜杠转义引号。
-	if !strings.Contains(cl, `rmdir /s /q "C:\ProgramData\FlowZ"`) {
+	if !strings.Contains(cl, `rmdir /s /q "C:\ProgramData\ShadowVPN"`) {
 		t.Fatalf("rmdir 路径未用真双引号包裹: %q", cl)
 	}
 	if strings.Contains(cl, `\"`) {
@@ -22,8 +22,8 @@ func TestSelfUninstallCmdLine(t *testing.T) {
 	}
 
 	// 停服务在删服务前、删服务在 rmdir 前（sc delete 要服务先停；rmdir 要 exe 先随 helper 退出解锁）。
-	iStop := strings.Index(cl, "sc stop FlowZHelper")
-	iDel := strings.Index(cl, "sc delete FlowZHelper")
+	iStop := strings.Index(cl, "sc stop ShadowVPNHelper")
+	iDel := strings.Index(cl, "sc delete ShadowVPNHelper")
 	iRmdir := strings.Index(cl, "rmdir")
 	if iStop < 0 || iDel < 0 || iRmdir < 0 || !(iStop < iDel && iDel < iRmdir) {
 		t.Fatalf("命令顺序应为 stop→delete→rmdir: stop=%d del=%d rmdir=%d (%q)", iStop, iDel, iRmdir, cl)
@@ -40,7 +40,7 @@ func TestSelfUninstallCmdLine(t *testing.T) {
 
 // 服务名/路径含空格时仍正确包裹（虽默认无空格，验证不退化）。
 func TestSelfUninstallCmdLineSpacedPath(t *testing.T) {
-	cl := selfUninstallCmdLine("FlowZHelper", `C:\Program Data\FlowZ`)
+	cl := selfUninstallCmdLine("ShadowVPNHelper", `C:\Program Data\FlowZ`)
 	if !strings.Contains(cl, `rmdir /s /q "C:\Program Data\FlowZ"`) {
 		t.Fatalf("含空格路径未用真双引号包裹: %q", cl)
 	}
@@ -51,7 +51,7 @@ func TestSelfUninstallCmdLineSpacedPath(t *testing.T) {
 
 // 恶意 supportDir（含 cmd 元字符）走安全占位，关闭 SYSTEM 注入窗口。
 func TestSelfUninstallCmdLineUnsafePath(t *testing.T) {
-	cl := selfUninstallCmdLine("FlowZHelper", `C:\evil & calc.exe`)
+	cl := selfUninstallCmdLine("ShadowVPNHelper", `C:\evil & calc.exe`)
 	// 原恶意片段不得出现在最终命令行（防 & 触发 cmd 注入即提权）。
 	if strings.Contains(cl, `evil & calc`) {
 		t.Fatalf("恶意 supportDir 未被占位替换，注入面仍开: %q", cl)
@@ -67,7 +67,7 @@ func TestIsSafeSupportDir(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{`C:\ProgramData\FlowZ`, true},
+		{`C:\ProgramData\ShadowVPN`, true},
 		{`C:\Program Data\FlowZ`, true}, // 空格允许
 		{``, false},
 		{`C:\evil & calc`, false}, // &

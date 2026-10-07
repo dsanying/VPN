@@ -81,9 +81,9 @@ resources/*/libcronet.*
 # sing-box 官方面板静态资源（由 npm run fetch:dashboard 下载 gh-pages 构建，打包时随 resources 打入；构建产物不入库，CI 现拉现打）
 resources/dashboard/
 
-# 提权 helper 二进制（macOS com.flowz.helper / Windows com.flowz.helper.exe，由 npm run build:helper 交叉编译；构建产物不入库，CI 现编现打）
-resources/*/com.flowz.helper
-resources/*/com.flowz.helper.exe
+# 提权 helper 二进制（macOS com.dsanying.shadowvpn.helper / Windows com.dsanying.shadowvpn.helper.exe，由 npm run build:helper 交叉编译；构建产物不入库，CI 现编现打）
+resources/*/com.dsanying.shadowvpn.helper
+resources/*/com.dsanying.shadowvpn.helper.exe
 # helper-win/ 本地 go build 误产的二进制（构建应输出到 resources/win/，源目录的 .exe 不入库）
 helper-win/*.exe
 
@@ -112,3 +112,6 @@ src/shared/build-info.ts
 /Untitled.canvas
 /2026-06-13.md
 /helper/flowzhelper
+
+# Linux 提权 helper 构建产物
+resources/linux/shadowvpn-helper-linux

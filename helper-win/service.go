@@ -12,8 +12,8 @@ import (
 	"golang.org/x/sys/windows/svc"
 )
 
-// 命名管道名（镜像 macOS 的 helper.sock 命名谱系，flowz-helper）。
-const pipeName = `\\.\pipe\flowz-helper`
+// 命名管道名（镜像 macOS 的 helper.sock 命名谱系，shadowvpn-helper）。
+const pipeName = `\\.\pipe\shadowvpn-helper`
 
 // 管道 SDDL（纵深防御；token 仍是主鉴权边界）：
 //

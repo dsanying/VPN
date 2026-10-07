@@ -27,8 +27,15 @@ import {
 } from '@shared/subscription-preview';
 import { useTranslation } from 'react-i18next';
 import { formatBytes } from '@/lib/format';
-import { getVersionInfo } from '@/bridge/api-wrapper';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { InfoTooltip } from './shared/info-tooltip';
+import { SUBSCRIPTION_PROTOCOLS } from '@shared/subscription-protocol';
 
 interface SubscriptionDialogProps {
   open: boolean;
@@ -56,25 +63,12 @@ export function SubscriptionDialog({
   const [autoUpdate, setAutoUpdate] = useState(false); // 新增订阅默认【关闭】自动更新：避免订阅刷新带来节点变动触发重启断流，由用户按需手动开启（开启时下方提示重启代价）
   const [userAgent, setUserAgent] = useState('');
   const [updateViaProxy, setUpdateViaProxy] = useState(false); // per-sub 经代理更新（默认关）
-  const [appVersion, setAppVersion] = useState('');
+  const [protocolPreference, setProtocolPreference] =
+    useState<NonNullable<SubscriptionConfig['protocolPreference']>>('auto');
   const [isSaving, setIsSaving] = useState(false);
   // 字段级校验错误内联展示（§6：可归位到字段的错误不走 toast 通知流，就地红框+红字）。
   const [nameError, setNameError] = useState('');
   const [urlError, setUrlError] = useState('');
-
-  // 取 app 版本以拼出默认 UA placeholder（FlowZ/<版本>），与主进程 defaultSubscriptionUserAgent() 保持一致。
-  useEffect(() => {
-    if (!open || appVersion) return;
-    getVersionInfo()
-      .then((res) => {
-        if (res.success && res.data?.appVersion) setAppVersion(res.data.appVersion);
-      })
-      .catch(() => {
-        /* 取版本失败：placeholder 退化为 FlowZ/<版本>，不影响保存 */
-      });
-  }, [open, appVersion]);
-
-  const defaultUserAgent = appVersion ? `FlowZ/${appVersion}` : 'FlowZ/<版本>';
 
   useEffect(() => {
     if (open) {
@@ -84,13 +78,17 @@ export function SubscriptionDialog({
         setName(subscription.name);
         setUrl(subscription.url);
         setAutoUpdate(subscription.autoUpdate);
-        setUserAgent(subscription.userAgent ?? '');
+        setUserAgent(
+          subscription.userAgent?.startsWith('FlowZ/') ? '' : (subscription.userAgent ?? '')
+        );
+        setProtocolPreference(subscription.protocolPreference ?? 'auto');
         setUpdateViaProxy(subscription.updateViaProxy ?? false);
       } else {
         setName('');
         setUrl('');
         setAutoUpdate(false);
         setUserAgent('');
+        setProtocolPreference('auto');
         setUpdateViaProxy(false);
       }
     }
@@ -115,6 +113,7 @@ export function SubscriptionDialog({
         name: name.trim(),
         url: url.trim(),
         autoUpdate,
+        protocolPreference,
         // 非空才写入 userAgent；空则不带该字段（落回全局/默认 UA）。
         ...(trimmedUa ? { userAgent: trimmedUa } : {}),
         // 仅 true 才写入（默认关 = 不带字段，落回直连）。
@@ -191,17 +190,27 @@ export function SubscriptionDialog({
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5">
-              <Label htmlFor="sub-user-agent">{t('sub.userAgent')}</Label>
-              <InfoTooltip content={t('sub.userAgentDescFull')} />
-            </div>
-            <Input
-              id="sub-user-agent"
-              placeholder={t('sub.userAgentPlaceholder', { ua: defaultUserAgent })}
-              value={userAgent}
-              onChange={(e) => setUserAgent(e.target.value)}
-            />
-            <div className="text-[0.8rem] text-muted-foreground">{t('sub.userAgentDesc')}</div>
+            <Label htmlFor="sub-protocol">{t('sub.protocol')}</Label>
+            <Select
+              value={protocolPreference}
+              onValueChange={(value) =>
+                setProtocolPreference(
+                  value as NonNullable<SubscriptionConfig['protocolPreference']>
+                )
+              }
+            >
+              <SelectTrigger id="sub-protocol">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUBSCRIPTION_PROTOCOLS.map((protocol) => (
+                  <SelectItem key={protocol} value={protocol}>
+                    {protocol === 'auto' ? t('sub.protocolAuto') : protocol.toUpperCase()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="text-[0.8rem] text-muted-foreground">{t('sub.protocolDesc')}</div>
           </div>
 
           {isEditing && subscription?.userInfo && (

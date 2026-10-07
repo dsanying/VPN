@@ -9,7 +9,7 @@
  *
  * 与 macOS HelperManager 的差异（见 docs/design/flowz-linux-privileged-helper.md）：
  *   - 无 token：Linux 用 SO_PEERCRED（内核背书对端 uid）鉴权，行协议首行即命令、无鉴权行。
- *   - **核在 root-owned 受管目录**（/usr/local/lib/flowz/core，安装时播种、install-core hash 校验更新），与 macOS
+ *   - **核在 root-owned 受管目录**（/usr/local/lib/shadowvpn/core，安装时播种、install-core hash 校验更新），与 macOS
  *     受保护目录一致：核不可被普通用户篡改，一份共享、版本一致。helper 只跑锁定 coreDir/sing-box（路径锁）→ 根除
  *     「借 helper 给任意自有二进制赋 CAP_NET_ADMIN」的提权面。换核经 install-core 免密（socket 调用，无 pkexec）。
  *   - config/cache/log 仍按用户在 userData（核以登录用户跑，属主天然对）。
@@ -30,19 +30,19 @@ import { getUserDataPath } from '../utils/paths';
 import { shq } from '../utils/shell-quote';
 import { sha256File } from '../../shared/file-hash';
 
-const SERVICE_NAME = 'flowz-helper.service';
+const SERVICE_NAME = 'shadowvpn-helper.service';
 // 受管安装根（避开 /opt/FlowZ —— 那是 electron-builder deb 的应用目录，混放会与 dpkg 生命周期冲突）。
 // FHS：本地管理员安装的软件归 /usr/local。helper 二进制 + root-owned 受管核都在此。
-const INSTALL_DIR = '/usr/local/lib/flowz';
-const HELPER_DEST = `${INSTALL_DIR}/flowz-helper`;
+const INSTALL_DIR = '/usr/local/lib/shadowvpn';
+const HELPER_DEST = `${INSTALL_DIR}/shadowvpn-helper`;
 // root-owned 受管核目录（root:root 0755，普通用户改不动）：安装时播种随包核、install-core hash 校验更新。
 // helper 只跑此目录内的 sing-box（路径锁），与 macOS 受保护目录 / Windows 锁定 --singbox 一致。
 const CORE_DIR = `${INSTALL_DIR}/core`;
 const CORE_BIN = `${CORE_DIR}/sing-box`;
 const UNIT_PATH = `/etc/systemd/system/${SERVICE_NAME}`;
-const STATE_DIR = '/var/lib/flowz';
+const STATE_DIR = '/var/lib/shadowvpn';
 const AUTH_FILE = `${STATE_DIR}/authorized-uids`;
-const RUNTIME_DIR = '/run/flowz';
+const RUNTIME_DIR = '/run/shadowvpn';
 const SOCKET_PATH = `${RUNTIME_DIR}/helper.sock`;
 // 与 helper-linux protoVersion 对应。proto ≥ MIN_USABLE 即 TUN 功能齐全；MIN_USABLE ≤ proto < EXPECTED → upgradeable
 // （温和提示可升级）。v1 起 EXPECTED===MIN，故 upgradeable 恒 false（无历史包袱，尚无更旧可用版本）——**将来 helper 协议
@@ -311,13 +311,13 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     // 真机验证后加（P3；过早收紧易踩 setuid/chown/dac_override 缺失）。singbox/authfile 路径不烧进 unit（多用户）。
     return `[Unit]
 Description=FlowZ privileged network helper
-Documentation=https://github.com/dododook/FlowZ
+Documentation=https://github.com/dsanying/VPN
 After=network.target
 
 [Service]
 Type=simple
 ExecStart=${HELPER_DEST} --socket=${SOCKET_PATH} --authfile=${AUTH_FILE} --coredir=${CORE_DIR}
-RuntimeDirectory=flowz
+RuntimeDirectory=shadowvpn
 RuntimeDirectoryMode=0755
 Restart=on-failure
 RestartSec=2
@@ -353,19 +353,19 @@ ${this.buildUnit()}FLOWZ_UNIT_EOF
 chmod 0644 ${shq(UNIT_PATH)}
 systemctl daemon-reload
 systemctl enable --now ${SERVICE_NAME}
-echo flowz-helper-install-ok
+echo shadowvpn-helper-install-ok
 `;
   }
 
   private buildUninstallScript(): string {
     // 对称清理：停服务 + 删 unit + 删受管安装根（helper 二进制 + root 核）+ 状态/运行目录。INSTALL_DIR 是 flowz 专属
-    // 目录（/usr/local/lib/flowz），整删安全，不碰 deb 的 /opt/FlowZ。
+    // 目录（/usr/local/lib/shadowvpn），整删安全，不碰 deb 的 /opt/FlowZ。
     return `#!/bin/sh
 systemctl disable --now ${SERVICE_NAME} 2>/dev/null || true
 rm -f ${shq(UNIT_PATH)}
 rm -rf ${shq(INSTALL_DIR)} ${shq(STATE_DIR)} ${shq(RUNTIME_DIR)}
 systemctl daemon-reload 2>/dev/null || true
-echo flowz-helper-uninstall-ok
+echo shadowvpn-helper-uninstall-ok
 `;
   }
 

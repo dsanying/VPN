@@ -7,11 +7,11 @@
  * 第二次计时（防塌成 ≈0ms 的相位机缺陷）、CONNECT 失败 / 对端早关 / 超时三类失败返回 null。
  */
 import * as net from 'net';
-import * as tls from 'tls';
+import tls = require('tls');
 import { SpeedTestService } from '../SpeedTestService';
 import { resolveSpeedTestTarget } from '../../../shared/speed-test';
 
-// 测试专用自签证书（仅本进程 mock origin 用；客户端测速 rejectUnauthorized=false 不校验）。
+// 测试专用自签证书（仅本进程 mock origin 用；客户端测速强制校验；成功测试显式信任此测试 CA）。
 const TEST_KEY = `-----BEGIN PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCoDRoduamuz7oo
 JDqvXZbOAmrSm74Qd6uj8zpfrrIlp4lUg+pVU4STww4pZAQQb88FSfzXjjEjKyWV
@@ -234,11 +234,28 @@ describe('SpeedTestService.measureViaTunnel（warm RTT，对齐 mihomo unified-d
       secondDelay: 60,
       tls: true,
     });
+    const realConnect = tls.connect;
+    const trusted = jest
+      .spyOn(tls, 'connect')
+      .mockImplementation(((options: tls.ConnectionOptions, callback: () => void) =>
+        realConnect({ ...options, ca: TEST_CERT }, callback)) as typeof tls.connect);
     try {
       const latency = await measureLatency(proxy.port, 8000, HTTPS_TARGET);
       expect(latency).not.toBeNull();
       expect(latency!).toBeGreaterThanOrEqual(40);
       expect(latency!).toBeLessThan(200); // TLS 握手 + connect + first 均排除
+    } finally {
+      trusted.mockRestore();
+      await proxy.close();
+    }
+  });
+
+  it('未信任的 HTTPS 证书返回 tls-error，不伪装成可达', async () => {
+    const proxy = await startMockProxy({ tls: true });
+    try {
+      const result = await svc.measureViaTunnel(proxy.port, 1000, HTTPS_TARGET);
+      expect(result.latency).toBeNull();
+      expect(result.reason).toMatch(/^tls-error:/);
     } finally {
       await proxy.close();
     }

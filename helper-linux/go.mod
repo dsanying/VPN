@@ -1,3 +1,3 @@
-module flowz-helper-linux
+module shadowvpn-helper-linux
 
 go 1.24

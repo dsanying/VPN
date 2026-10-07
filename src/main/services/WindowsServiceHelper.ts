@@ -10,7 +10,7 @@
  *
  * 与 macOS HelperManager 的对应（协议/行协议/token 语义一致，便于共用上层逻辑）：
  *   launchd daemon → Windows 服务（SCM, LocalSystem, start=auto）
- *   unix socket    → 命名管道 \\.\pipe\flowz-helper（ACL：SYSTEM + 交互用户；token 为主鉴权边界）
+ *   unix socket    → 命名管道 \\.\pipe\shadowvpn-helper（ACL：SYSTEM + 交互用户；token 为主鉴权边界）
  *   osascript 授权 → UAC（Start-Process -Verb RunAs）
  *   命令集取子集：ping/version/status/start/stop/cleanup/freeport（无 macOS 专属 install-core）。
  *
@@ -31,11 +31,11 @@ import { resourceManager } from './ResourceManager';
 import { getUserDataPath } from '../utils/paths';
 
 /** SCM 服务名。 */
-const SERVICE_NAME = 'FlowZHelper';
+const SERVICE_NAME = 'ShadowVPNHelper';
 /** 命名管道路径（与 helper-win 默认一致）。Node net.connect 支持 \\.\pipe\ 形式。 */
-const PIPE_PATH = '\\\\.\\pipe\\flowz-helper';
+const PIPE_PATH = '\\\\.\\pipe\\shadowvpn-helper';
 /** SYSTEM 侧支持目录：服务以 LocalSystem 读 helper.token；安装时 elevated 写入并设 ACL（SYSTEM + Administrators）。 */
-const SUPPORT_DIR = path.join(process.env.ProgramData || 'C:\\ProgramData', 'FlowZ');
+const SUPPORT_DIR = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ShadowVPN');
 /** sc query 不存在服务时的退出码（ERROR_SERVICE_DOES_NOT_EXIST）。 */
 const ERROR_SERVICE_DOES_NOT_EXIST = 1060;
 /** 与 helper-win 的 protoVersion 对应。Windows 独立谱系：v1 = ping/version/status/start/stop/cleanup/freeport。 */
@@ -436,10 +436,10 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     //   ① app 更新：NSIS 覆盖被「正在运行的服务锁定」的 helper.exe → 占用失败/残留；
     //   ② app 卸载：NSIS 删 app 文件却留下仍指向已删路径的 SCM 服务（孤儿服务 + 残留 ProgramData token）。
     // 镜像 macOS「把 helper 复制出 .app 到 /Library/PrivilegedHelperTools」范式：安装期把 helper.exe 复制到
-    // SUPPORT_DIR（ProgramData\FlowZ），服务 binPath 指向该**外置副本** → 二进制与 app 目录彻底解耦，
+    // SUPPORT_DIR（ProgramData\ShadowVPN），服务 binPath 指向该**外置副本** → 二进制与 app 目录彻底解耦，
     // 更新随便覆盖 app、卸载由 helper 自卸载/NSIS 钩子清服务+ProgramData（见 helper.go uninstall / 卸载钩子）。
     // 用 path.win32.basename 取末段：exe 恒为 Windows 反斜杠路径，在 POSIX 测试宿主上普通 path.basename 不识别
-    // 反斜杠会整串返回；win32 变体在两种宿主都正确剥出 com.flowz.helper.exe（与 getWinHelperPath 的名字保持耦合）。
+    // 反斜杠会整串返回；win32 变体在两种宿主都正确剥出 com.dsanying.shadowvpn.helper.exe（与 getWinHelperPath 的名字保持耦合）。
     const helperDst = path.join(SUPPORT_DIR, path.win32.basename(exe));
     // BinaryPathName(ImagePath)：各含空格路径用**真双引号**包裹，经 New-Service 单一字符串直达 Win32 CreateService。
     // 不可用 `sc.exe create binPath= "\"..\""`：PS 原样把 `\"` 传给 sc → 服务启动经 CommandLineToArgvW 时 `\"`
@@ -526,9 +526,9 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
   private runElevatedPowerShell(inner: string): Promise<{ success: boolean; error?: string }> {
     return new Promise((resolve) => {
       const stamp = randomBytes(6).toString('hex');
-      const scriptPath = path.join(os.tmpdir(), `flowz-helper-${stamp}.ps1`);
-      const flagPath = path.join(os.tmpdir(), `flowz-helper-${stamp}.done`);
-      const errPath = path.join(os.tmpdir(), `flowz-helper-${stamp}.err`);
+      const scriptPath = path.join(os.tmpdir(), `shadowvpn-helper-${stamp}.ps1`);
+      const flagPath = path.join(os.tmpdir(), `shadowvpn-helper-${stamp}.done`);
+      const errPath = path.join(os.tmpdir(), `shadowvpn-helper-${stamp}.err`);
       const script = [
         "$ErrorActionPreference = 'Stop'",
         'try {',
