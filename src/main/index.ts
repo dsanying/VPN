@@ -1,6 +1,10 @@
 import { app, BrowserWindow, dialog, Menu, powerMonitor, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+
+app.setName('暗影VPN');
+app.setPath('userData', path.join(app.getPath('appData'), 'ShadowVPN-FlowZ'));
+
 import { ConfigManager } from './services/ConfigManager';
 import { ProtocolParser } from './services/ProtocolParser';
 import { LogManager } from './services/LogManager';
@@ -741,7 +745,7 @@ async function createWindow(forceShow = false) {
     height: windowHeight,
     minWidth: 800,
     minHeight: 720,
-    title: 'FlowZ',
+    title: '暗影VPN',
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成
     backgroundColor: useMacTransparent ? '#00000000' : solidBackground,
@@ -1398,7 +1402,7 @@ if (gotTheLock) {
     logManager.addLog('info', 'Application started', 'Main');
 
     // Windows toast 前置：设 AppUserModelID（与 electron-builder appId 一致），提升 portable 版通知可靠性（无 NSIS 注册时）。
-    if (process.platform === 'win32') app.setAppUserModelId('com.flowz.app');
+    if (process.platform === 'win32') app.setAppUserModelId('com.dsanying.shadowvpn.app');
     // 主进程 i18n 初值先按系统偏好兜底（config 加载完成前的极短窗口，覆盖任何早于配置读取的 mt() 调用）。
     setMainLanguage(resolveAutoLanguage(getPreferredSystemLanguagesSafe()));
     // 桌面通知总开关初始同步（运行期变更由 config-change-handler 同步）。await 确保 enabled 在后续启动步骤

@@ -17,7 +17,7 @@ See the comment block at the top of `helper.go`. Key points: the token is the pr
 ## Build
 
 ```bash
-npm run build:helper          # cross-compile arm64 + x64 → resources/mac-*/com.flowz.helper
+npm run build:helper          # cross-compile arm64 + x64 → resources/mac-*/com.dsanying.shadowvpn.helper
 ```
 
-The output is bundled into the app via electron-builder `extraResources` (`resources/mac-${arch}` → `mac`), lives at runtime under `<App>/Contents/Resources/mac/com.flowz.helper`, and is copied to `/Library/PrivilegedHelperTools/com.flowz.helper` on install.
+The output is bundled into the app via electron-builder `extraResources` (`resources/mac-${arch}` → `mac`), lives at runtime under `<App>/Contents/Resources/mac/com.dsanying.shadowvpn.helper`, and is copied to `/Library/PrivilegedHelperTools/com.dsanying.shadowvpn.helper` on install.

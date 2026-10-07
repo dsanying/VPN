@@ -15,9 +15,9 @@ import (
 
 func main() {
 	var console bool
-	flag.StringVar(&sockPath, "socket", "/run/flowz/helper.sock", "unix socket path")
-	flag.StringVar(&authFile, "authfile", "/var/lib/flowz/authorized-uids", "authorized uid list file (one decimal uid per line)")
-	flag.StringVar(&coreDir, "coredir", "/usr/local/lib/flowz/core", "locked root-owned managed core dir (only sing-box here is run; install-core writes only here)")
+	flag.StringVar(&sockPath, "socket", "/run/shadowvpn/helper.sock", "unix socket path")
+	flag.StringVar(&authFile, "authfile", "/var/lib/shadowvpn/authorized-uids", "authorized uid list file (one decimal uid per line)")
+	flag.StringVar(&coreDir, "coredir", "/usr/local/lib/shadowvpn/core", "locked root-owned managed core dir (only sing-box here is run; install-core writes only here)")
 	flag.BoolVar(&console, "console", false, "run in foreground for dev/test (systemd not required)")
 	flag.Parse()
 

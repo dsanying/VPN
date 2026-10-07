@@ -220,6 +220,18 @@ export function useServerActions() {
       // L-4：编辑保存重建对象须保留非表单字段——userInfo（流量）恒保留；条件 GET validators + hasProviders 仅 URL
       // 未变时保留（URL 变=不同资源，旧 validator 无意义、旧 hasProviders 可能错 → 丢弃走全量拉取）。否则 #92 新字段
       // 连同既有 userInfo 被全量替换抹掉（损失一次 304 优化）。
+      const protocolChanged =
+        (editingSub.protocolPreference ?? 'auto') !== (subData.protocolPreference ?? 'auto');
+      // 协议无匹配或源不可读时保留原选择及节点，不先保存失败配置。
+      if (protocolChanged) {
+        const preview = await apiPreviewSubscription(subData.url, {
+          viaProxy: subData.updateViaProxy,
+          userAgent: subData.userAgent,
+          protocolPreference: subData.protocolPreference,
+        });
+        if (!preview.ok)
+          return { ok: false, errorKind: preview.errorKind, httpStatus: preview.httpStatus };
+      }
       const urlUnchanged = subData.url === editingSub.url;
       const updatedSub: SubscriptionConfig = {
         ...subData,
@@ -238,6 +250,14 @@ export function useServerActions() {
       const res = await updateSubscription(updatedSub);
       // 失败（api-wrapper 已 toast）返回 ok:false → 对话框不关、留住用户输入。
       if (!res.success) return { ok: false };
+      if (protocolChanged) {
+        const refresh = await apiUpdateSubscriptionServers(updatedSub.id);
+        if (!refresh.success) {
+          await updateSubscription(editingSub);
+          await loadConfig();
+          return { ok: false };
+        }
+      }
       await loadConfig();
       return { ok: true, sub: updatedSub };
     }
@@ -245,6 +265,7 @@ export function useServerActions() {
     const pre = await apiPreviewSubscription(subData.url, {
       viaProxy: subData.updateViaProxy,
       userAgent: subData.userAgent,
+      protocolPreference: subData.protocolPreference,
     });
     if (!pre.ok) {
       // 不建任何记录 → 对话框据 errorKind/httpStatus 展示错误、留窗；无闪现节点。

@@ -147,8 +147,10 @@ export interface SubscriptionConfig {
   lastUpdated?: string;
   createdAt: string;
   // 拉取订阅时的 User-Agent 覆盖（per-sub）。优先级：subscription.userAgent ?? config.subscriptionUserAgent ?? 默认。
-  // 默认 `FlowZ/<版本>`（纯中性）。订阅对话框「自定义 User-Agent」输入框可设置本字段。
+  // 默认 `clash.meta`（标准格式协商）；仅兼容已保存的自定义请求标识，普通订阅入口不暴露此字段。
   userAgent?: string;
+  // 缺省自动解析全部支持的协议；显式选择只保留该协议节点。
+  protocolPreference?: Protocol | 'auto';
   // 该订阅是否经代理更新（per-sub；默认 false=直连）。仅全局 subscriptionProxyPolicy='follow' 时生效，
   // 'proxy'/'direct' 时被全局覆盖（忽略本字段）。生效求值见 shared/subscription-proxy#resolveSubscriptionViaProxy。
   updateViaProxy?: boolean;
@@ -417,7 +419,7 @@ export interface UserConfig {
   // 订阅经代理更新的【全局三态策略】（默认 'follow'）：'follow'=按各订阅 per-sub updateViaProxy 决定；
   // 'proxy'=所有订阅强制经代理（忽略 per-sub）；'direct'=所有订阅强制直连（忽略 per-sub）。求值见 shared/subscription-proxy。
   subscriptionProxyPolicy?: SubscriptionProxyPolicy;
-  // 全局订阅 UA（被 per-sub subscription.userAgent 覆盖；均缺省时用 `FlowZ/<版本>`）。本期无 UI，手编生效。
+  // 全局订阅 UA（被 per-sub subscription.userAgent 覆盖；均缺省时用 `clash.meta`）。本期无 UI，手编生效。
   subscriptionUserAgent?: string;
   // 更新链路（应用/资源/订阅/核心）是否经代理（默认 true=代理运行时经 update-in 借道，更新源多在 GitHub、
   // 墙内借道更可靠）；false=强制直连。经 shared/update-proxy#resolveMainSessionViaProxy 求值，Phase 1b 后

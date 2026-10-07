@@ -176,7 +176,8 @@ export class SubscriptionScheduler {
             sub.id,
             subViaProxy,
             sub.userAgent ?? config.subscriptionUserAgent,
-            conditional
+            conditional,
+            ...(sub.protocolPreference ? ([sub.protocolPreference] as const) : [])
           );
           fetched.push({
             subId: sub.id,

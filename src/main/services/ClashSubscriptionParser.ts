@@ -75,13 +75,31 @@ function bool(v: unknown): boolean | undefined {
   return undefined;
 }
 
-/** ws-opts.headers 大小写不敏感取 Host（机场写 Host / host / HOST 都接）。 */
-function pickHostHeader(headers: unknown): string | undefined {
+function findHostHeader(headers: unknown): unknown {
   if (!headers || typeof headers !== 'object') return undefined;
   for (const [k, v] of Object.entries(headers as Record<string, unknown>)) {
-    if (k.toLowerCase() === 'host') return str(v);
+    if (k.toLowerCase() === 'host') return v;
   }
   return undefined;
+}
+
+/** WS 单一 Host 与 HTTP Host 列表分别保留各自语义。 */
+function pickHostHeader(headers: unknown): string | undefined {
+  const value = findHostHeader(headers);
+  return str(Array.isArray(value) ? value[0] : value);
+}
+
+function normalizeHeaders(headers: unknown): Record<string, string[]> | undefined {
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return undefined;
+  const normalized: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === 'host') continue; // transport.host 是唯一 Host 来源
+    const values = (Array.isArray(value) ? value : [value])
+      .map(str)
+      .filter((item): item is string => item !== undefined);
+    if (values.length) normalized[key] = values;
+  }
+  return Object.keys(normalized).length ? normalized : undefined;
 }
 
 /**
@@ -189,7 +207,13 @@ function applyTransportAndTls(
     const host = pickHostHeader(wsOpts['headers']);
     const ws: NonNullable<ServerConfig['wsSettings']> = {};
     if (path) ws.path = path;
-    if (host) ws.headers = { Host: host };
+    const headers = normalizeHeaders(wsOpts['headers']);
+    if (headers || host) {
+      ws.headers = Object.fromEntries(
+        Object.entries(headers ?? {}).map(([key, values]) => [key, values.join(', ')])
+      );
+      if (host) ws.headers.Host = host;
+    }
     const med = num(wsOpts['max-early-data']);
     if (med !== undefined) ws.maxEarlyData = med;
     const edhn = str(wsOpts['early-data-header-name']);
@@ -218,14 +242,18 @@ function applyTransportAndTls(
     const path = Array.isArray(rawPath) ? str(rawPath[0]) : str(rawPath);
     if (path) httpSettings.path = path;
     // host：h2-opts.host（数组/字符串）→ http-opts.host（数组/字符串）→ http-opts.headers.Host。
-    const rawHost = h2Opts['host'] ?? httpOpts['host'];
+    const rawHost = h2Opts['host'] ?? httpOpts['host'] ?? findHostHeader(httpOpts['headers']);
     if (Array.isArray(rawHost)) {
       const hosts = rawHost.map((x) => str(x)).filter((x): x is string => !!x);
       if (hosts.length > 0) httpSettings.host = hosts;
     } else {
-      const single = str(rawHost) ?? pickHostHeader(httpOpts['headers']);
+      const single = str(rawHost);
       if (single) httpSettings.host = [single];
     }
+    const method = str(httpOpts['method']);
+    if (method) httpSettings.method = method;
+    const headers = normalizeHeaders(httpOpts['headers']);
+    if (headers) httpSettings.headers = headers;
     if (Object.keys(httpSettings).length > 0) config.httpSettings = httpSettings;
   } else if (rawNet && rawNet !== 'tcp') {
     // xhttp/splithttp/kcp 等 sing-box 不支持的传输：静默落 tcp 会产出连不上的假节点，

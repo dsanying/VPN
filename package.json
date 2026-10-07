@@ -1,8 +1,8 @@
 {
-  "name": "flowz",
-  "version": "4.3.3",
-  "description": "FlowZ - 简洁现代的跨平台代理客户端",
-  "desktopName": "flowz",
+  "name": "shadow-vpn",
+  "version": "0.1.0",
+  "description": "暗影VPN — 基于 FlowZ 的后端修复版",
+  "desktopName": "shadow-vpn",
   "main": "dist/main/main/index.js",
   "scripts": {
     "prepare": "husky",
@@ -36,7 +36,8 @@
     "fetch:dashboard": "node scripts/fetch-dashboard.mjs",
     "release:tag": "node scripts/push-release.js",
     "release:tag:update": "node scripts/push-release.js -y -u",
-    "release:prepare": "npm run fetch:core && npm run test:core-gate && npm run fetch:cronet && npm run fetch:dashboard && npm run build && npm run package:all"
+    "release:prepare": "npm run fetch:core && npm run test:core-gate && npm run fetch:cronet && npm run fetch:dashboard && npm run build && npm run package:all",
+    "package:mac:local": "npm run build:main && npm run build:renderer && electron-builder --mac --arm64 --dir"
   },
   "keywords": [
     "electron",
@@ -122,5 +123,6 @@
     "src/**/*.{ts,tsx,json,css}": [
       "prettier --write"
     ]
-  }
+  },
+  "productName": "暗影VPN"
 }

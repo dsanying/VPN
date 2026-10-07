@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { app, net, session, type Session } from 'electron';
+import { net, session, type Session } from 'electron';
 import type {
   ServerConfig,
   SubscriptionConfig,
@@ -19,22 +19,15 @@ import {
 import { parseXrayOutbounds } from './xray-import';
 import { isServerComplete } from '../../shared/server-completeness';
 import { normalizeDuration } from '../../shared/duration';
+import { selectSubscriptionProtocol } from '../../shared/subscription-protocol';
 import {
   classifySubscriptionError,
   type SubscriptionPreviewResult,
 } from '../../shared/subscription-preview';
 
-/** 默认订阅 UA：纯中性 `FlowZ/<版本>`（去除 clash.meta/mihomo 标识，陈先生 2026-06-12 决策）。 */
+/** 默认请求 Clash Meta 格式；仅作为本地解析器已支持的格式协商，用户自定义 UA 优先。 */
 export function defaultSubscriptionUserAgent(): string {
-  // 订阅伪装中性 UA（FlowZ/<版本>），规避机场拦截。**勿用于 GitHub API/资源下载**——带版本会泄漏，
-  // 用 shared/constants.ts 的 APP_USER_AGENT（应用自标识）。app.getVersion() 仅打包后可用；测试不消费本函数（UA 拼接在 fetch 路径，已 mock）。
-  let version = '0.0.0';
-  try {
-    version = app.getVersion();
-  } catch {
-    // app 不可用（极早期/非 electron 上下文）兜底
-  }
-  return `FlowZ/${version}`;
+  return 'clash.meta';
 }
 
 export interface SubscriptionUpdateResult {
@@ -62,8 +55,9 @@ type SingboxTls = {
 type SingboxTransport = {
   type?: string;
   path?: string;
-  host?: string;
-  headers?: Record<string, string>;
+  host?: string | string[];
+  method?: string;
+  headers?: Record<string, string | string[]>;
   service_name?: string;
 };
 type SingboxMultiplex = {
@@ -405,14 +399,48 @@ export class SubscriptionService {
           if (netType === 'ws') {
             // 与 httpupgrade 对齐：transport.host 折叠进 Host header（部分配置把 ws Host 放在 t.host），
             // 避免同一节点经 JSON 订阅 vs 分享链解析出不一致的 wsSettings（丢 Host）。
-            base.wsSettings = { path: t.path, headers: t.host ? { Host: t.host } : t.headers };
+            base.wsSettings = {
+              path: t.path,
+              headers: {
+                ...Object.fromEntries(
+                  Object.entries(t.headers ?? {}).map(([key, value]) => [
+                    key,
+                    Array.isArray(value) ? value.join(', ') : value,
+                  ])
+                ),
+                ...(typeof t.host === 'string' ? { Host: t.host } : {}),
+              },
+            };
           } else if (netType === 'grpc') {
             base.grpcSettings = { serviceName: t.service_name };
           } else if (netType === 'http') {
-            base.httpSettings = { path: t.path };
+            base.httpSettings = {
+              path: t.path,
+              host: typeof t.host === 'string' ? [t.host] : t.host,
+              method: t.method,
+              headers: t.headers
+                ? Object.fromEntries(
+                    Object.entries(t.headers).map(([key, value]) => [
+                      key,
+                      Array.isArray(value) ? value : [value],
+                    ])
+                  )
+                : undefined,
+            };
           } else if (netType === 'httpupgrade') {
             // httpupgrade 复用 ws 设置承载 path/Host
-            base.wsSettings = { path: t.path, headers: t.host ? { Host: t.host } : t.headers };
+            base.wsSettings = {
+              path: t.path,
+              headers: {
+                ...Object.fromEntries(
+                  Object.entries(t.headers ?? {}).map(([key, value]) => [
+                    key,
+                    Array.isArray(value) ? value.join(', ') : value,
+                  ])
+                ),
+                ...(typeof t.host === 'string' ? { Host: t.host } : {}),
+              },
+            };
           }
         }
 
@@ -582,7 +610,11 @@ export class SubscriptionService {
           }
           if (!ob.psk?.trim()) {
             // trim 语义与 protocolRequirementError 的 password?.trim() 对齐：空白 psk 穿闸入库会连累整份订阅保存。
-            this.logManager.addLog('warn', `跳过 snell outbound "${ob.tag}"：缺 psk`, 'Subscription');
+            this.logManager.addLog(
+              'warn',
+              `跳过 snell outbound "${ob.tag}"：缺 psk`,
+              'Subscription'
+            );
             continue;
           }
           const snell: NonNullable<ServerConfig['snellSettings']> = { version: ob.version };
@@ -936,11 +968,7 @@ export class SubscriptionService {
     }
     if (unsupportedSchemes.size > 0) {
       const detail = [...unsupportedSchemes.entries()].map(([s, c]) => `${s}(${c})`).join(', ');
-      this.logManager.addLog(
-        'warn',
-        `跳过不支持的协议链接: ${detail}`,
-        'Subscription'
-      );
+      this.logManager.addLog('warn', `跳过不支持的协议链接: ${detail}`, 'Subscription');
     }
 
     if (servers.length === 0) {
@@ -1080,7 +1108,8 @@ export class SubscriptionService {
     subscriptionId: string,
     viaProxy: boolean = false,
     userAgent?: string,
-    conditional?: { etag?: string; lastModified?: string }
+    conditional?: { etag?: string; lastModified?: string },
+    protocolPreference: SubscriptionConfig['protocolPreference'] = 'auto'
   ): Promise<{
     servers: ServerConfig[];
     userInfo?: SubscriptionConfig['userInfo'];
@@ -1104,13 +1133,7 @@ export class SubscriptionService {
       const ua = userAgent?.trim() || defaultSubscriptionUserAgent();
       // 主订阅 fetch 加超时（30s，比 provider 15s 宽）→ 防 slow-loris 挂死 scheduler.isRunning 永真。
       // §16.3.4：conditional 由调用方决定是否传（provider 型订阅豁免——见 subscription-handlers/scheduler）。
-      const {
-        text,
-        userInfo,
-        etag,
-        lastModified,
-        notModified,
-      } = await this.fetchSubscriptionText(
+      const { text, userInfo, etag, lastModified, notModified } = await this.fetchSubscriptionText(
         url,
         viaProxy,
         ua,
@@ -1143,7 +1166,15 @@ export class SubscriptionService {
         }
       );
 
-      return { servers, userInfo, partial, failedProviders, etag, lastModified, hasProviders };
+      return {
+        servers: selectSubscriptionProtocol(servers, protocolPreference),
+        userInfo,
+        partial,
+        failedProviders,
+        etag,
+        lastModified,
+        hasProviders,
+      };
     } catch (error: any) {
       // 失败日志同样脱敏 url。
       this.logManager.addLog(
@@ -1166,7 +1197,11 @@ export class SubscriptionService {
    */
   async previewSubscription(
     url: string,
-    opts: { viaProxy?: boolean; userAgent?: string }
+    opts: {
+      viaProxy?: boolean;
+      userAgent?: string;
+      protocolPreference?: SubscriptionConfig['protocolPreference'];
+    }
   ): Promise<SubscriptionPreviewResult> {
     const viaProxy = opts.viaProxy ?? false;
     const userAgent = opts.userAgent?.trim() || defaultSubscriptionUserAgent();
@@ -1184,7 +1219,10 @@ export class SubscriptionService {
         userAgent,
         throwOnEmpty: true,
       });
-      return { ok: true, nodeCount: servers.length };
+      return {
+        ok: true,
+        nodeCount: selectSubscriptionProtocol(servers, opts.protocolPreference).length,
+      };
     } catch (err: any) {
       // 摊平错误信号交纯分类器（不自己判分类）：message + code(err.code ?? cause.code) + 从
       // 'HTTP Error: NNN'（fetchSubscriptionText 的 HTTP 失败文案 `HTTP Error: ${status} ${statusText}`）提 status。

@@ -121,44 +121,44 @@ export class ResourceManager {
 
   /**
    * 获取随包内置的 macOS 提权 helper 二进制路径（与 sing-box 同目录）。
-   * 生产环境：<App>/Contents/Resources/mac/com.flowz.helper；开发环境：resources/mac-${arch}/com.flowz.helper。
+   * 生产环境：<App>/Contents/Resources/mac/com.dsanying.shadowvpn.helper；开发环境：resources/mac-${arch}/com.dsanying.shadowvpn.helper。
    * 仅 macOS 有意义；安装时由 HelperManager 复制到 /Library/PrivilegedHelperTools/。
    */
   getMacHelperPath(): string {
-    return path.join(this.getPlatformResourceDir(), 'com.flowz.helper');
+    return path.join(this.getPlatformResourceDir(), 'com.dsanying.shadowvpn.helper');
   }
 
   /**
    * 获取随包内置的 Windows 提权 helper 服务二进制路径（与 sing-box.exe 同目录，安装期的**复制源**）。
-   * 生产/开发：<resources>/win/com.flowz.helper.exe。仅 Windows 有意义。
-   * 安装时由 WindowsServiceHelper 把它**复制外置**到 ProgramData\FlowZ 再注册为 LocalSystem 服务，binPath 指向
+   * 生产/开发：<resources>/win/com.dsanying.shadowvpn.helper.exe。仅 Windows 有意义。
+   * 安装时由 WindowsServiceHelper 把它**复制外置**到 ProgramData\ShadowVPN 再注册为 LocalSystem 服务，binPath 指向
    * 外置副本（非此 app 内路径）——故 app 更新/移动不影响服务、卸载由 helper 自卸载/NSIS 钩子清外置副本。
    * 镜像 macOS HelperManager 把 helper 复制出 .app 到 /Library/PrivilegedHelperTools 的范式。
    */
   getWinHelperPath(): string {
-    return path.join(this.getPlatformResourceDir(), 'com.flowz.helper.exe');
+    return path.join(this.getPlatformResourceDir(), 'com.dsanying.shadowvpn.helper.exe');
   }
 
   /**
    * 获取随包内置的 Linux 提权 helper 二进制路径（与 sing-box 同目录，安装期的**复制源**）。
-   * 生产：<resources>/linux/flowz-helper-linux；开发：resources/linux[-${arch}]/flowz-helper-linux。仅 Linux 有意义。
-   * 安装时由 LinuxServiceHelper 复制到 /opt/FlowZ/flowz-helper 并注册为 systemd system service。
+   * 生产：<resources>/linux/shadowvpn-helper-linux；开发：resources/linux[-${arch}]/shadowvpn-helper-linux。仅 Linux 有意义。
+   * 安装时由 LinuxServiceHelper 复制到 /opt/FlowZ/shadowvpn-helper 并注册为 systemd system service。
    */
   getLinuxHelperPath(): string {
-    return path.join(this.getPlatformResourceDir(), 'flowz-helper-linux');
+    return path.join(this.getPlatformResourceDir(), 'shadowvpn-helper-linux');
   }
 
   /** macOS 内核持久化的受保护目录（root-only 写，App 升级不覆盖；B 块）。helper 安装时经 --coredir 锁定它，
    *  install-core 只写此目录。仅 macOS 有意义。 */
   getProtectedCoreDir(): string {
-    return '/Library/Application Support/FlowZ/core';
+    return '/Library/Application Support/ShadowVPN/core';
   }
 
   /** Linux root-owned 受管核目录（root:root 0755，普通用户改不动；LinuxServiceHelper 安装时播种、install-core 写入）。
    *  helper 只跑此目录内的 sing-box（路径锁），getSingBoxPath 在此目录有可执行核时优先返回它。**须与 LinuxServiceHelper
    *  的 CORE_DIR 常量字面一致**。仅 Linux 有意义。 */
   getLinuxManagedCoreDir(): string {
-    return '/usr/local/lib/flowz/core';
+    return '/usr/local/lib/shadowvpn/core';
   }
 
   /** Linux root 受管核是否在位且可执行——getSingBoxPath 读路径与 ensureWritableCore force 刷新腿共用同一谓词，

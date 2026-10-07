@@ -12,10 +12,10 @@ import (
 // 为何手工拼 CmdLine 而非 exec.Command("cmd","/c",script)：
 //
 //	后者经 Go syscall.EscapeArg 把内层 `"` 转义成 `\"`，而 cmd.exe 不识别 `\"` 反转义。命令行含 >2 个引号且夹
-//	`&`/`>` 等特殊字符 → cmd 的 /c 走「strip 首尾各一个引号」规则；转义版剥壳后 rmdir 收到 `\"C:\ProgramData\FlowZ\"`
+//	`&`/`>` 等特殊字符 → cmd 的 /c 走「strip 首尾各一个引号」规则；转义版剥壳后 rmdir 收到 `\"C:\ProgramData\ShadowVPN\"`
 //	→ 实际路径多出前导反斜杠 `\C:\...\` → 语法非法、目录删不掉（外置 helper.exe + token 残留，自卸载白做）。
 //	手工 CmdLine 绕开 EscapeArg、写**真双引号**：同样经 strip 首尾后，内层真引号原样保留 → rmdir 收到合法的
-//	"C:\ProgramData\FlowZ"。
+//	"C:\ProgramData\ShadowVPN"。
 //
 // 前置假设：serviceName / supportDir 非攻击者可控（serviceName 为常量；supportDir 为安装期固定的 SUPPORT_DIR，
 // 无引号/cmd 元字符）。若未来 --support 变为可达输入，须先校验/转义其 cmd 元字符——本旁路以 SYSTEM 执行，注入即提权。

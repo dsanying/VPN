@@ -886,7 +886,7 @@ export class ConfigManager implements IConfigManager {
     }
     // 如果未定义，设置默认值
     if (config.autoCheckUpdate === undefined) {
-      config.autoCheckUpdate = true;
+      config.autoCheckUpdate = false;
     }
 
     // 图形兼容逃生门（正向纯开关，默认开=true；undefined=未设/旧配置，读取端一律 `!== false` 视为开）：
@@ -1153,7 +1153,7 @@ export class ConfigManager implements IConfigManager {
       silentStart: false,
       autoConnect: false,
       minimizeToTray: true,
-      autoCheckUpdate: true, // 默认启用启动时自动检查更新
+      autoCheckUpdate: false, // 私有预览版尚未发布可匿名获取的应用更新，默认关闭检查
       autoLightweightMode: false, // 默认不启用自动轻量模式
       hardwareAcceleration: true, // 图形兼容逃生门：默认开（关闭=opt-in 自救，app ready 前禁硬件加速改软件渲染，见 services/graphics-compat）
       windowEffects: true, // 窗口特效（Win Mica / mac 毛玻璃）默认开；关闭=opt-in 自救，主窗回落实色底

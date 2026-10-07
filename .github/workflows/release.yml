@@ -36,7 +36,7 @@ jobs:
       # 提权 helper 二进制不入库（.gitignore），由 build:helper 现编现打：mac(helper/) + win(helper-win/)。
       # 必须在 mac 与 win 两个 runner 都装 Go，否则该平台 package 缺 helper 二进制 → 安装提权助手「二进制缺失」(issue #57)。
       - name: Setup Go (提权 helper, mac + win)
-        if: matrix.platform == 'mac' || matrix.platform == 'win'
+        if: matrix.platform == 'mac' || matrix.platform == 'win' || matrix.platform == 'linux'
         uses: actions/setup-go@v5
         with:
           go-version-file: helper/go.mod
@@ -75,10 +75,10 @@ jobs:
           # 避免 v4.1.0 那样绿灯却漏发 mac-x64 包）。
           VERSION=${GITHUB_REF#refs/tags/v}
           for ARCH in arm64 x64; do
-            DMG_PATH="dist-package/FlowZ-${VERSION}-mac-${ARCH}.dmg"
+            DMG_PATH="dist-package/暗影VPN-${VERSION}-mac-${ARCH}.dmg"
             case "$ARCH" in arm64) WANT=arm64 ;; x64) WANT=x86_64 ;; esac
             APP_PATH=""
-            for CAND in "dist-package/mac-${ARCH}/FlowZ.app" "dist-package/mac/FlowZ.app"; do
+            for CAND in "dist-package/mac-${ARCH}/暗影VPN.app" "dist-package/mac/暗影VPN.app"; do
               [ -d "$CAND" ] || continue
               EXE=$(ls "$CAND"/Contents/MacOS/* 2>/dev/null | head -1)
               if [ -n "$EXE" ] && lipo -archs "$EXE" 2>/dev/null | tr ' ' '\n' | grep -qx "$WANT"; then
@@ -86,7 +86,7 @@ jobs:
               fi
             done
             if [ -z "$APP_PATH" ]; then
-              echo "::error::找不到 ${ARCH}(${WANT}) 架构的 FlowZ.app（查了 dist-package/mac-${ARCH}/ 与 dist-package/mac/）——发布将缺 mac-${ARCH} 包，请检查 package:mac 的 electron-builder --${ARCH} 产出。"
+              echo "::error::找不到 ${ARCH}(${WANT}) 架构的 暗影VPN.app（查了 dist-package/mac-${ARCH}/ 与 dist-package/mac/）——发布将缺 mac-${ARCH} 包，请检查 package:mac 的 electron-builder --${ARCH} 产出。"
               exit 1
             fi
             echo "Using ${ARCH} app bundle: $APP_PATH"
@@ -101,7 +101,7 @@ jobs:
             # macOS 首次打开报「已损坏，应移到废纸篓」，且右键→打开无效、须 xattr -cr。
             # DMG 内附首次打开引导（中英），教用户清除隔离属性。文件名带序号让它排在 app 前、更显眼。
             cp "build/macos-dmg-open-guide.txt" "$TEMP_DIR/0 首次打开必读 READ ME FIRST.txt"
-            hdiutil create -volname "FlowZ ${VERSION} (${ARCH})" \
+            hdiutil create -volname "暗影VPN ${VERSION} (${ARCH})" \
               -srcfolder "$TEMP_DIR" \
               -ov -format UDZO \
               "$DMG_PATH"

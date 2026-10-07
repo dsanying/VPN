@@ -892,7 +892,7 @@
     "resetSort": "重設排序",
     "protocol": "協定",
     "multiSelect": "多選",
-    "timeout": "逾時",
+    "timeout": "無法連線",
     "edit": "編輯",
     "importSuccess": "伺服器匯入成功",
     "lastUpdated": "最後更新：",
@@ -1546,6 +1546,9 @@
     "appendFail": "加入既有規則失敗"
   },
   "sub": {
+    "protocol": "節點協定",
+    "protocolAuto": "自動識別",
+    "protocolDesc": "自動識別所有協定；單選時只匯入所選協定的節點。",
     "requireName": "請輸入訂閱名稱",
     "requireUrl": "請輸入訂閱連結",
     "unknown": "未知",

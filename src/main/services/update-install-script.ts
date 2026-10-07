@@ -11,7 +11,7 @@
  *   配置/已更新内核/规则都在**独立的 data 目录**，不在产物文件里——
  *   · Windows 便携：`<exe 同级>\data\`（config + core_update + rules）
  *   · Linux AppImage：`~/.config/FlowZ`（XDG userData）
- *   · macOS：`~/Library/Application Support/FlowZ`
+ *   · macOS：`~/Library/Application Support/ShadowVPN`
  *   故覆盖 exe / AppImage / .app 单个产物 → data 原样保留 → 用户配置与已更新内核零丢失。
  *   installed 形态（NSIS / dpkg）由安装器自身原位升级，亦不动各自 data 目录。
  */
@@ -28,7 +28,7 @@ const vbsStr = (s: string): string => s.replace(/"/g, '""');
  * portable 自更新遗留的【本产品】`.exe.old`（旧版本被 stub 锁时 rename 留下）筛选——只匹配
  * 「<productPrefix>…portable.exe.old」，避免误删同目录其它便携工具的 `.exe.old`；IO 分离便于单测，启动期据此清理。
  */
-export function selectPortableStaleOld(fileNames: string[], productPrefix = 'FlowZ-'): string[] {
+export function selectPortableStaleOld(fileNames: string[], productPrefix = '暗影VPN-'): string[] {
   const p = productPrefix.toLowerCase();
   return fileNames.filter((f) => {
     const l = f.toLowerCase();

@@ -168,8 +168,8 @@ export function registerHelperHandlers(
           await proxyManager.stop().catch(() => {});
         }
         // 1. 清 helper + 其受保护资源。
-        //    macOS：uninstall 脚本 rm -rf /Library/Application Support/FlowZ（含受保护目录 core/），弹一次密码框。
-        //    Windows：helper.uninstall 走命名管道零提权令服务自停删 + 删 ProgramData\FlowZ（含外置 helper.exe + token）；
+        //    macOS：uninstall 脚本 rm -rf /Library/Application Support/ShadowVPN（含受保护目录 core/），弹一次密码框。
+        //    Windows：helper.uninstall 走命名管道零提权令服务自停删 + 删 ProgramData\ShadowVPN（含外置 helper.exe + token）；
         //      仅在 helper 确已安装时执行——未装则跳过，避免提权兜底路径无谓弹 UAC。
         if (process.platform === 'darwin') {
           const r = await helperManager.uninstall();
@@ -177,7 +177,7 @@ export function registerHelperHandlers(
             return { ok: false, error: r.error || 'helper 卸载失败，已中止完全卸载' };
           }
         } else if (process.platform === 'win32' || process.platform === 'linux') {
-          // Windows：命名管道令服务自停删 + 删 ProgramData\FlowZ。
+          // Windows：命名管道令服务自停删 + 删 ProgramData\ShadowVPN。
           // Linux：pkexec 一次授权 systemctl disable --now + 删 unit/二进制/授权文件/运行目录（对齐 mac/win 完全卸载清 helper 的加固）。
           // 两者均仅在 helper 确已安装时执行——未装则跳过，避免提权兜底路径无谓弹授权框。
           const st = await helperManager.getStatus();

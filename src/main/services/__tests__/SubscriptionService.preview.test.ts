@@ -123,7 +123,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
     });
     const r = await svc.previewSubscription('https://sub.example.com/c', {});
     expect(r.ok).toBe(true);
-    // 第 3 个实参为 userAgent：缺省时用 defaultSubscriptionUserAgent() = FlowZ/9.9.9（electron mock 版本）。
-    expect(fetchSpy.mock.calls[0][2]).toBe('FlowZ/9.9.9');
+    // 第 3 个实参为 userAgent：缺省时用 defaultSubscriptionUserAgent() = clash.meta（electron mock 版本）。
+    expect(fetchSpy.mock.calls[0][2]).toBe('clash.meta');
   });
 });

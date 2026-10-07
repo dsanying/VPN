@@ -42,6 +42,12 @@ import { normalizeDuration } from '../../shared/duration';
 /** 基于 UDP/QUIC 的协议，需要走真实代理测速 */
 const UDP_PROTOCOLS = new Set(['hysteria2', 'tuic']);
 
+// Respect the same trust boundary as the OS/browser, including locally trusted enterprise CAs.
+const SPEED_TEST_CA =
+  typeof tls.getCACertificates === 'function'
+    ? [...tls.getCACertificates('default'), ...tls.getCACertificates('system')]
+    : [...tls.rootCertificates];
+
 export interface SpeedTestResult {
   serverId: string;
   latency: number | null; // null 表示超时或失败
@@ -85,9 +91,9 @@ export class SpeedTestService {
   private logManager: LogManager;
   private readonly MAX_CONCURRENT = 5; // TCP 并发数（仅兜底裸 ping 路径）
   /** 经代理 urltest 的测速并发上限：大订阅时分波，避免 N 路握手同时打出→请求风暴假超时。
-   *  小订阅(≤此值)等价全并行、零额外延迟。取 16=并发与稳健的折中（warm 计量已把握手挪出上报值，并发主要影响
+   *  小订阅(≤此值)等价全并行、零额外延迟。取 4=限制同时冷握手的数量（warm 计量已把握手挪出上报值，并发主要影响
    *  总测速时长与争用、非延迟数值）；调大更快、调小更稳。 */
-  private static readonly PROXY_TEST_CONCURRENCY = 16;
+  private static readonly PROXY_TEST_CONCURRENCY = 4;
   /** 单节点测速总超时（ms）：覆盖冷建连(CONNECT+到代理/目标握手)+两次 GET；上报值只取第二次 warm RTT，与此无关。
    *  取 8s 给大订阅并发冷启动留足头寸，超时即判该节点不可达(null)。 */
   private static readonly MEASURE_TIMEOUT_MS = 8000;
@@ -182,13 +188,15 @@ export class SpeedTestService {
       : this.doTestAllServers(testable, onResult, onProgress, testUrl);
     this.currentTest = run;
     this.currentTestIds = requestIds;
-    void run.finally(() => {
+    const clearRun = () => {
       // 仅当仍是最新一次（其后无更晚的串行链接）才清空，避免清掉排队中的下一次。
       if (this.currentTest === run) {
         this.currentTest = null;
         this.currentTestIds = null;
       }
-    });
+    };
+    // Both branches consume cleanup; an ignored finally() would create a second unhandled rejection.
+    void run.then(clearRun, clearRun);
     return run;
   }
 
@@ -440,7 +448,7 @@ export class SpeedTestService {
       this.buildOutboundFn ?? ((s: ServerConfig, t: string) => this.buildOutbound(s, t));
     const usable: { server: ServerConfig; tag: string; outbound: Record<string, unknown> }[] = [];
     for (const s of servers) {
-      const tag = `out-${s.id.slice(0, 8)}`;
+      const tag = `out-${s.id}`;
       const ob = getOutbound(s, tag);
       if (ob) usable.push({ server: s, tag, outbound: ob });
       else {
@@ -477,7 +485,7 @@ export class SpeedTestService {
       // 3. 写入临时配置文件
       const userDataPath = getUserDataPath();
       configFilePath = path.join(userDataPath, `speedtest_${Date.now()}.json`);
-      await fs.writeFile(configFilePath, JSON.stringify(config, null, 2));
+      await fs.writeFile(configFilePath, JSON.stringify(config, null, 2), { mode: 0o600 });
 
       // 4. 启动临时 sing-box 进程
       const singboxPath = resourceManager.getSingBoxPath();
@@ -534,10 +542,11 @@ export class SpeedTestService {
           return;
         }
         const port = serverPortMap.get(u.server.id)!;
-        const { latency, reason } = await this.measureViaTunnel(
+        const { latency, reason } = await this.measureWithFallback(
           port,
           SpeedTestService.MEASURE_TIMEOUT_MS,
-          target
+          target,
+          () => this.getCoreGeneration() === gen0
         );
         // 超代再检（measure 期间核可能刚 START）：绝不写假 -1——超代的未测 vs measureViaTunnel 真实失败(-1) 由此分流。
         if (this.getCoreGeneration() !== gen0) {
@@ -642,7 +651,7 @@ export class SpeedTestService {
   ): Promise<Map<string, number | null>> {
     const results = new Map<string, number | null>();
     const poolPorts = probe.poolPorts;
-    const K = poolPorts.length;
+    const K = Math.min(poolPorts.length, SpeedTestService.PROXY_TEST_CONCURRENCY);
     // 进度/失败分布机制与 testServersViaProxy 同款（单一口径，UI/诊断零差异）。
     let tested = 0;
     let ok = 0;
@@ -742,10 +751,11 @@ export class SpeedTestService {
               return;
             }
             const port = poolPorts[k];
-            const { latency, reason } = await this.measureViaTunnel(
+            const { latency, reason } = await this.measureWithFallback(
               port,
               SpeedTestService.MEASURE_TIMEOUT_MS,
-              target
+              target,
+              () => !superseded()
             );
             // §15.11 超代②：measure 期间核跃迁/崩溃 → 丢在飞结果、不 report、不写假 -1（超代未测 vs 真实失败 -1 分流处）。
             if (superseded()) {
@@ -822,7 +832,7 @@ export class SpeedTestService {
     for (const { server, tag, outbound } of usable) {
       const port = serverPortMap.get(server.id);
       if (!port) continue;
-      const id8 = server.id.slice(0, 8);
+      const id8 = server.id;
       const inboundTag = `http-in-${id8}`;
       inbounds.push({ type: 'http', tag: inboundTag, listen: '127.0.0.1', listen_port: port });
       routeRules.push({ inbound: [inboundTag], action: 'route', outbound: tag });
@@ -996,6 +1006,35 @@ export class SpeedTestService {
    * HTTP/HTTPS 走同一隧道路径：第二次请求是否 warm 不依赖 sing-box 入站是否复用出站（隧道本身就是那条已建立的连接），
    * 避免赌核内部行为。返回 null = 不可达/超时/对端过早关闭；单一总超时 timeout 兜底。
    */
+  /** Default target failure is checked against an independent HTTPS origin before marking the node unavailable. */
+  private async measureWithFallback(
+    proxyPort: number,
+    timeout: number,
+    target: SpeedTestTarget,
+    isCurrent: () => boolean = () => true
+  ): Promise<{ latency: number | null; reason?: string }> {
+    const first = await this.measureViaTunnel(proxyPort, timeout, target);
+    if (
+      first.latency !== null ||
+      !isCurrent() ||
+      !target.https ||
+      target.port !== 443 ||
+      target.host !== 'www.gstatic.com' ||
+      target.path !== '/generate_204'
+    )
+      return first;
+    const fallback = await this.measureViaTunnel(
+      proxyPort,
+      timeout,
+      resolveSpeedTestTarget('https://cp.cloudflare.com/generate_204')
+    );
+    if (fallback.latency !== null) return fallback;
+    return {
+      latency: null,
+      reason: `${first.reason ?? 'failed'}; fallback:${fallback.reason ?? 'failed'}`,
+    };
+  }
+
   private measureViaTunnel(
     proxyPort: number,
     timeout: number,
@@ -1036,19 +1075,21 @@ export class SpeedTestService {
       // 'response' 仅兜「代理把 CONNECT 降级成普通 HTTP 响应」的边缘情况，避免挂到总超时。
       connectReq.on('response', () => finish(null, 'connect-downgraded'));
       connectReq.on('connect', (res, socket) => {
+        tunnel = socket;
         if (res.statusCode !== 200) {
           finish(null, `connect-${res.statusCode}`); // finish 内统一 destroy socket
           return;
         }
-        tunnel = socket;
         socket.setNoDelay(true); // 关 Nagle：小请求 TTFB 不被 delayed-ACK/合包拖慢
         if (target.https) {
-          // 隧道上做一次 TLS 握手（仅一次，归入第一次暖身）；测速仅量可达性+TTFB，不校验证书（与 HTTP 路径等价）。
+          // 隧道上做一次 TLS 握手（仅一次，归入第一次暖身）；必须校验证书，防拦截页被误判成代理可用。
           tlsSock = tls.connect(
-            { socket, servername: target.host, rejectUnauthorized: false },
+            { socket, servername: target.host, rejectUnauthorized: true, ca: SPEED_TEST_CA },
             () => this.measureWarmRtt(tlsSock!, target, finish)
           );
-          tlsSock.on('error', () => finish(null, 'tls-error'));
+          tlsSock.on('error', (error: NodeJS.ErrnoException) =>
+            finish(null, `tls-error:${error.code ?? 'unknown'}`)
+          );
         } else {
           this.measureWarmRtt(socket, target, finish);
         }
@@ -1064,7 +1105,7 @@ export class SpeedTestService {
    */
   async measureWarmRttViaHttpProxy(proxyPort: number, testUrl?: string): Promise<number | null> {
     const target = resolveSpeedTestTarget(testUrl);
-    const { latency, reason } = await this.measureViaTunnel(
+    const { latency, reason } = await this.measureWithFallback(
       proxyPort,
       SpeedTestService.MEASURE_TIMEOUT_MS,
       target
@@ -1089,7 +1130,7 @@ export class SpeedTestService {
     targetHost: string,
     timeout: number
   ): Promise<SpeedTestResolvedIpDiagnostic> {
-    const resolverPath = `dns-exit-${server.id.slice(0, 8)} tcp/53 probe`;
+    const resolverPath = `dns-exit-${server.id} tcp/53 probe`;
     if (net.isIP(targetHost)) {
       return {
         serverId: server.id,

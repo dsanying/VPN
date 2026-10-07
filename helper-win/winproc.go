@@ -214,7 +214,7 @@ func killAllSingbox(singboxBin string) int {
 }
 
 // spawnSelfUninstall：派生一个脱离本进程生命周期的 SYSTEM 旁路 cmd，完成 helper 自身无法自完成的卸载收尾：
-// 停并删 SCM 服务（serviceName）、删 supportDir（含外置的 com.flowz.helper.exe 自身 + helper.token）。
+// 停并删 SCM 服务（serviceName）、删 supportDir（含外置的 com.dsanying.shadowvpn.helper.exe 自身 + helper.token）。
 //
 // 为何必须借旁路进程：
 //   - 正在运行的 helper.exe 被自身锁定，无法自删 → 由「等 helper 退出解锁后」的旁路删；

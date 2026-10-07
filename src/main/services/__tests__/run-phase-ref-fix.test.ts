@@ -69,6 +69,7 @@ function makePm() {
     'copyRuleSetsToUserData',
     'writeCustomRuleFiles',
     'allocateProbePorts',
+    'startNodeDnsRaceServer',
     'writeSingBoxConfig',
     'checkAndPruneConfig',
     'ensureSystemProxyCleared',
@@ -132,9 +133,7 @@ async function settle<T>(
  * **成因未确证，且已排除一个候选**（我没有 Windows 环境复现，如实记，不要据此推断）：
  *  · 已排除「测试把 `global.setTimeout` 全局改成立即触发 → 自我重排的定时器变热循环」这条：本机把
  *    `process.platform` 伪装成 'win32' 后，两个用例仍各只花几十毫秒，未复现变慢。
- *  · 顺带核实到一条**与平台无关的既有问题**：本文件跑完后 jest 进程不会自行退出（`timeout` 下 rc=124，
- *    需 `--forceExit`；全量跑时表现为 `A worker process has failed to exit gracefully`）。即 start() 路径
- *    留下了未清理的句柄/定时器。它不是本次超时的已证成因，但确实存在，且会拖长收尾——单独议题。
+ *  · DNS server 与 cleanup 同属前置协作方：此处均 stub，避免只 stub cleanup 时留下真实 UDP 监听句柄。
  *  · 剩余候选：Windows runner 的冷文件系统 + AV 扫描把 fs 密集路径拖慢一两个数量级。
  *
  * 要给出确证结论需在真 Windows 上跑本文件并计时，尚未做。

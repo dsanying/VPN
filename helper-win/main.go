@@ -12,13 +12,13 @@ import (
 	"golang.org/x/sys/windows/svc"
 )
 
-const serviceName = "FlowZHelper"
+const serviceName = "ShadowVPNHelper"
 
 func main() {
 	var console bool
 	flag.StringVar(&singboxBin, "singbox", "", "path to sing-box binary (locked at install time)")
 	flag.StringVar(&confDir, "confdir", "", "allowed config directory")
-	flag.StringVar(&supportDir, "support", `C:\ProgramData\FlowZ`, "dir holding helper.token + state (SYSTEM side)")
+	flag.StringVar(&supportDir, "support", `C:\ProgramData\ShadowVPN`, "dir holding helper.token + state (SYSTEM side)")
 	flag.StringVar(&coreDir, "coredir", "", "accepted and ignored on Windows (mirrors macOS flag; no install-core)")
 	flag.BoolVar(&console, "console", false, "run as a foreground console process (dev/test without SCM)")
 	flag.Parse()

@@ -892,7 +892,7 @@
     "resetSort": "重置排序",
     "protocol": "协议",
     "multiSelect": "多选",
-    "timeout": "超时",
+    "timeout": "不可达",
     "edit": "编辑",
     "importSuccess": "服务器导入成功",
     "lastUpdated": "最后更新：",
@@ -1546,6 +1546,9 @@
     "appendFail": "加入已有规则失败"
   },
   "sub": {
+    "protocol": "节点协议",
+    "protocolAuto": "自动识别",
+    "protocolDesc": "自动识别全部协议；单选时只导入所选协议的节点。",
     "requireName": "请输入订阅名称",
     "requireUrl": "请输入订阅链接",
     "unknown": "未知",

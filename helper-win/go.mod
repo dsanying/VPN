@@ -1,4 +1,4 @@
-module flowz-helper-win
+module shadowvpn-helper-win
 
 go 1.24.0
 

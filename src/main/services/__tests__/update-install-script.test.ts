@@ -89,14 +89,14 @@ describe('selectPortableStaleOld', () => {
   it('只筛本产品 <prefix>…portable.exe.old，不误删同目录他人 .exe.old', () => {
     expect(
       selectPortableStaleOld([
-        'FlowZ-4.1.5-win-x64-portable.exe.old',
-        'FlowZ-4.1.7-win-x64-portable.exe',
+        '暗影VPN-0.1.0-win-x64-portable.exe.old',
+        '暗影VPN-0.1.1-win-x64-portable.exe',
         'Other.EXE.OLD', // 他家工具 → 不删
-        'Foo-portable.exe.old', // 非 FlowZ 前缀 → 不删
+        'FlowZ-4.1.5-win-x64-portable.exe.old', // 上游产品 → 不删
         'data',
         'config.json',
       ])
-    ).toEqual(['FlowZ-4.1.5-win-x64-portable.exe.old']);
+    ).toEqual(['暗影VPN-0.1.0-win-x64-portable.exe.old']);
   });
 
   it('自定义 productPrefix', () => {
