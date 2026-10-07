@@ -3,14 +3,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"shadowvpn/helperrpc"
 	"syscall"
-	"time"
 )
 
 func main() {
@@ -44,37 +46,30 @@ func main() {
 	go func() {
 		<-sigCh
 		mu.Lock()
+		shuttingDown = true
 		c, done := child, childDone
-		child, childDone = nil, nil
 		mu.Unlock()
 		if c != nil && c.Process != nil {
 			terminateChild(c, done) // 同步收割当前 child（TERM→≤5s→KILL）
 		}
-		// 等在途后台收割（stop 刚摘除 child + go terminateChild 的窗口）跑完 KILL 升级，再退出——杜绝孤儿。
-		waitReaps(6 * time.Second)
-		setForward(false) // 退出兜底：不留全局转发态
 		_ = l.Close()
 		os.Exit(0)
 	}()
 
 	if console {
-		fmt.Printf("FlowZ linux helper (console) listening on %s, coredir=%s, proto v%s\n", sockPath, coreDir, protoVersion)
+		fmt.Printf("FlowZ linux helper (console) listening on %s, coredir=%s, proto v%s\n", sockPath, coreDir, helperVersion)
 	}
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			continue
-		}
-		go handle(conn)
+	methods := []string{"ping", "version", "status", "start", "stop", "cleanup", "freeport", "install-core"}
+	authorize := func(r *http.Request) bool {
+		cred, _ := r.Context().Value(peerKey{}).(*syscall.Ucred)
+		return cred != nil && isAuthorized(cred.Uid)
 	}
-}
+	connContext := func(ctx context.Context, conn net.Conn) context.Context {
+		cred, _ := peerCred(conn)
+		return context.WithValue(ctx, peerKey{}, cred)
+	}
+	if err := helperrpc.Serve(l, helperrpc.NewHandler(methods, authorize, executeCommand), connContext); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 
-// waitReaps：等 reapWG（在途后台 terminateChild）完成，最多 timeout（终不阻死退出）。
-func waitReaps(timeout time.Duration) {
-	doneCh := make(chan struct{})
-	go func() { reapWG.Wait(); close(doneCh) }()
-	select {
-	case <-doneCh:
-	case <-time.After(timeout):
-	}
 }

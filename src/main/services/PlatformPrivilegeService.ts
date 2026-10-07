@@ -942,7 +942,8 @@ rm -f "$STOPFLAG"
       });
     } catch (e) {
       throw new Error(
-        `TUN 模式需要管理员权限：无法写入提权脚本 (${e instanceof Error ? e.message : String(e)})`
+        `TUN 模式需要管理员权限：无法写入提权脚本 (${e instanceof Error ? e.message : String(e)})`,
+        { cause: e }
       );
     }
 

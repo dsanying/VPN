@@ -11,10 +11,14 @@
  * app.getVersion() 等 electron 依赖一律由 SubscriptionService 侧注入/传入。
  */
 import { randomUUID } from 'crypto';
-import { load as yamlLoad } from 'js-yaml';
+import { load as yamlLoad, CORE_SCHEMA, mergeTag } from 'js-yaml';
+
 import type { ServerConfig, Protocol } from '../../shared/types';
 import { normalizeDuration } from '../../shared/duration';
 import { dedupeTrim } from '../../shared/collections';
+
+// YAML 1.2 保持安全默认类型，并显式兼容 Clash 常用的 YAML merge 锚点。
+const CLASH_SCHEMA = CORE_SCHEMA.withTags(mergeTag);
 
 // ── 探测正则 / 校验 ──────────────────────────────────────────────────────────
 /** 内联 proxies: 或 proxy-providers: 任一命中即「确为 Clash 意图」。 */
@@ -173,10 +177,10 @@ function normalizeClashType(rawType: unknown): Protocol | null {
 export function tryLoadClashDoc(trimmed: string): ClashDoc {
   let doc: unknown;
   try {
-    doc = yamlLoad(trimmed, { json: true });
+    doc = yamlLoad(trimmed, { json: true, schema: CLASH_SCHEMA });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Clash YAML 解析失败: ${msg}`);
+    throw new Error(`Clash YAML 解析失败: ${msg}`, { cause: e });
   }
   if (!doc || typeof doc !== 'object') {
     throw new Error('检测到 Clash 订阅特征，但文档结构异常（非对象）');

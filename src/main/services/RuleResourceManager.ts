@@ -52,8 +52,7 @@ const MAX_SIZE = 64 * 1024 * 1024;
 const POOL_SIZE = 3;
 
 type FetchResult =
-  | { ok: true; buf: Buffer }
-  | { ok: false; errorCode: string; statusCode?: number };
+  { ok: true; buf: Buffer } | { ok: false; errorCode: string; statusCode?: number };
 
 export class RuleResourceManager {
   private inflight = new Set<string>();
@@ -666,7 +665,7 @@ export class RuleResourceManager {
     } catch (e) {
       // 刷新失败 → 保持现 catalog，抛错让 UI toast（区分限流）
       const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(/rate|403/i.test(msg) ? 'rate_limited' : 'refresh_failed');
+      throw new Error(/rate|403/i.test(msg) ? 'rate_limited' : 'refresh_failed', { cause: e });
     }
   }
 

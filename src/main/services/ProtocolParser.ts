@@ -161,7 +161,7 @@ export class ProtocolParser implements IProtocolParser {
       throw new Error(`不支持的协议: ${protocol}`);
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`URL 解析失败: ${error.message}`);
+        throw new Error(`URL 解析失败: ${error.message}`, { cause: error });
       }
       throw error;
     }
@@ -322,10 +322,7 @@ export class ProtocolParser implements IProtocolParser {
       throw new Error('Hysteria2 obfs=salamander 缺少 obfs-password');
     } else if (obfs) {
       // 非 salamander 值（sing-box hy2 无对应混淆类型/参数噪声）：剥离 + warn 留痕。
-      this.log(
-        'warn',
-        `Hysteria2 节点 "${name}" 的 obfs 参数（${obfs}）不受支持，已忽略混淆配置`
-      );
+      this.log('warn', `Hysteria2 节点 "${name}" 的 obfs 参数（${obfs}）不受支持，已忽略混淆配置`);
     }
 
     // 解析网络类型（tcp 或 udp）
@@ -486,9 +483,7 @@ export class ProtocolParser implements IProtocolParser {
    */
   private parseSnell(url: URL): ServerConfig {
     // psk 含未编码 ':' 时 URL 引擎会拆成 username:password——两段拼回，避免 psk 静默截断成假节点。
-    const psk = decodeURIComponent(
-      url.password ? `${url.username}:${url.password}` : url.username
-    );
+    const psk = decodeURIComponent(url.password ? `${url.username}:${url.password}` : url.username);
     const { address, port, params, name } = this.parseBase(url);
 
     if (!psk.trim()) {
@@ -606,7 +601,7 @@ export class ProtocolParser implements IProtocolParser {
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Shadowsocks URL 格式错误: ${errorMessage}`);
+        throw new Error(`Shadowsocks URL 格式错误: ${errorMessage}`, { cause: error });
       }
     } else {
       throw new Error('Shadowsocks URL 缺少加密信息');
@@ -814,7 +809,7 @@ export class ProtocolParser implements IProtocolParser {
       return config;
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`VMess URL 解析失败: ${error.message}`);
+        throw new Error(`VMess URL 解析失败: ${error.message}`, { cause: error });
       }
       throw error;
     }

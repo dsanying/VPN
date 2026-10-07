@@ -66,9 +66,9 @@ export function RuleDialog({ open, onOpenChange, mode, rule }: RuleDialogProps) 
   const { t } = useTranslation();
   const addCustomRule = useAppStore((state) => state.addCustomRule);
   const updateCustomRule = useAppStore((state) => state.updateCustomRule);
-  const servers = useAppStore((state) => state.config?.servers || []);
+  const servers = useAppStore((state) => state.config?.servers) ?? [];
   const selectedServerId = useAppStore((state) => state.config?.selectedServerId ?? null);
-  const subscriptions = useAppStore((state) => state.config?.subscriptions || []);
+  const subscriptions = useAppStore((state) => state.config?.subscriptions) ?? [];
   const latencyMap = useAppStore((state) => state.latencyMap);
   const customRules = useAppStore((state) => state.config?.customRules);
   const appRules = useAppStore((state) => state.config?.appRules);

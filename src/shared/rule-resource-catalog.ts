@@ -79,7 +79,7 @@ export const findCatalogItem = (id: string): RuleResourceCatalogItem | undefined
 
 /** 从下载 URL 推导资源 category 与默认 name（手动 URL 自动命名；主进程兜底与渲染端预填共用）。 */
 export function deriveResourceMeta(url: string): { category: RuleResourceCategory; name: string } {
-  let pathname = url;
+  let pathname: string;
   try {
     pathname = new URL(url).pathname;
   } catch {

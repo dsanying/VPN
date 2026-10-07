@@ -1,34 +1,7 @@
 name: Package
 
-# 打包（出安装包）与验证分离：验证在 ci.yml（每个 PR/push 都跑）。本 workflow 只在改动碰打包输入时跑：
-#   - push main 碰打包敏感 paths：完整打包，Windows 上传 artifact。价值：a) 直推 main 的版本/lockfile/内核
-#     bump 没有 PR 冒烟，这里是其唯一打包检查；b) nsis/portable/压缩层 --dir 冒烟测不到，在此 tag 前暴露。
-#     纯 src/UI/docs 提交跳过——不碰打包输入，CI 已验编译，完整打包增量保护≈0；兜底 = 下一个
-#     build-input push 或 tag（release.yml）。
-#   - PR 碰打包敏感 paths：只跑 `electron-builder --dir` 冒烟（验证 helper 编译/资产 fetch/asar 组装/extraResources 布局），
-#     不出安装包、不上传。
-#   - workflow_dispatch：手动取包逃生舱（替代「从 PR 拿包」），任意 commit 需要安装包时手动触发。
-# push 与 pull_request 的 paths 列表必须逐行一致（不用 YAML anchor，稳妥优先）；新增打包输入
-# （新资源目录/新原生构建步骤）时两处同时补。build=buildResources（installer.nsh/图标/entitlements），
-# resources=extraResources 源（geo .srs/dashboard/图标）——二者均为打包产物输入。
-# runner 钉版本对齐 release.yml（macos-14/windows-2022），使冒烟真正代表发布路径。本 workflow 不设 required check
-# （paths 过滤的 check 设 required 会遇「check 从未上报 → merge 卡 expected」死锁）。
+# 当前阶段仅本地验证；PR 可做目录构建冒烟，安装包须手动触发。
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'electron-builder.json'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'scripts/**'
-      - 'helper/**'
-      - 'helper-win/**'
-      - 'helper-linux/**'
-      - 'src/shared/core-manifest.json'
-      - '.github/workflows/**'
-      - 'build/**'
-      - 'resources/**'
   pull_request:
     branches:
       - main
@@ -40,7 +13,9 @@ on:
       - 'helper/**'
       - 'helper-win/**'
       - 'helper-linux/**'
+      - 'helper-rpc/**'
       - 'src/shared/core-manifest.json'
+      - 'src/shared/dashboard-manifest.json'
       - '.github/workflows/**'
       - 'build/**'
       - 'resources/**'
@@ -66,22 +41,20 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: false
       REQUIRE_HELPER: "1"
-      ELECTRON_MIRROR: "https://npmmirror.com/mirrors/electron/"
-      ELECTRON_BUILDER_BINARIES_MIRROR: "https://npmmirror.com/mirrors/electron-builder-binaries/"
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '26'
           cache: 'npm'
 
       # 提权 helper 二进制不入库（.gitignore），现编现打；mac + win 均需 Go，否则该平台包缺 helper（issue #57）。
       - name: Setup Go (提权 helper)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: helper/go.mod
           cache: false
@@ -105,7 +78,7 @@ jobs:
       #    PATH 里 GNU tar 优先，它把 `C:\Users\...` 当成 `host:path` 远程语法 → `Cannot connect to C:
       #    resolve failed`，`fetch:core` 变成 1 ready / 3 failed。
       #
-      # 故保持各平台默认 shell（Windows 侧与 main push 走 npm script 时的解析一致），改用 `&&` 串联拿
+      # 故保持各平台默认 shell（Windows 侧与 手动触发走 npm script 时的解析一致），改用 `&&` 串联拿
       # fail-fast：pwsh 7 与 bash 都支持该操作符，前一条非零即短路，$LASTEXITCODE 由 GitHub 包装器带出。
       # 新增多行 run 块时照此串联。
       - name: Package smoke (PR, --dir, no artifact)
@@ -118,17 +91,17 @@ jobs:
           npm run build &&
           npx electron-builder --${{ matrix.platform }} --dir
 
-      # main push / 手动：完整打包（与 release.yml 同源脚本，含正确 arch flag）。
-      - name: Package full (main push / manual)
+      # 手动：完整打包（与 release.yml 同源脚本，含正确 arch flag）。
+      - name: Package full (manual)
         if: github.event_name != 'pull_request'
         run: npm run package:${{ matrix.platform }}
 
       # 仅 Windows 完整打包上传 artifact（当日可取）；retention 3d 控存储。
       # macOS 不上传：electron-builder.json mac target=dir 不产 .exe/.dmg（DMG 只在 release.yml 用 hdiutil 手搓），
       # 旧 build.yml 的 mac upload 匹配不到文件、artifact 恒为 0——本次一并去除这个空动作。
-      - name: Upload Windows installer (main push / manual)
+      - name: Upload Windows installer (manual)
         if: github.event_name != 'pull_request' && matrix.platform == 'win'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: build-win-${{ github.sha }}
           path: dist-package/*.exe

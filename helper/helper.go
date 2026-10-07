@@ -1,35 +1,21 @@
-// FlowZ 提权 helper（生产版）：root LaunchDaemon，监听 token 鉴权的 unix socket，按行协议驱动 sing-box 启停。
-// 装一次（osascript 一次授权）后，普通用户 app 经 socket 零提权启停 sing-box —— 切节点/停止/退出/崩溃回收均免再次授权。
-//
-// 安全边界：
-//   - token：仅 root 可读的 helper.token(600)，app 持自身副本鉴权；socket 为 0666，故 token 是主边界。
-//   - sing-box 二进制路径在安装时由 --singbox 锁定（改它需 root），客户端不可指定 → 杜绝「持 token 跑任意二进制」。
-//   - 配置文件必须落在 --confdir（app 数据目录）内，拒绝越权路径。
-//     残余风险：能读到 app 配置目录内 token 的同用户进程可驱动本 helper（FlowZ 未签名，无法做 SMJobBless 客户端校验）。
-//     此为「未签名应用 + 免提权 helper」的固有取舍；token + 二进制锁定 + 配置目录约束为现实可行的缓解。
-//
-// 协议（每行以 \n 结尾，路径整行传递 → 容忍含空格的路径，如 "Application Support/ShadowVPN"）：
-//
-//	行1: <token>
-//	行2: <command>           ping | version | start | stop | status | cleanup | freeport | install-core |
-//	                         route-add | route-del | default-restore | flush-dns
-//	start 追加: 行3=<cfg> 行4=<log，可空> 行5=<fwd: 0|1> 行6=<父appPID，可选；缺失/空=不启父死看护（兼容旧客户端）>
-//
-// 仅依赖 Go 标准库（无第三方依赖，便于交叉编译与审计）。
+// 暗影VPN 提权助手：系统服务 + 本机 HTTP JSON-RPC 2.0。
+// macOS/Windows 以 Authorization: Bearer 鉴权；Linux 保留 SO_PEERCRED 授权 UID。
+// JSON-RPC 由稳定通用库实现；业务方法只启动锁定内核，不向网络开放监听。
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"shadowvpn/helperrpc"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,41 +23,8 @@ import (
 	"time"
 )
 
-// 协议版本：app 经 `version` 命令读取，与内置期望值不符则提示「修复/重装 helper」。
-// v2：start 追加可选父 PID 行（父死看护）+ stop 升级 TERM→等≤5s→KILL。
-// v3：main() 加 SIGTERM/SIGINT 收割器——卸载/launchctl bootout 时先收割 child sing-box 再退出，
-//
-//	杜绝 helper 死后 child 变 root 孤儿继续占 9090（修 root 孤儿根因）。
-//
-// v4：加 freeport 命令——root 侧按端口（lsof）定位 9090/指定端口的 LISTEN 持有者，是 sing-box 才 kill -9，
-//
-//	否则回报占用者名字。彻底摆脱 app 侧 cmdline 匹配（覆盖外部/旧路径 sing-box）。
-//
-// v5：加 install-core 命令——把 app 下载+预检的临时内核校验 sha256 后 root 写入锁定的受保护目录（--coredir）+
-//
-//	签名+清 quarantine，实现 macOS 内核持久化更新（App 升级不覆盖）。**向后兼容**：v1-v4 命令不变，装着 v4 的用户
-//	TUN 启停继续可用，仅内核更新需 v5（无 v5 时 app fallback 一次 osascript）→ 非强制重装、温和提示可升级。
-//
-// v6：start 的 child 退出后自动 chownRuntimeDirs——把 root 跑 sing-box 留下的 tailscale state / dashboard / ui
-//
-//	属主归还登录用户，根治跨提权态属主冲突（root 跑写 root 600 → 登录用户跑读不了 → endpoint post-start FATAL）。
-//	协议命令不变、纯行为增强；旧 v5 helper 仍可用 TUN，仅本根治需 v6 → app 据 proto 检测「可升级」温和提示重装。
-//
-// v7：加 route-add/route-del 命令——在 System 内核接口（flowz-ts/flowz-wg/utunN）装/清 ifscope 拆半默认路由
-//
-//	（sing-box 不为 TS exit_node 装出口路由，真机实证）。
-//
-// v8：加 default-restore 命令——system WG 全隧道（裸 0/0）会撞 en0 全局 default 的 EEXIST，被 sing-tun setRoutes
-//
-//	善后误删、停核 unsetRoutes 不回填 → Mac 停核后断网。app 侧在停核后检测全局 default 缺失则经本命令 `route add
-//	-inet default <gw>` 补回（best-effort）。proto<8 无此命令 → 回 ERR unknown，断网安全网失效但 TUN 正常。
-//
-// v9：加 flush-dns 命令——root 依次执行 dscacheutil -flushcache 与 killall -HUP mDNSResponder，两层系统 DNS
-//
-//	缓存全清（用户级 dscacheutil 无权 HUP mDNSResponder，清不到其 unicast cache）。核 start/stop 后由 app 侧
-//	best-effort 调用；dscacheutil 成功而 HUP 失败回 OK flushed-partial（app 不降级，用户级重复无益）；
-//	proto<9 无此命令 → 回 ERR unknown，app 降级用户级 dscacheutil。
-const protoVersion = "9"
+// 助手应用版本；通信标准固定为 JSON-RPC 2.0，功能通过 capabilities 发现。
+const helperVersion = helperrpc.Version
 
 var (
 	singboxBin string // 安装时锁定的 sing-box 路径
@@ -81,17 +34,46 @@ var (
 
 	mu        sync.Mutex
 	child     *exec.Cmd
-	childDone chan struct{} // 与 child 同生命周期：start 时创建，c.Wait() 收割后 close；摘除 child 时同步置 nil
+	childDone chan struct{} // Wait、运行目录回收完成后关闭
+	stopping  bool          // 停止期间保留 child，防止新旧内核重叠
 )
+
+// 恢复本会话实际改变过的 forwarding 键；原值已为 1 时不抢其他应用的状态。
+func enableForwarding() (func(), error) {
+	changed := []string{}
+	restore := func() {
+		for _, key := range changed {
+			current, err := execOutput(execTimeout, "/usr/sbin/sysctl", "-n", key)
+			if err == nil && strings.TrimSpace(string(current)) == "1" {
+				_ = execRun(execTimeout, "/usr/sbin/sysctl", "-w", key+"=0")
+			}
+		}
+	}
+	for _, key := range []string{"net.inet.ip.forwarding", "net.inet6.ip6.forwarding"} {
+		previous, err := execOutput(execTimeout, "/usr/sbin/sysctl", "-n", key)
+		if err != nil {
+			restore()
+			return func() {}, err
+		}
+		value := strings.TrimSpace(string(previous))
+		if value != "0" && value != "1" {
+			restore()
+			return func() {}, fmt.Errorf("invalid forwarding state")
+		}
+		if value == "0" {
+			if err := execRun(execTimeout, "/usr/sbin/sysctl", "-w", key+"=1"); err != nil {
+				restore()
+				return func() {}, err
+			}
+			changed = append(changed, key)
+		}
+	}
+	return restore, nil
+}
 
 func tokenValue() string {
 	b, _ := os.ReadFile(filepath.Join(supportDir, "helper.token"))
 	return strings.TrimSpace(string(b))
-}
-
-func readLine(r *bufio.Reader) string {
-	s, _ := r.ReadString('\n')
-	return strings.TrimRight(s, "\r\n")
 }
 
 // exec 超时上限：所有阻塞式 root 命令一律经下面三个包装执行，绝不裸调 exec.Command().Run/Output。
@@ -242,13 +224,74 @@ func chownTree(root string, uid, gid int) {
 }
 
 // cfg 必须位于 confDir 内（清洗后前缀匹配），防止越权指定任意路径作 root 配置。
-func cfgAllowed(cfg string) bool {
-	if confDir == "" {
-		return true
+// 路径必须是允许目录内的绝对路径，解析软链接后仍在目录内；空 confDir 不放行。
+func pathAllowed(name string) bool {
+	if confDir == "" || !filepath.IsAbs(name) {
+		return false
 	}
-	clean := filepath.Clean(cfg)
-	base := filepath.Clean(confDir) + string(os.PathSeparator)
-	return strings.HasPrefix(clean, base)
+	base, err := filepath.EvalSymlinks(confDir)
+	if err != nil {
+		return false
+	}
+	base, err = filepath.Abs(base)
+	if err != nil {
+		return false
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(name))
+	if err != nil {
+		return false
+	}
+	parent, err = filepath.Abs(parent)
+	if err != nil {
+		return false
+	}
+	resolved := filepath.Join(parent, filepath.Base(name))
+	rel, err := filepath.Rel(base, resolved)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+
+func cfgAllowed(cfg string) bool {
+	if !pathAllowed(cfg) {
+		return false
+	}
+	info, err := os.Lstat(cfg)
+	return err == nil && info.Mode().IsRegular()
+}
+
+func openLog(name string) (*os.File, error) {
+	if !pathAllowed(name) {
+		return nil, fmt.Errorf("log-path-denied")
+	}
+	// O_NOFOLLOW 防最终条目被替换成软链接；Fstat 防向设备/FIFO 写 root 输出。
+	fd, err := syscall.Open(name, syscall.O_CREAT|syscall.O_WRONLY|syscall.O_APPEND|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(fd), name)
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		file.Close()
+		return nil, fmt.Errorf("log-not-regular")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Nlink != 1 {
+		file.Close()
+		return nil, fmt.Errorf("log-hardlink-denied")
+	}
+	return file, nil
+}
+
+// 必须持 mu；托管进程真正 Wait 完成前保持可观察，不允许新 start 穿过停止窗口。
+func beginStopLocked() int {
+	if child == nil || child.Process == nil {
+		return 0
+	}
+	pid := child.Process.Pid
+	if !stopping {
+		stopping = true
+		go terminateChild(child, childDone)
+	}
+	return pid
 }
 
 // route-add/route-del 安全约束：仅允许 FlowZ 自己的内核接口名 + macOS 动态 utunN，杜绝任意接口注入。
@@ -272,7 +315,7 @@ func ifaceAllowed(s string) bool {
 }
 
 // TERM→等≤5s→KILL 收割 child：先给 sing-box 优雅窗口（拆 utun/路由/DNS），超时未退则强杀。
-// 必须不持 mu 调用（最长阻塞 5s，持锁会饿死所有 socket 命令），且调用方须先在持锁状态把 child 摘成 nil（收割权独占）。
+// 必须不持 mu 调用；停止期间仍保留 child，Wait 完成后才清除状态。
 // 实际信号只经 c.Process 发出：Wait() 收割后 Signal/Kill 返回 ErrProcessDone 不发信号 → 天然防 PID 复用误杀。
 func terminateChild(c *exec.Cmd, done <-chan struct{}) {
 	if c == nil || c.Process == nil {
@@ -282,7 +325,11 @@ func terminateChild(c *exec.Cmd, done <-chan struct{}) {
 	select {
 	case <-done: // 已被 Wait 收割（优雅退出），免 KILL
 	case <-time.After(5 * time.Second):
-		_ = c.Process.Kill() // SIGKILL；若恰已退出则 ErrProcessDone，无害
+		_ = c.Process.Kill() // 仅操作自己持有的 Process，避免按名字/PID 扫杀
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
 	}
 }
 
@@ -347,71 +394,56 @@ func watchParent(ppid int, ppidStart string, c *exec.Cmd, done <-chan struct{}) 
 				mu.Unlock()
 				return
 			}
-			child, childDone = nil, nil
+			beginStopLocked()
 			mu.Unlock()
-			terminateChild(c, done)
 			return
 		}
 	}
 }
 
-// handleFreeport（proto v4）：按端口（root lsof）定位 LISTEN 持有者——是 sing-box 才 kill -9，否则回报占用者名字
-// （不杀）。彻底摆脱 app 侧 cmdline 匹配，覆盖「外部 / 旧 app 路径 / 改过 singboxBin 路径」的 9090 占用者（L2）。
-// 不碰 child/childDone → 无需持 mu，由 handle 在加锁前调用（避免 stale 挂载下 lsof 阻塞拖住并发命令）。各 exec 带超时。
-func handleFreeport(conn net.Conn, r *bufio.Reader) {
-	port := strings.TrimSpace(readLine(r))
-	if port == "" || strings.IndexFunc(port, func(c rune) bool { return c < '0' || c > '9' }) >= 0 {
+// 只回收本服务托管且占用目标端口的 child。其他客户端的 sing-box 也属于 foreign。
+func handleFreeport(conn io.Writer, args *helperrpc.Arguments) {
+	port, err := strconv.Atoi(strings.TrimSpace(args.Next()))
+	if err != nil || port < 1 || port > 65535 {
 		fmt.Fprintln(conn, "ERR bad-port")
 		return
 	}
-	out, _ := execOutput(execTimeout, "/usr/sbin/lsof", "-ti", "tcp:"+port, "-sTCP:LISTEN")
-	pids := strings.Fields(strings.TrimSpace(string(out)))
+	out, err := execOutput(execTimeout, "/usr/sbin/lsof", "-ti", "tcp:"+strconv.Itoa(port), "-sTCP:LISTEN")
+	if err != nil {
+		// lsof 无匹配时退出 1；工具错误不能冒充空闲。
+		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 1 {
+			fmt.Fprintln(conn, "ERR port-probe")
+			return
+		}
+	}
+	pids := strings.Fields(string(out))
 	if len(pids) == 0 {
 		fmt.Fprintln(conn, "OK free")
 		return
 	}
-	var killed, foreign []string
+	mu.Lock()
+	defer mu.Unlock()
 	for _, p := range pids {
-		// ps -o comm=（仅可执行名，不含参数）：避免「参数里碰巧含 sing-box」的进程被 root 误杀（M2）。
-		commOut, _ := execOutput(execTimeout, "/bin/ps", "-o", "comm=", "-p", p)
-		comm := strings.TrimSpace(string(commOut))
-		if strings.Contains(comm, "sing-box") {
-			_ = execRun(execTimeout, "/bin/kill", "-9", p)
-			killed = append(killed, p)
-		} else {
-			name := comm
-			if name == "" {
-				name = "pid:" + p
-			}
-			foreign = append(foreign, name)
+		pid, err := strconv.Atoi(p)
+		if err != nil || child == nil || child.Process == nil || child.Process.Pid != pid {
+			fmt.Fprintf(conn, "OK foreign pid:%s\n", p)
+			return
 		}
 	}
-	if len(foreign) > 0 {
-		// 占用者非 sing-box → 不杀、回报名字（app 据此给「9090 被 X 占用」的诚实终态）
-		fmt.Fprintf(conn, "OK foreign %s\n", strings.Join(foreign, " | "))
-	} else {
-		fmt.Fprintf(conn, "OK killed %s\n", strings.Join(killed, ","))
-	}
+	pid := beginStopLocked()
+	fmt.Fprintf(conn, "OK stopping %d\n", pid)
 }
 
-func handle(conn net.Conn) {
-	defer conn.Close()
-	// 读超时：防止无 token 进程连上后不发数据耗尽 fd/goroutine，或持 token 客户端发一半卡死、
-	// 在 mu.Lock() 之后阻塞读 → 永久持锁拖垮整个 helper。
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	r := bufio.NewReader(conn)
-	tok := readLine(r)
-	cmd := readLine(r)
-	if tok == "" || tok != tokenValue() {
-		fmt.Fprintln(conn, "ERR auth")
-		return
-	}
+func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (response string) {
+	var output strings.Builder
+	conn := &output
+	defer func() { response = strings.TrimSpace(output.String()) }()
 
 	// freeport 只做 lsof/ps 只读探测 + kill 端口占用者，完全不碰 child/childDone（mu 只护这两者）→ 先于加锁
 	// 独立处理、移出临界区，避免其 exec（stale 挂载下 lsof 可能阻塞到超时上限）在临界区内拖住并发的
 	// ping/status/start/stop（参照 stop 后台化的去饿死思路）。自身各 exec 已带超时兜底。
 	if cmd == "freeport" {
-		handleFreeport(conn, r)
+		handleFreeport(conn, args)
 		return
 	}
 
@@ -420,40 +452,33 @@ func handle(conn net.Conn) {
 
 	switch cmd {
 	case "ping":
-		fmt.Fprintf(conn, "OK pong uid=%d v%s\n", os.Getuid(), protoVersion)
+		fmt.Fprintf(conn, "OK pong uid=%d v%s\n", os.Getuid(), helperVersion)
 	case "version":
-		fmt.Fprintf(conn, "OK %s\n", protoVersion)
+		fmt.Fprintf(conn, "OK %s\n", helperVersion)
 	case "status":
 		if child != nil && child.Process != nil {
-			fmt.Fprintf(conn, "OK running %d\n", child.Process.Pid)
+			state := "running"
+			if stopping {
+				state = "stopping"
+			}
+			fmt.Fprintf(conn, "OK %s %d\n", state, child.Process.Pid)
 		} else {
 			fmt.Fprintln(conn, "OK stopped")
 		}
-	case "stop":
-		if child != nil && child.Process != nil {
-			pid := child.Process.Pid
-			c, done := child, childDone
-			child, childDone = nil, nil
-			// TERM→等≤5s→KILL 放后台：本 handle 持着 mu，同步等待会饿死并发 ping/status，
-			// 且客户端 stop 超时仅 3-5s。摘除 child 后由该 goroutine 独占收割权（watchParent 见 child!=c 即退）。
-			go terminateChild(c, done)
-			fmt.Fprintf(conn, "OK stopped %d\n", pid)
+	case "stop", "cleanup":
+		// 不再 pkill：父死看护与退出收割负责托管进程，外部进程不属于本服务。
+		if pid := beginStopLocked(); pid != 0 {
+			fmt.Fprintf(conn, "OK stopping %d\n", pid)
 		} else {
 			fmt.Fprintln(conn, "OK notrunning")
 		}
-	case "cleanup":
-		// 以 root 杀掉所有「<锁定的 singbox> run …」进程，含外部 osascript 路径遗留的孤儿，让 app 免 osascript 清理。
-		// pattern 含 " run"：只匹配真正运行的 sing-box，不会误杀 argv 为「--singbox <path>」的本 daemon。
-		_ = execRun(execTimeout, "/usr/bin/pkill", "-9", "-f", singboxBin+" run")
-		child, childDone = nil, nil
-		fmt.Fprintln(conn, "OK cleaned")
 	case "route-add", "route-del":
 		// proto v7：出口托管在 System 内核接口上装/清 ifscope 拆半默认路由（sing-box 不为 TS exit_node 装、
 		// 真机实证）。约束：iface 白名单（flowz-ts/flowz-wg/utunN）+ net.ParseCIDR 校验，杜绝注入。
 		// ifscope 作用域到该接口 → 只服务绑该接口的 dialer，不抢主表默认路由（与主 TUN 共存）。幂等 best-effort，
 		// add 忽略 file-exists、delete 忽略 not-in-table；最终由 app 侧 netstat 校验。
-		iface := strings.TrimSpace(readLine(r))
-		cidrsLine := strings.TrimSpace(readLine(r))
+		iface := strings.TrimSpace(args.Next())
+		cidrsLine := strings.TrimSpace(args.Next())
 		if !ifaceAllowed(iface) {
 			fmt.Fprintln(conn, "ERR iface-denied")
 			break
@@ -482,7 +507,7 @@ func handle(conn net.Conn) {
 		// proto v8：补回被 sing-tun setRoutes EEXIST 善后误删的 en0 全局默认路由（system WG 全隧道场景，停核后断网）。
 		// 行3=网关 IPv4（app 起核前快照 `route -n get default` 得到）。约束：net.ParseIP+To4 校验，杜绝注入任意参数。
 		// best-effort：app 仅在检测到全局 default 缺失时才调本命令；若 default 已存在则 `route add` 无害失败、忽略。
-		gw := strings.TrimSpace(readLine(r))
+		gw := strings.TrimSpace(args.Next())
 		if ip := net.ParseIP(gw); ip == nil || ip.To4() == nil {
 			fmt.Fprintln(conn, "ERR bad-gateway")
 			break
@@ -505,12 +530,12 @@ func handle(conn net.Conn) {
 		}
 		fmt.Fprintln(conn, "OK flushed")
 	case "start":
-		cfg := readLine(r)
-		logPath := readLine(r)
-		fwd := readLine(r)
+		cfg := args.Next()
+		logPath := args.Next()
+		fwd := args.Next()
 		// 行6（可选）：父 app PID。旧客户端只发 5 行后即 FIN，此处读到 ""（EOF 不阻塞）→ ppid=0 → 不启看护。
 		// 恶意 ppid 无安全增量：看护只会提前杀自家 child，与持 token 者本就有的 stop 权能等价。
-		ppid, _ := strconv.Atoi(readLine(r))
+		ppid, _ := strconv.Atoi(args.Next())
 		// 启动时快照父进程启动时间（唯一身份）：watchParent 每轮除 kill(ppid,0) 存活探测外再比对它，
 		// 识破「父 kill -9 后 PID 被复用 → kill(ppid,0) 假阴性」→ 防 root sing-box 漏成孤儿（修复 2）。
 		// 取不到（快照失败）为空 → watchParent 退化为仅 kill(ppid,0) 探测（原语义），不误杀真父。
@@ -519,6 +544,10 @@ func handle(conn net.Conn) {
 			ppidStart = procStartTime(ppid)
 		}
 		if child != nil && child.Process != nil {
+			if stopping {
+				fmt.Fprintln(conn, "ERR stopping")
+				return
+			}
 			fmt.Fprintf(conn, "OK already %d\n", child.Process.Pid)
 			return
 		}
@@ -530,22 +559,34 @@ func handle(conn net.Conn) {
 			fmt.Fprintln(conn, "ERR config-path-denied")
 			return
 		}
-		// allowLan：开启 IP 转发（macOS 键名，与 Linux 不同）
-		if fwd == "1" {
-			_ = execRun(execTimeout, "/usr/sbin/sysctl", "-w", "net.inet.ip.forwarding=1")
-			_ = execRun(execTimeout, "/usr/sbin/sysctl", "-w", "net.inet6.ip6.forwarding=1")
-		}
+
 		c := exec.Command(singboxBin, "run", "-c", cfg)
 		// sing-box 早期 stdout/stderr 重定向到 app 日志文件（与 osascript 看护脚本一致），便于诊断启动问题。
 		var logFile *os.File
 		if logPath != "" {
-			if lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
-				logFile = lf
-				c.Stdout = lf
-				c.Stderr = lf
+			lf, err := openLog(logPath)
+			if err != nil {
+				fmt.Fprintf(conn, "ERR log %v\n", err)
+				return
+			}
+			logFile = lf
+			c.Stdout = lf
+			c.Stderr = lf
+		}
+		restoreForward := func() {}
+		if fwd == "1" {
+			var err error
+			restoreForward, err = enableForwarding()
+			if err != nil {
+				if logFile != nil {
+					logFile.Close()
+				}
+				fmt.Fprintf(conn, "ERR forwarding %v\n", err)
+				return
 			}
 		}
 		if err := c.Start(); err != nil {
+			restoreForward()
 			if logFile != nil {
 				logFile.Close()
 			}
@@ -561,7 +602,7 @@ func handle(conn net.Conn) {
 		childDone = done
 		go func() {
 			_ = c.Wait()
-			close(done) // 广播子进程已被收割：terminateChild 据此免 KILL、watchParent 据此退出
+			restoreForward()
 			// proto v6：root 跑的 sing-box 退出后，把运行时目录（tailscale state / dashboard / ui）属主归还
 			// 登录用户 → 下次以登录用户（系统代理模式）跑能直接读、不再 FATAL，且不丢 Tailscale 登录态。
 			// 放 Wait() 之后确保文件已不被 sing-box 占用、属主稳定。
@@ -569,7 +610,9 @@ func handle(conn net.Conn) {
 			mu.Lock()
 			if child == c {
 				child, childDone = nil, nil
+				stopping = false
 			}
+			close(done)
 			mu.Unlock()
 		}()
 		// 父死看护（proto v2）：覆盖 GUI 崩溃/kill -9 后 stopCore 够不到的孤儿场景。
@@ -580,12 +623,13 @@ func handle(conn net.Conn) {
 	case "install-core":
 		// 行3=临时内核源路径（app 下载+预检后，用户可写区）；行4=期望 sha256（hex）。helper 校验哈希后 root 写锁定
 		// 的受保护目录。与 child/TUN 进程无关，仅文件写入。
-		src := readLine(r)
-		wantHash := strings.TrimSpace(readLine(r))
+		src := args.Next()
+		wantHash := strings.TrimSpace(args.Next())
 		fmt.Fprintln(conn, installCore(src, wantHash))
 	default:
 		fmt.Fprintln(conn, "ERR unknown")
 	}
+	return
 }
 
 func main() {
@@ -619,25 +663,15 @@ func main() {
 		<-sigCh
 		mu.Lock()
 		c, done := child, childDone
-		child, childDone = nil, nil
 		mu.Unlock()
 		if c != nil && c.Process != nil {
 			terminateChild(c, done)
-		} else {
-			// child==nil 也兜一发 pkill：可能 SIGTERM 恰落在某次 stop 命令「摘除 child + 后台 go terminateChild」
-			// 的窗口内——那个收割 goroutine 会随本进程 os.Exit 一起消失，其 5s KILL 升级丢失 → 残留 root 孤儿。
-			// `-U 0` 限定 root 进程：helper child 与 osascript-TUN 的 sing-box 均为 root，而 systemProxy 模式由
-			// app 直接 spawn 的是用户态 sing-box（同一二进制路径）→ 卸载/重装 helper 时不会误杀活跃用户会话（M-B）。
-			_ = execRun(execTimeout, "/usr/bin/pkill", "-9", "-U", "0", "-f", singboxBin+" run")
 		}
 		os.Exit(0)
 	}()
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			continue
-		}
-		go handle(conn)
+	methods := []string{"ping", "version", "status", "start", "stop", "cleanup", "freeport", "install-core", "route-add", "route-del", "default-restore", "flush-dns"}
+	if err := helperrpc.Serve(l, helperrpc.NewHandler(methods, helperrpc.Bearer(tokenValue), executeCommand), nil); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 	}
 }

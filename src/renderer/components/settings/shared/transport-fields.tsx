@@ -5,18 +5,23 @@
  * 仍留在各表单内联；此处只抽 path / Host / gRPC 三个完全一致的字段。
  * 约定字段名：wsPath?: string，wsHost?: string，grpcServiceName?: string。
  */
-import type { Control } from 'react-hook-form';
+import type { Control, FieldValues, FieldPath } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { FormField, FormMessage } from '@/components/ui/form';
 
-type AnyControl = Control<any>;
 type TFn = (key: string, fallback?: any) => string;
 
-export function WsPathField({ control, t }: { control: AnyControl; t: TFn }) {
+export function WsPathField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="wsPath"
+      name={'wsPath' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.wsPath')}</span>
@@ -28,11 +33,17 @@ export function WsPathField({ control, t }: { control: AnyControl; t: TFn }) {
   );
 }
 
-export function WsHostField({ control, t }: { control: AnyControl; t: TFn }) {
+export function WsHostField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="wsHost"
+      name={'wsHost' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.wsHost')}</span>
@@ -44,11 +55,17 @@ export function WsHostField({ control, t }: { control: AnyControl; t: TFn }) {
   );
 }
 
-export function GrpcServiceNameField({ control, t }: { control: AnyControl; t: TFn }) {
+export function GrpcServiceNameField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="grpcServiceName"
+      name={'grpcServiceName' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.grpcServiceName')}</span>

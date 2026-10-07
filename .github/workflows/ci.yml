@@ -1,6 +1,6 @@
 name: CI
 
-# 验证门禁：lint + test + build（tsc/vite），双平台。职责=「改动是否正确」，快速反馈。
+# 验证门禁：lint + test + 类型 + 真核检查 + build（tsc/vite），双平台。职责=「改动是否正确」，快速反馈。
 # 打包（出安装包）已拆到 package.yml，不再在每个 PR/push 上跑——CI 只做验证，约 2min。
 # 建议：main 开 ruleset，把本 workflow 的 test (macos-latest) / test (windows-latest) 设为 required checks。
 on:
@@ -30,17 +30,15 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '26'
           cache: 'npm'
 
       - name: Install dependencies
-        env:
-          ELECTRON_MIRROR: "https://npmmirror.com/mirrors/electron/"
         run: npm ci
 
       - name: Lint code
@@ -49,5 +47,39 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Check renderer types
+        run: npx tsc --noEmit -p tsconfig.renderer.json
+
+      - name: Fetch official core
+        run: npm run fetch:core
+
+      - name: Validate generated core configurations
+        run: npm run test:core-gate
+
       - name: Build application
         run: npm run build
+
+  helper:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            module: helper
+          - os: ubuntu-latest
+            module: helper-linux
+          - os: windows-latest
+            module: helper-win
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: helper/go.mod
+          cache: false
+      - name: Test shared JSON-RPC transport
+        working-directory: helper-rpc
+        run: go test ./...
+      - name: Test native helper
+        working-directory: ${{ matrix.module }}
+        run: go test ./...

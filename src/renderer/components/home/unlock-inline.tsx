@@ -94,7 +94,7 @@ export function UnlockInline() {
           {/* X3（§12.2 P12）：timeout 且出口本身连通（egress 非空）→ 诚实提示「服务经该出口不可达（可能被服务方网络层
               拦截），非检测故障」。不显「已封锁」——无 marker 证据不下 blocked 结论（checkers「绝不误 block」契约）。 */}
           {status === 'timeout' && egress && (
-            <div className="mt-1 max-w-[13rem] whitespace-normal text-fg-faint">
+            <div className="mt-1 max-w-52 whitespace-normal text-fg-faint">
               {t(
                 isRestrictedEgressRegion(egress.region)
                   ? 'home.unlockRestrictedEgressHint'

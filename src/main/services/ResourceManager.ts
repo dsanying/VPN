@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import * as path from 'path';
-import * as fs from 'fs/promises';
+import fs = require('fs/promises');
 import type { LogLevel } from '../../shared/types';
 import type { LogManager } from './LogManager';
 import { sha256File } from '../../shared/file-hash';

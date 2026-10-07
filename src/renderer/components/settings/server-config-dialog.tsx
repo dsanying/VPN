@@ -70,7 +70,7 @@ function DetourPicker({
   onSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const subscriptions = useAppStore((s) => s.config?.subscriptions || []);
+  const subscriptions = useAppStore((s) => s.config?.subscriptions) ?? [];
   const latencyMap = useAppStore((s) => s.latencyMap);
 
   // memo 对齐 rule-dialog / app-rules-card 口径：测速广播只重渲本下拉、输入不变不空跑。

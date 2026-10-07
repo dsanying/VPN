@@ -5,3 +5,5 @@
 随包 sing-box 来自 SagerNet/sing-box 官方发布，使用 core-manifest.json 固定版本与 SHA-256，未修改内核二进制。内核源码及许可见 https://github.com/SagerNet/sing-box ，下载产物随官方归档保留 LICENSE。内核不进入 Git；构建时下载官方版本。
 
 依赖、字体及厂商 Go 库的原许可文件保留在相应目录。本地前端实验分支 prototype 与当前 FlowZ 主分支实现独立，不能将实验验证结果当作本分支的验证。
+
+本轮内核管理 schema 逐字来自 sing-box v1.14.2 的 daemon/started_service.proto，保留上游 GPL-3.0-or-later 许可说明，见 licenses/sing-box-LICENSE.txt；不将这份上游定义标为 MIT。JSON-RPC 服务端采用 creachadair/jrpc2（BSD-3-Clause），vendored 依赖保留各自 LICENSE；客户端采用 json-rpc-2.0。官方面板采用 SagerNet/sing-box-dashboard 已部署构建，来源提交及 SHA-256 记录在 dashboard-manifest.json，资源不入 Git。

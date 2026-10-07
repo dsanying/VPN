@@ -11,7 +11,7 @@
  *
  * 这些字段最终由 ProxyManager.applyAntiCensorshipOptions 消费（tls.ech / multiplex）。
  */
-import type { Control } from 'react-hook-form';
+import type { Control, FieldValues, FieldPath } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -25,21 +25,20 @@ import {
 import { FormField, FormMessage } from '@/components/ui/form';
 import { InfoTooltip } from './info-tooltip';
 
-type AnyControl = Control<any>;
 type TFn = (key: string, fallback?: any) => string;
 
 /**
  * ECH（Encrypted Client Hello）开关行 + 可选 ECHConfigList —— 隐藏 SNI、抗 SNI 阻断。适用于带 TLS 的协议。
  * 勾选后展开可选 config 文本框：留空 = sing-box 从 DNS(HTTPS RR) 自取；填 PEM = 下发 tls.ech.config。
  */
-export function EchField({ control, t }: { control: AnyControl; t: TFn }) {
+export function EchField<T extends FieldValues>({ control, t }: { control: Control<T>; t: TFn }) {
   const { watch } = useFormContext();
   const enabled = watch('ech') === true;
   return (
     <div className="flex flex-col gap-[13px]">
       <FormField
         control={control}
-        name="ech"
+        name={'ech' as FieldPath<T>}
         render={({ field }) => (
           <div className="nd-swrow">
             <div className="nd-swrow-main">
@@ -56,7 +55,7 @@ export function EchField({ control, t }: { control: AnyControl; t: TFn }) {
       {enabled && (
         <FormField
           control={control}
-          name="echConfig"
+          name={'echConfig' as FieldPath<T>}
           render={({ field }) => (
             <div className="nd-fld">
               <span className="nd-fld-lbl">{t('servers.echConfig', 'ECH Config (optional)')}</span>
@@ -78,13 +77,13 @@ export function EchField({ control, t }: { control: AnyControl; t: TFn }) {
  * Multiplex（多路复用）字段组（`.nd-fset` + 头部 `.swt` 开关）。
  * @param disabled    置 true 时禁用并显示 disabledReason（如 vision flow 不兼容）
  */
-export function MultiplexFields({
+export function MultiplexFields<T extends FieldValues>({
   control,
   t,
   disabled = false,
   disabledReason,
 }: {
-  control: AnyControl;
+  control: Control<T>;
   t: TFn;
   disabled?: boolean;
   disabledReason?: string;
@@ -96,7 +95,7 @@ export function MultiplexFields({
     <div className="nd-fset">
       <FormField
         control={control}
-        name="muxEnabled"
+        name={'muxEnabled' as FieldPath<T>}
         render={({ field }) => (
           <div className="nd-fset-h">
             {t('servers.multiplex')}
@@ -118,7 +117,7 @@ export function MultiplexFields({
         <>
           <FormField
             control={control}
-            name="muxProtocol"
+            name={'muxProtocol' as FieldPath<T>}
             render={({ field }) => (
               <div className="nd-fld">
                 <span className="nd-fld-lbl">{t('servers.multiplexProtocol')}</span>
@@ -140,7 +139,7 @@ export function MultiplexFields({
           <div className="nd-grid2">
             <FormField
               control={control}
-              name="muxMaxConnections"
+              name={'muxMaxConnections' as FieldPath<T>}
               render={({ field }) => (
                 <div className="nd-fld">
                   <span className="nd-fld-lbl">{t('servers.multiplexMaxConn')}</span>
@@ -159,7 +158,7 @@ export function MultiplexFields({
             />
             <FormField
               control={control}
-              name="muxMinStreams"
+              name={'muxMinStreams' as FieldPath<T>}
               render={({ field }) => (
                 <div className="nd-fld">
                   <span className="nd-fld-lbl">{t('servers.multiplexMinStreams')}</span>
@@ -180,7 +179,7 @@ export function MultiplexFields({
 
           <FormField
             control={control}
-            name="muxPadding"
+            name={'muxPadding' as FieldPath<T>}
             render={({ field }) => (
               <div className="nd-swrow">
                 <div className="nd-swrow-main">

@@ -243,7 +243,7 @@ export function SubscriptionDialog({
           )}
 
           {/* 高级设置（默认折叠，用户反馈）：自动更新 + 经代理更新。 */}
-          <details className="group rounded-lg border shadow-sm">
+          <details className="group rounded-lg border shadow-xs">
             <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
               <span>{t('sub.advancedSection', '高级')}</span>
               <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
@@ -261,7 +261,7 @@ export function SubscriptionDialog({
               {/* 开启自动更新即提示重启代价（订阅刷新带来节点变动会重启代理、短暂断流） */}
               {autoUpdate && (
                 <p className="flex items-start gap-1.5 px-1 text-[0.8rem] text-warning">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>{t('sub.autoUpdateRestartHint')}</span>
                 </p>
               )}

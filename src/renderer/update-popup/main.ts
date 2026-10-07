@@ -70,7 +70,7 @@ function render(s: UpdatePopupState): void {
 
   const L = s.labels;
   const pill = `<span class="pill proto">${esc(s.version)}</span>`;
-  let body = '';
+  let body: string;
 
   if (s.phase === 'remind') {
     body = `

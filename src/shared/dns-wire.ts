@@ -255,7 +255,7 @@ export function setDnsMessageId(wire: Uint8Array, id: number): Uint8Array {
  * 截到首 question 末（丢弃 query 的 OPT/additional），置 QR=1 RA=1 RCODE=2、清 AN/NS/AR。
  */
 export function buildServfail(query: Uint8Array): Uint8Array {
-  let end = 12;
+  let end: number;
   try {
     end = skipName(query, 12) + 4; // qname + qtype(2) + qclass(2)
   } catch {

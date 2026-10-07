@@ -45,10 +45,10 @@ export function MainLayout({
       />
       <main className="flex-1 min-w-0 flex flex-col relative z-10 main-content-card transition-all duration-300">
         {/* 集成标题栏拖拽区：Mac(hiddenInset) h-9；Windows(titleBarOverlay)/Linux(右上自绘按钮) 同高 32px。 */}
-        {isMac && <div className="h-9 flex-shrink-0 app-region-drag" />}
+        {isMac && <div className="h-9 shrink-0 app-region-drag" />}
         {(isWindows || isLinux) && (
           <div
-            className="h-[32px] flex-shrink-0 app-region-drag"
+            className="h-[32px] shrink-0 app-region-drag"
             // Linux frameless：拖拽区双击最大化由显式 IPC 保证（不赌 WM 原生处理 app-region 双击）；
             // Windows 由系统 titleBarOverlay 处理，不加 handler 避免双重触发。
             onDoubleClick={
@@ -59,7 +59,7 @@ export function MainLayout({
         {/* 内容区滚动，状态栏固定在卡片底部（flex-none）——全页常驻实心底栏。 */}
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto app-region-no-drag">
           {/* hero 页（conns/logs）用 h-full 断高度棘轮（见上 HERO_VIEWS 注）；其余页 min-h-full 自然增长。
-              home 保 min-h-full：拓扑卡已由 connection-topology 的 [contain:size] 单独定高，不进 hero 集合（最小 blast radius）。 */}
+              home 保 min-h-full：拓扑卡已由 connection-topology 的 contain-[size] 单独定高，不进 hero 集合（最小 blast radius）。 */}
           <div
             className={`container mx-auto flex ${
               HERO_VIEWS.has(currentView) ? 'h-full' : 'min-h-full'

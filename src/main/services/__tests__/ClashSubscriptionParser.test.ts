@@ -1490,3 +1490,36 @@ describe('parseClashProxies — snell review 边界补测', () => {
     expect(r.warnings.join('\n')).toMatch(/snell-vabc/);
   });
 });
+
+describe('js-yaml 5 订阅兼容', () => {
+  it('展开 merge 锚点，保留继承的认证及 TLS/传输字段，单节点字段优先', () => {
+    const doc = tryLoadClashDoc(`defaults: &base
+  type: trojan
+  server: example.com
+  port: 443
+  password: example-password
+  sni: cdn.example.com
+  network: ws
+  ws-opts:
+    path: /tunnel
+    headers: { Host: edge.example.com }
+proxies:
+  - <<: *base
+    name: inherited
+    port: 8443
+`);
+    const parsed = parseClashProxies(doc.proxies, 'test-sub', NOW);
+    expect(parsed.failed).toBe(0);
+    expect(parsed.skipped).toBe(0);
+    expect(parsed.servers).toHaveLength(1);
+    expect(parsed.servers[0]).toMatchObject({
+      protocol: 'trojan',
+      address: 'example.com',
+      port: 8443,
+      password: 'example-password',
+      tlsSettings: { serverName: 'cdn.example.com' },
+      network: 'ws',
+      wsSettings: { path: '/tunnel', headers: { Host: 'edge.example.com' } },
+    });
+  });
+});

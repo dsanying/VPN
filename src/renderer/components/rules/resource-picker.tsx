@@ -110,7 +110,7 @@ export function ResourcePicker({ value, onChange, onRequestClose }: ResourcePick
           open={open}
           onOpenChange={setOpen}
           triggerClassName="rl-select rl-resdd-trig"
-          contentClassName="max-h-[300px] w-[var(--radix-dropdown-menu-trigger-width)]"
+          contentClassName="max-h-[300px] w-(--radix-dropdown-menu-trigger-width)"
           showSearch={showSearch}
           query={query}
           onQueryChange={setQuery}

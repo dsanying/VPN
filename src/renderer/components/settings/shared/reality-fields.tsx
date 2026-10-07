@@ -4,18 +4,23 @@
  * 各协议表单的 RHF schema / 默认值 / submit 仍各自维护，渲染统一走这里。
  * 约定字段名：realityPublicKey?: string，realityShortId?: string。
  */
-import type { Control } from 'react-hook-form';
+import type { Control, FieldValues, FieldPath } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { FormField, FormMessage } from '@/components/ui/form';
 
-type AnyControl = Control<any>;
 type TFn = (key: string, fallback?: any) => string;
 
-export function RealityPublicKeyField({ control, t }: { control: AnyControl; t: TFn }) {
+export function RealityPublicKeyField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="realityPublicKey"
+      name={'realityPublicKey' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.realityPublicKey', 'Public Key')}</span>
@@ -27,11 +32,17 @@ export function RealityPublicKeyField({ control, t }: { control: AnyControl; t: 
   );
 }
 
-export function RealityShortIdField({ control, t }: { control: AnyControl; t: TFn }) {
+export function RealityShortIdField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="realityShortId"
+      name={'realityShortId' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.shortId')}</span>

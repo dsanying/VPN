@@ -56,7 +56,7 @@ export function registerIconProtocol(deps: IconProtocolDeps): void {
     // viaProxy × update-in 端口（同四链路口径，端口闸共用 resolveUpdateProxyTarget）：代理运行 ∧
     // mainSessionViaProxy 未关 ∧ 端口可用 → 经 update-in。config 经 TTL 缓存避免网格批量渲染逐请求读盘；
     // 端口/运行态走廉价 thunk 每次取最新。
-    let viaProxy = false;
+    let viaProxy: boolean;
     let port = 0;
     try {
       const now = Date.now();

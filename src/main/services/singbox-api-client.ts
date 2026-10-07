@@ -3,13 +3,12 @@
  * 含：Tailscale 状态订阅 + 原生登出，以及 clash 等价管理方法（选节点 / 关连接 / 订阅 Status / 订阅 Connections）。
  * 取代 1.13.x 的「state 目录存在性 + stdout 日志解析」启发式（见 docs/design/tailscale-1.14-management-api.md）。
  *
- * proto 内嵌（避免打包路径依赖）；用本地 `Empty`——空消息 wire 编码为 0 字节，与服务端 google.protobuf.Empty
- * 完全兼容（gRPC 只按 service/method 名 + 字段号对齐，消息类型名不参与 wire）。字段号对齐 sing-box
- * 1.14.0-alpha.32 grpcurl 反射；升级核时若变以反射为准重核。
+ * 官方 proto 定义单独维护（避免打包路径依赖），字段与消息均使用 sing-box
+ * v1.14.2 官方完整定义；升级核时同步官方 schema。
  *
- * TailscaleEndpointStatus 的 peers 不在顶层：对端按归属用户分组在 userGroups(f7).peers(f5)，
- * 顶层另有 exitNode(f8)=当前选中出口。peer 的 exitNodeOption(f7)=是否广告可当出口（出口下拉判据）。
- * 上述 userGroups/peers/exitNode 字段号 + 嵌套结构经 1.14.0-alpha.34 真核 live wire 实测核对（strict proto-loader 解析通过）。
+ * TailscaleEndpointStatus 的 peers 不在顶层：对端按归属用户分组在 userGroups(f8).peers(f5)，
+ * 顶层另有 exitNode(f9)=当前选中出口。peer 的 exitNodeOption(f7)=是否广告可当出口（出口下拉判据）。
+ * 官方字段布局由独立编码的 wire 测试覆盖；Status、选节点与关连接经 1.14.2 真核实测。
  *
  * 认证（P0 修复）：api service 注入了 secret（= config.clashApiSecret）时，daemon/server.go 会对每个 RPC 校验
  * metadata `authorization: "Bearer <secret>"`（缺失/不符 → Unauthenticated）。本客户端经 call credentials 把 Bearer
@@ -23,127 +22,12 @@
  */
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { TailscaleStatusPeer } from '../../shared/tailscale-status';
+import { SINGBOX_STARTED_SERVICE_PROTO } from './singbox-started-service-schema';
 import { isIpv4 } from '../../shared/ip';
-
-const PROTO_SRC = `
-syntax = "proto3";
-package daemon;
-message Empty {}
-service StartedService {
-  rpc SubscribeTailscaleStatus(Empty) returns (stream TailscaleStatusUpdate);
-  rpc TailscaleLogout(TailscaleLogoutRequest) returns (Empty);
-  rpc SetTailscaleExitNode(SetTailscaleExitNodeRequest) returns (Empty);
-  rpc SubscribeStatus(SubscribeStatusRequest) returns (stream Status);
-  rpc SubscribeConnections(SubscribeConnectionsRequest) returns (stream ConnectionEvents);
-  rpc SelectOutbound(SelectOutboundRequest) returns (Empty);
-  rpc CloseConnection(CloseConnectionRequest) returns (Empty);
-  rpc CloseAllConnections(Empty) returns (Empty);
-}
-message TailscaleStatusUpdate { repeated TailscaleEndpointStatus endpoints = 1; }
-message TailscaleEndpointStatus {
-  string endpointTag = 1;
-  string backendState = 2;
-  string authURL = 3;
-  TailscalePeer self = 6;
-  repeated TailscaleUserGroup userGroups = 7;
-  TailscalePeer exitNode = 8;
-}
-// 对端节点按归属用户(owner/sharee)分组。FlowZ 只需把各组 peers 摊平成一张表(flattenTailscalePeers)，
-// 分组元信息(userID/displayName 等)不展示。endpoint.f4=account / f5=tailnet 名(字符串)刻意不映射(proto-loader 跳过)。
-message TailscaleUserGroup { repeated TailscalePeer peers = 5; }
-message TailscalePeer {
-  string hostName = 1;
-  string os = 3;
-  repeated string tailscaleIPs = 4;
-  bool online = 5;
-  bool exitNode = 6;
-  bool exitNodeOption = 7;
-  bool active = 8;
-  int64 keyExpiry = 11;
-  string stableID = 12;
-  bool expired = 13;
-}
-message TailscaleLogoutRequest { string endpointTag = 1; }
-// 热重设 TS 出口节点（不重启核）：按 stableID EditPrefs{ExitNodeID}，幂等。字段号逐字对齐上游
-// daemon/started_service.proto（endpointTag=1, stableID=2）。用于 re-advertise 后强制核重解析 exit_node。
-message SetTailscaleExitNodeRequest {
-  string endpointTag = 1;
-  string stableID = 2;
-}
-
-message SubscribeStatusRequest { int64 interval = 1; }
-message Status {
-  int64 memory = 1;
-  int32 goroutines = 2;
-  int32 connectionsIn = 3;
-  int32 connectionsOut = 4;
-  int64 trafficAvailable = 5;
-  int64 uplink = 6;
-  int64 downlink = 7;
-  int64 uplinkTotal = 8;
-  int64 downlinkTotal = 9;
-}
-
-message SubscribeConnectionsRequest { int64 interval = 1; }
-message ConnectionEvents {
-  repeated ConnectionEvent events = 1;
-  bool reset = 2;
-}
-message ConnectionEvent {
-  ConnectionEventType type = 1;
-  string id = 2;
-  Connection connection = 3;
-  int64 uplinkDelta = 4;
-  int64 downlinkDelta = 5;
-  int64 closedAt = 6;
-}
-enum ConnectionEventType {
-  NEW = 0;
-  UPDATE = 1;
-  CLOSED = 2;
-}
-message Connection {
-  string id = 1;
-  string inbound = 2;
-  string inboundType = 3;
-  int32 ipVersion = 4;
-  string network = 5;
-  string source = 6;
-  string destination = 7;
-  string domain = 8;
-  string protocol = 9;
-  string user = 10;
-  string fromOutbound = 11;
-  int64 createdAt = 12;
-  int64 closedAt = 13;
-  int64 uplink = 14;
-  int64 downlink = 15;
-  int64 uplinkTotal = 16;
-  int64 downlinkTotal = 17;
-  string rule = 18;
-  string outbound = 19;
-  string outboundType = 20;
-  repeated string chainList = 21;
-  ProcessInfo processInfo = 22;
-}
-message ProcessInfo {
-  uint32 processId = 1;
-  uint32 userId = 2;
-  string userName = 3;
-  string processPath = 4;
-  repeated string packageNames = 5;
-}
-message SelectOutboundRequest {
-  string groupTag = 1;
-  string outboundTag = 2;
-}
-message CloseConnectionRequest { string id = 1; }
-`;
 
 // self 与对端 peer 同构（同一 TailscalePeer 消息）。exitNode/exitNodeOption/active 对 self 通常为空。
 export interface TailscalePeer {
@@ -173,7 +57,7 @@ export interface TailscaleEndpointStatus {
   authURL: string;
   self?: TailscaleSelf;
   userGroups?: TailscaleUserGroup[]; // 对端按 owner 分组；摊平见 flattenTailscalePeers
-  exitNode?: TailscalePeer; // 当前选中的出口节点（peer 形态；endpoint.f8）
+  exitNode?: TailscalePeer; // 当前选中的出口节点（peer 形态；endpoint.f9）
 }
 
 /**
@@ -223,7 +107,7 @@ export interface SingBoxStatus {
   goroutines?: number;
   connectionsIn?: number;
   connectionsOut?: number;
-  trafficAvailable?: string;
+  trafficAvailable?: boolean;
   uplink?: string;
   downlink?: string;
   uplinkTotal?: string;
@@ -300,36 +184,23 @@ export interface SingBoxApiEndpoint {
 let serviceCtor: grpc.ServiceClientConstructor | null = null;
 function getServiceCtor(): grpc.ServiceClientConstructor {
   if (serviceCtor) return serviceCtor;
-  // 文件名内嵌 PROTO_SRC 内容哈希：proto 演进（加 peers/userGroups 等字段）后文件名随之变 → 必写新文件，
-  // 不会被旧版本残留的同名临时 proto 顶替（否则升级后新字段静默解不出——「已存在即跳过写」对内容变更不安全）。
-  const protoHash = crypto.createHash('sha1').update(PROTO_SRC).digest('hex').slice(0, 12);
-  const protoPath = path.join(os.tmpdir(), `flowz-started-service-${protoHash}.proto`);
-  if (!fs.existsSync(protoPath)) {
-    // 原子落盘：写进程私有临时文件再 rename（POSIX rename 原子、覆盖同内容无害）。否则主核与瞬态登录核
-    // 并发首连时 existsSync→writeFileSync 非原子，loadSync 可能读到半截 proto 抛错。内容由 hash 钉死，
-    // 并发写同字节，rename 竞争时落后者 EEXIST(Win)/被覆盖(POSIX) → 清掉自己的临时文件即可。
-    const tmp = `${protoPath}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, PROTO_SRC);
-    try {
-      fs.renameSync(tmp, protoPath);
-    } catch {
-      try {
-        fs.unlinkSync(tmp);
-      } catch {
-        /* 已被清理/抢先，忽略 */
-      }
-    }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-grpc-'));
+  try {
+    const protoPath = path.join(dir, 'started-service.proto');
+    fs.writeFileSync(protoPath, SINGBOX_STARTED_SERVICE_PROTO, { mode: 0o600 });
+    const def = protoLoader.loadSync(protoPath, {
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: true,
+    });
+    const pkg = grpc.loadPackageDefinition(def) as unknown as {
+      daemon: { StartedService: grpc.ServiceClientConstructor };
+    };
+    serviceCtor = pkg.daemon.StartedService;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  const def = protoLoader.loadSync(protoPath, {
-    keepCase: true,
-    longs: String,
-    enums: String,
-    defaults: true,
-  });
-  const pkg = grpc.loadPackageDefinition(def) as unknown as {
-    daemon: { StartedService: grpc.ServiceClientConstructor };
-  };
-  serviceCtor = pkg.daemon.StartedService;
   return serviceCtor;
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 交叉编译 FlowZ 提权 helper（Go）：macOS（helper/，纯 stdlib，两 mac 架构）+ Windows（helper-win/，winio+x-sys，amd64）
-# + Linux（helper-linux/，纯 stdlib，宿主架构）。
+# 交叉编译 FlowZ 提权 helper（Go）：macOS（helper/ + helper-rpc/，JSON-RPC 标准库，两 mac 架构）+ Windows（helper-win/，winio+x-sys，amd64）
+# + Linux（helper-linux/ + helper-rpc/，JSON-RPC 标准库，宿主架构）。
 # 产物随 electron-builder extraResources（resources/mac-${arch} → mac；resources/win；resources/linux → linux）打进 app 包。
 set -euo pipefail
 
@@ -41,7 +41,7 @@ if [ -d "$WIN_SRC" ]; then
       go build -mod=vendor -trimpath -ldflags="-s -w" -o "$WIN_OUT" . )
 fi
 
-# Linux 提权 helper（独立 module helper-linux/，纯 stdlib，需 linux-only syscall → 只在 GOOS=linux 编译）。输出到
+# Linux 提权 helper（独立 module helper-linux/ + helper-rpc/，JSON-RPC 标准库，需 linux-only syscall → 只在 GOOS=linux 编译）。输出到
 # resources/linux/（与 sing-box / libcronet.so 同目录，对齐 ResourceManager.getLinuxHelperPath 与 getPlatformResourceDir
 # 的 linux 分支；electron-builder 打包 resources/linux → linux）。按宿主架构本地编译；跨架构（arm64）随对应架构的发布
 # 构建另行 GOARCH=arm64 交叉编译（AmbientCaps/SO_PEERCRED 为 linux 通用，无 CGO）。

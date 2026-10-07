@@ -708,7 +708,7 @@ export class SubscriptionService {
   }> {
     // 解析初始 URL：限 http(s)。
     const parse = (u: string): URL => {
-      let urlObj: URL | null = null;
+      let urlObj: URL | null;
       try {
         urlObj = new URL(u);
       } catch {

@@ -6,27 +6,26 @@
  *
  * 端口默认占位符各协议不同（443/8388/1080/...），故 placeholder 为必传 prop。
  */
-import type { Control } from 'react-hook-form';
+import type { Control, FieldValues, FieldPath } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { FormField, FormMessage } from '@/components/ui/form';
 
-type AnyControl = Control<any>;
 type TFn = (key: string, fallback?: any) => string;
 
 /** 服务器地址（host/IP）。readOnly：WARP 等注册生成的连接参数只展示不可改。 */
-export function AddressField({
+export function AddressField<T extends FieldValues>({
   control,
   t,
   readOnly,
 }: {
-  control: AnyControl;
+  control: Control<T>;
   t: TFn;
   readOnly?: boolean;
 }) {
   return (
     <FormField
       control={control}
-      name="address"
+      name={'address' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">
@@ -48,13 +47,13 @@ export function AddressField({
 /**
  * @param placeholder 占位符（各协议默认端口不同，必传）
  */
-export function PortField({
+export function PortField<T extends FieldValues>({
   control,
   t,
   placeholder,
   readOnly,
 }: {
-  control: AnyControl;
+  control: Control<T>;
   t: TFn;
   placeholder: string;
   readOnly?: boolean;
@@ -62,7 +61,7 @@ export function PortField({
   return (
     <FormField
       control={control}
-      name="port"
+      name={'port' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">

@@ -105,7 +105,7 @@ async function listLinux(): Promise<SystemProcessInfo[]> {
 
 async function listWindows(): Promise<SystemProcessInfo[]> {
   // 进程名：tasklist（最稳、无需管理员）
-  let names: string[] = [];
+  let names: string[];
   try {
     const out = await execFileP(system32('tasklist.exe'), ['/fo', 'csv', '/nh'], {
       timeout: EXEC_TIMEOUT_MS,

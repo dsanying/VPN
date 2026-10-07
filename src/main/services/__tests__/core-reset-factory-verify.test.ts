@@ -25,11 +25,17 @@ jest.mock('electron', () => ({
 // 否则「CI 上没有那个文件」会让正向断言静默空过（绿而无信息量）。
 const MOCK_CORE_BYTES = 'pretend this is the bundled sing-box';
 const MOCK_PIN = require('crypto').createHash('sha256').update(MOCK_CORE_BYTES).digest('hex');
-jest.mock('../../../shared/core-manifest.json', () => ({
-  bundledCoreVersion: '9.9.9',
-  coreArchiveSha256: {},
-  coreBinarySha256: { linux: MOCK_PIN, win: MOCK_PIN, 'mac-x64': MOCK_PIN, 'mac-arm64': MOCK_PIN },
-}));
+jest.mock('../../../shared/core-manifest.json', () => {
+  const pin = require('crypto')
+    .createHash('sha256')
+    .update('pretend this is the bundled sing-box')
+    .digest('hex');
+  return {
+    bundledCoreVersion: '9.9.9',
+    coreArchiveSha256: {},
+    coreBinarySha256: { linux: pin, win: pin, 'mac-x64': pin, 'mac-arm64': pin },
+  };
+});
 
 import { CoreUpdateService } from '../CoreUpdateService';
 

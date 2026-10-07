@@ -14,7 +14,8 @@
  * 拉取走 curl（CI/打包环境就绪）；解压走 unzip。原子落地：先解到临时目录、校验 index.html 存在再 rename 替换。
  */
 import { execFileSync } from 'child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, renameSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync, renameSync } from 'fs';
+import { createHash } from 'crypto';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -23,10 +24,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DEST = join(ROOT, 'resources', 'dashboard');
 const FORCE = process.argv.includes('--force');
 
-// gh-pages 分支 zipball（GitHub codeload）：含构建好的面板静态资源（index.html + assets）。
-const ZIP_URL = 'https://github.com/SagerNet/sing-box-dashboard/archive/refs/heads/gh-pages.zip';
+// 官方已部署分支没有版本发布，以核验后的提交和归档摘要固定当前稳定构建。
+const manifest = JSON.parse(readFileSync(join(ROOT, 'src/shared/dashboard-manifest.json'), 'utf8'));
+const ZIP_URL = `https://github.com/${manifest.repository}/archive/${manifest.commit}.zip`;
+const marker = join(DEST, '.upstream-commit');
 
-if (existsSync(join(DEST, 'index.html')) && !FORCE) {
+if (existsSync(join(DEST, 'index.html')) && existsSync(marker) && readFileSync(marker, 'utf8').trim() === manifest.commit && !FORCE) {
   console.log(`skip (exists): resources/dashboard/index.html`);
   process.exit(0);
 }
@@ -36,9 +39,11 @@ const zipPath = join(work, 'dashboard.zip');
 const extractDir = join(work, 'extracted');
 
 try {
-  console.log(`downloading sing-box-dashboard (gh-pages) → ${zipPath} ...`);
+  console.log(`downloading sing-box-dashboard (${manifest.commit}) → ${zipPath} ...`);
   // -L 跟随重定向；-f 失败返回非零（不把 404 页面当成功）；--retry 抗瞬时网络抖动。
   execFileSync('curl', ['-fL', '--retry', '3', '-o', zipPath, ZIP_URL], { stdio: 'inherit' });
+  const actualSha256 = createHash('sha256').update(readFileSync(zipPath)).digest('hex');
+  if (actualSha256 !== manifest.archiveSha256) throw new Error('官方面板归档 SHA-256 不匹配');
 
   mkdirSync(extractDir, { recursive: true });
   console.log('extracting ...');
@@ -58,6 +63,7 @@ try {
   rmSync(tmpDest, { recursive: true, force: true });
   mkdirSync(dirname(DEST), { recursive: true });
   cpSync(uiRoot, tmpDest, { recursive: true, dereference: true });
+  writeFileSync(join(tmpDest, '.upstream-commit'), `${manifest.commit}\n`);
   rmSync(DEST, { recursive: true, force: true });
   renameSync(tmpDest, DEST);
 

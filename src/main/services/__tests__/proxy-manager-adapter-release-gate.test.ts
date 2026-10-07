@@ -146,7 +146,6 @@ function stubPrelude(svc: any, order: string[]): void {
   svc.killOrphanedSingBoxProcesses = jest.fn(async () => {
     order.push('killOrphans');
   });
-  svc.resolveClashApiPortConflict = jest.fn().mockResolvedValue(undefined);
   svc.getCoreVersion = jest.fn().mockResolvedValue('1.14.0');
   svc.reconcileCoreWithBundledBaseline = jest.fn().mockResolvedValue(undefined);
   svc.resolveTailscaleApiPort = jest.fn().mockResolvedValue(9099);
