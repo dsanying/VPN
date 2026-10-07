@@ -58,7 +58,7 @@ function ExitNodePicker({
   onSelect: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const subscriptions = useAppStore((s) => s.config?.subscriptions || []);
+  const subscriptions = useAppStore((s) => s.config?.subscriptions) ?? [];
   const latencyMap = useAppStore((s) => s.latencyMap);
   const sortByLatency = useNodeSortStore((s) => s.sortByLatency);
   // 徽标异常态输入：使下拉里 TS/组网出口显「出口无效 / 未登录」warn 文案（与 SpeedBadge 同 deriveLatencyBadge 口径）。

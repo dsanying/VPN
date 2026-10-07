@@ -1,33 +1,10 @@
-//go:build linux
-
-// FlowZ Linux 提权 helper（生产版）：root systemd system service，监听 unix socket，按行协议驱动 sing-box 启停。
-// 装一次（pkexec 一次授权）后，普通用户 app 经 socket 零提权启停 sing-box —— 切节点/停止/退出/崩溃回收/换核均免再次授权。
-//
-// 第一性设计（见 docs/design/flowz-linux-privileged-helper.md）：
-//   - 能力挂进程不挂文件：start 时 helper 以 root fork，setuid 回**发起请求的登录用户** + AmbientCaps=CAP_NET_ADMIN
-//     拉核。核仍以登录用户跑（读得到 userData 的 config/cache/log，属主天然对），cap 在进程 ambient set 上。
-//   - **核二进制在 root-owned 受管目录（--coredir，安装时播种、install-core hash 校验更新）**，与 macOS 受保护目录 /
-//     Windows 锁定 --singbox 一致：核不可被普通用户篡改，一份共享、版本一致。这根除了「哪个二进制可信持有 CAP_NET_ADMIN」
-//     的问题——start 只跑锁定的 coreDir/sing-box，绝不跑客户端指定的任意路径。换核经 install-core 免密（socket 调用）。
-//   - 鉴权 SO_PEERCRED（内核背书对端 uid）+ 授权 uid 列表，无 token。
-//
-// 安全边界：
-//   - 只跑锁定的 coreDir/sing-box（root-owned，普通用户改不动）→ 杜绝「借 helper 给任意自有二进制赋 CAP_NET_ADMIN」。
-//   - config 必须属于对端 uid（open+fstat，防读别人配置）。install-core 只写锁定的 coreDir，sha256 校验主二进制（防 TOCTOU）。
-//   - 授权 uid 由 root-owned authfile 记录；freeport/cleanup 仅作用于对端 uid 自己的进程（不跨用户杀）。
-//   - AmbientCaps 授 CAP_NET_ADMIN/NET_RAW/NET_BIND_SERVICE（与现役 setcap 授权一致，PlatformPrivilegeService.ts:191）。
-//
-// 协议（每行 \n 结尾，路径整行传递）：
-//	行1: <command>   ping | version | status | start | stop | cleanup | freeport | install-core
-//	start 追加: 行2=<singbox 路径，须==coreDir/sing-box> 行3=<cfg> 行4=<log，可空> 行5=<fwd:0|1> 行6=<父 app PID，可选>
-//	freeport 追加: 行2=<port>
-//	install-core 追加: 行2=<srcDir> 行3=<sha256(hex)>
-//
-// 鉴权无独立行：对端身份经 SO_PEERCRED 取得。仅依赖 Go 标准库（便于交叉编译与审计）。
+// 暗影VPN 提权助手：系统服务 + 本机 HTTP JSON-RPC 2.0。
+// macOS/Windows 以 Authorization: Bearer 鉴权；Linux 保留 SO_PEERCRED 授权 UID。
+// JSON-RPC 由稳定通用库实现；业务方法只启动锁定内核，不向网络开放监听。
 package main
 
 import (
-	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -37,6 +14,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"shadowvpn/helperrpc"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,8 +22,8 @@ import (
 	"time"
 )
 
-// 协议版本。v1：root 受管核 + install-core + 路径锁 + SO_PEERCRED + 授权列表 + 父死看护 + freeport。
-const protoVersion = "1"
+// 助手应用版本；通信标准固定为 JSON-RPC 2.0，功能通过 capabilities 发现。
+const helperVersion = helperrpc.Version
 
 // Linux capability 数值（<linux/capability.h>；纯标准库不引 x/sys/unix）。授权集与现役 setcap 一致（不推测削减）。
 const (
@@ -59,19 +37,16 @@ var (
 	authFile string // 授权 uid 列表文件（root 写；每行一个十进制 uid）
 	coreDir  string // root-owned 受管核目录（只跑/只写此目录内的 sing-box，锁定）
 
-	mu        sync.Mutex
-	child     *exec.Cmd
-	childDone chan struct{}
-	reapWG    sync.WaitGroup // 在途后台收割（stop 的 terminateChild）：SIGTERM 退出前须等它们跑完，杜绝孤儿
+	mu           sync.Mutex
+	child        *exec.Cmd
+	childDone    chan struct{}
+	stopping     bool
+	shuttingDown bool
+	childUID     uint32
 )
 
 // coreBin：锁定的受管核路径。start 只跑它，绝不跑客户端指定的任意二进制。
 func coreBin() string { return filepath.Join(coreDir, "sing-box") }
-
-func readLine(r *bufio.Reader) string {
-	s, _ := r.ReadString('\n')
-	return strings.TrimRight(s, "\r\n")
-}
 
 // peerCred 取对端进程凭据（SO_PEERCRED）。uid/gid 内核在 connect 时锁定、不可伪造，作鉴权与 setuid 的唯一依据。
 func peerCred(conn net.Conn) (*syscall.Ucred, error) {
@@ -116,20 +91,24 @@ func isAuthorized(uid uint32) bool {
 
 // ownedBy：path 存在且属主 == uid（open 后对 fd fstat，杜绝 stat(path) 后被换的 TOCTOU；symlink 跟随到目标）。
 func ownedBy(path string, uid uint32) (bool, error) {
-	f, err := os.Open(path)
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
-	fi, err := f.Stat()
+	file := os.NewFile(uintptr(fd), path)
+	defer file.Close()
+	info, err := file.Stat()
 	if err != nil {
 		return false, err
 	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("config-not-regular")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
 		return false, fmt.Errorf("no stat_t")
 	}
-	return st.Uid == uid, nil
+	return stat.Uid == uid, nil
 }
 
 // supplementaryGroups：登录用户 uid 的补充组 gid 列表（纯 Go 解析 /etc/group，CGO 关不含 NSS/SSSD）。
@@ -152,30 +131,6 @@ func supplementaryGroups(uid uint32) []uint32 {
 		}
 	}
 	return gids
-}
-
-// procUID：/proc/<pid> 的属主 uid（进程运行者）。用于 freeport 跨用户防误杀。
-func procUID(pid string) (uint32, error) {
-	fi, err := os.Stat(filepath.Join("/proc", pid))
-	if err != nil {
-		return 0, err
-	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return 0, fmt.Errorf("no stat_t")
-	}
-	return st.Uid, nil
-}
-
-// setForward：allowLan 时开/关 IPv4+IPv6 转发（直写 /proc/sys）。每次 start 按 fwd 显式设置、stop 复位为 0，
-// 使转发态严格跟随运行中的核 —— 杜绝「开过 LAN 共享后停核/退出，主机仍全局转发到重启」的状态泄漏。best-effort。
-func setForward(on bool) {
-	v := []byte("0")
-	if on {
-		v = []byte("1")
-	}
-	_ = os.WriteFile("/proc/sys/net/ipv4/ip_forward", v, 0o644)
-	_ = os.WriteFile("/proc/sys/net/ipv6/conf/all/forwarding", v, 0o644)
 }
 
 // installCore：把 app 下载+预检的临时核 srcDir，校验 sha256(srcDir/sing-box)==wantHash 后，root 写入锁定的 coreDir
@@ -243,6 +198,19 @@ func installCore(srcDir, wantHash string) string {
 	return "OK installed"
 }
 
+// 必须持 mu；Wait 和状态恢复完成前保留 child，禁止重叠 start。
+func beginStopLocked() int {
+	if child == nil || child.Process == nil {
+		return 0
+	}
+	pid := child.Process.Pid
+	if !stopping {
+		stopping = true
+		go terminateChild(child, childDone)
+	}
+	return pid
+}
+
 func terminateChild(c *exec.Cmd, done <-chan struct{}) {
 	if c == nil || c.Process == nil {
 		return
@@ -252,6 +220,10 @@ func terminateChild(c *exec.Cmd, done <-chan struct{}) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		_ = c.Process.Kill()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
 	}
 }
 
@@ -276,9 +248,8 @@ func watchParent(ppid int, c *exec.Cmd, done <-chan struct{}) {
 				mu.Unlock()
 				return
 			}
-			child, childDone = nil, nil
+			beginStopLocked()
 			mu.Unlock()
-			terminateChild(c, done)
 			return
 		}
 	}
@@ -286,68 +257,49 @@ func watchParent(ppid int, c *exec.Cmd, done <-chan struct{}) {
 
 var ssPidRe = regexp.MustCompile(`pid=(\d+)`)
 
-// freePort：按端口找 LISTEN 持有者。**仅作用于对端 uid 自己的进程**（procUID==cred.Uid），是 sing-box 才 kill，
-// 否则回报占用者名（不跨用户杀、不杀无辜）。ss 缺失/无占用 → OK free。
+// freePort 只回收本服务托管进程；名字和 UID 都不是进程归属凭据。
+// 调用方持 mu。
 func freePort(port string, callerUID uint32) string {
-	out, err := exec.Command("ss", "-H", "-ltnp", "sport = :"+port).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ss", "-H", "-ltnp", "sport = :"+port).Output()
 	if err != nil {
+		return "ERR port-probe"
+	}
+	matches := ssPidRe.FindAllStringSubmatch(string(out), -1)
+	if len(matches) == 0 {
+		if strings.TrimSpace(string(out)) != "" {
+			return "ERR port-owner-unavailable"
+		}
 		return "OK free"
 	}
-	pids := map[string]bool{}
-	for _, m := range ssPidRe.FindAllStringSubmatch(string(out), -1) {
-		pids[m[1]] = true
-	}
-	if len(pids) == 0 {
-		return "OK free"
-	}
-	var killed, foreign []string
-	for p := range pids {
-		// 跨用户防误杀：非对端 uid 的进程一律不动，回报为 foreign。
-		if uid, e := procUID(p); e != nil || uid != callerUID {
-			foreign = append(foreign, "pid:"+p)
-			continue
-		}
-		comm := ""
-		if b, e := os.ReadFile(filepath.Join("/proc", p, "comm")); e == nil {
-			comm = strings.TrimSpace(string(b))
-		}
-		if strings.Contains(comm, "sing-box") {
-			if n, e := strconv.Atoi(p); e == nil {
-				_ = syscall.Kill(n, syscall.SIGKILL)
-			}
-			killed = append(killed, p)
-		} else {
-			name := comm
-			if name == "" {
-				name = "pid:" + p
-			}
-			foreign = append(foreign, name)
+	for _, match := range matches {
+		pid, err := strconv.Atoi(match[1])
+		if err != nil || child == nil || child.Process == nil || child.Process.Pid != pid || (callerUID != 0 && callerUID != childUID) {
+			return "OK foreign pid:" + match[1]
 		}
 	}
-	if len(foreign) > 0 {
-		return "OK foreign " + strings.Join(foreign, " | ")
-	}
-	return "OK killed " + strings.Join(killed, ",")
+	return fmt.Sprintf("OK stopping %d", beginStopLocked())
 }
 
-func handle(conn net.Conn) {
-	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+type peerKey struct{}
 
-	cred, err := peerCred(conn)
-	if err != nil || cred == nil {
+func executeCommand(ctx context.Context, cmd string, args *helperrpc.Arguments) (response string) {
+	var output strings.Builder
+	conn := &output
+	defer func() { response = strings.TrimSpace(output.String()) }()
+	cred, _ := ctx.Value(peerKey{}).(*syscall.Ucred)
+	if cred == nil {
 		fmt.Fprintln(conn, "ERR peercred")
 		return
 	}
-	r := bufio.NewReader(conn)
-	cmd := readLine(r)
 
 	switch cmd {
 	case "ping":
-		fmt.Fprintf(conn, "OK pong uid=%d v%s\n", os.Getuid(), protoVersion)
+		fmt.Fprintf(conn, "OK pong uid=%d v%s\n", os.Getuid(), helperVersion)
 		return
 	case "version":
-		fmt.Fprintf(conn, "OK %s\n", protoVersion)
+		fmt.Fprintf(conn, "OK %s\n", helperVersion)
 		return
 	}
 
@@ -362,49 +314,55 @@ func handle(conn net.Conn) {
 	switch cmd {
 	case "status":
 		if child != nil && child.Process != nil {
-			fmt.Fprintf(conn, "OK running %d\n", child.Process.Pid)
+			state := "running"
+			if stopping {
+				state = "stopping"
+			}
+			fmt.Fprintf(conn, "OK %s %d\n", state, child.Process.Pid)
 		} else {
 			fmt.Fprintln(conn, "OK stopped")
 		}
-	case "stop":
-		if child != nil && child.Process != nil {
-			pid := child.Process.Pid
-			c, done := child, childDone
-			child, childDone = nil, nil
-			setForward(false) // 停核复位转发态（跟随运行中的核）
-			reapWG.Add(1)
-			go func() { defer reapWG.Done(); terminateChild(c, done) }()
-			fmt.Fprintf(conn, "OK stopped %d\n", pid)
+	case "stop", "cleanup":
+		if child != nil && cred.Uid != 0 && cred.Uid != childUID {
+			fmt.Fprintln(conn, "ERR process-not-owned")
+			return
+		}
+		if pid := beginStopLocked(); pid != 0 {
+			fmt.Fprintf(conn, "OK stopping %d\n", pid)
 		} else {
 			fmt.Fprintln(conn, "OK notrunning")
 		}
-	case "cleanup":
-		if child != nil && child.Process != nil {
-			_ = child.Process.Kill()
-		}
-		child, childDone = nil, nil
-		setForward(false)
-		_ = exec.Command("pkill", "-9", "-U", strconv.Itoa(int(cred.Uid)), "-f", "sing-box run").Run()
-		fmt.Fprintln(conn, "OK cleaned")
 	case "freeport":
-		port := strings.TrimSpace(readLine(r))
-		if port == "" || strings.IndexFunc(port, func(c rune) bool { return c < '0' || c > '9' }) >= 0 {
+		port := strings.TrimSpace(args.Next())
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
 			fmt.Fprintln(conn, "ERR bad-port")
 			return
 		}
 		fmt.Fprintln(conn, freePort(port, cred.Uid))
 	case "install-core":
-		src := readLine(r)
-		wantHash := strings.TrimSpace(readLine(r))
+		src := args.Next()
+		wantHash := strings.TrimSpace(args.Next())
 		fmt.Fprintln(conn, installCore(src, wantHash))
 	case "start":
-		singbox := strings.TrimSpace(readLine(r))
-		cfg := readLine(r)
-		logPath := readLine(r)
-		fwd := readLine(r)
-		ppid, _ := strconv.Atoi(readLine(r))
+		singbox := strings.TrimSpace(args.Next())
+		cfg := args.Next()
+		logPath := args.Next()
+		fwd := args.Next()
+		ppid, _ := strconv.Atoi(args.Next())
 
+		if shuttingDown {
+			fmt.Fprintln(conn, "ERR shutting-down")
+			return
+		}
 		if child != nil && child.Process != nil {
+			if cred.Uid != 0 && cred.Uid != childUID {
+				fmt.Fprintln(conn, "ERR process-not-owned")
+				return
+			}
+			if stopping {
+				fmt.Fprintln(conn, "ERR stopping")
+				return
+			}
 			fmt.Fprintf(conn, "OK already %d\n", child.Process.Pid)
 			return
 		}
@@ -426,7 +384,6 @@ func handle(conn net.Conn) {
 			fmt.Fprintf(conn, "ERR config-not-owned %v\n", e)
 			return
 		}
-		setForward(fwd == "1") // 显式跟随本次会话（fwd=0 亦复位）
 
 		c := exec.Command(coreBin(), "run", "-c", cfg)
 		// 降权拉核：setuid/setgid 回对端登录用户 + AmbientCaps 保留 CAP_NET_ADMIN/RAW/BIND_SERVICE 建 TUN/改路由。
@@ -442,18 +399,34 @@ func handle(conn net.Conn) {
 		}
 		var logFile *os.File
 		if logPath != "" {
-			if lf, e := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); e == nil {
-				_ = lf.Chown(int(cred.Uid), int(cred.Gid))
-				logFile = lf
-				c.Stdout = lf
-				c.Stderr = lf
+			lf, err := openUserLog(logPath, cred.Uid, cred.Gid)
+			if err != nil {
+				fmt.Fprintf(conn, "ERR log %v\n", err)
+				return
+			}
+			logFile = lf
+			c.Stdout = lf
+			c.Stderr = lf
+		}
+		restoreForward := func() error { return nil }
+		if fwd == "1" {
+			var err error
+			restoreForward, err = enableForwarding(forwardingFiles, os.ReadFile, func(name string, value []byte) error { return os.WriteFile(name, value, 0o644) })
+			if err != nil {
+				if logFile != nil {
+					logFile.Close()
+				}
+				fmt.Fprintf(conn, "ERR forwarding %v\n", err)
+				return
 			}
 		}
 		if err := c.Start(); err != nil {
 			if logFile != nil {
 				logFile.Close()
 			}
-			setForward(false)
+			if err := restoreForward(); err != nil {
+				fmt.Fprintln(os.Stderr, "restore forwarding:", err)
+			}
 			fmt.Fprintf(conn, "ERR start %v\n", err)
 			return
 		}
@@ -461,15 +434,20 @@ func handle(conn net.Conn) {
 			logFile.Close()
 		}
 		child = c
+		childUID = cred.Uid
 		done := make(chan struct{})
 		childDone = done
 		go func() {
 			_ = c.Wait()
-			close(done)
+			if err := restoreForward(); err != nil {
+				fmt.Fprintln(os.Stderr, "restore forwarding:", err)
+			}
 			mu.Lock()
 			if child == c {
 				child, childDone = nil, nil
+				stopping = false
 			}
+			close(done)
 			mu.Unlock()
 		}()
 		if ppid > 0 {
@@ -479,4 +457,5 @@ func handle(conn net.Conn) {
 	default:
 		fmt.Fprintln(conn, "ERR unknown")
 	}
+	return
 }

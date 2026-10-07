@@ -6,7 +6,7 @@
  * 约定字段名：tlsServerName?: string，tlsFingerprint?: string，tlsEngine?: string，
  *            tlsSpoofMethod?: string，tlsSpoofSni?: string，tlsAllowInsecure?: boolean，alpn?: string。
  */
-import type { Control } from 'react-hook-form';
+import type { Control, FieldValues, FieldPath } from 'react-hook-form';
 import { useFormContext } from 'react-hook-form';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -23,14 +23,13 @@ import { InfoTooltip } from './info-tooltip';
 import { FieldGrid, FieldSpan } from './form-layout';
 import { EchField } from './anti-censor-fields';
 
-type AnyControl = Control<any>;
 type TFn = (key: string, fallback?: any) => string;
 
 /**
  * TLS serverName / SNI / Reality target —— 三种语义共用 tlsServerName 字段，标签按场景传入。
  * @param optional true 时在标签后追加「(可选)」
  */
-export function TlsServerNameField({
+export function TlsServerNameField<T extends FieldValues>({
   control,
   t,
   labelKey = 'servers.tlsServerName',
@@ -38,7 +37,7 @@ export function TlsServerNameField({
   placeholder = 'example.com',
   optional = false,
 }: {
-  control: AnyControl;
+  control: Control<T>;
   t: TFn;
   labelKey?: string;
   descKey?: string;
@@ -50,7 +49,7 @@ export function TlsServerNameField({
   return (
     <FormField
       control={control}
-      name="tlsServerName"
+      name={'tlsServerName' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">
@@ -69,11 +68,17 @@ export function TlsServerNameField({
   );
 }
 
-export function FingerprintField({ control, t }: { control: AnyControl; t: TFn }) {
+export function FingerprintField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="tlsFingerprint"
+      name={'tlsFingerprint' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.fingerprint')}</span>
@@ -106,14 +111,20 @@ export function FingerprintField({ control, t }: { control: AnyControl; t: TFn }
  * - windows(Schannel)：仅 Windows 运行时可用——非 Windows 平台启动 FATAL，故仅在 win32 暴露该选项。
  * - apple(Network.framework)：仅 Apple 运行时可用——非 Apple 平台启动 FATAL，故仅在 darwin 暴露该选项。
  */
-export function TlsEngineField({ control, t }: { control: AnyControl; t: TFn }) {
+export function TlsEngineField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   const platform = (typeof window !== 'undefined' && window.electron?.platform) || '';
   const isWin = platform === 'win32';
   const isMac = platform === 'darwin';
   return (
     <FormField
       control={control}
-      name="tlsEngine"
+      name={'tlsEngine' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.tlsEngine', 'TLS 引擎')}</span>
@@ -148,7 +159,13 @@ export function TlsEngineField({ control, t }: { control: AnyControl; t: TFn }) 
  * 方法下拉：none（默认=不启用）+ wrong-ack / wrong-md5 / wrong-timestamp（sing-box check 实证的合法方法）。
  * 选中方法后展开「诱饵 SNI」输入。ARM64 内核不支持 → 整项置灰 + 描述说明。跨栅格占满整行。
  */
-export function TlsSpoofField({ control, t }: { control: AnyControl; t: TFn }) {
+export function TlsSpoofField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   const arch = (typeof window !== 'undefined' && window.electron?.arch) || '';
   const archSupported = isTlsSpoofSupportedArch(arch);
   const { watch } = useFormContext();
@@ -157,7 +174,7 @@ export function TlsSpoofField({ control, t }: { control: AnyControl; t: TFn }) {
     <div className="col-span-full flex flex-col gap-[13px]">
       <FormField
         control={control}
-        name="tlsSpoofMethod"
+        name={'tlsSpoofMethod' as FieldPath<T>}
         render={({ field }) => (
           <div className="nd-fld">
             <span className="nd-fld-lbl inline-flex items-center gap-1.5">
@@ -196,7 +213,7 @@ export function TlsSpoofField({ control, t }: { control: AnyControl; t: TFn }) {
       {methodSelected && (
         <FormField
           control={control}
-          name="tlsSpoofSni"
+          name={'tlsSpoofSni' as FieldPath<T>}
           render={({ field }) => (
             <div className="nd-fld">
               <span className="nd-fld-lbl">{t('servers.tlsSpoofSni', 'Spoof SNI')}</span>
@@ -211,11 +228,17 @@ export function TlsSpoofField({ control, t }: { control: AnyControl; t: TFn }) {
 }
 
 /** allowInsecure 开关行（`.nd-swrow` + `.swt`）—— 允许无效证书（不推荐）。 */
-export function AllowInsecureField({ control, t }: { control: AnyControl; t: TFn }) {
+export function AllowInsecureField<T extends FieldValues>({
+  control,
+  t,
+}: {
+  control: Control<T>;
+  t: TFn;
+}) {
   return (
     <FormField
       control={control}
-      name="tlsAllowInsecure"
+      name={'tlsAllowInsecure' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-swrow">
           <div className="nd-swrow-main">
@@ -230,19 +253,19 @@ export function AllowInsecureField({ control, t }: { control: AnyControl; t: TFn
 }
 
 /** @param placeholder 占位符（如 trojan 用 http/1.1，tuic 用 h3） */
-export function AlpnField({
+export function AlpnField<T extends FieldValues>({
   control,
   t,
   placeholder,
 }: {
-  control: AnyControl;
+  control: Control<T>;
   t: TFn;
   placeholder: string;
 }) {
   return (
     <FormField
       control={control}
-      name="alpn"
+      name={'alpn' as FieldPath<T>}
       render={({ field }) => (
         <div className="nd-fld">
           <span className="nd-fld-lbl">{t('servers.alpn')}</span>
@@ -260,7 +283,7 @@ export function AlpnField({
  *   · alpn：仅 trojan 传（在 SNI 之后插入 ALPN 输入）；其余不传 → 不渲染 ALPN。
  *   · sniLabelKey/sniDescKey/sniOptional：仅 anytls 传（SNI 用「服务器名称指示(SNI)」标签 + 可选标记）。
  */
-export function TlsAdvancedFields({
+export function TlsAdvancedFields<T extends FieldValues>({
   control,
   t,
   alpn,
@@ -268,7 +291,7 @@ export function TlsAdvancedFields({
   sniDescKey,
   sniOptional = false,
 }: {
-  control: AnyControl;
+  control: Control<T>;
   t: TFn;
   alpn?: string;
   sniLabelKey?: string;

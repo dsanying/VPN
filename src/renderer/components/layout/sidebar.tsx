@@ -177,7 +177,7 @@ export function Sidebar({
       >
         <span className="nav-item-indicator" />
         <Icon
-          className={`${collapsed ? (isMac ? 'h-[26px] w-[26px]' : 'h-[22px] w-[22px]') : 'h-[16px] w-[16px]'} flex-shrink-0`}
+          className={`${collapsed ? (isMac ? 'h-[26px] w-[26px]' : 'h-[22px] w-[22px]') : 'h-[16px] w-[16px]'} shrink-0`}
           strokeWidth={isActive ? 2.2 : 1.8}
         />
         {!collapsed && <span>{label}</span>}
@@ -191,10 +191,10 @@ export function Sidebar({
     >
       {/* 集成标题栏顶部条：Mac 让出红绿灯(52)、Windows/Linux 让出右上窗口控制按钮(32)、可拖窗。 */}
       {isMac ? (
-        <div className="h-[36px] flex-shrink-0 app-region-drag" />
+        <div className="h-[36px] shrink-0 app-region-drag" />
       ) : (
         <div
-          className="h-[32px] flex-shrink-0 app-region-drag"
+          className="h-[32px] shrink-0 app-region-drag"
           // Linux frameless：拖拽区双击最大化由显式 IPC 保证（与 main 顶部对称，覆盖侧栏顶部双击）。
           onDoubleClick={
             isLinux ? () => void api.window.maximizeToggle().catch(() => {}) : undefined
@@ -243,7 +243,7 @@ export function Sidebar({
               style={{ color: 'hsl(var(--muted-foreground))' }}
             >
               <ChevronLeft
-                className={`${collapsed ? (isMac ? 'h-[26px] w-[26px]' : 'h-[22px] w-[22px]') : 'h-4 w-4'} flex-shrink-0 rtl-mirror`}
+                className={`${collapsed ? (isMac ? 'h-[26px] w-[26px]' : 'h-[22px] w-[22px]') : 'h-4 w-4'} shrink-0 rtl-mirror`}
                 style={{ color: 'hsl(var(--muted-foreground))' }}
               />
               {!collapsed && (

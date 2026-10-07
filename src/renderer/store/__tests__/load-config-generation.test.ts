@@ -14,8 +14,11 @@ let mockLoginCache: Record<string, unknown> = {};
 
 jest.mock('../../ipc', () => ({
   api: {
-    config: { get: mockConfigGet, getPrivacyMode: mockGetPrivacyMode },
-    server: { delete: mockServerDelete },
+    config: {
+      get: (...args: unknown[]) => mockConfigGet(...args),
+      getPrivacyMode: (...args: unknown[]) => mockGetPrivacyMode(...args),
+    },
+    server: { delete: (...args: unknown[]) => mockServerDelete(...args) },
   },
 }));
 jest.mock('sonner', () => ({

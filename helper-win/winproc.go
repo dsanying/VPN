@@ -4,22 +4,29 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/registry"
 )
 
 // startSingbox：以 CREATE_NEW_PROCESS_GROUP 启动锁定的 sing-box（exec.Command(singboxBin,"run","-c",cfg)）。
 // 新进程组是 stop 走 GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid) 优雅停的前提（CTRL_BREAK 按进程组投递）。
 // 早期 stdout/stderr 重定向到 app 日志文件（镜像 macOS start），便于诊断启动问题。
-func startSingbox(singboxBin, cfg, logPath string) (*exec.Cmd, *os.File, error) {
-	c := exec.Command(singboxBin, "run", "-c", cfg)
+func startSingbox(singboxBin, cfg, logPath string) (*exec.Cmd, *os.File, *os.File, error) {
+	configFile, actualConfig, err := openConfinedFile(cfg, false)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	c := exec.Command(singboxBin, "run", "-c", actualConfig)
 	// CREATE_NEW_PROCESS_GROUP：使 child 成为独立进程组组长，可被定向投递 CTRL_BREAK_EVENT。
 	// 注意：CREATE_NEW_PROCESS_GROUP 会令 child 默认忽略 CTRL_C（仅 CTRL_BREAK 可达），故 stop 用 CTRL_BREAK。
 	c.SysProcAttr = &syscall.SysProcAttr{
@@ -27,14 +34,17 @@ func startSingbox(singboxBin, cfg, logPath string) (*exec.Cmd, *os.File, error) 
 	}
 	var logFile *os.File
 	if logPath != "" {
-		if lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
-			logFile = lf
-			c.Stdout = lf
-			c.Stderr = lf
+		logFile, _, err = openConfinedFile(logPath, true)
+		if err != nil {
+			configFile.Close()
+			return nil, nil, nil, err
 		}
+		c.Stdout = logFile
+		c.Stderr = logFile
 	}
 	if err := c.Start(); err != nil {
-		return nil, logFile, err
+		configFile.Close()
+		return nil, logFile, nil, err
 	}
 	// 防孤儿安全网（H1）：确保常驻 job 存在，并把刚起的 child assign 进去。
 	// 必须在 Start 成功后（此刻 child 必活、pid 必指向本 child，无复用窗口）；best-effort 不阻断 start。
@@ -45,7 +55,7 @@ func startSingbox(singboxBin, cfg, logPath string) (*exec.Cmd, *os.File, error) 
 	} else if c.Process != nil {
 		assignToJob(c.Process.Pid)
 	}
-	return c, logFile, nil
+	return c, logFile, configFile, nil
 }
 
 // sendCtrlBreak：向指定进程组（pid 为组长，见 CREATE_NEW_PROCESS_GROUP）投递 CTRL_BREAK_EVENT，尝试触发
@@ -142,77 +152,6 @@ func processAlive(ppid int) bool {
 	return code == stillActive
 }
 
-// terminatePid：硬杀指定 pid（freeport/cleanup 用）。OpenProcess(TERMINATE) + TerminateProcess。
-func terminatePid(pid uint32) error {
-	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, pid)
-	if err != nil {
-		return err
-	}
-	defer windows.CloseHandle(h)
-	return windows.TerminateProcess(h, 1)
-}
-
-// processImageName：取 pid 的可执行映像全路径（QueryFullProcessImageName）。失败返回 ""。
-// 仅映像路径、不含命令行参数 → 镜像 macOS `ps -o comm=`：避免「参数里碰巧含 sing-box」被误判/误杀。
-func processImageName(pid uint32) string {
-	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-	if err != nil {
-		return ""
-	}
-	defer windows.CloseHandle(h)
-	buf := make([]uint16, windows.MAX_PATH)
-	size := uint32(len(buf))
-	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &size); err != nil {
-		return ""
-	}
-	return windows.UTF16ToString(buf[:size])
-}
-
-// isLockedSingbox：判映像路径是否为安装时锁定的 sing-box 二进制（Windows 路径大小写不敏感 → EqualFold）。
-// 镜像 macOS「只杀锁定二进制」：客户端不可指定，杜绝误杀外部同名进程。
-func isLockedSingbox(image, singboxBin string) bool {
-	if image == "" || singboxBin == "" {
-		return false
-	}
-	return strings.EqualFold(image, singboxBin)
-}
-
-// killAllSingbox：杀所有运行中的「锁定 singbox」实例（cleanup / 兜底收割用）。
-// 枚举系统进程快照（CreateToolhelp32Snapshot），按映像全路径 EqualFold 匹配 singboxBin → TerminateProcess。
-// 按完整锁定路径匹配（非 basename），避免误杀同名无关进程；镜像 macOS pkill -f "<singboxBin> run" 的意图。
-// 返回杀掉的实例数。
-func killAllSingbox(singboxBin string) int {
-	if singboxBin == "" {
-		return 0
-	}
-	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
-	if err != nil {
-		return 0
-	}
-	defer windows.CloseHandle(snap)
-	var pe windows.ProcessEntry32
-	pe.Size = uint32(unsafe.Sizeof(pe))
-	killed := 0
-	for err = windows.Process32First(snap, &pe); err == nil; err = windows.Process32Next(snap, &pe) {
-		pid := pe.ProcessID
-		if pid == 0 || pid == 4 { // System Idle / System：跳过
-			continue
-		}
-		// 先按 toolhelp 的 ExeFile（basename，大小写不敏感）粗筛，命中再取全路径精确比对，省去给每个进程开句柄。
-		base := windows.UTF16ToString(pe.ExeFile[:])
-		if !strings.EqualFold(base, filepathBase(singboxBin)) {
-			continue
-		}
-		img := processImageName(pid)
-		if isLockedSingbox(img, singboxBin) {
-			if terminatePid(pid) == nil {
-				killed++
-			}
-		}
-	}
-	return killed
-}
-
 // spawnSelfUninstall：派生一个脱离本进程生命周期的 SYSTEM 旁路 cmd，完成 helper 自身无法自完成的卸载收尾：
 // 停并删 SCM 服务（serviceName）、删 supportDir（含外置的 com.dsanying.shadowvpn.helper.exe 自身 + helper.token）。
 //
@@ -244,15 +183,6 @@ func spawnSelfUninstall() {
 	_ = c.Start() // 不 assignToJob、不 Wait —— 旁路须比 helper 活得久
 }
 
-// filepathBase：轻量 basename（避免在 windows 约束下引 path/filepath 仅为取末段；helper.go 已用 filepath.Base 处理其余）。
-func filepathBase(p string) string {
-	p = strings.TrimRight(p, `\/`)
-	if i := strings.LastIndexAny(p, `\/`); i >= 0 {
-		return p[i+1:]
-	}
-	return p
-}
-
 // ---- freeport：GetExtendedTcpTable 枚举 IPv4 + IPv6 的 LISTEN 持有者 pid ----
 
 // MIB_TCPROW_OWNER_PID（IPv4）：与 Windows API 内存布局逐字段对齐。
@@ -278,10 +208,10 @@ type mibTCP6RowOwnerPID struct {
 }
 
 const (
-	tcpTableOwnerPIDListener = 3 // TCP_TABLE_OWNER_PID_LISTENER
-	afINET                   = 2 // AF_INET
+	tcpTableOwnerPIDListener = 3  // TCP_TABLE_OWNER_PID_LISTENER
+	afINET                   = 2  // AF_INET
 	afINET6                  = 23 // AF_INET6
-	mibTCPStateListen        = 2 // MIB_TCP_STATE_LISTEN
+	mibTCPStateListen        = 2  // MIB_TCP_STATE_LISTEN
 )
 
 var (
@@ -292,8 +222,8 @@ var (
 // localPortFromNetOrder：GetExtendedTcpTable 的 LocalPort 为「主机内存中按网络序排布的 32 位」，低 16 位是端口。
 // 端口 = 高字节<<8 | 次高字节（取低 16 位的两个字节做 ntohs）。
 func localPortFromNetOrder(p uint32) uint16 {
-	b0 := byte(p)       // 低字节（网络序高位）
-	b1 := byte(p >> 8)  // 次低字节（网络序低位）
+	b0 := byte(p)      // 低字节（网络序高位）
+	b1 := byte(p >> 8) // 次低字节（网络序低位）
 	return uint16(b0)<<8 | uint16(b1)
 }
 
@@ -405,23 +335,46 @@ func listenPidsForPort(port uint16) ([]uint32, error) {
 	return out, nil
 }
 
-// enableIPForwarding：allowLan/IP 转发的最小 Windows 实现，镜像 macOS start 的 IPv4+IPv6 双开
-//（macOS: net.inet.ip.forwarding=1 + net.inet6.ip6.forwarding=1）。
-// IPv4：设 HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\IPEnableRouter=1（DWORD）。
-// IPv6：netsh interface ipv6 set global forwarding=enabled（运行时即时生效，等价 IPv4 注册表的对侧补足）。
-// best-effort：两路均失败不阻塞 start。真机必验项 —— IPv4 注册表生效通常需重启「Routing and Remote Access」服务或
-// 重启系统，单设注册表未必即时转发；完整实现应另启用/配置 RRAS，留待真机验证后补。
-func enableIPForwarding() {
-	// IPv4：注册表副作用。已知限制（review M3）：这是**持久**写入，stop/卸载本 helper 不还原 IPEnableRouter
-	// —— 与 macOS sysctl（重启即失效的运行时开关）语义不同；如需还原须额外清理逻辑，当前镜像 IPv4 现状不做。
-	if k, _, err := registry.CreateKey(
-		registry.LOCAL_MACHINE,
-		`SYSTEM\CurrentControlSet\Services\Tcpip\Parameters`,
-		registry.SET_VALUE,
-	); err == nil {
-		_ = k.SetDWordValue("IPEnableRouter", 1)
-		k.Close()
+// 使用 ActiveStore 修改运行时接口转发，不写入持久 IPEnableRouter 注册表。
+func forwardingPowerShell(script string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ps := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	return exec.CommandContext(ctx, ps, "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; "+script).Output()
+}
+
+func readInterfaceForwarding() ([]forwardingInterface, error) {
+	output, err := forwardingPowerShell("$items=@(Get-NetIPInterface -PolicyStore ActiveStore | ForEach-Object { [pscustomobject]@{Index=[int]$_.InterfaceIndex; Family=[string]$_.AddressFamily; Enabled=([string]$_.Forwarding -eq 'Enabled')} }); ConvertTo-Json -InputObject $items -Compress")
+	if err != nil {
+		return nil, err
 	}
-	// IPv6：best-effort，错误忽略（镜像 IPv4 路径不阻塞 start）。netsh 是运行时开关，无需重启即生效。
-	_ = exec.Command("netsh", "interface", "ipv6", "set", "global", "forwarding=enabled").Run()
+	var values []forwardingInterface
+	if err := json.Unmarshal(output, &values); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func writeInterfaceForwarding(values []forwardingInterface, enabled bool) error {
+	if len(values) == 0 {
+		return nil
+	}
+	state := "Disabled"
+	if enabled {
+		state = "Enabled"
+	}
+	var script strings.Builder
+	for _, value := range values {
+		if value.Index <= 0 || (value.Family != "IPv4" && value.Family != "IPv6") {
+			return fmt.Errorf("invalid forwarding interface")
+		}
+		// 再读运行值，避免对已被其他操作关闭的接口重复写入。
+		fmt.Fprintf(&script, "$i=Get-NetIPInterface -InterfaceIndex %d -AddressFamily %s -PolicyStore ActiveStore -ErrorAction SilentlyContinue; if ($i -and ([string]$i.Forwarding -ne '%s')) { $i | Set-NetIPInterface -Forwarding %s -PolicyStore ActiveStore -ErrorAction Stop }; ", value.Index, value.Family, state, state)
+	}
+	_, err := forwardingPowerShell(script.String())
+	return err
+}
+
+func enableIPForwarding() (func() error, error) {
+	return enableForwarding(readInterfaceForwarding, writeInterfaceForwarding)
 }

@@ -41,6 +41,12 @@ export function formatRuleUpdateSummary(results: RuleResourceDownloadResult[]): 
 }
 
 export class RuleResourceScheduler {
+  private static readonly TICK_MS = 30 * 60_000;
+  private static readonly STARTUP_DELAY_MS = 12_000; // 错开 SubscriptionScheduler 的 8s 启动高峰
+  private static readonly BACKOFF_BASE_MS = 10 * 60_000;
+  private static readonly BACKOFF_MAX_MS = 6 * 60 * 60_000;
+  private static readonly DEFAULT_INTERVAL_HOURS = 12;
+
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private started = false;
   private isRunning = false;
@@ -51,12 +57,6 @@ export class RuleResourceScheduler {
   /** 目录刷新「上次尝试」时刻：catalog 未成功远程拉取时 fetchedAt 恒 null，仅靠它会每 tick 重拉；
    *  按本字段节流，失败也算一次尝试、间隔内不重试（避免离线/限流下每 30min 白打 GitHub）。 */
   private lastCatalogRefreshAttempt = 0;
-
-  private static readonly TICK_MS = 30 * 60_000;
-  private static readonly STARTUP_DELAY_MS = 12_000; // 错开 SubscriptionScheduler 的 8s 启动高峰
-  private static readonly BACKOFF_BASE_MS = 10 * 60_000;
-  private static readonly BACKOFF_MAX_MS = 6 * 60 * 60_000;
-  private static readonly DEFAULT_INTERVAL_HOURS = 12;
 
   constructor(
     private readonly configManager: ConfigManager,

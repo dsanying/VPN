@@ -7,6 +7,7 @@ package main
 
 import (
 	"net"
+	"shadowvpn/helperrpc"
 
 	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows/svc"
@@ -25,7 +26,7 @@ const pipeName = `\\.\pipe\shadowvpn-helper`
 //
 // 选 IU（交互登录用户）而非 BU/AU：FlowZ GUI 由当前桌面登录用户运行，IU 精确覆盖「本机交互会话」，
 // 不授予服务账户/远程会话/网络登录，最小化攻击面。GENERIC_READ|GENERIC_WRITE 足以连接管道并读写消息
-//（命名管道客户端连接 + ReadFile/WriteFile 即需此二者），不授予 FILE_ALL_ACCESS（无需改 ACL/删管道权能）。
+// （命名管道客户端连接 + ReadFile/WriteFile 即需此二者），不授予 FILE_ALL_ACCESS（无需改 ACL/删管道权能）。
 // 无显式 owner/group/SACL（前缀仅 D:）→ owner 默认 SYSTEM（创建者），无审计，符合纵深防御定位。
 //
 // 注意：DACL 一旦显式给出即「拒绝未列明者」（无隐式 Everyone）。故非交互/非 SYSTEM 进程（如远程、服务账户、
@@ -46,14 +47,9 @@ func listen() (net.Listener, error) {
 // serve：accept 循环，每连接一个 handle goroutine（镜像 macOS main 的 for{Accept;go handle}）。
 // 阻塞运行，直到 listener 被 Close（服务停止时 runService 关闭它解阻塞）。
 func serve(l net.Listener) {
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			// Accept 在 listener 关闭后持续返回 err；上层（runService/console）负责关闭以退出。
-			return
-		}
-		go handle(conn)
-	}
+	methods := []string{"ping", "version", "status", "start", "stop", "cleanup", "freeport", "route-add", "route-del", "iface-metric", "uninstall"}
+	_ = helperrpc.Serve(l, helperrpc.NewHandler(methods, helperrpc.Bearer(tokenValue), executeCommand), nil)
+
 }
 
 // flowzService 实现 svc.Handler。

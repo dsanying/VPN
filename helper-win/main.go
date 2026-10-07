@@ -61,7 +61,7 @@ func runConsole() {
 		os.Exit(0)
 	}()
 
-	fmt.Printf("FlowZ helper (console) listening on %s, proto v%s\n", pipeName, protoVersion)
+	fmt.Printf("FlowZ helper (console) listening on %s, proto v%s\n", pipeName, helperVersion)
 	serve(l) // 阻塞，直到 l.Close（由信号 goroutine 触发）
 }
 

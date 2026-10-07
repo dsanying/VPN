@@ -55,7 +55,7 @@ export function WarpPanel({ onSubmit, nameMissing }: WarpPanelProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start gap-3 rounded-[10px] border border-[hsl(var(--line))] bg-[hsl(var(--surface-2))] p-3">
-        <Cloud className="mt-0.5 h-5 w-5 flex-shrink-0 text-[hsl(var(--fg-faint))]" />
+        <Cloud className="mt-0.5 h-5 w-5 shrink-0 text-[hsl(var(--fg-faint))]" />
         <p className="text-[12.5px] leading-relaxed text-[hsl(var(--fg-dim))]">
           {t(
             'servers.warpPanelIntro',

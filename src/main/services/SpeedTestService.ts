@@ -10,7 +10,7 @@
 
 import * as net from 'net';
 import * as http from 'http';
-import * as tls from 'tls';
+import tls = require('tls');
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { spawn, ChildProcess } from 'child_process';

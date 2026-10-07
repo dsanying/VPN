@@ -215,7 +215,7 @@ export function AboutSettings() {
       <div className="card set-card">
         <div className="about-brand">
           {/* FlowZ 自有应用图标（ui/icon.svg，F/Z 导流单色渐变）——替换原通用占位 SVG（用户反馈）。 */}
-          <div className="about-logo overflow-hidden !bg-transparent !p-0">
+          <div className="about-logo overflow-hidden bg-transparent! p-0!">
             <img src={flowzIcon} alt="暗影VPN" className="h-full w-full object-cover" />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>

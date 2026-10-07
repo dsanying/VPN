@@ -8,7 +8,7 @@
  * 仅 Windows 有意义；其余平台所有方法安全降级（supported=false / ready=false）。
  * 未安装时由 ProxyManager 回退到 buildWindowsUacLaunchCommand（每次 UAC）。
  *
- * 与 macOS HelperManager 的对应（协议/行协议/token 语义一致，便于共用上层逻辑）：
+ * 与 macOS HelperManager 的对应（协议/HTTP JSON-RPC 2.0/token 语义一致，便于共用上层逻辑）：
  *   launchd daemon → Windows 服务（SCM, LocalSystem, start=auto）
  *   unix socket    → 命名管道 \\.\pipe\shadowvpn-helper（ACL：SYSTEM + 交互用户；token 为主鉴权边界）
  *   osascript 授权 → UAC（Start-Process -Verb RunAs）
@@ -19,7 +19,7 @@
  */
 import { execFile } from 'child_process';
 import * as fs from 'fs';
-import * as net from 'net';
+import { requestHelper, formatHelperResult, waitForHelperStopped } from './helper-rpc-client';
 import { system32, powershellPath } from '../utils/win-system32';
 import * as os from 'os';
 import * as path from 'path';
@@ -38,13 +38,7 @@ const PIPE_PATH = '\\\\.\\pipe\\shadowvpn-helper';
 const SUPPORT_DIR = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ShadowVPN');
 /** sc query 不存在服务时的退出码（ERROR_SERVICE_DOES_NOT_EXIST）。 */
 const ERROR_SERVICE_DOES_NOT_EXIST = 1060;
-/** 与 helper-win 的 protoVersion 对应。Windows 独立谱系：v1 = ping/version/status/start/stop/cleanup/freeport。 */
-const MIN_USABLE_PROTO = 1;
-// Windows 禁 System（强制 gVisor）后，客户端只用 v1 命令：iface-metric（v3–v5）已删；route-add/del（v2）仅
-// MeshExitRouteManager 调用，而其 win32 路径已 no-op 不可达。故期望 proto 降回 MIN_USABLE_PROTO → 不再对 v1–v4
-// 旧 helper 弹「可升级」提示（那些高 proto 能力 Windows 已不调用）。将来若 Windows 重新启用 route 命令再上调。
-const EXPECTED_PROTO = MIN_USABLE_PROTO;
-
+// 通信使用 JSON-RPC 2.0；助手应用版本与功能列表来自 ping 元数据。
 export class WindowsServiceHelper implements IPrivilegedHelper {
   /** 装/卸互斥期返回最近稳定快照，避免 TOCTOU 半态（对齐 HelperManager.lastStableStatus）。 */
   private lastStableStatus: HelperStatus | null = null;
@@ -89,30 +83,12 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     }
   }
 
-  // ── 命名管道客户端（行协议：token\n cmd\n [args...]，与 helper.go/HelperManager 同款）────────
-  private sendCommand(rest: string[], timeoutMs: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const sock = net.connect(PIPE_PATH);
-      let buf = '';
-      const timer = setTimeout(() => {
-        sock.destroy();
-        reject(new Error('helper pipe 超时'));
-      }, timeoutMs);
-      sock.on('connect', () => {
-        sock.end([this.token(), ...rest].join('\n') + '\n');
-      });
-      sock.on('data', (d) => {
-        buf += d.toString();
-      });
-      sock.on('end', () => {
-        clearTimeout(timer);
-        resolve(buf.trim());
-      });
-      sock.on('error', (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
+  // ── 命名管道客户端（HTTP JSON-RPC 2.0：token\n cmd\n [args...]，与 helper.go/HelperManager 同款）────────
+  private capabilities: string[] = [];
+  private async sendCommand(rest: string[], timeoutMs: number): Promise<string> {
+    const result = await requestHelper(PIPE_PATH, this.token(), rest[0], rest.slice(1), timeoutMs);
+    if (rest[0] === 'ping') this.capabilities = result.capabilities ?? [];
+    return formatHelperResult(result);
   }
 
   // ── SCM 状态探测 ─────────────────────────────────────────────────────────
@@ -143,8 +119,8 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     if (!this.supported || !this.token()) return false;
     try {
       const resp = await this.sendCommand(['ping'], 1500);
-      const m = resp.match(/^OK pong uid=-?\d+ v(\d+)/);
-      return !!m && parseInt(m[1], 10) >= MIN_USABLE_PROTO;
+      const m = resp.match(/^OK pong uid=0 v(\d+\.\d+\.\d+)$/);
+      return !!m && this.capabilities.includes('start');
     } catch {
       return false;
     }
@@ -168,12 +144,11 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     if (installed && this.token()) {
       try {
         const resp = await this.sendCommand(['ping'], 1500);
-        const m = resp.match(/^OK pong uid=-?\d+ v(\d+)/);
+        const m = resp.match(/^OK pong uid=0 v(\d+\.\d+\.\d+)$/);
         if (m) {
           version = m[1];
-          const pv = parseInt(version, 10);
-          ready = !isNaN(pv) && pv >= MIN_USABLE_PROTO;
-          upgradeable = ready && pv < EXPECTED_PROTO;
+          ready = this.capabilities.includes('start');
+          upgradeable = false;
         }
       } catch {
         /* 未就绪 */
@@ -185,6 +160,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       ready,
       upgradeable,
       version,
+      capabilities: this.capabilities,
       // SCM RUNNING 即「已加载」；未安装为 null（对齐 HelperManager.loaded 语义）。
       loaded: installed ? running : null,
       needsRepair: installed && !ready,
@@ -206,7 +182,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     forward: boolean
   ): Promise<HelperStartResult> {
     try {
-      await this.sendCommand(['stop'], 3000).catch(() => '');
+      if (!(await this.stopCore())) return { ok: false, error: '旧内核尚未停止' };
       const resp = await this.sendCommand(
         ['start', configPath, logPath || '', forward ? '1' : '0', String(process.pid)],
         8000
@@ -223,7 +199,8 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
   async stopCore(): Promise<boolean> {
     try {
       const resp = await this.sendCommand(['stop'], 5000);
-      return resp.startsWith('OK');
+      if (!resp.startsWith('OK')) return false;
+      return await waitForHelperStopped(() => this.sendCommand(['status'], 1500));
     } catch {
       return false;
     }
@@ -255,11 +232,14 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     return { ok: true };
   }
 
-  /** 经服务杀掉所有 sing-box（含孤儿），零提权。 */
+  /** 只结束当前服务托管的内核并等待善后完成。 */
   async cleanup(): Promise<boolean> {
     try {
       const resp = await this.sendCommand(['cleanup'], 5000);
-      return resp.startsWith('OK');
+      return (
+        resp.startsWith('OK') &&
+        (await waitForHelperStopped(() => this.sendCommand(['status'], 1500)))
+      );
     } catch {
       return false;
     }
@@ -269,6 +249,10 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
   async freePort(port: number): Promise<{ freed?: boolean; foreign?: string; error?: string }> {
     try {
       const resp = await this.sendCommand(['freeport', String(port)], 5000);
+      if (/^OK stopping \d+/.test(resp))
+        return (await waitForHelperStopped(() => this.sendCommand(['status'], 1500)))
+          ? { freed: true }
+          : { error: '内核善后未完成' };
       if (resp.startsWith('OK free') || resp.startsWith('OK killed')) return { freed: true };
       const m = resp.match(/^OK foreign (.+)/);
       if (m) return { foreign: m[1].trim() };
@@ -282,7 +266,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
   async coreStatus(): Promise<{ running: boolean; pid?: number }> {
     try {
       const resp = await this.sendCommand(['status'], 2000);
-      const m = resp.match(/^OK running (\d+)/);
+      const m = resp.match(/^OK (?:running|stopping) (\d+)/);
       return m ? { running: true, pid: parseInt(m[1], 10) } : { running: false };
     } catch {
       return { running: false };

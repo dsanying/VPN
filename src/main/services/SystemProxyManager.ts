@@ -289,11 +289,13 @@ export class WindowsSystemProxy extends SystemProxyBase {
       // command-not-found 的根因是 PATH 缺 System32 而非权限——给对症诊断，避免误导用户去开管理员
       if (isCommandNotFoundError(error)) {
         throw new Error(
-          `设置 Windows 系统代理失败: ${errorMessage}\n\n可能的原因:\n1. 系统命令 reg/netsh 未找到，PATH 可能缺失 C:\\Windows\\System32\n2. 系统环境变量被第三方工具损坏（如 Path 值类型被改为 REG_SZ 致 %SystemRoot% 不展开）\n3. 安全软件拦截了系统命令调用`
+          `设置 Windows 系统代理失败: ${errorMessage}\n\n可能的原因:\n1. 系统命令 reg/netsh 未找到，PATH 可能缺失 C:\\Windows\\System32\n2. 系统环境变量被第三方工具损坏（如 Path 值类型被改为 REG_SZ 致 %SystemRoot% 不展开）\n3. 安全软件拦截了系统命令调用`,
+          { cause: error }
         );
       }
       throw new Error(
-        `设置 Windows 系统代理失败: ${errorMessage}\n\n可能的原因:\n1. 权限不足，请以管理员身份运行\n2. 注册表访问被阻止\n3. 系统策略限制`
+        `设置 Windows 系统代理失败: ${errorMessage}\n\n可能的原因:\n1. 权限不足，请以管理员身份运行\n2. 注册表访问被阻止\n3. 系统策略限制`,
+        { cause: error }
       );
     }
   }
@@ -324,7 +326,9 @@ export class WindowsSystemProxy extends SystemProxyBase {
     } catch (error) {
       this.log('error', `禁用 Windows 系统代理失败: ${error}`);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`禁用 Windows 系统代理失败: ${errorMessage}\n\n建议手动检查系统代理设置`);
+      throw new Error(`禁用 Windows 系统代理失败: ${errorMessage}\n\n建议手动检查系统代理设置`, {
+        cause: error,
+      });
     }
   }
 
@@ -549,7 +553,8 @@ export class MacOSSystemProxy extends SystemProxyBase {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `设置 macOS 系统代理失败: ${errorMessage}\n\n可能的原因:\n1. 权限不足，请授予应用网络设置权限\n2. networksetup 命令不可用\n3. 网络服务配置异常`
+        `设置 macOS 系统代理失败: ${errorMessage}\n\n可能的原因:\n1. 权限不足，请授予应用网络设置权限\n2. networksetup 命令不可用\n3. 网络服务配置异常`,
+        { cause: error }
       );
     }
   }
@@ -581,7 +586,9 @@ export class MacOSSystemProxy extends SystemProxyBase {
     } catch (error) {
       this.log('error', `禁用 macOS 系统代理失败: ${error}`);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`禁用 macOS 系统代理失败: ${errorMessage}\n\n建议手动检查系统代理设置`);
+      throw new Error(`禁用 macOS 系统代理失败: ${errorMessage}\n\n建议手动检查系统代理设置`, {
+        cause: error,
+      });
     }
   }
 
@@ -657,7 +664,8 @@ export class MacOSSystemProxy extends SystemProxyBase {
         .filter((line) => line && !line.startsWith('*') && !line.includes('Bluetooth'));
     } catch (error) {
       throw new Error(
-        `获取网络服务列表失败: ${error instanceof Error ? error.message : String(error)}`
+        `获取网络服务列表失败: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       );
     }
   }

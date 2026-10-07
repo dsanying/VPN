@@ -39,7 +39,7 @@ export function AppRulesCard() {
   const config = useAppStore((state) => state.config);
   const saveConfig = useAppStore((state) => state.saveConfig);
   const setCurrentView = useAppStore((state) => state.setCurrentView);
-  const subscriptions = useAppStore((state) => state.config?.subscriptions || []);
+  const subscriptions = useAppStore((state) => state.config?.subscriptions) ?? [];
   const latencyMap = useAppStore((state) => state.latencyMap);
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);

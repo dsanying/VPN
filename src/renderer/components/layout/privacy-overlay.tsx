@@ -58,7 +58,7 @@ export function PrivacyOverlay() {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col justify-center items-center backdrop-blur-[100px] bg-background/95 transition-all duration-500">
+    <div className="fixed inset-0 z-9999 flex flex-col justify-center items-center backdrop-blur-[100px] bg-background/95 transition-all duration-500">
       <EyeOff className="w-24 h-24 text-muted-foreground mb-6 animate-pulse" />
       <h2 className="text-3xl font-bold mb-3 tracking-tight">{t('privacy.title')}</h2>
       <p className="text-muted-foreground mb-8">{t('privacy.subtitle')}</p>
@@ -69,7 +69,7 @@ export function PrivacyOverlay() {
             className={`flex w-full space-x-2 rtl:space-x-reverse ${errorShake ? 'animate-shake' : ''}`}
           >
             <div className="relative flex-1">
-              <Lock className="absolute start-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Lock className="absolute inset-s-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="password"
                 placeholder={t('privacy.passwordPlaceholder')}

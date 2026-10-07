@@ -1,6 +1,5 @@
 const js = require('@eslint/js');
-const typescript = require('@typescript-eslint/eslint-plugin');
-const typescriptParser = require('@typescript-eslint/parser');
+const babelParser = require('@babel/eslint-parser');
 const prettier = require('eslint-plugin-prettier');
 const reactHooks = require('eslint-plugin-react-hooks');
 const globals = require('globals');
@@ -10,8 +9,10 @@ module.exports = [
   {
     files: ['src/**/*.ts', 'src/**/*.tsx'],
     languageOptions: {
-      parser: typescriptParser,
+      parser: babelParser,
       parserOptions: {
+        requireConfigFile: false,
+        babelOptions: { presets: ['@babel/preset-typescript'] },
         ecmaVersion: 2020,
         sourceType: 'module',
         ecmaFeatures: {
@@ -24,34 +25,29 @@ module.exports = [
       },
     },
     plugins: {
-      '@typescript-eslint': typescript,
       prettier: prettier,
       'react-hooks': reactHooks,
     },
     rules: {
-      ...typescript.configs.recommended.rules,
       'prettier/prettier': 'warn',
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-        },
-      ],
-      'no-unused-vars': 'off',
+      'no-unused-vars': 'off', // TypeScript 类型和值由 Oxlint 一并分析。
       'no-undef': 'off',
       'no-useless-escape': 'warn',
       'no-useless-catch': 'warn',
     },
   },
   {
+    files: ['src/**/*.tsx'],
+    languageOptions: {
+      parserOptions: {
+        babelOptions: { presets: ['@babel/preset-typescript', '@babel/preset-react'] },
+      },
+    },
+  },
+  {
     // 主进程文件允许使用 require()
     files: ['src/main/**/*.ts'],
-    rules: {
-      '@typescript-eslint/no-require-imports': 'off',
-    },
+    rules: {},
   },
   {
     files: ['src/renderer/**/*.ts', 'src/renderer/**/*.tsx'],
@@ -88,7 +84,7 @@ module.exports = [
     // 测试文件放宽规则
     files: ['src/**/__tests__/**/*.ts', 'src/**/*.test.ts'],
     rules: {
-      '@typescript-eslint/no-unused-vars': 'off',
+      'no-unused-vars': 'off',
       'no-restricted-syntax': 'off', // 测试可断言 hex 输出,不受 UI 防偏移规则约束
     },
   },

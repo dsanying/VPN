@@ -149,15 +149,17 @@ export interface ConnectionsAggregate {
 // ============================================================================
 
 export interface HelperStatus {
+  /** Methods advertised by the standard JSON-RPC helper. */
+  capabilities?: string[];
   /** 当前平台是否支持（仅 macOS） */
   supported: boolean;
   /** helper 二进制 + LaunchDaemon plist 是否在位 */
   installed: boolean;
-  /** socket ping 成功且协议版本 ≥ 最低可用（可零提权驱动 TUN） */
+  /** 标准 RPC ping 确认 root 身份和启动能力（可零提权驱动 TUN） */
   ready: boolean;
-  /** 可用但有新版 helper（v5 install-core）：proto ≥ 最低可用但 < 期望 → 温和提示可升级（非故障，不强制重装） */
+  /** 可用但有新版助手应用 */
   upgradeable: boolean;
-  /** 协议版本（ping/version 返回），未就绪为 null */
+  /** 助手应用版本，未就绪为 null */
   version: string | null;
   /** daemon 是否被 launchd 加载（launchctl print 退出码）；非 macOS / 未安装为 null */
   loaded: boolean | null;
@@ -209,9 +211,7 @@ export interface IpInfo {
 
 /** TS 出口 API 直判无效、不探测的终态原因（非空=未选出口设备 / exit peer 离线 / exit peer 在线但未广告出口）。 */
 export type ProxyExitBlock =
-  | 'ts-no-exit-device'
-  | 'ts-exit-device-offline'
-  | 'ts-exit-not-advertised';
+  'ts-no-exit-device' | 'ts-exit-device-offline' | 'ts-exit-not-advertised';
 
 export interface IpInfoSnapshot {
   /** 本地直连出口（auto_detect_interface 物理网卡），代理未连时也可测。 */

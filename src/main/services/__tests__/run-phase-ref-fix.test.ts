@@ -64,7 +64,6 @@ function makePm() {
   for (const m of [
     'maybePromptHelperGate',
     'killOrphanedSingBoxProcesses',
-    'resolveClashApiPortConflict',
     'fixFilePermissions',
     'copyRuleSetsToUserData',
     'writeCustomRuleFiles',

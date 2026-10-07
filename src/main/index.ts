@@ -899,12 +899,10 @@ async function createWindow(forceShow = false) {
     try {
       const cfg = await configManager.loadConfig();
       const isHiddenArg = process.argv.includes('--hidden');
-      const isMacHidden =
-        process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden;
 
       // forceShow：用户显式唤出窗口（托盘「打开主窗口」/ activate / 窗口被销毁后重建）时绕过静默启动门控，
       // 否则 silentStart=true 时点了没反应。仅应用初始启动（forceShow=false）才尊重 silentStart。
-      if (wantShow || (!cfg.silentStart && !isHiddenArg && !isMacHidden)) {
+      if (wantShow || (!cfg.silentStart && !isHiddenArg)) {
         mainWindow?.show();
         logManager.addLog('info', 'Main window shown', 'Main');
         // Part C：本次 createWindow 从入口到首帧呈现的耗时（冷重建/首启）。app.log 随诊断导出自然带出。
@@ -1506,9 +1504,7 @@ if (gotTheLock) {
     // 后续代码已容忍该态（proxyManager 构造 mainWindow||undefined、升级检查 setTimeout 兜底、各 getMainWindow
     // getter 懒取）。configManager.get 读 1120 行已加载的内存缓存（同步、不重复读盘）。
     const startsHidden =
-      configManager.get<boolean>('silentStart') === true ||
-      process.argv.includes('--hidden') ||
-      (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAsHidden);
+      configManager.get<boolean>('silentStart') === true || process.argv.includes('--hidden');
     if (startsHidden) {
       logManager.addLog('info', 'Silent start: deferring window creation to first show', 'Main');
       // macOS：无窗口时主动进入菜单栏-only（原静默分支在 presentWindow 内做，现无窗口 → 在此做）；
@@ -2132,7 +2128,7 @@ if (gotTheLock) {
     const autoStartManager = createAutoStartManager();
     autoStartManager.setLogManager(logManager);
     const config = await configManager.loadConfig();
-    await autoStartManager.setAutoStart(config.autoStart ?? false);
+    if (app.isPackaged) await autoStartManager.setAutoStart(config.autoStart ?? false);
 
     // 注册更新处理器（窗口引用已由 createWindow() 内的刷新逻辑设置，此处无需重复）
     setUpdateService(updateService);
@@ -2223,6 +2219,7 @@ if (gotTheLock) {
 
     // 启动期延迟任务（自动连接 + 自动检查更新）已抽到 startup-tasks.scheduleStartupTasks。
     scheduleStartupTasks({
+      allowAppUpdates: app.isPackaged,
       configManager,
       coreUpdateService,
       updateService,

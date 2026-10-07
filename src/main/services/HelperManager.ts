@@ -3,7 +3,7 @@
  *
  * 解决：未签名应用在 TUN 模式下每次启停 sing-box（含切节点重启）都弹 osascript 管理员授权框。
  * 方案：一次性安装一个 root LaunchDaemon（Go 二进制，见 helper/helper.go），之后 app 经 token 鉴权的
- *       unix socket 零提权驱动 sing-box 启停。本类负责安装/卸载/状态探测 + socket 客户端（行协议）。
+ *       unix socket 零提权驱动 sing-box 启停。本类负责安装/卸载/状态探测 + socket 客户端（HTTP JSON-RPC 2.0）。
  *
  * 仅 macOS 有意义；其余平台所有方法均安全降级（supported=false / ready=false）。
  * 未安装时由 ProxyManager 回退到 PR-M1 的 root 看护脚本（osascript 启动一次授权）。
@@ -12,7 +12,7 @@
 import { app } from 'electron';
 import { spawn, execFile } from 'child_process';
 import * as fs from 'fs';
-import * as net from 'net';
+import { requestHelper, formatHelperResult, waitForHelperStopped } from './helper-rpc-client';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import type { HelperStatus } from '../../shared/types';
@@ -23,24 +23,14 @@ import { getUserDataPath } from '../utils/paths';
 import { shq } from '../utils/shell-quote';
 import { sha256File } from '../../shared/file-hash';
 
-// .btm(NSKeyedArchiver) 结构化解析：plist 原为 electron-builder 间接依赖，已提升为直接 dependency 确保打包入 asar。
-// 解析输入是本机 root 写的 plutil xml1（可信源），无类型定义故 require + 最小类型注解（与本类内既有 require 风格一致）。
-
-const plist: { parse(xml: string): unknown } = require('plist');
+// plist 5 使用标准 ESM；仅在读取 macOS 后台记录时加载。
 
 const LABEL = 'com.dsanying.shadowvpn.helper';
 const HELPER_DEST = `/Library/PrivilegedHelperTools/${LABEL}`;
 const PLIST_PATH = `/Library/LaunchDaemons/${LABEL}.plist`;
 const SYSTEM_SUPPORT = '/Library/Application Support/ShadowVPN';
 const SOCKET_PATH = `${SYSTEM_SUPPORT}/helper.sock`;
-/** 与 helper.go 的 protoVersion 对应。**分级**（v5 起）：proto ≥ MIN_USABLE 即 TUN 功能齐全（可用，不报需修复）；
- *  MIN_USABLE ≤ proto < EXPECTED → upgradeable（旧版仍能 TUN，仅温和提示可升级、不强制重装）；proto < MIN_USABLE 才 needsRepair。
- *  v3=SIGTERM 收割 child；v4=freeport；v5=install-core（root 写受保护目录持久化内核 + 哈希校验防 TOCTOU）；
- *  v6=chownRuntimeDirs（root 跑的 sing-box 退出后归还 tailscale/dashboard/ui 属主给登录用户，根治跨提权态属主冲突）；
- *  v7=route-add/route-del（出口托管 ifscope 拆半默认路由）；v8=default-restore（停核补回被 EEXIST 善后误删的全局 default）；
- *  v9=flush-dns（root 刷系统 DNS 缓存：dscacheutil + HUP mDNSResponder 两层全清）。 */
-const EXPECTED_PROTO = '9';
-const MIN_USABLE_PROTO = 4;
+// 通信使用 JSON-RPC 2.0；助手应用版本与功能列表来自 ping 元数据。
 /** launchctl 加载态探测缓存 TTL：getStatus 被首页/设置页高频轮询，避免每次都 spawn launchctl。 */
 const LOADED_PROBE_TTL_MS = 10_000;
 /** SMAppService 上次权威读数(1/2)的保持窗口：sm 偶发返回 0(NotRegistered，多在装卸过渡期)/3/null 时，30s 内仍用上次
@@ -179,16 +169,15 @@ export class HelperManager implements IPrivilegedHelper {
     const installed = this.filesPresent();
     let version: string | null = null;
     let ready = false;
-    let upgradeable = false; // 可用但有新版 helper（v5 install-core）：proto ≥ MIN_USABLE 且 < EXPECTED
+    let upgradeable = false; // 应用版本与能力由标准 RPC 发现
     if (installed && this.token()) {
       try {
         const resp = await this.sendCommand(['ping'], 1500);
-        const m = resp.match(/^OK pong uid=\d+ v(\S+)/);
+        const m = resp.match(/^OK pong uid=0 v(\d+\.\d+\.\d+)$/);
         if (m) {
           version = m[1];
-          const pv = parseInt(version, 10);
-          ready = !isNaN(pv) && pv >= MIN_USABLE_PROTO; // proto ≥ 最低可用即 TUN 齐全，不再要求精确 EXPECTED
-          upgradeable = ready && pv < parseInt(EXPECTED_PROTO, 10); // 可用但有新版 → 温和提示可升级
+          ready = this.capabilities.includes('start');
+          upgradeable = false;
         }
       } catch {
         /* 未就绪 */
@@ -280,6 +269,7 @@ export class HelperManager implements IPrivilegedHelper {
       ready,
       upgradeable,
       version,
+      capabilities: this.capabilities,
       loaded,
       needsRepair: installed && (!ready || pathMismatch),
       backgroundDisabled,
@@ -293,8 +283,8 @@ export class HelperManager implements IPrivilegedHelper {
     if (!this.supported || !this.filesPresent() || !this.token()) return false;
     try {
       const resp = await this.sendCommand(['ping'], 1500);
-      const m = resp.match(/^OK pong uid=\d+ v(\d+)/);
-      return !!m && parseInt(m[1], 10) >= MIN_USABLE_PROTO; // proto ≥ 最低可用即可零提权驱动 TUN
+      const m = resp.match(/^OK pong uid=0 v(\d+\.\d+\.\d+)$/);
+      return !!m && this.capabilities.includes('start');
     } catch {
       return false;
     }
@@ -309,7 +299,7 @@ export class HelperManager implements IPrivilegedHelper {
   ): Promise<HelperStartResult> {
     try {
       // 起前先停掉可能残留的旧 child（app 上次崩溃 → daemon 仍托管着旧 sing-box），幂等。
-      await this.sendCommand(['stop'], 3000).catch(() => '');
+      if (!(await this.stopCore())) return { ok: false, error: '旧内核尚未停止' };
       const resp = await this.sendCommand(
         // 行6=父 app PID（helper v2 父死看护：本进程消失 → helper 自行 TERM→KILL 收割 sing-box）。
         // HelperManager 跑在 Electron 主进程内，process.pid 即 GUI 父 PID → ProxyManager 零改动。
@@ -328,7 +318,8 @@ export class HelperManager implements IPrivilegedHelper {
   async stopCore(): Promise<boolean> {
     try {
       const resp = await this.sendCommand(['stop'], 5000);
-      return resp.startsWith('OK');
+      if (!resp.startsWith('OK')) return false;
+      return await waitForHelperStopped(() => this.sendCommand(['status'], 1500));
     } catch {
       return false;
     }
@@ -380,22 +371,22 @@ export class HelperManager implements IPrivilegedHelper {
     }
   }
 
-  /** 经 helper 以 root 杀掉所有 sing-box（含外部 osascript 路径遗留的孤儿），零提权。 */
+  /** 经 helper 停止本服务托管的内核，等待进程退出，不扫描其他客户端。 */
   async cleanup(): Promise<boolean> {
-    try {
-      const resp = await this.sendCommand(['cleanup'], 5000);
-      return resp.startsWith('OK');
-    } catch {
-      return false;
-    }
+    return this.stopCore();
   }
 
-  /** 经 helper root 侧按端口清占用者（v4 freeport）：占用者是 sing-box 则 kill，否则回报名字（不杀）。
+  /** 经 helper root 侧按端口清占用者（v4 freeport）：占用者是本助手托管内核则终止，否则回报身份（不杀）。
    *  返回 freed=true（已空闲/已杀）/ foreign=占用者名（非 sing-box，未杀）/ error。彻底摆脱 cmdline 匹配（L2）。 */
   async freePort(port: number): Promise<{ freed?: boolean; foreign?: string; error?: string }> {
     try {
       const resp = await this.sendCommand(['freeport', String(port)], 5000);
-      if (resp.startsWith('OK free') || resp.startsWith('OK killed')) return { freed: true };
+      if (resp.startsWith('OK free')) return { freed: true };
+      const pending = resp.match(/^OK stopping (\d+)/);
+      if (pending)
+        return (await waitForHelperStopped(() => this.sendCommand(['status'], 1500)))
+          ? { freed: true }
+          : { error: '内核尚未退出' };
       const m = resp.match(/^OK foreign (.+)/);
       if (m) return { foreign: m[1].trim() };
       return { error: resp || 'helper 无响应' };
@@ -408,7 +399,7 @@ export class HelperManager implements IPrivilegedHelper {
   async coreStatus(): Promise<{ running: boolean; pid?: number }> {
     try {
       const resp = await this.sendCommand(['status'], 2000);
-      const m = resp.match(/^OK running (\d+)/);
+      const m = resp.match(/^OK (?:running|stopping) (\d+)/);
       return m ? { running: true, pid: parseInt(m[1], 10) } : { running: false };
     } catch {
       return { running: false };
@@ -430,30 +421,18 @@ export class HelperManager implements IPrivilegedHelper {
     }
   }
 
-  // ── socket 客户端（行协议：token\n cmd\n [args...]）────────────────────────
-  private sendCommand(rest: string[], timeoutMs: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const sock = net.connect(SOCKET_PATH);
-      let buf = '';
-      const timer = setTimeout(() => {
-        sock.destroy();
-        reject(new Error('helper socket 超时'));
-      }, timeoutMs);
-      sock.on('connect', () => {
-        sock.end([this.token(), ...rest].join('\n') + '\n');
-      });
-      sock.on('data', (d) => {
-        buf += d.toString();
-      });
-      sock.on('end', () => {
-        clearTimeout(timer);
-        resolve(buf.trim());
-      });
-      sock.on('error', (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
+  // ── socket 客户端（HTTP JSON-RPC 2.0：token\n cmd\n [args...]）────────────────────────
+  private capabilities: string[] = [];
+  private async sendCommand(rest: string[], timeoutMs: number): Promise<string> {
+    const result = await requestHelper(
+      SOCKET_PATH,
+      this.token(),
+      rest[0],
+      rest.slice(1),
+      timeoutMs
+    );
+    if (rest[0] === 'ping') this.capabilities = result.capabilities ?? [];
+    return formatHelperResult(result);
   }
 
   // ── 安装 / 卸载（osascript 一次授权）──────────────────────────────────────
@@ -525,7 +504,9 @@ export class HelperManager implements IPrivilegedHelper {
       // BTM 落盘延迟由 dispositionCache mtime-key 自动处理；UI 后续 getStatus（聚焦/轮询）会读准 backgroundDisabled，
       // 仍「后台被禁用」则引导去系统设置手动开启（不走 deepRepair 自动恢复）。
       this.lastStableStatus = status; // mutation 结束后的新稳定基准
-      return { success: true, status };
+      return status.ready
+        ? { success: true, status }
+        : { success: false, error: '助手已安装，但未就绪；请检查系统后台权限', status };
     } finally {
       this.mutationInFlight = false;
       this.mutationEpoch++;
@@ -674,7 +655,7 @@ export class HelperManager implements IPrivilegedHelper {
         '/usr/bin/plutil',
         ['-convert', 'xml1', '-o', '-', btmPath],
         { timeout: 4000, maxBuffer: 16 * 1024 * 1024 },
-        (err, stdout) => {
+        async (err, stdout) => {
           if (err || !stdout) {
             if (!this.btmReadFailLogged) {
               this.btmReadFailLogged = true;
@@ -688,7 +669,8 @@ export class HelperManager implements IPrivilegedHelper {
             return;
           }
           try {
-            const root = plist.parse(stdout) as { $objects?: unknown[] };
+            const { parse } = await import('plist');
+            const root = parse(stdout) as { $objects?: unknown[] };
             const objs = root?.$objects;
             if (!Array.isArray(objs)) {
               resolve({ ok: false });

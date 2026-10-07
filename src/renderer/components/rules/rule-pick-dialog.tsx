@@ -96,7 +96,7 @@ export function RulePickDialog({ open, onOpenChange, domain, rules, onPick }: Ru
 
         <div className="min-w-0 space-y-3">
           <div className="relative">
-            <Search className="absolute start-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute inset-s-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}

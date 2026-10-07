@@ -152,7 +152,8 @@ export async function assertHostAllowed(
     resolved = await lookup(host);
   } catch (e: any) {
     throw new Error(
-      `订阅地址解析失败，已拒绝: ${urlObj.hostname}（${e?.code ?? e?.message ?? e}）`
+      `订阅地址解析失败，已拒绝: ${urlObj.hostname}（${e?.code ?? e?.message ?? e}）`,
+      { cause: e }
     );
   }
   if (resolved.length === 0) {

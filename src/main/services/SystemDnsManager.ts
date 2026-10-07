@@ -510,14 +510,15 @@ export class WindowsSystemDns extends SystemDnsBase {
     //   的解析器——那是行为变化，不是性能优化，故 Promise.all 后按 ifaces 原序合并。
     const ifaces = await this.listTargets();
     const perIface = await Promise.all(
-      ifaces.map((iface) =>
-        execFileAsync(
-          this.netshExe,
-          ['interface', 'ipv4', 'show', 'dnsservers', `name=${iface}`],
-          { timeout: DNS_CMD_TIMEOUT_MS }
-        )
-          .then(({ stdout }) => extractIpv4s(String(stdout)))
-          .catch((): string[] => []) // 单接口读失败跳过
+      ifaces.map(
+        (iface) =>
+          execFileAsync(
+            this.netshExe,
+            ['interface', 'ipv4', 'show', 'dnsservers', `name=${iface}`],
+            { timeout: DNS_CMD_TIMEOUT_MS }
+          )
+            .then(({ stdout }) => extractIpv4s(String(stdout)))
+            .catch((): string[] => []) // 单接口读失败跳过
       )
     );
     const all: string[] = [];
@@ -747,11 +748,11 @@ export class LinuxSystemDns extends SystemDnsBase {
       // 而 resolvectl 的原文是 "Interactive authentication required."，不归一化会白重试两轮。
       const msg = e instanceof Error ? e.message : String(e);
       if (/interactive authentication required|not authorized|access denied/i.test(msg)) {
-        throw new Error(`permission denied: ${msg}`);
+        throw new Error(`permission denied: ${msg}`, { cause: e });
       }
       // 服务不可用（resolved 未跑 / D-Bus 连不上）同样重试无益 —— 归一化成同一类，免白重试两轮。
       if (/failed to connect to bus|unit .* not found|is masked|no such unit/i.test(msg)) {
-        throw new Error(`permission denied (service unavailable): ${msg}`);
+        throw new Error(`permission denied (service unavailable): ${msg}`, { cause: e });
       }
       throw e;
     }
@@ -892,7 +893,7 @@ export class LinuxSystemDns extends SystemDnsBase {
       return;
     }
     // 与异步版同一身份核验：链路上没有受控 IP 就不是我们的活儿。
-    let ours = false;
+    let ours: boolean;
     try {
       ours = resolvectlLinkValues(this.runSync(['dns', iface]), iface).includes(this.controlledIp);
     } catch {

@@ -1,8 +1,5 @@
-/** ts-jest + node 环境。inline tsconfig（commonjs/esModuleInterop/ES2020）避开主/渲染 tsconfig 的
- *  noEmit/bundler 设置，仅用于测试编译。测试文件不进 dist（tsconfig.main.json 已 exclude __tests__）。 */
-/** @type {import('ts-jest').JestConfigWithTsJest} */
+/** SWC 编译测试；TypeScript 7 类型检查由 test:types 单独执行。 */
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
@@ -15,20 +12,18 @@ module.exports = {
     '/node_modules/',
     '<rootDir>/src/main/services/__tests__/singbox-check-gate\\.test\\.ts$',
   ],
+  moduleNameMapper: { '^plist$': '<rootDir>/node_modules/plist/dist/index.js' },
+  transformIgnorePatterns: ['/node_modules/(?!plist/)'],
   transform: {
-    '^.+\\.ts$': [
-      'ts-jest',
+    '^.+\\.[jt]s$': [
+      '@swc/jest',
       {
-        tsconfig: {
-          module: 'commonjs',
-          target: 'ES2020',
-          esModuleInterop: true,
-          allowJs: false,
-          strict: true,
-          skipLibCheck: true,
-          isolatedModules: false,
-          resolveJsonModule: true,
+        jsc: {
+          parser: { syntax: 'typescript' },
+          target: 'es2022',
+          experimental: { plugins: [['@swc-contrib/mut-cjs-exports', {}]] },
         },
+        module: { type: 'commonjs', lazy: true },
       },
     ],
   },

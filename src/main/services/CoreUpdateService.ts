@@ -5,7 +5,7 @@
 
 import { app, dialog } from 'electron';
 import { createHash } from 'crypto';
-import * as fs from 'fs';
+import fs = require('fs');
 import * as path from 'path';
 
 import { LogManager } from './LogManager';
@@ -430,23 +430,9 @@ export class CoreUpdateService {
    * 不变量：**调用方须保证此刻代理进程不存在**（updateCore 已停代理、tryApplyStaged 仅在 !running 时进入）。
    * @param onBackupDone backupCurrentCore() 成功后立即回调（让调用方在同一时点置 backupMade，保留原失败恢复语义）。
    */
-  /**
-   * helper 是否支持 install-core（受保护/受管核目录持久化写入）——命令级能力门，取代旧的 `ready && !upgradeable`。
-   * 为什么不能用 `!upgradeable`：upgradeable 的门槛是 helper 的 EXPECTED_PROTO（macOS=9），远高于 install-core 的
-   * 真实契约。install-core 各平台起始 proto 不同（见 HelperManager.installCore / LinuxServiceHelper 注释）：
-   *  - macOS：proto ≥ 5（v5 引入受保护目录持久化，proto<5 回 ERR unknown）；
-   *  - Linux：proto ≥ 1（v1 起即支持，ready 已含此下限）。
-   * 旧门 `ready && !upgradeable` 让 macOS proto 5-8 的旧 helper 用户被判「无 install-core」→ 内核更新走 bundle
-   * 写入却仍跑受保护目录旧核，更新静默失效。故改按 ready + 平台最低 proto 判定。version 即 ping 返回的 proto 串。
-   */
+  /** 根据标准 RPC 返回的功能列表判断受管内核更新能力，不猜私有协议版本。 */
   private helperSupportsInstallCore(st: HelperStatus): boolean {
-    if (!st.ready) return false;
-    const minProto = process.platform === 'darwin' ? 5 : 1;
-    const proto = Number.parseInt(st.version ?? '', 10);
-    // version 非数字串（异常 ping 应答/未来格式变体）→ NaN 比较恒 false 会把有能力 helper 误判无能力、
-    // 静默走 bundle 分支复现本 bug；回退旧布尔语义（ready && !upgradeable）而非一票否决。
-    if (Number.isNaN(proto)) return !st.upgradeable;
-    return proto >= minProto;
+    return st.ready && (st.capabilities?.includes('install-core') ?? false);
   }
 
   private async installCoreFromDir(

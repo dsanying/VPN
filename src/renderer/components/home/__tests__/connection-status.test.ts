@@ -87,7 +87,7 @@ describe('deriveConnectionStatus — TUN 模式', () => {
     expect(r.description).toContain('home.uptime#{"min":2}'); // floor(125/60)=2
   });
 
-  it('!running + busy + stopping → disconnecting', () => {
+  it('running! + busy + stopping → disconnecting', () => {
     const r = d({
       configProxyModeType: 'tun',
       connectionStatus: {
@@ -105,7 +105,7 @@ describe('deriveConnectionStatus — TUN 模式', () => {
     });
   });
 
-  it('!running + busy + starting → connecting/startingTun', () => {
+  it('running! + busy + starting → connecting/startingTun', () => {
     const r = d({
       configProxyModeType: 'tun',
       connectionStatus: {
@@ -119,7 +119,7 @@ describe('deriveConnectionStatus — TUN 模式', () => {
     expect(r).toMatchObject({ label: 'home.statusConnecting', description: 'home.startingTun' });
   });
 
-  it('!running + !busy → disconnected/tunNotEnabled', () => {
+  it('running! + !busy → disconnected/tunNotEnabled', () => {
     const r = tun();
     expect(r).toMatchObject({
       label: 'home.statusDisconnected',
@@ -174,7 +174,7 @@ describe('deriveConnectionStatus — 系统代理 / manual', () => {
     });
   });
 
-  it('!running + busy + starting → startingSingbox', () => {
+  it('running! + busy + starting → startingSingbox', () => {
     const r = d({ proxyBusy: true, proxyPhase: 'starting' });
     expect(r).toMatchObject({
       label: 'home.statusConnecting',
@@ -182,12 +182,12 @@ describe('deriveConnectionStatus — 系统代理 / manual', () => {
     });
   });
 
-  it('!running + busy + stopping → disconnecting/stoppingProxy', () => {
+  it('running! + busy + stopping → disconnecting/stoppingProxy', () => {
     const r = d({ proxyBusy: true, proxyPhase: 'stopping' });
     expect(r).toMatchObject({ label: 'home.disconnecting', description: 'home.stoppingProxy' });
   });
 
-  it('!running + !busy → disconnected/proxyNotEnabled', () => {
+  it('running! + !busy → disconnected/proxyNotEnabled', () => {
     const r = d({});
     expect(r).toMatchObject({
       label: 'home.statusDisconnected',

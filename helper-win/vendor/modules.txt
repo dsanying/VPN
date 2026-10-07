@@ -5,8 +5,25 @@ github.com/Microsoft/go-winio/internal/fs
 github.com/Microsoft/go-winio/internal/socket
 github.com/Microsoft/go-winio/internal/stringbuffer
 github.com/Microsoft/go-winio/pkg/guid
-# golang.org/x/sys v0.39.0
-## explicit; go 1.24.0
+# github.com/creachadair/jrpc2 v1.3.5
+## explicit; go 1.25.0
+github.com/creachadair/jrpc2
+github.com/creachadair/jrpc2/channel
+github.com/creachadair/jrpc2/handler
+github.com/creachadair/jrpc2/jhttp
+github.com/creachadair/jrpc2/server
+# github.com/creachadair/mds v0.31.0
+## explicit; go 1.26.0
+github.com/creachadair/mds/queue
+github.com/creachadair/mds/slice
+# golang.org/x/sync v0.23.0
+## explicit; go 1.26.0
+golang.org/x/sync/semaphore
+# golang.org/x/sys v0.48.0
+## explicit; go 1.26.0
 golang.org/x/sys/windows
-golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
+# shadowvpn/helperrpc v0.0.0 => ../helper-rpc
+## explicit; go 1.27.1
+shadowvpn/helperrpc
+# shadowvpn/helperrpc => ../helper-rpc

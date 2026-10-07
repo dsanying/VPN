@@ -157,7 +157,7 @@ export function NodePicker({
       disabled={disabled}
       triggerAriaLabel={ariaLabel}
       // 宽度按内容：至少触发器宽、内容撑到 max-content、封顶 420px（长名在选项内截断）。
-      contentClassName="max-h-[280px] w-max min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[min(420px,calc(100vw-3rem))]"
+      contentClassName="max-h-[280px] w-max min-w-(--radix-dropdown-menu-trigger-width) max-w-[min(420px,calc(100vw-3rem))]"
       // Conduit `.npick-trig` 观感：surface-2 实底 + line 描边（覆盖壳的 muted/40 + input）。
       triggerClassName={cn(
         'gap-[9px] rounded-[9px] border-line bg-surface-2',

@@ -8,7 +8,7 @@
  *       CAP_NET_ADMIN 拉核——能力挂进程 ambient set 不挂文件，故换核/软件更新后**无需再次授权、无需 setcap**。
  *
  * 与 macOS HelperManager 的差异（见 docs/design/flowz-linux-privileged-helper.md）：
- *   - 无 token：Linux 用 SO_PEERCRED（内核背书对端 uid）鉴权，行协议首行即命令、无鉴权行。
+ *   - 无 token：Linux 用 SO_PEERCRED（内核背书对端 uid）鉴权，HTTP JSON-RPC 2.0首行即命令、无鉴权行。
  *   - **核在 root-owned 受管目录**（/usr/local/lib/shadowvpn/core，安装时播种、install-core hash 校验更新），与 macOS
  *     受保护目录一致：核不可被普通用户篡改，一份共享、版本一致。helper 只跑锁定 coreDir/sing-box（路径锁）→ 根除
  *     「借 helper 给任意自有二进制赋 CAP_NET_ADMIN」的提权面。换核经 install-core 免密（socket 调用，无 pkexec）。
@@ -20,7 +20,7 @@
 
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as net from 'net';
+import { requestHelper, formatHelperResult, waitForHelperStopped } from './helper-rpc-client';
 import * as path from 'path';
 import type { HelperStatus } from '../../shared/types';
 import type { IPrivilegedHelper, HelperStartResult } from './IPrivilegedHelper';
@@ -44,12 +44,7 @@ const STATE_DIR = '/var/lib/shadowvpn';
 const AUTH_FILE = `${STATE_DIR}/authorized-uids`;
 const RUNTIME_DIR = '/run/shadowvpn';
 const SOCKET_PATH = `${RUNTIME_DIR}/helper.sock`;
-// 与 helper-linux protoVersion 对应。proto ≥ MIN_USABLE 即 TUN 功能齐全；MIN_USABLE ≤ proto < EXPECTED → upgradeable
-// （温和提示可升级）。v1 起 EXPECTED===MIN，故 upgradeable 恒 false（无历史包袱，尚无更旧可用版本）——**将来 helper 协议
-// 加不兼容能力时，须把 EXPECTED_PROTO 提到新版号**，upgradeable 分支才会点亮「可升级」提示（对齐 Windows 同惯例）。
-const EXPECTED_PROTO = 1;
-const MIN_USABLE_PROTO = 1;
-
+// 通信使用 JSON-RPC 2.0；助手应用版本与功能列表来自 ping 元数据。
 export class LinuxServiceHelper implements IPrivilegedHelper {
   constructor(private logManager?: ILogManager | null) {}
 
@@ -61,30 +56,12 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     return process.platform === 'linux';
   }
 
-  // ── socket 客户端（行协议：cmd\n [args...]；鉴权走 SO_PEERCRED，无 token 行）────────────────
-  private sendCommand(rest: string[], timeoutMs: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const sock = net.connect(SOCKET_PATH);
-      let buf = '';
-      const timer = setTimeout(() => {
-        sock.destroy();
-        reject(new Error('helper socket 超时'));
-      }, timeoutMs);
-      sock.on('connect', () => {
-        sock.end(rest.join('\n') + '\n');
-      });
-      sock.on('data', (d) => {
-        buf += d.toString();
-      });
-      sock.on('end', () => {
-        clearTimeout(timer);
-        resolve(buf.trim());
-      });
-      sock.on('error', (err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-    });
+  // ── socket 客户端（HTTP JSON-RPC 2.0：cmd\n [args...]；鉴权走 SO_PEERCRED，无 token 行）────────────────
+  private capabilities: string[] = [];
+  private async sendCommand(rest: string[], timeoutMs: number): Promise<string> {
+    const result = await requestHelper(SOCKET_PATH, null, rest[0], rest.slice(1), timeoutMs);
+    if (rest[0] === 'ping') this.capabilities = result.capabilities ?? [];
+    return formatHelperResult(result);
   }
 
   // ── 状态探测 ─────────────────────────────────────────────────────────────
@@ -101,8 +78,8 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     if (!this.supported || !this.filesPresent()) return false;
     try {
       const resp = await this.sendCommand(['ping'], 1500);
-      const m = resp.match(/^OK pong uid=\d+ v(\d+)/);
-      return !!m && parseInt(m[1], 10) >= MIN_USABLE_PROTO;
+      const m = resp.match(/^OK pong uid=0 v(\d+\.\d+\.\d+)$/);
+      return !!m && this.capabilities.includes('start');
     } catch {
       return false;
     }
@@ -131,12 +108,11 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     if (installed) {
       try {
         const resp = await this.sendCommand(['ping'], 1500);
-        const m = resp.match(/^OK pong uid=\d+ v(\d+)/);
+        const m = resp.match(/^OK pong uid=0 v(\d+\.\d+\.\d+)$/);
         if (m) {
           version = m[1];
-          const pv = parseInt(version, 10);
-          ready = !isNaN(pv) && pv >= MIN_USABLE_PROTO;
-          upgradeable = ready && pv < EXPECTED_PROTO;
+          ready = this.capabilities.includes('start');
+          upgradeable = false;
         }
       } catch {
         /* 未就绪：装了 unit 但 daemon 没起来（如刚 reboot 未起、被 mask）→ needsRepair 引导重装 */
@@ -148,6 +124,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
       ready,
       upgradeable,
       version,
+      capabilities: this.capabilities,
       loaded: installed ? true : null,
       needsRepair: installed && !ready,
       backgroundDisabled: false,
@@ -165,7 +142,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     forward: boolean
   ): Promise<HelperStartResult> {
     try {
-      await this.sendCommand(['stop'], 3000).catch(() => ''); // 幂等清残留旧 child
+      if (!(await this.stopCore())) return { ok: false, error: '旧内核尚未停止' };
       const singbox = resourceManager.getSingBoxPath();
       const resp = await this.sendCommand(
         ['start', singbox, configPath, logPath || '', forward ? '1' : '0', String(process.pid)],
@@ -182,7 +159,8 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
   async stopCore(): Promise<boolean> {
     try {
       const resp = await this.sendCommand(['stop'], 5000);
-      return resp.startsWith('OK');
+      if (!resp.startsWith('OK')) return false;
+      return await waitForHelperStopped(() => this.sendCommand(['status'], 1500));
     } catch {
       return false;
     }
@@ -191,7 +169,10 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
   async cleanup(): Promise<boolean> {
     try {
       const resp = await this.sendCommand(['cleanup'], 5000);
-      return resp.startsWith('OK');
+      return (
+        resp.startsWith('OK') &&
+        (await waitForHelperStopped(() => this.sendCommand(['status'], 1500)))
+      );
     } catch {
       return false;
     }
@@ -200,6 +181,10 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
   async freePort(port: number): Promise<{ freed?: boolean; foreign?: string; error?: string }> {
     try {
       const resp = await this.sendCommand(['freeport', String(port)], 5000);
+      if (/^OK stopping \d+/.test(resp))
+        return (await waitForHelperStopped(() => this.sendCommand(['status'], 1500)))
+          ? { freed: true }
+          : { error: '内核善后未完成' };
       if (resp.startsWith('OK free') || resp.startsWith('OK killed')) return { freed: true };
       const m = resp.match(/^OK foreign (.+)/);
       if (m) return { foreign: m[1].trim() };
@@ -212,7 +197,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
   async coreStatus(): Promise<{ running: boolean; pid?: number }> {
     try {
       const resp = await this.sendCommand(['status'], 2000);
-      const m = resp.match(/^OK running (\d+)/);
+      const m = resp.match(/^OK (?:running|stopping) (\d+)/);
       return m ? { running: true, pid: parseInt(m[1], 10) } : { running: false };
     } catch {
       return { running: false };

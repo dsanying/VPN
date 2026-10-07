@@ -472,8 +472,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   // config-changed 重启/换节点回退重启…）最终都汇入 start()，gate 设在此处即不可能漏。
   // 返回 'abort' → start() 抛 HELPER_GATE_ABORTED 终止启动（终态等价 osascript 取消=停止态）。
   private helperGate:
-    | ((hs: HelperStatus, config: UserConfig) => Promise<'proceed' | 'abort'>)
-    | null = null;
+    ((hs: HelperStatus, config: UserConfig) => Promise<'proceed' | 'abort'>) | null = null;
   // 本次 sing-box 是否经 helper 启动（决定停止走 helper socket 还是 osascript）。
   private startedViaHelper: boolean = false;
   // 本次 sing-box 是否经「包装进程」启动（macOS osascript / Windows UAC PowerShell）——决定 this.pid 是包装
@@ -919,10 +918,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     await this.killOrphanedSingBoxProcesses(isTunMode);
     this.markStart('killOrphans'); // win: helper 管道 cleanup + tasklist/taskkill（execSync，阻塞 event loop）
 
-    // 孤儿清理后仍占 9090 → 按端口清掉占用者（helper freePort / osascript），否则明确终态（L2，含外部/旧路径
-    // sing-box）。把「裸 spawn 撞 9090 占用 → retry 风暴」收敛为一次明确、可定位的失败。
-    await this.resolveClashApiPortConflict();
-    this.markStart('portConflict');
+    // 管理面使用官方 gRPC 动态端口，旧 Clash 9090 不参与启动，也不清理其他客户端。
 
     // 0. 获取核心版本（用于后续生成兼容的配置文件）。force=true：内核可能已更新，启动时强制重检测刷新缓存。
     this.coreVersion = await this.getCoreVersion(true);
@@ -2609,7 +2605,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     );
   }
 
-  /** 启动前端口冲突清理用的控制端口（缺省 9090，可经 config.controlPort 改）。clash_api 已移除，仅 resolveClashApiPortConflict 残留用作清理目标端口。 */
+  /** 启动前端口冲突清理用的控制端口（缺省 9090，可经 config.controlPort 改）。保留配置读取兼容，启动仅使用官方 gRPC 动态端口。 */
   getClashApiPort(): number {
     return controlApiPort(this.currentConfig ?? {});
   }
@@ -3390,256 +3386,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         servers.map((srv) => new Promise<void>((resolve) => srv.close(() => resolve())))
       );
     }
-  }
-
-  /**
-   * 启动前确认 clash_api 控制端口可用，仍被占则**按端口**清掉占用者（L2，彻底摆脱 cmdline 匹配）。
-   * 端口取 getClashApiPort()（默认 9090，可经 config.controlPort 改）。残留 sing-box 是自家的，正确处置是「清掉
-   * 占用者，否则明确终态 / 提示用户改 controlPort」。处置阶梯：① helper 就绪 → freePort（root、按端口、零提权，是 sing-box
-   * 才杀，否则回报占用者名）；② 交互 + 无 helper → osascript 一次性按端口清；③ 兜底明确终态。所有终态码
-   * ∈ 不可恢复错误（含 _FOREIGN / _AUTH_CANCELLED，均含 clash_api_port_busy 子串）→ 不进自动重启风暴。
-   */
-  private async resolveClashApiPortConflict(): Promise<void> {
-    const PORT = this.getClashApiPort();
-    // 占用两态：listening(connect 连上=有活监听者，必有 PID，可杀) / bindBusy(bind EADDRINUSE)。
-    // bindBusy 但 !listening = TIME_WAIT 类——XNU in_pcbbind 有 UID 检查：root sing-box 死后留下的 9090
-    // root TIME_WAIT，用户态(systemProxy) sing-box 即使 SO_REUSEADDR 也压不过 → EADDRINUSE，持续 2MSL≈30s。
-    // **TIME_WAIT 无进程可杀（lsof 抓不到），只能等它自然回收**，绝不能弹提权框（无意义且阻塞）。
-    const probe = async (): Promise<{ bindBusy: boolean; listening: boolean }> => {
-      // 串行（非 Promise.all）：isPortBindBusy 为测可绑定性会临时 listen 127.0.0.1:PORT；若与 isPortListening 并行，
-      // connect 探测会连上 bind 探测自己刚开的临时 listener → 空闲端口被误判 listening=true（Windows 真机实测 30/30
-      // 必中，致 9090 恒判 BUSY；Windows 无 helper/osascript 清理分支 → 锁死所有代理启动）。先让 bind 探测开/关
-      // listener 完全结束、再 connect → 杜绝自连（实测 0/30）。两探测无依赖、串行的额外延迟可忽略。
-      const bindBusy = await this.isPortBindBusy(PORT);
-      const listening = await this.isPortListening(PORT);
-      return { bindBusy, listening };
-    };
-    let p = await probe();
-    if (!p.bindBusy && !p.listening) {
-      this.logToManager('info', `[clash_api] 端口空闲，正常继续`);
-      return;
-    }
-    this.logToManager(
-      'warn',
-      `[clash_api] 仍被占用(bindBusy=${p.bindBusy} listening=${p.listening})，进入清理（helper=${!!this.helperManager}）`
-    );
-
-    // ② 有活监听者（孤儿/外部/旧路径 sing-box）→ 按端口提权杀（freePort 零提权 / osascript 带超时）
-    if (p.listening) {
-      if (this.helperManager && (await this.helperManager.isReady())) {
-        this.logToManager('info', `[clash_api] helper 就绪 → freePort 按端口清理`);
-        const r = await this.helperManager.freePort(PORT);
-        this.logToManager('info', `[clash_api] freePort 结果: ${JSON.stringify(r)}`);
-        if (r.foreign) throw this.clashPortError('FOREIGN', r.foreign);
-      }
-      p = await probe();
-      if (p.listening && this.startInteractive && process.platform === 'darwin') {
-        this.logToManager(
-          'warn',
-          `[clash_api] freePort 未清净 → osascript 按端口清理（带超时，弹前置顶窗口）`
-        );
-        const res = await this.osascriptFreePort(PORT);
-        this.logToManager('info', `[clash_api] osascript 按端口清理结果: ${res}`);
-        if (res === 'cancelled') throw this.clashPortError('AUTH_CANCELLED');
-        if (res === 'foreign') throw this.clashPortError('FOREIGN');
-        p = await probe();
-      }
-      if (
-        p.listening &&
-        process.platform === 'win32' &&
-        this.helperManager &&
-        (await this.helperManager.isReady())
-      ) {
-        // M5：Windows helper 就绪但首次 freePort 未清净（可能竞态/刚退 TIME_WAIT 转监听）→ 再试一次。
-        // 注：Windows 无 osascript 等价的零提权清理；helper 未装=设计现状（可选加速层），
-        // 不冒险加 RunAs taskkill（按映像名杀会误杀用户其他 sing-box 进程）。
-        this.logToManager('info', `[clash_api] Windows helper freePort 首次未清净，重试一次`);
-        await this.helperManager.freePort(PORT);
-        p = await probe();
-      }
-      if (!p.bindBusy && !p.listening) {
-        this.logToManager('info', `[clash_api] 活监听者已清掉，端口空闲`);
-        return;
-      }
-      if (p.listening) {
-        if (process.platform === 'win32') {
-          const ready = this.helperManager && (await this.helperManager.isReady());
-          this.logToManager(
-            'error',
-            `[clash_api] Windows 活监听者仍在 → 终态 BUSY：${ready ? 'helper freePort 重试后仍未清净' : '未装 helper，无零提权清理手段（建议安装 Windows 提权 helper）'}`
-          );
-        } else {
-          // 仍有活监听者没杀掉（非交互/取消/外部）
-          this.logToManager('error', `[clash_api] 活监听者仍在 → 终态 BUSY`);
-        }
-        throw this.clashPortError('BUSY');
-      }
-      // 杀完活孤儿后 bindBusy && !listening → 它自己留下的 root TIME_WAIT → 落入 ③ 等待
-    }
-
-    // ③ bindBusy 且无活监听者 = TIME_WAIT → 等自然回收（≤35s，覆盖 2MSL=30s），全程不弹提权框
-    if (p.bindBusy && !p.listening) {
-      // 预检放行：本次若经 macOS root(osascript/helper) 启动 sing-box（TUN 模式），残留多为上次 root sing-box 的
-      // 9090 TIME_WAIT（同 uid 0）。Go listener 默认带 SO_REUSEADDR，root 进程对同 uid TIME_WAIT 残留可直接 bind →
-      // 无需空等 30s，直接放行；失败由启动失败链（retry 退避，不进重启风暴）兜底。仅 darwin TUN 放行：用户态
-      // systemProxy sing-box 跨 uid 压不过 root TIME_WAIT 仍须等；Win/Linux 的 bind/TIME_WAIT 语义未验证，保守仍等待（M-2）。
-      // 注：依赖 XNU in_pcbbind「同 uid + SO_REUSEADDR 放行 TIME_WAIT」语义，需真机抓包实测确认（设计文档待验证项）。
-      if (this.needsOsascript()) {
-        this.logToManager(
-          'info',
-          `[clash_api] TIME_WAIT 残留，本次以 root 启动 sing-box（SO_REUSEADDR 复用同 uid 残留）→ 跳过等待直接放行`
-        );
-        return;
-      }
-      this.logToManager(
-        'warn',
-        `[clash_api] 端口处于回收中(TIME_WAIT)，等待系统释放（≤35s，无需结束进程）...`
-      );
-      this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
-        message:
-          '上一会话的 clash_api 端口正在回收（约 30 秒），请稍候自动重试或片刻后再启动，无需手动结束进程。',
-        errorCode: ProxyErrorCode.CLASH_API_PORT_RECYCLING,
-        code: -5,
-      });
-      const deadline = Date.now() + 35000;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 1000));
-        p = await probe();
-        if (!p.bindBusy && !p.listening) {
-          this.logToManager('info', `[clash_api] TIME_WAIT 已回收，端口空闲`);
-          return;
-        }
-        if (p.listening) break; // 期间又冒出活监听者 → 跳出走 BUSY 终态（罕见）
-      }
-      if (p.bindBusy && !p.listening) {
-        this.logToManager('error', `[clash_api] TIME_WAIT 35s 未回收 → 终态`);
-        throw this.clashPortError('BUSY_TIMEWAIT');
-      }
-    }
-    this.logToManager('error', `[clash_api] 清理后仍被占用 → 终态 BUSY`);
-    throw this.clashPortError('BUSY');
-  }
-
-  /** bind 探测 127.0.0.1:port 是否被占（listen 报 EADDRINUSE=占用）。覆盖「活监听 + (SO_REUSEADDR 之外的)端口持有」，
-   *  与 sing-box(Go) 的 bind 语义最接近——connect 探测漏掉的 held-but-not-accepting 由它兜住（修 9090 storm 回归）。 */
-  private isPortBindBusy(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const srv = net.createServer();
-      srv.once('error', (e: NodeJS.ErrnoException) => resolve(e.code === 'EADDRINUSE'));
-      srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(false)));
-    });
-  }
-
-  /** connect 探测 127.0.0.1:port 是否有活监听者（连上=有）。被拒/超时=无（不被 TIME_WAIT 误判为占用）。 */
-  private isPortListening(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const sock = net.connect({ port, host: '127.0.0.1' });
-      const done = (v: boolean): void => {
-        sock.destroy();
-        resolve(v);
-      };
-      sock.once('connect', () => done(true));
-      sock.once('error', () => done(false));
-      sock.setTimeout(800, () => done(false));
-    });
-  }
-
-  /** 构造 clash_api 端口占用终态错误（err.code 带机读码；消息均含「clash_api 端口」→ isUnrecoverableRestartError 命中、立即终态）。 */
-  private clashPortError(
-    kind: 'BUSY' | 'FOREIGN' | 'AUTH_CANCELLED' | 'BUSY_TIMEWAIT',
-    occupant?: string
-  ): Error & { code?: string } {
-    const PORT = this.getClashApiPort();
-    let msg: string;
-    let code: string;
-    if (kind === 'FOREIGN') {
-      msg = `clash_api 端口 ${PORT} 被${occupant ? `「${occupant}」` : '非 sing-box 进程'}占用，请手动结束该进程后重试`;
-      code = 'CLASH_API_PORT_BUSY_FOREIGN';
-    } else if (kind === 'AUTH_CANCELLED') {
-      msg = `清理占用 clash_api 端口 ${PORT} 的进程需要授权，已取消`;
-      code = 'CLASH_API_PORT_BUSY_AUTH_CANCELLED';
-    } else if (kind === 'BUSY_TIMEWAIT') {
-      // TIME_WAIT 无进程可杀，提示「稍候重试」而非「结束进程」（避免误导用户去杀不存在的进程）
-      msg = `clash_api 端口 ${PORT} 仍在系统回收中（上一会话残留的 TIME_WAIT，约 30 秒），请稍候片刻再启动，无需手动结束进程`;
-      code = 'CLASH_API_PORT_BUSY';
-    } else {
-      msg = `clash_api 端口 ${PORT} 被占用（残留 sing-box 未释放或被外部进程占用），请手动结束占用进程后重试`;
-      code = 'CLASH_API_PORT_BUSY';
-    }
-    const err = new Error(msg) as Error & { code?: string };
-    err.code = code;
-    return err;
-  }
-
-  /** 无 helper 时按端口清 9090 占用者：写临时脚本（避内联引号转义）→ osascript 提权跑（lsof → 是 sing-box 才杀）。 */
-  private osascriptFreePort(port: number): Promise<'freed' | 'cancelled' | 'foreign'> {
-    const scriptPath = path.join(getUserDataPath(), 'flowz-freeport.sh');
-    // 用 ps -o comm=（仅可执行名，不含参数）判据：避免「参数里碰巧含 sing-box」的无辜进程被 root 误杀（M2）。
-    // 杀掉的进程 cmdline 记到 KILLED 行供 app 落日志（killUserOrphansMac「不波及外部」承诺的口径透明化）。
-    const script = `#!/bin/bash
-pids=$(/usr/sbin/lsof -ti tcp:${port} -sTCP:LISTEN 2>/dev/null)
-[ -z "$pids" ] && { echo FREED; exit 0; }
-foreign=""; killed=""
-for p in $pids; do
-  comm=$(/bin/ps -o comm= -p $p 2>/dev/null)
-  case "$comm" in
-    *sing-box*) /bin/kill -9 $p 2>/dev/null; killed="$killed $p";;
-    *) foreign="$foreign|$comm";;
-  esac
-done
-[ -n "$killed" ] && echo "KILLED$killed"
-[ -n "$foreign" ] && echo "FOREIGN$foreign" || echo FREED
-`;
-    try {
-      require('fs').writeFileSync(scriptPath, script, { mode: 0o755 });
-    } catch {
-      return Promise.resolve('cancelled');
-    }
-    const cleanup = (): void => {
-      try {
-        require('fs').rmSync(scriptPath, { force: true });
-      } catch {
-        /* 忽略 */
-      }
-    };
-    // 注：不再 mainWindow.show()/focus()——osascript `with administrator privileges` 的授权框是 SecurityAgent
-    // 系统级 modal、自带置顶，不依赖 app 窗口可见；强行 show 隐藏窗口会经 'show' 把 Dock 图标拽回来（破坏
-    // 「关窗=隐藏到托盘」的 Dock 状态机，是「程序坞关不掉」的副作用源）。有 120s 超时兜底，不会因不 show 而永挂。
-    return new Promise((resolve) => {
-      const proc = spawn('/usr/bin/osascript', [
-        '-e',
-        `do shell script "/bin/bash '${scriptPath}'" with administrator privileges`,
-      ]);
-      let out = '';
-      let settled = false;
-      const finish = (r: 'freed' | 'cancelled' | 'foreign'): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        cleanup();
-        resolve(r);
-      };
-      // 硬超时：授权框被遮挡/无人应答 120s → 杀 osascript 按取消处理，绝不让 start() 永挂（修卡死诱因）。
-      const timer = setTimeout(() => {
-        this.logToManager('warn', `[clash_api] osascript 授权框 120s 未应答，按取消处理`);
-        try {
-          proc.kill('SIGKILL');
-        } catch {
-          /* 忽略 */
-        }
-        finish('cancelled');
-      }, 120_000);
-      proc.stdout?.on('data', (d: Buffer) => (out += d.toString()));
-      proc.on('close', (code) => {
-        const k = out.match(/KILLED(.+)/);
-        if (k)
-          this.logToManager('info', `已提权按端口清掉占用 ${port} 的 sing-box: ${k[1].trim()}`);
-        if (code !== 0)
-          finish('cancelled'); // 用户取消授权(-128) 等
-        else finish(out.includes('FOREIGN') ? 'foreign' : 'freed');
-      });
-      proc.on('error', () => finish('cancelled'));
-    });
   }
 
   /** 当前出口 IP 探针端口；代理未启动或分配失败时返回 null。供 IpInfoService 取数用。 */
@@ -8251,13 +7997,11 @@ rm -f "$STOPFLAG"
    */
   private matchDnsLookupFailure(lowerMessage: string): 'node' | 'generic' | null {
     if (!lowerMessage.includes('lookup ')) return null;
-    if (
-      !(
-        lowerMessage.includes('servfail') ||
-        lowerMessage.includes('no such host') ||
-        lowerMessage.includes('i/o timeout')
-      )
-    ) {
+    if (!(
+      lowerMessage.includes('servfail') ||
+      lowerMessage.includes('no such host') ||
+      lowerMessage.includes('i/o timeout')
+    )) {
       return null;
     }
     // 提取 `lookup <domain>` 的域名（到首个空白/冒号止），与节点域名集比对。

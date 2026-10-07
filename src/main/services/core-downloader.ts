@@ -362,7 +362,7 @@ export class CoreDownloader {
       } catch {
         // Ignore cleanup errors during recovery
       }
-      throw new Error(`解压失败: ${(error as any).message}`);
+      throw new Error(`解压失败: ${(error as any).message}`, { cause: error });
     }
   }
 }

@@ -241,7 +241,7 @@ export function ConnectionTopology() {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (containerRef.current) {
-      // 存视口坐标：tooltip 用 fixed 定位（原 absolute 挂在 overflow-hidden [contain:size] 容器内，
+      // 存视口坐标：tooltip 用 fixed 定位（原 absolute 挂在 overflow-hidden contain-[size] 容器内，
       // 靠下/靠右 hover 时被卡片裁掉——与右键菜单同一个病）。
       setMousePos({ x: e.clientX, y: e.clientY });
     }
@@ -389,7 +389,7 @@ export function ConnectionTopology() {
           // 用 flex-1 而非 h-full：h-full(height:100%) 在 flex 父级下不稳解析、会塌成内容高（同 logs 修复根因）。
           // [contain:size]：内容不参与自身尺寸——否则 svg viewBox 纵横比把上次高度变成内容地板，intrinsic 经
           // flex-basis:0 链传进 .container(min-h-full auto 高)，缩窗时 RO 永远量不到更小值（高度棘轮）。
-          className="relative min-h-[300px] w-full min-w-0 flex-1 cursor-default overflow-hidden [contain:size]"
+          className="relative min-h-[300px] w-full min-w-0 flex-1 cursor-default overflow-hidden contain-[size]"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
@@ -499,7 +499,7 @@ export function ConnectionTopology() {
           </DropdownMenu>
 
           {/* 「加入已有规则…」选择器（issue #336）。Dialog 自带 Portal 挂 body，故挂在本容器内不受
-              overflow-hidden [contain:size] 影响；与右键菜单互斥（选完/取消即回 null）。 */}
+              overflow-hidden contain-[size] 影响；与右键菜单互斥（选完/取消即回 null）。 */}
           {pickDomain !== null && (
             <RulePickDialog
               open

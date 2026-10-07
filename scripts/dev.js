@@ -1,4 +1,4 @@
-const { spawn, execSync } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const { createServer } = require('vite');
 const path = require('path');
 const waitOn = require('wait-on');
@@ -9,7 +9,7 @@ async function startDev() {
   // 1. 启动 Vite 开发服务器
   console.log('📦 启动 Vite 开发服务器...');
   const viteServer = await createServer({
-    configFile: path.join(__dirname, '../vite.config.ts'),
+    configFile: path.join(__dirname, '../vite.config.mts'),
     mode: 'development',
   });
   await viteServer.listen();
@@ -26,9 +26,8 @@ async function startDev() {
   // 3. 编译主进程代码
   console.log('🔨 编译主进程代码...');
   // 先注入构建日期常量（B-1：about 页 buildDate 取构建时刻，非运行时 new Date）
-  execSync('node scripts/gen-build-info.js', { stdio: 'inherit' });
-  const tsc = spawn('npx', ['tsc', '-p', 'tsconfig.main.json'], {
-    shell: true,
+  execFileSync(process.execPath, ['scripts/gen-build-info.js'], { stdio: 'inherit' });
+  const tsc = spawn(process.execPath, [path.join(__dirname, '../node_modules/typescript/bin/tsc'), '-p', 'tsconfig.main.json'], {
     stdio: 'inherit',
   });
 
@@ -47,12 +46,7 @@ async function startDev() {
   console.log('⚡ 启动 Electron...\n');
   const env = { ...process.env, NODE_ENV: 'development' };
   delete env.ELECTRON_RUN_AS_NODE;
-  // Electron 42 起 postinstall 不再下载二进制，首次 `electron .` 改为现场下载；
-  // 默认走 npmmirror 避免卡 GitHub Releases（已设 ELECTRON_MIRROR 的环境不覆盖）。
-  env.ELECTRON_MIRROR ??= 'https://npmmirror.com/mirrors/electron/';
-
-  const electron = spawn('npx', ['electron', '.'], {
-    shell: true,
+  const electron = spawn(require('electron'), ['.'], {
     stdio: 'inherit',
     env,
   });

@@ -16,6 +16,8 @@ import { getWarpDeregisterQueue } from './services/WarpDeregisterQueue';
 
 /** 注入依赖：服务单例 + proxyManager getter（call-time 取值）+ 托盘状态刷新。 */
 export interface StartupTaskDeps {
+  /** 开发版通过源码更新，不查询或安装发行包。 */
+  allowAppUpdates: boolean;
   configManager: ConfigManager;
   coreUpdateService: CoreUpdateService;
   updateService: UpdateService;
@@ -90,7 +92,7 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
   setTimeout(async () => {
     try {
       const config = await configManager.loadConfig();
-      if (config.autoCheckUpdate !== false) {
+      if (deps.allowAppUpdates && config.autoCheckUpdate !== false) {
         logManager.addLog('info', '正在自动检查更新...', 'Main');
         const result = await updateService.checkForUpdate();
         if (result.hasUpdate && result.updateInfo) {

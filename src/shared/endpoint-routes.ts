@@ -65,7 +65,7 @@ export const WG_SYSTEM_INTERFACE_NAME = 'flowz-wg';
  */
 export function endpointForcedRouteCidrs(server: ServerConfig): string[] {
   const p = server.protocol?.toLowerCase();
-  let raw: string[] = [];
+  let raw: string[];
   if (p === 'wireguard') {
     raw = stripCatchAll(server.wireguardSettings?.allowedIPs);
   } else if (p === 'tailscale') {

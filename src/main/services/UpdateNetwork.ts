@@ -85,7 +85,7 @@ export class UpdateNetwork {
    * CoreDownloader 三处统一调用，防漂移。未注入 providers（理论：index 总注入）→ 读不到则 viaProxy=false。
    */
   async resolveSessionForMainUpdate(): Promise<Session> {
-    let target = { viaProxy: false, port: 0 };
+    let target: { viaProxy: boolean; port: number };
     try {
       const cfg = this.configProvider ? await this.configProvider() : null;
       const running = this.proxyRunningProvider ? this.proxyRunningProvider() : false;

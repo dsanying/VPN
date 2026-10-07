@@ -26,6 +26,14 @@ import { referencedServerIds } from '../../shared/endpoint-routes';
 import { BackoffTracker } from './backoff-tracker';
 
 export class SubscriptionScheduler {
+  private static readonly TICK_MS = 30 * 60_000; // 30 分钟巡检一次
+  private static readonly STARTUP_DELAY_MS = 8_000; // 启动延迟，避开启动高峰
+  private static readonly BACKOFF_BASE_MS = 5 * 60_000; // 退避基数 5 分钟
+  private static readonly BACKOFF_MAX_MS = 6 * 60 * 60_000; // 退避上限 6 小时
+  private static readonly DEFAULT_INTERVAL_HOURS = 12;
+  // 启动 / 代理就绪补更免陈旧门时的最小间隔地板：防频繁重启把订阅源打爆
+  private static readonly STARTUP_MIN_GAP_MS = 10 * 60_000;
+
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private started = false;
   private isRunning = false; // 防重入（巡检与启动补更不并发）
@@ -36,14 +44,6 @@ export class SubscriptionScheduler {
   );
   private pendingProxyCatchup = false; // 经代理订阅因代理未起被跳过的挂起标记（启动补更与周期巡检轮均可置位），待代理就绪 onProxyStarted 补跑
   private startupTimer: ReturnType<typeof setTimeout> | null = null; // 启动补更句柄（stop 时清，防 8s 内 stop→start 武装双补更）
-
-  private static readonly TICK_MS = 30 * 60_000; // 30 分钟巡检一次
-  private static readonly STARTUP_DELAY_MS = 8_000; // 启动延迟，避开启动高峰
-  private static readonly BACKOFF_BASE_MS = 5 * 60_000; // 退避基数 5 分钟
-  private static readonly BACKOFF_MAX_MS = 6 * 60 * 60_000; // 退避上限 6 小时
-  private static readonly DEFAULT_INTERVAL_HOURS = 12;
-  // 启动 / 代理就绪补更免陈旧门时的最小间隔地板：防频繁重启把订阅源打爆
-  private static readonly STARTUP_MIN_GAP_MS = 10 * 60_000;
 
   constructor(
     private readonly configManager: ConfigManager,

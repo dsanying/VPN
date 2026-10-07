@@ -48,7 +48,7 @@ export function SegmentedControl<T extends string>({
               'flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-[550] text-fg-dim transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               'disabled:pointer-events-none disabled:opacity-50',
-              active ? 'bg-surface font-[650] text-flow-hi shadow-sm' : 'hover:text-fg'
+              active ? 'bg-surface font-[650] text-flow-hi shadow-xs' : 'hover:text-fg'
             )}
           >
             {opt.label}
