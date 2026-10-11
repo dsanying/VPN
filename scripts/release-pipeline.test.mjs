@@ -93,6 +93,20 @@ test('CI rejects a tag that differs from the packaged version', () => {
   assert.equal(run(`refs/tags/v${version}`).status, 0);
   assert.notEqual(run('refs/tags/v999.999.999').status, 0);
 });
+test('candidate builds cannot publish a release or bypass tag validation', () => {
+  const script = path.join(scripts, 'check-release-version.mjs');
+  const run = (event, ref, args = ['--candidate']) => spawnSync(process.execPath, [script, ...args], {
+    env: { ...process.env, GITHUB_EVENT_NAME: event, GITHUB_REF: ref },
+  });
+  assert.equal(run('workflow_dispatch', 'refs/heads/main').status, 0);
+  assert.notEqual(run('push', 'refs/heads/main').status, 0);
+  assert.notEqual(run('workflow_dispatch', 'refs/tags/v999.999.999').status, 0);
+  assert.notEqual(run('workflow_dispatch', 'refs/heads/main', []).status, 0);
+  const release = load(fs.readFileSync(path.join(scripts, '../.github/workflows/release.yml'), 'utf8'));
+  assert.ok(Object.hasOwn(release.on, 'workflow_dispatch'));
+  assert.equal(release.jobs['create-release'].if, "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')");
+  assert.ok(release.jobs['create-release'].steps.some(step => step.run?.includes('check-client-platforms.mjs --release')));
+});
 test('clean CI prepares pinned native binaries before tests and uploads referenced native reports', () => {
   const workflow = name => load(fs.readFileSync(path.join(scripts, '../.github/workflows', name), 'utf8'));
   for (const [name, job] of [['ci.yml', 'test'], ['release.yml', 'release']]) {
