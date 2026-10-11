@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { androidHostTestEnvironment } from './android-host-toolchain.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'src/shared/android-core-manifest.json')));
 const cache = process.env.SHADOW_TOOLCHAIN_CACHE || path.join(os.homedir(), '.local/share/shadowvpn-toolchains');
@@ -41,7 +42,7 @@ const overlayFiles = fs.readdirSync(overlay).filter(name => name.endsWith('.go')
 const overlayDigest = crypto.createHash('sha256');
 for (const name of overlayFiles) overlayDigest.update(name).update(fs.readFileSync(path.join(overlay, name)));
 const overlaySha256 = overlayDigest.digest('hex');
-const fingerprint = crypto.createHash('sha256').update(JSON.stringify(manifest)).update(overlaySha256).update(fs.readFileSync(import.meta.filename)).digest('hex');
+const fingerprint = crypto.createHash('sha256').update(JSON.stringify(manifest)).update(overlaySha256).update(fs.readFileSync(import.meta.filename)).update(fs.readFileSync(path.join(root, 'scripts/android-host-toolchain.mjs'))).digest('hex');
 function digest(file) { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
 if (fs.existsSync(aar) && fs.existsSync(receipt)) {
   const previous = JSON.parse(fs.readFileSync(receipt));
@@ -56,7 +57,7 @@ fs.cpSync(source, stagedSource, { recursive: true, filter: file => !file.split(p
 for (const name of overlayFiles) fs.copyFileSync(path.join(overlay, name), path.join(stagedSource, 'experimental/libbox', name));
 const temporary = path.join(outputDir, `libbox-${process.pid}.aar`);
 try {
-  run('go', ['test', '-ldflags=-checklinkname=0', '-tags', manifest.tags.join(','), './experimental/libbox', '-run', '^TestShadowProbe', '-count=1'], { cwd: stagedSource, env });
+  run('go', ['test', '-ldflags=-checklinkname=0', '-tags', manifest.tags.join(','), './experimental/libbox', '-run', '^TestShadowProbe', '-count=1'], { cwd: stagedSource, env: androidHostTestEnvironment(stagedSource, cache, env, manifest.cronetCommit) });
   run(path.join(goBin, process.platform === 'win32' ? 'gomobile.exe' : 'gomobile'), [
     'bind', '-o', temporary, '-target', manifest.target, '-androidapi', String(manifest.androidApi),
     '-javapkg=io.nekohasekai', '-libname=box', '-trimpath', '-buildvcs=false',
@@ -70,7 +71,27 @@ try {
     '-tags', manifest.tags.join(','), './experimental/libbox',
   ];
   fs.writeFileSync(path.join(stagedSource, 'SHADOWVPN-BUILD.json'), JSON.stringify({ ...manifest, overlaySha256, fingerprint, bindArguments, overlayDirectory: 'experimental/libbox', sourceLicense: 'GPL-3.0-or-later' }, null, 2) + '\n');
-  fs.writeFileSync(path.join(stagedSource, 'build-shadow-libbox.mjs'), `// Build from this unpacked modified source. Requires Node.js, Go, JDK 21, Android SDK and pinned NDK.\nimport fs from 'node:fs';\nimport path from 'node:path';\nimport { spawnSync } from 'node:child_process';\nconst manifest = JSON.parse(fs.readFileSync(new URL('./SHADOWVPN-BUILD.json', import.meta.url)));\nconst source = import.meta.dirname;\nif (!process.env.JAVA_HOME || !process.env.ANDROID_HOME) throw new Error('Set JAVA_HOME and ANDROID_HOME');\nconst env = { ...process.env, ANDROID_NDK_HOME: path.join(process.env.ANDROID_HOME, 'ndk', manifest.ndkVersion) };\nfunction run(command, args) { const result = spawnSync(command, args, { cwd: source, env, stdio: 'inherit' }); if (result.error) throw result.error; if (result.status !== 0) throw new Error(command + ' failed'); }\nrun('go', ['install', 'github.com/sagernet/gomobile/cmd/gomobile@' + manifest.gomobileVersion, 'github.com/sagernet/gomobile/cmd/gobind@' + manifest.gomobileVersion]);\n// Ensure the Go bin directory is present in PATH (go env GOPATH + /bin, or GOBIN).\nrun('go', ['test', '-ldflags=-checklinkname=0', '-tags', manifest.tags.join(','), './experimental/libbox', '-run', '^TestShadowProbe', '-count=1']);\nrun('gomobile', manifest.bindArguments);\n`);
+  fs.copyFileSync(path.join(root, 'scripts/android-host-toolchain.mjs'), path.join(stagedSource, 'android-host-toolchain.mjs'));
+  fs.writeFileSync(path.join(stagedSource, 'build-shadow-libbox.mjs'), `// Build from this unpacked modified source. Requires Node.js, Go, JDK 21, Android SDK and pinned NDK.
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { androidHostTestEnvironment } from './android-host-toolchain.mjs';
+const manifest = JSON.parse(fs.readFileSync(new URL('./SHADOWVPN-BUILD.json', import.meta.url)));
+const source = import.meta.dirname;
+if (!process.env.JAVA_HOME || !process.env.ANDROID_HOME) throw new Error('Set JAVA_HOME and ANDROID_HOME');
+const env = { ...process.env, ANDROID_NDK_HOME: path.join(process.env.ANDROID_HOME, 'ndk', manifest.ndkVersion) };
+function run(command, args, runEnv = env) {
+  const result = spawnSync(command, args, { cwd: source, env: runEnv, stdio: 'inherit' });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(command + ' failed');
+}
+run('go', ['install', 'github.com/sagernet/gomobile/cmd/gomobile@' + manifest.gomobileVersion, 'github.com/sagernet/gomobile/cmd/gobind@' + manifest.gomobileVersion]);
+// Ensure the Go bin directory is present in PATH (go env GOPATH + /bin, or GOBIN).
+run('go', ['test', '-ldflags=-checklinkname=0', '-tags', manifest.tags.join(','), './experimental/libbox', '-run', '^TestShadowProbe', '-count=1'], androidHostTestEnvironment(source, path.join(os.homedir(), '.local/share/shadowvpn-toolchains'), env, manifest.cronetCommit));
+run('gomobile', manifest.bindArguments);
+`);
   run('tar', ['-czf', sourceArchive, '-C', stagedSource, '.']);
   fs.renameSync(temporary, aar);
   fs.writeFileSync(receipt, JSON.stringify({ ...manifest, overlaySha256, fingerprint, sha256: digest(aar), sourceSha256: digest(sourceArchive), sourceArchive: path.basename(sourceArchive) }, null, 2) + '\n');
