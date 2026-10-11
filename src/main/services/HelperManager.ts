@@ -1,3 +1,4 @@
+import { assertPersistentHelperProfile } from '../validation-profile';
 /**
  * macOS 提权 helper 管理器
  *
@@ -456,6 +457,7 @@ export class HelperManager implements IPrivilegedHelper {
   // ── 安装 / 卸载（osascript 一次授权）──────────────────────────────────────
   /** 安装/修复 helper：生成随机 token 并持久化，osascript 以 root 跑安装脚本（弹一次密码框）。 */
   async install(): Promise<{ success: boolean; error?: string; status: HelperStatus }> {
+    assertPersistentHelperProfile();
     if (!this.supported) {
       return {
         success: false,
@@ -546,6 +548,7 @@ export class HelperManager implements IPrivilegedHelper {
 
   /** 卸载 helper：osascript 以 root 注销 daemon 并删除文件（弹一次密码框）。 */
   async uninstall(): Promise<{ success: boolean; error?: string; status: HelperStatus }> {
+    assertPersistentHelperProfile();
     if (!this.supported) {
       return {
         success: false,

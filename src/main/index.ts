@@ -1,5 +1,5 @@
 import { closeMeasurementDatabases } from './services/MeasurementDatabase';
-import { resolveUserDataPath } from './validation-profile';
+import { resolveUserDataPath, assertPersistentHelperProfile } from './validation-profile';
 import { RUNTIME_POLICY } from '../shared/runtime-policy';
 import { DEFAULT_SPEED_TEST_URL } from '../shared/speed-test';
 import { createConnectionApplicationResolver } from './services/ConnectionApplications';
@@ -370,6 +370,11 @@ async function promptHelperGate(
   _config: UserConfig
 ): Promise<'proceed' | 'abort'> {
   if (!helperManager) return 'proceed';
+  try {
+    assertPersistentHelperProfile();
+  } catch {
+    return 'abort';
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
     mainWindow.focus();

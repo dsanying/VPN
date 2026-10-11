@@ -1,3 +1,4 @@
+import { assertPersistentHelperProfile } from '../validation-profile';
 /**
  * Linux 提权 helper 管理器（systemd system service）。
  *
@@ -227,6 +228,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
   // ── 安装 / 卸载（pkexec 一次授权）─────────────────────────────────────────
   /** 安装/修复 helper：pkexec 以 root 跑安装脚本（拷二进制 + 写授权 uid + 装 systemd unit + enable --now，弹一次密码框）。 */
   async install(): Promise<{ success: boolean; error?: string; status: HelperStatus }> {
+    assertPersistentHelperProfile();
     if (!this.supported) {
       return {
         success: false,
@@ -267,6 +269,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
 
   /** 卸载 helper：pkexec 以 root 停服务 + 删 unit / 二进制 / 授权文件 / 运行目录（弹一次密码框）。 */
   async uninstall(): Promise<{ success: boolean; error?: string; status: HelperStatus }> {
+    assertPersistentHelperProfile();
     if (!this.supported) {
       return {
         success: false,
