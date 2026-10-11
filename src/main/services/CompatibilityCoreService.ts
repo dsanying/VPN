@@ -40,15 +40,21 @@ function safeCoreError(error: unknown, servers: ServerConfig[]): string {
   servers.forEach(scrub);
   return redactLogText(text);
 }
-export async function allocateCompatibilityPort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const listener = createServer();
-    listener.once('error', reject);
-    listener.listen(0, '127.0.0.1', () => {
-      const port = (listener.address() as { port: number }).port;
-      listener.close((error) => (error ? reject(error) : resolve(port)));
+export async function allocateCompatibilityPort(reserved?: Set<number>): Promise<number> {
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const port = await new Promise<number>((resolve, reject) => {
+      const listener = createServer();
+      listener.once('error', reject);
+      listener.listen(0, '127.0.0.1', () => {
+        const port = (listener.address() as { port: number }).port;
+        listener.close((error) => (error ? reject(error) : resolve(port)));
+      });
     });
-  });
+    if (reserved?.has(port)) continue;
+    reserved?.add(port);
+    return port;
+  }
+  throw new Error('Could not allocate a distinct compatibility listener port');
 }
 
 export class CompatibilityCoreService {
@@ -109,6 +115,11 @@ export class CompatibilityCoreService {
     await this.pendingStop;
     if (generation !== this.generation) throw new Error('Compatibility core startup superseded');
     this.failures.clear();
+    // Kernels bind after compilation; closing a probe socket does not reserve its port.
+    const reserved = new Set([directPort]);
+    for (const server of servers) {
+      if (['127.0.0.1', 'localhost', '::1'].includes(server.address)) reserved.add(server.port);
+    }
     for (const engine of ['xray', 'mihomo', 'sing-box'] as const) {
       const candidates = servers.filter((server) => chooseEngine(server) === engine);
       if (!candidates.length) continue;
@@ -149,9 +160,9 @@ export class CompatibilityCoreService {
             }
             nodes.push({
               server,
-              ...(server.detour ? { dialPort: await allocateCompatibilityPort() } : {}),
+              ...(server.detour ? { dialPort: await allocateCompatibilityPort(reserved) } : {}),
               bridge: {
-                port: await allocateCompatibilityPort(),
+                port: await allocateCompatibilityPort(reserved),
                 username: 'shadowvpn',
                 password: randomBytes(24).toString('hex'),
               },
@@ -169,7 +180,7 @@ export class CompatibilityCoreService {
               : buildMihomoConfig;
         // Auxiliary Mihomo listeners may bind before its proxy map is applied.
         // Keep the controller private and authenticate startup configuration checks.
-        const controllerPort = engine === 'mihomo' ? await allocateCompatibilityPort() : 0;
+        const controllerPort = engine === 'mihomo' ? await allocateCompatibilityPort(reserved) : 0;
         const controllerSecret = controllerPort ? randomBytes(24).toString('hex') : '';
         let runtimeConfig: Record<string, unknown> = {};
         const args =
