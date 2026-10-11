@@ -1,3 +1,4 @@
+import { closeMeasurementDatabases } from './services/MeasurementDatabase';
 import { resolveUserDataPath } from './validation-profile';
 import { RUNTIME_POLICY } from '../shared/runtime-policy';
 import { DEFAULT_SPEED_TEST_URL } from '../shared/speed-test';
@@ -1246,6 +1247,8 @@ async function cleanupResources(): Promise<void> {
         if (timer) clearTimeout(timer); // 正常完成则清计时器，避免误导性的超时 warn
       } catch (e) {
         console.error('cleanupResources error:', e);
+      } finally {
+        closeMeasurementDatabases();
       }
     })();
   }

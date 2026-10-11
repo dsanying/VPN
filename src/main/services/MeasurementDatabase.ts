@@ -5,8 +5,10 @@ import * as path from 'path';
 /** Private measurement database: no subscription URLs or node credentials are stored. */
 export class MeasurementDatabase {
   private db?: DatabaseSync;
+  private closed = false;
   constructor(private readonly file: string) {}
   private open(): DatabaseSync {
+    if (this.closed) throw new Error('Measurement database is closed');
     if (!this.db) {
       fs.mkdirSync(path.dirname(this.file), { recursive: true });
       this.db = new DatabaseSync(this.file);
@@ -16,6 +18,11 @@ export class MeasurementDatabase {
       );
     }
     return this.db;
+  }
+  close(): void {
+    this.db?.close();
+    this.db = undefined;
+    this.closed = true;
   }
   read<T>(kind: string): Record<string, T> {
     const rows = this.open().prepare('SELECT id,payload FROM measurements WHERE kind=?').all(kind);
@@ -47,6 +54,14 @@ export class MeasurementDatabase {
   }
 }
 const databases = new Map<string, MeasurementDatabase>();
+/** The owner releases a profile before deletion, replacement or terminal shutdown. */
+export function closeMeasurementDatabases(file?: string): void {
+  for (const [key, database] of databases) {
+    if (file !== undefined && key !== file) continue;
+    database.close();
+    databases.delete(key);
+  }
+}
 export function measurementDatabase(file: string): MeasurementDatabase {
   let db = databases.get(file);
   if (!db) {

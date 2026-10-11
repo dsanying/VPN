@@ -13,8 +13,11 @@ describe('提权助手资源暂存', () => {
   it('以普通用户先复制资源到私有临时目录，校验内容并完整清理', () => {
     const staged = stageHelperInstallation(path.join(source, 'helper'), path.join(source, 'core'));
     expect(staged.directory.startsWith(os.tmpdir())).toBe(true);
-    expect(fs.statSync(staged.directory).mode & 0o777).toBe(0o700);
-    expect(fs.statSync(staged.helper).mode & 0o777).toBe(0o600);
+    // This installer is macOS-only; Windows stat mode does not represent POSIX permissions.
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(staged.directory).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(staged.helper).mode & 0o777).toBe(0o600);
+    }
     expect(fs.readFileSync(staged.helper, 'utf8')).toBe('helper');
     expect(staged.helperSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(staged.coreSha256).not.toBe(staged.helperSha256);

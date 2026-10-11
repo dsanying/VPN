@@ -84,7 +84,8 @@ for(const [mode,algorithm] of Object.entries(themes)) {
   blocks.push(`${dark?':root[data-theme="dark"]':':root'} {\n  color-scheme: ${mode};\n${declarations}\n}`);
 }
 blocks.push(`[data-surface="inverse"] {\n${['link','info','success','warning','error'].map(role=>`  --ds-color-${role}: var(--ds-color-${role}-on-inverse);`).join('\n')}\n}`);
-const result='/* Generated from Ant Design public theme algorithms by generate-client-tokens.mjs. */\n'+blocks.join('\n\n')+'\n';
+const result=('/* Generated from Ant Design public theme algorithms by generate-client-tokens.mjs. */\n'+blocks.join('\n\n')+'\n')
+  .split('\n').map(line=>line.trimEnd()).join('\n');
 const target=new URL('../src/design/tokens.css',import.meta.url);
 if(process.argv.includes('--check')) {
   if(readFileSync(target,'utf8')!==result)throw new Error('Generated client tokens are stale');

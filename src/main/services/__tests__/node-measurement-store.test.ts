@@ -1,3 +1,4 @@
+import { closeMeasurementDatabases } from '../MeasurementDatabase';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -56,6 +57,7 @@ it('restores private measurements after restart; renames retain results but tran
       {}
     );
   } finally {
+    closeMeasurementDatabases(path.join(dir, 'measurements.sqlite'));
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
@@ -99,6 +101,7 @@ it('nonfinite or negative cache timestamps cannot overwrite valid measurements',
     }
     expect((await store.get([node])).example).toMatchObject({ latency: 20, testedAt: 1000 });
   } finally {
+    closeMeasurementDatabases(path.join(dir, 'measurements.sqlite'));
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
@@ -126,6 +129,7 @@ it('rechecks formerly unsupported QUIC entries without erasing the measured regi
     expect(dueMeasurements([udp], { example: record }, udp.id, 2000)).toEqual([udp]);
     expect(record.detail?.entry.status).toBe('unavailable');
   } finally {
+    closeMeasurementDatabases(path.join(dir, 'measurements.sqlite'));
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
