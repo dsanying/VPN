@@ -54,6 +54,55 @@ test('missing smart routing data and unsupported compatibility fail before tunne
   value.servers[0].network = 'xhttp';
   expect(() => buildAndroidCoreConfig(value, host)).toThrow('Compatibility engine');
 });
+test('inactive imported compatibility nodes do not prevent a supported selected exit from connecting', () => {
+  const value = config();
+  const unsupported = { ...structuredClone(node), id: 'unused', network: 'xhttp' as const };
+  value.servers.push(unsupported);
+  expect(buildAndroidCoreConfig(value, host).outbounds?.map((outbound) => outbound.tag)).toEqual([
+    'direct',
+    'node-node-a',
+    'proxy-selector',
+  ]);
+  value.selectedServerId = unsupported.id;
+  expect(() => buildAndroidCoreConfig(value, host)).toThrow('Compatibility engine');
+  value.proxyMode = 'direct';
+  expect(buildAndroidCoreConfig(value, host).outbounds).toEqual([
+    { type: 'direct', tag: 'direct' },
+  ]);
+});
+test('enabled rule targets and every detour remain required and cannot silently use direct', () => {
+  const value = config();
+  value.servers.push(
+    { ...structuredClone(node), id: 'chain' },
+    { ...structuredClone(node), id: 'rule-exit', detour: 'chain' }
+  );
+  value.customRules = [
+    {
+      id: 'target',
+      enabled: true,
+      type: 'domain',
+      values: ['example.org'],
+      action: 'proxy',
+      targetServerId: 'rule-exit',
+    },
+  ];
+  const generated = buildAndroidCoreConfig(value, host);
+  expect(generated.outbounds?.find((outbound) => outbound.tag === 'node-rule-exit')).toMatchObject({
+    detour: 'node-chain',
+  });
+  expect(generated.route?.rules).toContainEqual({
+    domain: ['example.org'],
+    action: 'route',
+    outbound: 'node-rule-exit',
+  });
+  value.servers[1].network = 'xhttp';
+  expect(() => buildAndroidCoreConfig(value, host)).toThrow('Compatibility engine');
+  value.customRules[0].enabled = false;
+  expect(() => buildAndroidCoreConfig(value, host)).not.toThrow();
+  value.customRules[0].enabled = true;
+  value.servers[2].detour = 'missing';
+  expect(() => buildAndroidCoreConfig(value, host)).toThrow('chain target');
+});
 test('rules preserve order, conditions and target identity and do not mutate saved configuration', () => {
   const value = config();
   value.customRules = [

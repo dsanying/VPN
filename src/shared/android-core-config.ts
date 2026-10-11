@@ -39,16 +39,36 @@ export function buildAndroidCoreConfig(config: UserConfig, host: AndroidCoreHost
     ids.add(server.id);
     tags.set(server.id, tagFor(server));
   }
-  for (const server of config.servers) serverDetourChain(server, config.servers);
   const selected = isDirectSelection(config.selectedServerId)
     ? 'direct'
     : config.selectedServerId
       ? tags.get(config.selectedServerId)
       : undefined;
   if (config.proxyMode !== 'direct' && !selected) throw new Error('A valid exit must be selected');
+  // Only exits used by the current selection or enabled rules belong to this tunnel.
+  // An imported, inactive node must not require an unavailable compatibility engine.
+  const activeIds = new Set<string>();
+  const requireExit = (id: string) => {
+    const server = config.servers.find((candidate) => candidate.id === id);
+    if (!server) throw new Error('Rule target does not exist');
+    for (const dependency of serverDetourChain(server, config.servers))
+      activeIds.add(dependency.id);
+  };
+  if (config.proxyMode !== 'direct') {
+    if (selected !== 'direct' && config.selectedServerId) requireExit(config.selectedServerId);
+    for (const rule of unifiedUserRules(config))
+      if (
+        rule.enabled &&
+        rule.action === 'proxy' &&
+        rule.targetServerId &&
+        planCustomRule(rule).kind !== 'ext-skip'
+      )
+        requireExit(rule.targetServerId);
+  }
+  const activeServers = config.servers.filter((server) => activeIds.has(server.id));
   const endpoints: SingBoxEndpoint[] = [];
   const outbounds: SingBoxOutbound[] = [{ type: 'direct', tag: 'direct' }];
-  for (const server of config.servers) {
+  for (const server of activeServers) {
     if (meshUsesSystemInterface(server))
       throw new Error('Android cannot create privileged mesh system interfaces');
     if (server.protocol === 'wireguard')
@@ -77,7 +97,7 @@ export function buildAndroidCoreConfig(config: UserConfig, host: AndroidCoreHost
       );
     }
   }
-  for (const server of config.servers) {
+  for (const server of activeServers) {
     if (!server.detour) continue;
     if (host.bridges?.has(server.id))
       throw new Error('Android compatibility engine cannot apply this proxy chain');
@@ -90,11 +110,11 @@ export function buildAndroidCoreConfig(config: UserConfig, host: AndroidCoreHost
       endpoint.detour = tags.get(server.detour);
     }
   }
-  if (selected && selected !== 'direct')
+  if (config.proxyMode !== 'direct' && selected && selected !== 'direct')
     outbounds.push({
       type: 'selector',
       tag: 'proxy-selector',
-      outbounds: [...tags.values(), 'direct'],
+      outbounds: [...activeServers.map((server) => tags.get(server.id)!), 'direct'],
       default: selected,
     });
   const final =
