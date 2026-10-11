@@ -1,0 +1,64 @@
+import type { Page } from '@playwright/test';
+export async function installDesktopMock(page:Page,options:{helperStatus?:Partial<import('../../../src/shared/types').HelperStatus>;globalUpdates?:import('../../../src/shared/global-update').GlobalUpdateSnapshot;failActionChannel?:string;empty?:boolean;running?:boolean;locked?:boolean;failSave?:boolean;failDelete?:boolean;failStart?:boolean;deferProxy?:boolean;speedFailure?:boolean;deferSpeed?:boolean;nodeProtocol?:string;hasPassword?:boolean;fixtures?:{servers?:Record<string,unknown>[];subscriptions?:Record<string,unknown>[];measurements?:Record<string,unknown>;logs?:unknown[];node?:Record<string,unknown>}}={}){
+ await page.addInitScript(options=>{
+  const nodes=options.empty?[]:[{id:'n1',name:'示例节点',protocol:options.nodeProtocol??'vless',address:'example.com',port:443,uuid:'00000000-0000-4000-8000-000000000001',network:'ws',security:'tls',tlsSettings:{serverName:'example.com',alpn:['h2']},wsSettings:{path:'/proxy',headers:{Host:'example.com'}},createdAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',...options.fixtures?.node}];
+  let config={servers:options.fixtures?.servers??nodes,subscriptions:options.fixtures?.subscriptions??[],customRules:[],appRules:[],customAppPresets:[],selectedServerId:nodes[0]?.id??null,proxyModeType:'tun',proxyMode:'smart',logLevel:'info',language:'zh-CN',dnsConfig:{domesticDns:'https://doh.pub/dns-query',foreignDns:'https://dns.google/dns-query',enableFakeIp:true,takeoverSystemDns:false},tunConfig:{mtu:'auto',stack:'auto',autoRoute:true,strictRoute:true}};
+  const subscriptionMeasurements:Record<string,unknown>={};
+  let hasPassword=options.hasPassword??options.locked??false;let running=options.running??false;const calls:Array<{channel:string;args:unknown}>=[];const unexpected:string[]=[];const listeners=new Map<string,Set<(event:unknown,data:unknown)=>void>>();
+  const emit=(channel:string,data:unknown)=>listeners.get(channel)?.forEach(listener=>listener({},channel==='event:statsUpdated'?{sampledAt:Date.now(),source:running?'proxy':'device',...(data as object)}:data));
+  const invoke=async(channel:string,args:any)=>{calls.push({channel,args});let data:unknown;
+   if(channel===options.failActionChannel)throw new Error('Action rejected');
+   switch(channel){
+    case 'server:measurements':data=options.fixtures?.measurements??{};break;
+    case 'config:get':data=config;break;
+    case 'config:getPrivacyMode':data=options.locked??false;break;
+    case 'config:save':if(options.failSave)throw new Error('Save rejected');config=args.config??args;emit('event:configChanged',{newValue:config});break;
+    case 'config:setValue':config={...config,[args.key]:args.value};break;
+    case 'proxy:getStatus':data={running,currentServer:config.servers.find(n=>n.id===config.selectedServerId)};break;
+    case 'proxy:getPendingChanges':data={added:[],modified:[]};break;
+    case 'proxy:start':if(options.failStart)throw new Error('Start rejected');if(options.deferProxy)await new Promise<void>(resolve=>Object.assign(window,{finishProxy:resolve}));running=true;emit('event:proxyStarted',{});break;
+    case 'proxy:stop':if(options.deferProxy)await new Promise<void>(resolve=>Object.assign(window,{finishProxy:resolve}));running=false;emit('event:proxyStopped',{});break;
+    case 'rules:reorder':config={...config,customRules:args.orderedIds.map((id:string)=>config.customRules.find((r:any)=>r.id===id))};emit('event:configChanged',{newValue:config});break;
+    case 'server:switch':config={...config,selectedServerId:args.serverId};break;
+    case 'server:update':config={...config,servers:config.servers.map(n=>n.id===args.id?args:n)};break;
+    case 'server:delete':if(options.failDelete)throw new Error('Delete rejected');config={...config,servers:config.servers.filter(n=>n.id!==args.serverId)};break;
+    case 'localImport:parse':data={nodes:[{...nodes[0],id:'imported',name:'导入示例'}],subscriptions:[],stats:{imported:1,unsupported:0,skipped:0,failed:0},warnings:[],format:'uri'};break;
+    case 'server:addBulk':config={...config,servers:[...config.servers,...args.servers]};data={added:args.servers.length};break;
+    case 'server:add':data={...args,id:args.id??'new-node'};config={...config,servers:[...config.servers,data as any]};break;
+    case 'subscription:measurements':data={...subscriptionMeasurements};break;
+      case 'subscription:connectivity':data={direct:{status:'reachable',httpStatus:200,latencyMs:42},current:{status:'http-error',httpStatus:403,latencyMs:20},checkedAt:new Date().toISOString()};subscriptionMeasurements[args.subscriptionId]=data;emit('event:subscriptionMeasurements',{...subscriptionMeasurements});break;
+    case 'subscription:update':config={...config,subscriptions:config.subscriptions.map((s:any)=>s.id===args.subscription.id?args.subscription:s)};break;
+    case 'subscription:delete':config={...config,subscriptions:config.subscriptions.filter((s:any)=>s.id!==args.subscriptionId),servers:config.servers.filter(n=>n.subscriptionId!==args.subscriptionId)};break;
+    case 'subscription:preview':data={ok:true,nodeCount:1,protocols:[{protocol:'vless',count:1}]};break;
+    case 'subscription:add':data={...args.subscription,id:'s1',createdAt:'2026-10-01'};config={...config,subscriptions:[data as never]};break;
+    case 'subscription:updateServers':data={success:true,addedServers:1,updatedServers:0,deletedServers:0};break;
+    case 'privacy:hasPassword':data=hasPassword;break;
+    case 'privacy:setPassword':hasPassword=!!args.plain;data={success:true};break;
+    case 'config:setPrivacyMode':emit(args?'event:enterPrivacyMode':'event:exitPrivacyMode',{});break;
+    case 'privacy:unlock':data={ok:!hasPassword||args.plain==='test-only-password'};break;
+    case 'tailscale:login':data={started:true,authUrl:'https://example.com/login'};break;
+    case 'tailscale:loginCancel':break;
+    case 'tailscale:logout':data={runningNeedsRestart:false};break;
+    case 'shell:openExternal':break;
+    case 'server:speedTest':if(options.deferSpeed)await new Promise<void>(resolve=>Object.assign(window,{finishSpeed:resolve}));data={results:Object.fromEntries(args.serverIds.map((id:string)=>[id,options.speedFailure?-1:92])),notInPool:[],tsNotReady:[],outcome:'completed',details:Object.fromEntries(args.serverIds.map((id:string)=>[id,{entry:{status:'ok',latencyMs:52},proxyTarget:'https://cp.cloudflare.com/generate_204'}]))};break;
+    case 'system:listApplications':data=[{id:'custom-installed-example',name:'示例应用',iconDataUrl:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGNQWlX+nxLMMGrAqAGjBgwXAwAmy0IfBEOHvQAAAABJRU5ErkJggg==',path:'/Applications/Example.app',processPaths:[],processPathRegex:['^/Applications/Example\\.app/'],coverage:'bundle'},{id:'custom-installed-wrapper',name:'封装应用',path:'/usr/bin/flatpak',processPaths:[],processPathRegex:[],coverage:'unsupported'}];break;
+    case 'helper:getStatus':data={supported:true,installed:false,ready:false,version:null,loaded:null,needsRepair:false,backgroundDisabled:false,pathMismatch:false,installedSingboxPath:null,...options.helperStatus};break;
+    case 'ipinfo:get':data={direct:{ip:'192.0.2.1'},proxy:null,updatedAt:1};break;
+    case 'unlock:get':data=null;break;
+    case 'unlock:run':data={route:running&&config.proxyMode!=='direct'?'proxy':'direct',results:{youtube:{status:'ok',httpStatus:200},instagram:{status:'ok',httpStatus:403},netflix:{status:'blocked',httpStatus:451},github:{status:'error',reason:'CERT_HAS_EXPIRED'}},checkedAt:Date.now(),egress:running?{ip:'203.0.113.2'}:null};break;
+    case 'stats:subscribe':case 'stats:unsubscribe':case 'renderer:ready':break;
+    case 'helper:install':data={success:true,status:{supported:true,installed:true,ready:true,version:'5',loaded:true,needsRepair:false,backgroundDisabled:false,pathMismatch:false,installedSingboxPath:null}};break;
+    case 'backup:importPick':data={};break;
+    case 'logs:get':data=options.fixtures?.logs??[];break;
+    case 'update:check':data={hasUpdate:options.globalUpdates?.items.some(item=>item.status==='ready')??false,globalUpdates:options.globalUpdates??{checking:false,lastCheckedAt:null,items:[]}};break;
+    case 'update:install':data={success:true};break;
+    case 'core-update:check':data={hasUpdate:false,currentVersion:'1.14.0',latestVersion:'1.14.0'};break;
+    case 'version:getInfo':data={appVersion:'0.1.0',singBoxVersion:'1.14.0',platform:'darwin',arch:'arm64'};break;
+    default:unexpected.push(channel);throw new Error('Unexpected IPC '+channel);
+   }
+   return {success:true,data};
+  };
+  Object.assign(window,{electron:{platform:'darwin',ipcRenderer:{invoke,on:(channel:string,listener:(event:unknown,data:unknown)=>void)=>{const group=listeners.get(channel)??new Set();group.add(listener);listeners.set(channel,group);return()=>group.delete(listener);},once:()=>{},off:()=>{},removeAllListeners:()=>{}}},desktopTest:{calls,unexpected,emit,getConfig:()=>config}});
+ },options);
+ return {async expectNoUnexpectedRequests(){const unexpected=await page.evaluate(()=>((window as any).desktopTest.unexpected as string[]));if(unexpected.length)throw new Error(unexpected.join('\n'));}};
+}

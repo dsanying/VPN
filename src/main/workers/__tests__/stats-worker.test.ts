@@ -21,6 +21,8 @@ describe('stats-worker (batch2 数据面核心)', () => {
     setConnectionsStreamEnabled: jest.Mock;
   };
   let nowVal: number;
+  let deviceEnabled: jest.Mock;
+  let onDevice: ((snap: ConnSnap & { source: 'device' }) => void) | null;
 
   const ENDPOINT = { host: '127.0.0.1', port: 9090, secret: 's', tls: undefined };
   const CONNECT = { type: 'connect', endpoint: ENDPOINT };
@@ -49,6 +51,8 @@ describe('stats-worker (batch2 数据面核心)', () => {
     posted = [];
     messageHandler = null;
     onConnections = null;
+    onDevice = null;
+    deviceEnabled = jest.fn();
     nowVal = 10_000_000;
     jest.spyOn(Date, 'now').mockImplementation(() => nowVal);
     statsMethods = {
@@ -66,6 +70,12 @@ describe('stats-worker (batch2 数据面核心)', () => {
     };
 
     jest.resetModules();
+    jest.doMock('../../services/DeviceConnectionsService', () => ({
+      DeviceConnectionsService: jest.fn((update: typeof onDevice) => {
+        onDevice = update;
+        return { setEnabled: deviceEnabled };
+      }),
+    }));
     jest.doMock('../../services/StatsService', () => ({
       StatsService: jest.fn(
         (_onStats: unknown, _getClient: unknown, onConn: (s: ConnSnap) => void) => {
@@ -75,7 +85,10 @@ describe('stats-worker (batch2 数据面核心)', () => {
       ),
     }));
     jest.doMock('../../services/singbox-api-client', () => ({
-      SingBoxApiClient: jest.fn(() => ({})),
+      SingBoxApiClient: jest.fn(() => ({ start: jest.fn(), stop: jest.fn() })),
+    }));
+    jest.doMock('../../services/MihomoApiClient', () => ({
+      MihomoApiClient: jest.fn(() => ({ start: jest.fn(), stop: jest.fn() })),
     }));
     require('../stats-worker');
   });
@@ -83,6 +96,26 @@ describe('stats-worker (batch2 数据面核心)', () => {
   afterEach(() => {
     jest.restoreAllMocks();
     jest.resetModules();
+  });
+
+  it('停核时按需求采集设备连接，接入代理后关闭设备采集并拒绝晚到帧', () => {
+    send({ type: 'setDemand', connectionsStream: true, detail: true });
+    expect(deviceEnabled).toHaveBeenLastCalledWith(true);
+    onDevice!({
+      connections: [conn('example.com', 'system-network')],
+      at: nowVal,
+      source: 'device',
+    });
+    expect(postsOf('detail')).toHaveLength(1);
+    send(CONNECT);
+    expect(deviceEnabled).toHaveBeenLastCalledWith(false);
+    onDevice!({ connections: [], at: nowVal, source: 'device' });
+    expect(postsOf('detail')).toHaveLength(1);
+    send({ type: 'setDemand', connectionsStream: true, detail: true });
+    send({ type: 'stop' });
+    expect(deviceEnabled).toHaveBeenLastCalledWith(true);
+    send({ type: 'setDemand', connectionsStream: false, detail: false });
+    expect(deviceEnabled).toHaveBeenLastCalledWith(false);
   });
 
   it('加载即 post ready + 构造 StatsService（捕获 onConnections）', () => {
@@ -156,5 +189,20 @@ describe('stats-worker (batch2 数据面核心)', () => {
     expect(statsMethods.stop).toHaveBeenCalled();
     expect(postsOf('aggregate')).toHaveLength(0);
     expect(postsOf('detail')).toHaveLength(0);
+  });
+
+  it('Mihomo 连接启动轮询，重新连接和停核均关闭旧客户端', () => {
+    const { MihomoApiClient } = require('../../services/MihomoApiClient');
+    const { SingBoxApiClient } = require('../../services/singbox-api-client');
+    send({ type: 'connect', endpoint: { ...ENDPOINT, engine: 'mihomo' } });
+    const first = MihomoApiClient.mock.results[0].value;
+    expect(MihomoApiClient).toHaveBeenCalledWith(9090, 's');
+    expect(first.start).toHaveBeenCalledTimes(1);
+    expect(SingBoxApiClient).not.toHaveBeenCalled();
+    send(CONNECT);
+    expect(first.stop).toHaveBeenCalledTimes(1);
+    const second = SingBoxApiClient.mock.results[0].value;
+    send({ type: 'stop' });
+    expect(second.stop).toHaveBeenCalledTimes(1);
   });
 });

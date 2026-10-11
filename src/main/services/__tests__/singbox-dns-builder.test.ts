@@ -390,9 +390,7 @@ describe('buildDnsConfig — §15 主核测速探测池', () => {
     const dns = buildPool([1, 2]);
     const rules = dns.rules ?? [];
     for (let k = 0; k < 2; k++) {
-      const r = rules.find(
-        (x) => Array.isArray(x.inbound) && x.inbound.includes(`probe-in-${k}`)
-      );
+      const r = rules.find((x) => Array.isArray(x.inbound) && x.inbound.includes(`probe-in-${k}`));
       expect(r).toBeTruthy();
       expect(r!.query_type).toEqual(['A', 'AAAA']);
       expect(r!.action).toBe('route');
@@ -419,7 +417,17 @@ describe('buildDnsConfig — §15 主核测速探测池', () => {
   // §17.5：出口伴测 / 出口 IP 探测（probe-proxy-in）专用出口 DNS = 223.5.5.5 over DoH:443，detour=selectedServerTag。
   // China-reachable 治大陆出口（dns.google 8.8.4.4:443 穿大陆 16s 超时，真机实证）+ TCP/DoH 穿 tsnet 治 TS-exit（udp 弱腿）。
   it('probeProxyPort → dns-probe-exit-proxy server(223.5.5.5 DoH:443, detour=selectedServerTag) + probe-proxy-in rule 指它', () => {
-    const dns = buildDnsConfig(poolConfig(), 'proxy-selector', null, new Map(), noopLog, 0, [], [], 21002);
+    const dns = buildDnsConfig(
+      poolConfig(),
+      'proxy-selector',
+      null,
+      new Map(),
+      noopLog,
+      0,
+      [],
+      [],
+      21002
+    );
     const s = dns.servers.find((x) => x.tag === 'dns-probe-exit-proxy');
     expect(s).toBeTruthy();
     expect(s!.type).toBe('https'); // DoH（非 udp）：穿 tsnet gVisor 可达
@@ -438,22 +446,36 @@ describe('buildDnsConfig — §15 主核测速探测池', () => {
     // 正确性关键：probe-proxy-in rule 必须先于 fakeip catch-all（fakeip 非 inbound 键控，会匹配含 probe-proxy-in 的任意
     // 入站）。若落其后，probe-proxy-in 的 A/AAAA 先拿假 IP → 重现 V37 病。unshift 到绝对最前 → index 0、先于 fakeip。
     const rules = dns.rules ?? [];
-    const probeIdx = rules.findIndex((x) => Array.isArray(x.inbound) && x.inbound.includes('probe-proxy-in'));
+    const probeIdx = rules.findIndex(
+      (x) => Array.isArray(x.inbound) && x.inbound.includes('probe-proxy-in')
+    );
     const fakeipIdx = rules.findIndex((x) => x.server === 'fakeip');
     expect(probeIdx).toBe(0);
     expect(fakeipIdx).toBeGreaterThan(probeIdx);
   });
 
   it('无 probeProxyPort → 无 dns-probe-exit-proxy / probe-proxy-in rule（伴测未就绪零注入）', () => {
-    const dns = buildDnsConfig(poolConfig(), 'proxy-selector', null, new Map(), noopLog, 0, [], [], null);
+    const dns = buildDnsConfig(
+      poolConfig(),
+      'proxy-selector',
+      null,
+      new Map(),
+      noopLog,
+      0,
+      [],
+      [],
+      null
+    );
     expect(dns.servers.some((x) => x.tag === 'dns-probe-exit-proxy')).toBe(false);
     expect(
-      (dns.rules ?? []).some((x) => Array.isArray(x.inbound) && x.inbound.includes('probe-proxy-in'))
+      (dns.rules ?? []).some(
+        (x) => Array.isArray(x.inbound) && x.inbound.includes('probe-proxy-in')
+      )
     ).toBe(false);
   });
 
   // §15.11 CHANGE 2：pool DNS 规则须覆盖【非 FakeIP】分支（系统代理模式），治非选中 WG geo 错位。
-  it('非 FakeIP（系统代理，smart）→ pool inbound 键控 rule 仍注入、置于 fallthrough catch-all 之前', () => {
+  it('废弃 FakeIP 开关不影响统一策略（smart）→ pool inbound 键控 rule 仍注入、置于 fallthrough catch-all 之前', () => {
     const nonFakeip = {
       servers: [],
       selectedServerId: null,
@@ -462,7 +484,16 @@ describe('buildDnsConfig — §15 主核测速探测池', () => {
       enableIPv6: false,
       dnsConfig: { enableFakeIp: false },
     } as unknown as UserConfig;
-    const dns = buildDnsConfig(nonFakeip, 'proxy-selector', null, new Map(), noopLog, 0, [], [1, 2]);
+    const dns = buildDnsConfig(
+      nonFakeip,
+      'proxy-selector',
+      null,
+      new Map(),
+      noopLog,
+      0,
+      [],
+      [1, 2]
+    );
     const rules = dns.rules ?? [];
     for (let k = 0; k < 2; k++) {
       const r = rules.find((x) => Array.isArray(x.inbound) && x.inbound.includes(`probe-in-${k}`));
@@ -471,9 +502,9 @@ describe('buildDnsConfig — §15 主核测速探测池', () => {
       expect(r!.disable_cache).toBe(true);
     }
     // 无 fakeip 规则（关 FakeIP）；pool 规则须在 smart fallthrough catch-all（{server:'dns-remote'} 无 query_type）之前。
-    expect(rules.some((x) => x.server === 'fakeip')).toBe(false);
+    expect(rules.some((x) => x.server === 'fakeip')).toBe(true);
     const probeIdx = rules.findIndex((x) => x.server === 'dns-probe-exit-0');
-    const catchAllIdx = rules.findIndex((x) => x.server === 'dns-remote' && !x.query_type && !x.inbound);
+    const catchAllIdx = rules.findIndex((x) => x.server === 'fakeip' && !x.inbound);
     expect(probeIdx).toBe(0); // §15.11-F3：非 FakeIP 分支下 probe 规则同样在绝对最前
     expect(catchAllIdx).toBeGreaterThan(probeIdx);
   });

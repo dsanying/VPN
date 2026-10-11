@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"shadowvpn/helperrpc/entryprobe"
 	"syscall"
 
 	"golang.org/x/sys/windows/svc"
@@ -15,6 +16,9 @@ import (
 const serviceName = "ShadowVPNHelper"
 
 func main() {
+	if entryprobe.RunCommand() {
+		return
+	}
 	var console bool
 	flag.StringVar(&singboxBin, "singbox", "", "path to sing-box binary (locked at install time)")
 	flag.StringVar(&confDir, "confdir", "", "allowed config directory")

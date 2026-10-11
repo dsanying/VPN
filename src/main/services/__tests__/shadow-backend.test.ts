@@ -1,6 +1,6 @@
 jest.mock('electron', () => ({ app: { getVersion: () => '0.1.0' }, net: {}, session: {} }));
-import { SubscriptionService, defaultSubscriptionUserAgent } from '../SubscriptionService';
-import { ProtocolParser } from '../ProtocolParser';
+import { defaultSubscriptionUserAgent } from '../SubscriptionService';
+import { parseSingboxOutbounds } from '../../../shared/singbox-subscription-parser';
 import { SpeedTestService } from '../SpeedTestService';
 import { parseClashProxies } from '../ClashSubscriptionParser';
 import { resolveSpeedTestTarget } from '../../../shared/speed-test';
@@ -12,11 +12,8 @@ describe('暗影VPN 后端兼容修复', () => {
     expect(defaultSubscriptionUserAgent()).toBe('clash.meta');
   });
   it('sing-box HTTP/WS 导入保留 host、method 和全部 headers', () => {
-    const service = new SubscriptionService(new ProtocolParser(), log) as unknown as {
-      parseSingboxOutbounds(items: unknown[], sub: string): ServerConfig[];
-    };
     const base = { type: 'vmess', server: 'example.com', server_port: 443, uuid: 'test-id' };
-    const servers = service.parseSingboxOutbounds(
+    const servers = parseSingboxOutbounds(
       [
         {
           ...base,
@@ -39,7 +36,8 @@ describe('暗影VPN 后端兼容修复', () => {
           },
         },
       ],
-      'sub'
+      'sub',
+      log
     );
     expect(servers[0].httpSettings).toEqual({
       host: ['a.example', 'b.example'],
@@ -89,6 +87,52 @@ describe('暗影VPN 后端兼容修复', () => {
       latency: 90,
     });
     expect(svc.measureViaTunnel.mock.calls[1][2].host).toBe('cp.cloudflare.com');
+  });
+  it('主目标完整超时后仍给备用目标完整预算，并记录成功目标', async () => {
+    const svc = new SpeedTestService(log) as any;
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      svc.measureViaTunnel = jest
+        .fn()
+        .mockImplementationOnce(async () => {
+          clock.mockReturnValue(9000);
+          return { latency: null, reason: 'timeout' };
+        })
+        .mockResolvedValueOnce({ latency: 85 });
+      expect(await svc.measureWithFallback(1234, 8000, resolveSpeedTestTarget())).toEqual({
+        latency: 85,
+      });
+      expect(svc.measureViaTunnel.mock.calls[1][1]).toBe(8000);
+      expect(svc.measuredTargets.get(1234)).toEqual({
+        target: 'https://cp.cloudflare.com/generate_204',
+        reason: undefined,
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it('主目标失败期间内核换代时不再启动备用请求', async () => {
+    const svc = new SpeedTestService(log) as any;
+    svc.measureViaTunnel = jest.fn().mockResolvedValue({ latency: null, reason: 'timeout' });
+    await svc.measureWithFallback(1234, 8000, resolveSpeedTestTarget(), () => false);
+    expect(svc.measureViaTunnel).toHaveBeenCalledTimes(1);
+  });
+  it('出站无法构造时传递真实失败原因，不把早期失败冒充超时', async () => {
+    const svc = new SpeedTestService(log, () => null);
+    const server = {
+      id: 'unusable-fixture',
+      name: 'Fixture',
+      protocol: 'vless',
+      address: 'example.com',
+      port: 443,
+      uuid: '00000000-0000-0000-0000-000000000001',
+    } as ServerConfig;
+    const result = await svc.testAllServers([server]);
+    expect(result.results.get(server.id)).toBeNull();
+    expect(svc.getNodeMeasurement(server.id)).toMatchObject({
+      target: 'https://www.gstatic.com/generate_204',
+      reason: 'unusable',
+    });
   });
   it('自定义站点失败保留真实原因，不更改用户目标', async () => {
     const svc = new SpeedTestService(log) as unknown as {

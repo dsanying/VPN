@@ -96,3 +96,21 @@ describe('core-manifest：供应链 pin 齐全（缺 pin 时 fetch 脚本拒拉�
     }
   });
 });
+
+import compatibilityManifest from '../compatibility-core-manifest.json';
+describe('compatibility core pins', () => {
+  it.each(['xray', 'mihomo'] as const)(
+    '%s pins all official archives and executables',
+    (engine) => {
+      const core = compatibilityManifest[engine];
+      expect(core.version).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(core.repository).toBe(engine === 'xray' ? 'XTLS/Xray-core' : 'MetaCubeX/mihomo');
+      expect(Object.keys(core.assets).sort()).toEqual(['linux', 'mac-arm64', 'mac-x64', 'win']);
+      for (const asset of Object.values(core.assets)) {
+        expect(asset.sha256).toMatch(HEX64);
+        expect(asset.binarySha256).toMatch(HEX64);
+        expect(asset.binarySha256).not.toBe(asset.sha256);
+      }
+    }
+  );
+});

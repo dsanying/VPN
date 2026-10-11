@@ -148,7 +148,7 @@ export interface SingBoxConnection {
 }
 
 export interface SingBoxConnectionEvent {
-  type?: string; // 'NEW' | 'UPDATE' | 'CLOSED'（enums=String）
+  type?: string; // Official CONNECTION_EVENT_NEW/UPDATE/CLOSED; older fixtures use short names.
   id?: string;
   connection?: SingBoxConnection;
   uplinkDelta?: string;

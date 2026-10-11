@@ -596,3 +596,64 @@ describe('ProxyManager.planHotSwitch 全局 route 投影 guard', () => {
     expect(svc.planHotSwitch(cfg(list, ONLYSUB)).kind).toBe('none');
   });
 });
+
+describe('宿主设置不重启内核', () => {
+  it.each([
+    ['uiTheme', 'light'],
+    ['desktopNotifications', true],
+    ['autoStart', true],
+    ['autoConnect', true],
+    ['autoCheckUpdate', true],
+    ['autoUpdateCore', true],
+    ['speedTestUrl', 'https://example.com/probe'],
+    ['logLevel', 'debug'],
+    ['subscriptionUpdateIntervalHours', 24],
+    ['autoSwitchNode', true],
+    ['windowBounds', { width: 900, height: 700 }],
+  ])('%s 保存后仅更新运行配置，包括规则文件降级状态', async (key, value) => {
+    const s = makeSvc(),
+      before = makeConfig(),
+      after = { ...before, [key]: value };
+    expect(s.configGenerationNorm(after)).toBe(s.configGenerationNorm(before));
+    s.currentConfig = before;
+    s.singboxPid = 123;
+    s.customRuleFilesDegraded = true;
+    s.scheduleDebouncedRestart = jest.fn();
+    s.reconcileLoginFallback = jest.fn();
+    await s.switchMode(after);
+    expect(s.currentConfig).toEqual(after);
+    expect(s.scheduleDebouncedRestart).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['httpPort', 9999],
+    ['enableIPv6', true],
+  ])('%s 核心配置仍须应用', (key, value) => {
+    const s = makeSvc(),
+      before = makeConfig();
+    expect(s.configGenerationNorm({ ...before, [key]: value })).not.toBe(
+      s.configGenerationNorm(before)
+    );
+  });
+});
+
+it('serializes live configuration requests and keeps the latest choice', async () => {
+  const s = makeSvc(),
+    a = makeConfig(),
+    b = { ...a, uiTheme: 'light' },
+    c = { ...a, uiTheme: 'dark' };
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  s.applyLiveConfiguration = jest.fn(async (cfg: UserConfig) => {
+    if (cfg === b) await pending;
+    s.currentConfig = cfg;
+  });
+  const first = s.switchMode(b),
+    second = s.switchMode(c);
+  await Promise.resolve();
+  expect(s.applyLiveConfiguration).toHaveBeenCalledTimes(1);
+  release();
+  await Promise.all([first, second]);
+  expect(s.currentConfig).toBe(c);
+});

@@ -214,6 +214,32 @@ describe('StatsService 流式门控（gRPC streams）', () => {
   });
 
   describe('Connections 事件流维护（reset/NEW/UPDATE/CLOSED）', () => {
+    it('官方带前缀枚举更新流量并移除已关闭连接，未知事件不补建', () => {
+      const { service, mock } = setup();
+      service.start();
+      mock.pushConn({
+        reset: true,
+        events: [{ type: 'CONNECTION_EVENT_NEW', connection: { ...RAW_CONN } }],
+      });
+      mock.pushConn({
+        events: [
+          {
+            type: 'CONNECTION_EVENT_UPDATE',
+            id: RAW_CONN.id,
+            uplinkDelta: '100',
+            downlinkDelta: '200',
+          },
+        ],
+      });
+      expect(service.getConnectionsSnapshot().connections[0]).toMatchObject({
+        upload: 12445,
+        download: 68090,
+      });
+      mock.pushConn({ events: [{ type: 'CONNECTION_EVENT_CLOSED', id: RAW_CONN.id }] });
+      expect(service.getConnectionsSnapshot().connections).toEqual([]);
+      mock.pushConn({ events: [{ type: 'FUTURE_EVENT', connection: RAW_CONN }] });
+      expect(service.getConnectionsSnapshot().connections).toEqual([]);
+    });
     it('reset+NEW 全量建表 → trim 映射广播（字段裁剪正确）', () => {
       const { service, onConnections, mock } = setup({ withVisible: true, visible: true });
       activeServices.add(service);
@@ -320,6 +346,9 @@ describe('StatsService 流式门控（gRPC streams）', () => {
       expect((service as any).connMap.size).toBe(50_000);
       expect((service as any).connMap.has('conn-0')).toBe(false);
       expect((service as any).connMap.has('conn-50000')).toBe(true);
+      expect(service.getConnectionsSnapshot().limited).toBe(true);
+      mock.pushConn({ reset: true, events: [] });
+      expect(service.getConnectionsSnapshot().limited).toBeUndefined();
     });
 
     it('UPDATE 把活跃条目移到插入序末尾（LRU：eviction 删最久未更新而非最早插入）', () => {
@@ -563,7 +592,7 @@ describe('StatsService.setConnectionsStreamEnabled（batch2：Connections 上游
     service.setConnectionsStreamEnabled(false);
     expect(mock.calls.connStop).toBe(1); // Connections 流被 cancel
     expect(mock.hasConnCb()).toBe(false);
-    expect(mock.calls.statusStop).toBe(0); // Status 流不动（流量条恒需）
+    expect(mock.calls.statusStop).toBe(0); // Status 流不动（内部状态同步需要）
     expect(mock.hasStatusCb()).toBe(true);
     service.stop();
   });

@@ -5,7 +5,7 @@ import { registerIpcHandler } from '../ipc-handler';
 // 内核版本以 core-manifest.json 为权威（构建时随内核打包的真相），非 package.json.singboxVersion（旧值易漂移）。
 import coreManifest from '../../../shared/core-manifest.json';
 // 构建时刻注入的真实构建日期（scripts/gen-build-info.js 生成），非运行时 new Date（B-1）。
-import { BUILD_DATE } from '../../../shared/build-info';
+import { BUILD_DATE, BUILD_COMMIT, BUILD_DIRTY } from '../../../shared/build-info';
 
 const BUNDLED_CORE_VERSION = coreManifest.bundledCoreVersion || 'Unknown';
 
@@ -44,6 +44,8 @@ export function registerVersionHandlers(coreUpdateService?: CoreUpdateService): 
         appVersion: app.getVersion(),
         appName: '暗影VPN',
         buildDate: BUILD_DATE,
+        buildCommit: BUILD_COMMIT,
+        buildDirty: BUILD_DIRTY,
         singBoxVersion: currentSingBoxVersion,
         copyright: 'Based on FlowZ © dododook; MIT License',
         repositoryUrl: 'https://github.com/dsanying/VPN',

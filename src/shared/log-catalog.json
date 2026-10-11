@@ -1,0 +1,4050 @@
+[
+  {
+    "id": "log.3a5c905a1989",
+    "parts": ["Applied configuration change"],
+    "zh": "配置变更已应用",
+    "en": "Applied configuration change"
+  },
+  {
+    "id": "log.0ab55c7268fe",
+    "parts": ["Failed to apply config change: ", ""],
+    "zh": "应用配置变更失败：{0}",
+    "en": "Failed to apply config change: {0}"
+  },
+  {
+    "id": "log.ac060b741e63",
+    "parts": ["图标代理拉取失败: ", ""],
+    "zh": "图标代理拉取失败: {0}",
+    "en": "Failed to fetch icon through proxy: {0}"
+  },
+  {
+    "id": "log.b7c5976d563b",
+    "parts": ["[startup-timing] ", "（ms，自模块加载起）"],
+    "zh": "[startup-timing] {0}（ms，自模块加载起）",
+    "en": "[startup-timing] {0} (ms since module load)"
+  },
+  {
+    "id": "log.20e74fcd8b29",
+    "parts": ["System idle reached, entering lightweight mode"],
+    "zh": "系统进入空闲状态，切换到轻量模式",
+    "en": "System idle reached, entering lightweight mode"
+  },
+  {
+    "id": "log.d3a6d7a08d19",
+    "parts": ["System idle reached, entering privacy mode"],
+    "zh": "系统进入空闲状态，切换到隐私模式",
+    "en": "System idle reached, entering privacy mode"
+  },
+  {
+    "id": "log.180c55006d6b",
+    "parts": ["Renderer RSS ", "MB > ", "MB 且窗口隐藏，进入轻量模式回收"],
+    "zh": "Renderer RSS {0}MB > {1}MB 且窗口隐藏，进入轻量模式回收",
+    "en": "Renderer RSS {0} MB exceeds {1} MB; hidden window entering lightweight mode"
+  },
+  {
+    "id": "log.7d6478cfa2b0",
+    "parts": ["Renderer RSS ", "MB > ", "MB（窗口可见），建议刷新页面释放内存"],
+    "zh": "Renderer RSS {0}MB > {1}MB（窗口可见），建议刷新页面释放内存",
+    "en": "Renderer RSS {0} MB exceeds {1} MB; visible window may need a refresh"
+  },
+  {
+    "id": "log.fbc820ec4de6",
+    "parts": ["Uncaught Exception:"],
+    "zh": "未捕获异常：",
+    "en": "Uncaught Exception:"
+  },
+  {
+    "id": "log.0c02d5a3e8ab",
+    "parts": ["未捕获的异常: ", "\n", ""],
+    "zh": "未捕获的异常: {0}\n{1}",
+    "en": "Uncaught exception: {0}\n{1}"
+  },
+  {
+    "id": "log.a7b5a153af4b",
+    "parts": ["App not ready. Uncaught Exception: ", ""],
+    "zh": "应用尚未就绪，未捕获异常：{0}",
+    "en": "App not ready. Uncaught Exception: {0}"
+  },
+  {
+    "id": "log.cd9da2c0a2a6",
+    "parts": ["Unhandled Rejection at:"],
+    "zh": "未处理的 Promise 拒绝：",
+    "en": "Unhandled Rejection at:"
+  },
+  {
+    "id": "log.e8c9044c2ea7",
+    "parts": ["未处理的 Promise 拒绝: ", "\n", ""],
+    "zh": "未处理的 Promise 拒绝: {0}\n{1}",
+    "en": "Unhandled promise rejection: {0}\n{1}"
+  },
+  {
+    "id": "log.aa09363cbb4e",
+    "parts": ["App not ready. Unhandled Rejection: ", ""],
+    "zh": "应用尚未就绪，未处理的 Promise 拒绝：{0}",
+    "en": "App not ready. Unhandled Rejection: {0}"
+  },
+  {
+    "id": "log.80257fcf381b",
+    "parts": ["创建主窗口失败: ", ""],
+    "zh": "创建主窗口失败: {0}",
+    "en": "Failed to create main window: {0}"
+  },
+  {
+    "id": "log.32831376bf93",
+    "parts": ["Main window shown"],
+    "zh": "主窗口已显示",
+    "en": "Main window shown"
+  },
+  {
+    "id": "log.7a67052ac8d2",
+    "parts": ["[window-recreate-timing] ", "ms"],
+    "zh": "[window-recreate-timing] {0} ms",
+    "en": "[window-recreate-timing] {0}ms"
+  },
+  {
+    "id": "log.fca4b2f46803",
+    "parts": ["Main window kept hidden (Silent Start)"],
+    "zh": "静默启动，主窗口保持隐藏",
+    "en": "Main window kept hidden (Silent Start)"
+  },
+  {
+    "id": "log.5808a70817bd",
+    "parts": ["Failed to load dev server: ", ""],
+    "zh": "开发服务器加载失败：{0}",
+    "en": "Failed to load dev server: {0}"
+  },
+  {
+    "id": "log.7b2b2d1b2218",
+    "parts": ["Failed to load index.html: ", ""],
+    "zh": "index.html 加载失败：{0}",
+    "en": "Failed to load index.html: {0}"
+  },
+  {
+    "id": "log.8372d0e24c93",
+    "parts": ["主窗兜底：", " — ", ""],
+    "zh": "主窗兜底：{0} — {1}",
+    "en": "Main window fallback: {0} — {1}"
+  },
+  {
+    "id": "log.9432f3a3830e",
+    "parts": ["Renderer mount ready (RENDERER_READY)"],
+    "zh": "界面已挂载 (RENDERER_READY)",
+    "en": "Renderer mount ready (RENDERER_READY)"
+  },
+  {
+    "id": "log.774b75f7f37f",
+    "parts": ["Renderer mount timeout (", "ms, no RENDERER_READY) → reloading once"],
+    "zh": "界面挂载超时（{0} ms，未收到 RENDERER_READY），重载一次",
+    "en": "Renderer mount timeout ({0}ms, no RENDERER_READY) → reloading once"
+  },
+  {
+    "id": "log.111c1f9e17c4",
+    "parts": ["Fatal error page retry → reloading app"],
+    "zh": "错误页重试，正在重载应用",
+    "en": "Fatal error page retry → reloading app"
+  },
+  {
+    "id": "log.511610162662",
+    "parts": ["[renderer] ", ""],
+    "zh": "[renderer] {0}",
+    "en": "[renderer] {0}"
+  },
+  {
+    "id": "log.95e19ddd4606",
+    "parts": ["Window failed to load: ", " (", ")"],
+    "zh": "窗口加载失败：{0}（{1}）",
+    "en": "Window failed to load: {0} ({1})"
+  },
+  {
+    "id": "log.7394d4da618b",
+    "parts": ["主窗渲染进程终止（reason=", ", exitCode=", ", visible=", "", "）→ ", ""],
+    "zh": "主窗渲染进程终止（reason={0}, exitCode={1}, visible={2}{3}）→ {4}",
+    "en": "Renderer terminated (reason={0}, exitCode={1}, visible={2}{3}) → {4}"
+  },
+  {
+    "id": "log.ccc5ea54bb5d",
+    "parts": ["子进程终止（type=", ", reason=", ", exitCode=", "）"],
+    "zh": "子进程终止（type={0}, reason={1}, exitCode={2}）",
+    "en": "Child process terminated (type={0}, reason={1}, exitCode={2})"
+  },
+  {
+    "id": "log.348b35d4a925",
+    "parts": ["Window hidden to tray"],
+    "zh": "窗口已隐藏到托盘",
+    "en": "Window hidden to tray"
+  },
+  {
+    "id": "log.01b89a677e81",
+    "parts": ["Main window closed"],
+    "zh": "主窗口已关闭",
+    "en": "Main window closed"
+  },
+  {
+    "id": "log.73040550b6c0",
+    "parts": ["OS session-end detected, syncing cleanup"],
+    "zh": "系统会话结束，正在同步清理",
+    "en": "OS session-end detected, syncing cleanup"
+  },
+  {
+    "id": "log.685f4ae0f578",
+    "parts": ["Cleaning up resources before exit..."],
+    "zh": "退出前正在清理资源",
+    "en": "Cleaning up resources before exit..."
+  },
+  {
+    "id": "log.211f87f444c2",
+    "parts": ["Cleanup timed out (8s), proceeding to exit"],
+    "zh": "清理超时（8 秒），继续退出",
+    "en": "Cleanup timed out (8s), proceeding to exit"
+  },
+  {
+    "id": "log.f65a673d3b10",
+    "parts": ["cleanupResources error:"],
+    "zh": "资源清理出错：",
+    "en": "cleanupResources error:"
+  },
+  {
+    "id": "log.26db4cd3ae35",
+    "parts": ["Tearing down proxy for quit..."],
+    "zh": "退出前正在停止代理",
+    "en": "Tearing down proxy for quit..."
+  },
+  {
+    "id": "log.0392ebf19ab2",
+    "parts": ["Proxy torn down"],
+    "zh": "代理已停止",
+    "en": "Proxy torn down"
+  },
+  {
+    "id": "log.d5d7f1583ad6",
+    "parts": ["Disabling system proxy..."],
+    "zh": "正在关闭系统代理",
+    "en": "Disabling system proxy..."
+  },
+  {
+    "id": "log.00b3b5c4f156",
+    "parts": ["System proxy disabled"],
+    "zh": "系统代理已关闭",
+    "en": "System proxy disabled"
+  },
+  {
+    "id": "log.80609dbc2596",
+    "parts": ["Failed to disable system proxy: ", ""],
+    "zh": "关闭系统代理失败：{0}",
+    "en": "Failed to disable system proxy: {0}"
+  },
+  {
+    "id": "log.f809ae0d079a",
+    "parts": ["Failed to disable system proxy:"],
+    "zh": "关闭系统代理失败：",
+    "en": "Failed to disable system proxy:"
+  },
+  {
+    "id": "log.b8eb522605e7",
+    "parts": ["Restoring system DNS..."],
+    "zh": "正在恢复系统 DNS",
+    "en": "Restoring system DNS..."
+  },
+  {
+    "id": "log.7ba8a1c3d11f",
+    "parts": ["System DNS restored"],
+    "zh": "系统 DNS 已恢复",
+    "en": "System DNS restored"
+  },
+  {
+    "id": "log.a60b8bf975ad",
+    "parts": ["Failed to restore system DNS: ", ""],
+    "zh": "恢复系统 DNS 失败：{0}",
+    "en": "Failed to restore system DNS: {0}"
+  },
+  {
+    "id": "log.ac85122b3cea",
+    "parts": ["Resource cleanup completed"],
+    "zh": "资源清理完成",
+    "en": "Resource cleanup completed"
+  },
+  {
+    "id": "log.1e396a6ed488",
+    "parts": ["Error during cleanup: ", ""],
+    "zh": "清理出错：{0}",
+    "en": "Error during cleanup: {0}"
+  },
+  {
+    "id": "log.cea44998db75",
+    "parts": ["Error during cleanup:"],
+    "zh": "清理出错：",
+    "en": "Error during cleanup:"
+  },
+  {
+    "id": "log.b55e9332fbae",
+    "parts": ["Failed to update tray menu state: ", ""],
+    "zh": "更新托盘状态失败：{0}",
+    "en": "Failed to update tray menu state: {0}"
+  },
+  {
+    "id": "log.29178b684c8b",
+    "parts": ["Application started"],
+    "zh": "应用已启动",
+    "en": "Application started"
+  },
+  {
+    "id": "log.4601059c61fb",
+    "parts": ["检测到上次会话残留的系统代理(", ")，正在拆除..."],
+    "zh": "检测到上次会话残留的系统代理({0})，正在拆除...",
+    "en": "Found a system proxy left by the previous session ({0}); removing it"
+  },
+  {
+    "id": "log.c2678244e5f0",
+    "parts": ["残留系统代理已拆除"],
+    "zh": "残留系统代理已拆除",
+    "en": "Previous system proxy removed"
+  },
+  {
+    "id": "log.2b4c21e3e83f",
+    "parts": ["清理失效的系统代理 marker（当前代理未指向本应用）"],
+    "zh": "清理失效的系统代理 marker（当前代理未指向本应用）",
+    "en": "Removing stale system proxy marker; current proxy belongs to another application"
+  },
+  {
+    "id": "log.41cbe31517bd",
+    "parts": ["启动期系统代理 marker 恢复失败: ", ""],
+    "zh": "启动期系统代理 marker 恢复失败: {0}",
+    "en": "Failed to restore system proxy marker at startup: {0}"
+  },
+  {
+    "id": "log.6544c76cce77",
+    "parts": ["检测到上次会话残留的系统 DNS 接管，正在还原..."],
+    "zh": "检测到上次会话残留的系统 DNS 接管，正在还原...",
+    "en": "Found system DNS takeover left by the previous session; restoring it"
+  },
+  {
+    "id": "log.92bc3bca1015",
+    "parts": ["残留系统 DNS 已还原"],
+    "zh": "残留系统 DNS 已还原",
+    "en": "Previous system DNS restored"
+  },
+  {
+    "id": "log.d2da35ac3847",
+    "parts": ["启动期系统 DNS marker 恢复失败: ", ""],
+    "zh": "启动期系统 DNS marker 恢复失败: {0}",
+    "en": "Failed to restore system DNS marker at startup: {0}"
+  },
+  {
+    "id": "log.659fa2fa5f6b",
+    "parts": ["Configuration loaded successfully"],
+    "zh": "配置加载成功",
+    "en": "Configuration loaded successfully"
+  },
+  {
+    "id": "log.bcd353c6c4da",
+    "parts": ["Using default configuration"],
+    "zh": "使用默认配置",
+    "en": "Using default configuration"
+  },
+  {
+    "id": "log.7dfadcad206e",
+    "parts": ["Failed to load configuration: ", ""],
+    "zh": "加载配置失败：{0}",
+    "en": "Failed to load configuration: {0}"
+  },
+  {
+    "id": "log.29d20e5a1252",
+    "parts": ["Silent start: deferring window creation to first show"],
+    "zh": "静默启动，首次显示时再创建窗口",
+    "en": "Silent start: deferring window creation to first show"
+  },
+  {
+    "id": "log.7aa6ab73a68a",
+    "parts": ["configChanged dropped: no window (silent-start?)"],
+    "zh": "配置变更未发送，窗口尚未创建（可能是静默启动）",
+    "en": "configChanged dropped: no window (silent-start?)"
+  },
+  {
+    "id": "log.79ccd5fae1ea",
+    "parts": ["Proxy error: ", ""],
+    "zh": "代理错误：{0}",
+    "en": "Proxy error: {0}"
+  },
+  {
+    "id": "log.9c34ead9e4c0",
+    "parts": ["新核心启动失败，已自动回滚，正在以旧核心重启代理..."],
+    "zh": "新核心启动失败，已自动回滚，正在以旧核心重启代理...",
+    "en": "New core failed to start; rolled back and restarting the previous core"
+  },
+  {
+    "id": "log.81ff257d8722",
+    "parts": ["自动回滚重启失败: ", ""],
+    "zh": "自动回滚重启失败: {0}",
+    "en": "Failed to restart after automatic rollback: {0}"
+  },
+  {
+    "id": "log.7358d5d8b537",
+    "parts": ["启动后配置对账失败: ", ""],
+    "zh": "启动后配置对账失败: {0}",
+    "en": "Failed to reconcile configuration after startup: {0}"
+  },
+  {
+    "id": "log.82447375e522",
+    "parts": ["已记录当前运行的内核版本基线"],
+    "zh": "已记录当前运行的内核版本基线",
+    "en": "Recorded the running core version baseline"
+  },
+  {
+    "id": "log.d111c634c78a",
+    "parts": ["记录内核基线版本失败: ", ""],
+    "zh": "记录内核基线版本失败: {0}",
+    "en": "Failed to record core version baseline: {0}"
+  },
+  {
+    "id": "log.8b184f53b02a",
+    "parts": ["IPC handlers 注册完成"],
+    "zh": "IPC 处理器注册完成",
+    "en": "IPC handlers registered"
+  },
+  {
+    "id": "log.4846cb944784",
+    "parts": ["OS shutdown detected (powerMonitor), syncing cleanup"],
+    "zh": "系统正在关机 (powerMonitor)，同步清理资源",
+    "en": "OS shutdown detected (powerMonitor), syncing cleanup"
+  },
+  {
+    "id": "log.c8d59362fda7",
+    "parts": ["All windows closed, quitting"],
+    "zh": "所有窗口已关闭，正在退出",
+    "en": "All windows closed, quitting"
+  },
+  {
+    "id": "log.a70087132d63",
+    "parts": ["All windows closed, staying resident in tray"],
+    "zh": "所有窗口已关闭，继续驻留托盘",
+    "en": "All windows closed, staying resident in tray"
+  },
+  {
+    "id": "log.0c6eb06216a9",
+    "parts": ["Error during app quit:"],
+    "zh": "退出应用时出错：",
+    "en": "Error during app quit:"
+  },
+  {
+    "id": "log.3cdccb3e0b66",
+    "parts": ["[BackupHandlers] Export failed:"],
+    "zh": "[BackupHandlers] 导出失败：",
+    "en": "[BackupHandlers] Export failed:"
+  },
+  {
+    "id": "log.cc0c8ce4e411",
+    "parts": ["[BackupHandlers] 恢复补缺规则资源失败（下次自动更新兜底）:"],
+    "zh": "[BackupHandlers] 恢复补缺规则资源失败（下次自动更新兜底）:",
+    "en": "[BackupHandlers] Failed to restore missing rule resources; retrying on the next automatic update:"
+  },
+  {
+    "id": "log.2ee5927d920d",
+    "parts": ["[BackupHandlers] Import apply failed:"],
+    "zh": "[BackupHandlers] 应用导入配置失败：",
+    "en": "[BackupHandlers] Import apply failed:"
+  },
+  {
+    "id": "log.0bb987a51c0a",
+    "parts": ["[DiagnosticHandlers] Export failed:"],
+    "zh": "[DiagnosticHandlers] 导出失败：",
+    "en": "[DiagnosticHandlers] Export failed:"
+  },
+  {
+    "id": "log.66c6bf07f771",
+    "parts": ["[log-batch] UI 暂存溢出丢弃 ", " 条日志（仅 UI live tail 截断，已落盘）"],
+    "zh": "[log-batch] UI 暂存溢出丢弃 {0} 条日志（仅 UI live tail 截断，已落盘）",
+    "en": "[log-batch] UI buffer dropped {0} older entries; disk persistence is independent"
+  },
+  {
+    "id": "log.26182b3b4c96",
+    "parts": ["Failed to get core version:"],
+    "zh": "获取内核版本失败：",
+    "en": "Failed to get core version:"
+  },
+  {
+    "id": "log.3d5371752ef6",
+    "parts": ["[IPC] Error handling channel \"", "\":"],
+    "zh": "[IPC] 处理通道 \"{0}\" 时出错：",
+    "en": "[IPC] Error handling channel \"{0}\":"
+  },
+  {
+    "id": "log.6f46acc3dc79",
+    "parts": ["[IPC] Stack trace:"],
+    "zh": "[IPC] 错误堆栈：",
+    "en": "[IPC] Stack trace:"
+  },
+  {
+    "id": "log.889f359688a7",
+    "parts": ["Set openAtLogin: ", ""],
+    "zh": "开机启动设置：{0}",
+    "en": "Set openAtLogin: {0}"
+  },
+  {
+    "id": "log.59cd248cb281",
+    "parts": ["Failed to set Linux autostart: ", ""],
+    "zh": "设置 Linux 开机启动失败：{0}",
+    "en": "Failed to set Linux autostart: {0}"
+  },
+  {
+    "id": "log.fca7e373743d",
+    "parts": ["自动换节点已启用（应用层连通性检测）"],
+    "zh": "自动换节点已启用（应用层连通性检测）",
+    "en": "Automatic node switching enabled (application connectivity checks)"
+  },
+  {
+    "id": "log.ff5741d2c0ce",
+    "parts": ["自动换节点已禁用"],
+    "zh": "自动换节点已禁用",
+    "en": "Automatic node switching disabled"
+  },
+  {
+    "id": "log.d9bb9003085d",
+    "parts": ["心跳检测异常: ", ""],
+    "zh": "心跳检测异常: {0}",
+    "en": "Heartbeat check failed: {0}"
+  },
+  {
+    "id": "log.67287820d0dc",
+    "parts": ["连通性恢复正常（此前连续失败 ", " 次）"],
+    "zh": "连通性恢复正常（此前连续失败 {0} 次）",
+    "en": "Connectivity restored after {0} consecutive failures"
+  },
+  {
+    "id": "log.75aed913e3b8",
+    "parts": ["连通性检测失败 [", "/", "]: 当前节点 ", ""],
+    "zh": "连通性检测失败 [{0}/{1}]: 当前节点 {2}",
+    "en": "Connectivity check failed [{0}/{1}]: current node {2}"
+  },
+  {
+    "id": "log.2cac353cd6a1",
+    "parts": ["换节点操作已在进行中，跳过"],
+    "zh": "换节点操作已在进行中，跳过",
+    "en": "Node switch already in progress; skipping"
+  },
+  {
+    "id": "log.88a8242f1ddd",
+    "parts": ["自动换节点冷却中，", "s 后可再次触发"],
+    "zh": "自动换节点冷却中，{0}s 后可再次触发",
+    "en": "Automatic node switch cooling down; retry allowed in {0}s"
+  },
+  {
+    "id": "log.82a781298c7e",
+    "parts": ["没有其他可用节点，无法自动切换"],
+    "zh": "没有其他可用节点，无法自动切换",
+    "en": "No alternative nodes available for automatic switching"
+  },
+  {
+    "id": "log.18ef610670bd",
+    "parts": ["[", "] 开始对 ", " 个候选节点测速..."],
+    "zh": "[{0}] 开始对 {1} 个候选节点测速...",
+    "en": "[{0}] Testing {1} candidate nodes"
+  },
+  {
+    "id": "log.7700325a770f",
+    "parts": ["所有候选节点均不可达，无法自动切换"],
+    "zh": "所有候选节点均不可达，无法自动切换",
+    "en": "All candidate nodes are unreachable; cannot switch automatically"
+  },
+  {
+    "id": "log.2fcf15f9d067",
+    "parts": ["选中最优节点: ", " (", "ms)"],
+    "zh": "选中最优节点: {0} ({1}ms)",
+    "en": "Best node selected: {0} ({1} ms)"
+  },
+  {
+    "id": "log.477e94651239",
+    "parts": ["✅ 自动换节点成功: ", ""],
+    "zh": "✅ 自动换节点成功: {0}",
+    "en": "Automatic node switch succeeded: {0}"
+  },
+  {
+    "id": "log.ad917edf7f7d",
+    "parts": ["自动换节点因内核更新中暂缓: ", ""],
+    "zh": "自动换节点因内核更新中暂缓: {0}",
+    "en": "Automatic switch deferred during core update: {0}"
+  },
+  {
+    "id": "log.da4c0c6fce3e",
+    "parts": ["自动换节点失败: ", ""],
+    "zh": "自动换节点失败: {0}",
+    "en": "Automatic node switch failed: {0}"
+  },
+  {
+    "id": "log.bfc4c5499751",
+    "parts": ["备份旧配置失败（不阻断迁移）: ", ""],
+    "zh": "备份旧配置失败（不阻断迁移）: {0}",
+    "en": "Failed to back up previous configuration; migration continues: {0}"
+  },
+  {
+    "id": "log.7cb14df4bdda",
+    "parts": ["持久化 clashApiSecret 失败（不阻断）: ", ""],
+    "zh": "持久化 clashApiSecret 失败（不阻断）: {0}",
+    "en": "Failed to persist clashApiSecret; operation continues: {0}"
+  },
+  {
+    "id": "log.2c5b247abc70",
+    "parts": ["隐私密码迁移后落盘失败（不阻断）: ", ""],
+    "zh": "隐私密码迁移后落盘失败（不阻断）: {0}",
+    "en": "Failed to persist migrated privacy password; operation continues: {0}"
+  },
+  {
+    "id": "log.740e3924d63e",
+    "parts": ["隐私密码迁移失败（明文已从内存清除，下次加载重试）: ", ""],
+    "zh": "隐私密码迁移失败（明文已从内存清除，下次加载重试）: {0}",
+    "en": "Privacy password migration failed; plaintext removed from memory, retry on next load: {0}"
+  },
+  {
+    "id": "log.04a3ff7e8f1d",
+    "parts": ["应用分流默认注入落盘失败（不阻断）: ", ""],
+    "zh": "应用分流默认注入落盘失败（不阻断）: {0}",
+    "en": "Failed to persist default application routes; operation continues: {0}"
+  },
+  {
+    "id": "log.158c33da1256",
+    "parts": ["诊断采集还原落盘失败（不阻断）: ", ""],
+    "zh": "诊断采集还原落盘失败（不阻断）: {0}",
+    "en": "Failed to persist diagnostic capture reset; operation continues: {0}"
+  },
+  {
+    "id": "log.656381c85179",
+    "parts": ["诊断采集已结束，日志级别还原为 ", ""],
+    "zh": "诊断采集已结束，日志级别还原为 {0}",
+    "en": "Diagnostic capture ended; log level restored to {0}"
+  },
+  {
+    "id": "log.05325af397aa",
+    "parts": ["配置文件加载失败，使用默认配置: ", ""],
+    "zh": "配置文件加载失败，使用默认配置: {0}",
+    "en": "Failed to load configuration; using defaults: {0}"
+  },
+  {
+    "id": "log.04f027b6fbfa",
+    "parts": ["配置文件 JSON 格式错误: ", ""],
+    "zh": "配置文件 JSON 格式错误: {0}",
+    "en": "Invalid configuration JSON: {0}"
+  },
+  {
+    "id": "log.6f75c214721c",
+    "parts": ["配置文件不存在，将创建默认配置"],
+    "zh": "配置文件不存在，将创建默认配置",
+    "en": "Configuration file missing; creating defaults"
+  },
+  {
+    "id": "log.02b22e5622dc",
+    "parts": ["配置文件权限不足，无法读取"],
+    "zh": "配置文件权限不足，无法读取",
+    "en": "Insufficient permission to read configuration"
+  },
+  {
+    "id": "log.3b7db8028e13",
+    "parts": ["配置验证失败: ", ""],
+    "zh": "配置验证失败: {0}",
+    "en": "Configuration validation failed: {0}"
+  },
+  {
+    "id": "log.9afd95c323c8",
+    "parts": ["默认配置已保存到: ", ""],
+    "zh": "默认配置已保存到: {0}",
+    "en": "Default configuration saved to: {0}"
+  },
+  {
+    "id": "log.4fcd9dca95ed",
+    "parts": ["保存默认配置失败: ", ""],
+    "zh": "保存默认配置失败: {0}",
+    "en": "Failed to save default configuration: {0}"
+  },
+  {
+    "id": "log.3ceff60071ea",
+    "parts": ["配置文件损坏或校验失败，已备份到 ", "，未覆盖原文件；本次以默认配置启动"],
+    "zh": "配置文件损坏或校验失败，已备份到 {0}，未覆盖原文件；本次以默认配置启动",
+    "en": "Configuration corrupted or invalid; backed up to {0} without overwriting original, starting with defaults"
+  },
+  {
+    "id": "log.2a5f0ff406c0",
+    "parts": ["备份损坏配置失败（不阻断启动）: ", ""],
+    "zh": "备份损坏配置失败（不阻断启动）: {0}",
+    "en": "Failed to back up corrupted configuration; startup continues: {0}"
+  },
+  {
+    "id": "log.d561089706bd",
+    "parts": ["[ConfigManager] 丢弃 ", " 条非法订阅（缺 id/name/url）"],
+    "zh": "[ConfigManager] 丢弃 {0} 条非法订阅（缺 id/name/url）",
+    "en": "[ConfigManager] Dropped {0} invalid subscriptions (missing id/name/url)"
+  },
+  {
+    "id": "log.742db23176d9",
+    "parts": [
+      "[ConfigManager] 丢弃 ",
+      " 个结构非法节点（无 id/name、未知协议、缺 address/port 或协议必填缺失）"
+    ],
+    "zh": "[ConfigManager] 丢弃 {0} 个结构非法节点（无 id/name、未知协议、缺 address/port 或协议必填缺失）",
+    "en": "[ConfigManager] Dropped {0} invalid nodes (missing identity, unknown protocol or missing protocol fields)"
+  },
+  {
+    "id": "log.ef463f6cc466",
+    "parts": ["[ConfigManager] 丢弃 ", " 处非法 CIDR（endpoint allowedIPs/routes）"],
+    "zh": "[ConfigManager] 丢弃 {0} 处非法 CIDR（endpoint allowedIPs/routes）",
+    "en": "[ConfigManager] Dropped {0} invalid CIDRs (endpoint allowedIPs/routes)"
+  },
+  {
+    "id": "log.c7d57ad391c6",
+    "parts": [
+      "[ConfigManager] Tailscale 单节点硬限：丢弃 ",
+      " 个多余 Tailscale 节点（保留第一个）"
+    ],
+    "zh": "[ConfigManager] Tailscale 单节点硬限：丢弃 {0} 个多余 Tailscale 节点（保留第一个）",
+    "en": "[ConfigManager] Tailscale single-node limit: dropped {0} extra nodes, preserving the first"
+  },
+  {
+    "id": "log.d3e89826ceb2",
+    "parts": ["[ConfigManager] selectedServerId 类型非法，归零为未选节点"],
+    "zh": "[ConfigManager] selectedServerId 类型非法，归零为未选节点",
+    "en": "[ConfigManager] Invalid selectedServerId type; clearing node selection"
+  },
+  {
+    "id": "log.557243f14f44",
+    "parts": [
+      "[ConfigManager] selectedServerId 指向已不存在的节点（坏节点已剔除 / Tailscale 去重），归零为未选节点"
+    ],
+    "zh": "[ConfigManager] selectedServerId 指向已不存在的节点（坏节点已剔除 / Tailscale 去重），归零为未选节点",
+    "en": "[ConfigManager] Selected node no longer exists; clearing node selection"
+  },
+  {
+    "id": "log.1f575944d6e1",
+    "parts": [
+      "[ConfigManager] tunConfig.inboundExcludeCidrs 剔除 ",
+      " 条非法/过宽网段（须合法 CIDR，不含 0.0.0.0/0 等过宽段）"
+    ],
+    "zh": "[ConfigManager] tunConfig.inboundExcludeCidrs 剔除 {0} 条非法/过宽网段（须合法 CIDR，不含 0.0.0.0/0 等过宽段）",
+    "en": "[ConfigManager] Removed {0} invalid or overly broad tunConfig.inboundExcludeCidrs entries"
+  },
+  {
+    "id": "log.cd5e2ef46a33",
+    "parts": ["[ConfigManager] 丢弃非法 dns.timeout（须 ", "..", "ms）: ", ""],
+    "zh": "[ConfigManager] 丢弃非法 dns.timeout（须 {0}..{1}ms）: {2}",
+    "en": "[ConfigManager] Dropped invalid dns.timeout (expected {0}..{1} ms): {2}"
+  },
+  {
+    "id": "log.8f358bbcdc90",
+    "parts": ["[ConfigManager] 丢弃 ", " 条非法规则"],
+    "zh": "[ConfigManager] 丢弃 {0} 条非法规则",
+    "en": "[ConfigManager] Dropped {0} invalid rules"
+  },
+  {
+    "id": "log.502e72cc057e",
+    "parts": ["[ConfigManager] 清洗 ", " 处规则非法字段（已保留/重置默认）"],
+    "zh": "[ConfigManager] 清洗 {0} 处规则非法字段（已保留/重置默认）",
+    "en": "[ConfigManager] Sanitized {0} invalid rule fields, preserving values or resetting to defaults"
+  },
+  {
+    "id": "log.70bdcfbcafa1",
+    "parts": ["language must be a non-empty string; removing invalid value"],
+    "zh": "language 必须为非空字符串，已移除非法值",
+    "en": "language must be a non-empty string; removing invalid value"
+  },
+  {
+    "id": "log.88fd9ab2e9e7",
+    "parts": ["appRoutingEnabled must be a boolean; resetting to default (disabled)"],
+    "zh": "appRoutingEnabled 必须为布尔值，已重置为默认关闭",
+    "en": "appRoutingEnabled must be a boolean; resetting to default (disabled)"
+  },
+  {
+    "id": "log.440594ed484f",
+    "parts": ["singboxDashboard must be a boolean; dropping it (falls back to disabled)"],
+    "zh": "singboxDashboard 必须为布尔值，已移除非法值，默认关闭",
+    "en": "singboxDashboard must be a boolean; dropping it (falls back to disabled)"
+  },
+  {
+    "id": "log.7cf8ac0c668b",
+    "parts": ["builtinGeoMeta must be an object; resetting to default"],
+    "zh": "builtinGeoMeta 必须为对象，已重置为默认值",
+    "en": "builtinGeoMeta must be an object; resetting to default"
+  },
+  {
+    "id": "log.1502dd3f824d",
+    "parts": ["mainSessionViaProxy must be a boolean; resetting to default (enabled)"],
+    "zh": "mainSessionViaProxy 必须为布尔值，已重置为默认开启",
+    "en": "mainSessionViaProxy must be a boolean; resetting to default (enabled)"
+  },
+  {
+    "id": "log.3408e5ea966f",
+    "parts": ["hardwareAcceleration must be a boolean; resetting to default (enabled)"],
+    "zh": "hardwareAcceleration 必须为布尔值，已重置为默认开启",
+    "en": "hardwareAcceleration must be a boolean; resetting to default (enabled)"
+  },
+  {
+    "id": "log.aefad926ff2d",
+    "parts": ["windowEffects must be a boolean; resetting to default (enabled)"],
+    "zh": "windowEffects 必须为布尔值，已重置为默认开启",
+    "en": "windowEffects must be a boolean; resetting to default (enabled)"
+  },
+  {
+    "id": "log.5ec115e49032",
+    "parts": ["订阅代理策略迁移后落盘失败（不阻断，下次重试）: ", ""],
+    "zh": "订阅代理策略迁移后落盘失败（不阻断，下次重试）: {0}",
+    "en": "Failed to persist subscription proxy policy migration; retry on next load: {0}"
+  },
+  {
+    "id": "log.b55164ca4d87",
+    "parts": ["订阅代理策略迁移失败（吞掉，不影响启动）: ", ""],
+    "zh": "订阅代理策略迁移失败（吞掉，不影响启动）: {0}",
+    "en": "Subscription proxy policy migration failed; startup continues: {0}"
+  },
+  {
+    "id": "log.79fba5598948",
+    "parts": ["FakeIP 开关迁移后落盘失败（不阻断，下次重试）: ", ""],
+    "zh": "FakeIP 开关迁移后落盘失败（不阻断，下次重试）: {0}",
+    "en": "Failed to persist FakeIP migration; retry on next load: {0}"
+  },
+  {
+    "id": "log.924705b74cb9",
+    "parts": ["FakeIP 开关迁移失败（吞掉，不影响启动）: ", ""],
+    "zh": "FakeIP 开关迁移失败（吞掉，不影响启动）: {0}",
+    "en": "FakeIP migration failed; startup continues: {0}"
+  },
+  {
+    "id": "log.6d213b7a7c0f",
+    "parts": ["FakeIP-TUN 待纠正评估落盘失败（不阻断，下次重试）: ", ""],
+    "zh": "FakeIP-TUN 待纠正评估落盘失败（不阻断，下次重试）: {0}",
+    "en": "Failed to persist pending FakeIP-TUN correction; retry on next load: {0}"
+  },
+  {
+    "id": "log.12bc9ac0fdce",
+    "parts": ["FakeIP-TUN 待纠正评估失败（吞掉，不影响启动）: ", ""],
+    "zh": "FakeIP-TUN 待纠正评估失败（吞掉，不影响启动）: {0}",
+    "en": "Failed to evaluate pending FakeIP-TUN correction; startup continues: {0}"
+  },
+  {
+    "id": "log.d0feda7e34fa",
+    "parts": ["节点解析器迁移后落盘失败（不阻断，下次重试）: ", ""],
+    "zh": "节点解析器迁移后落盘失败（不阻断，下次重试）: {0}",
+    "en": "Failed to persist node resolver migration; retry on next load: {0}"
+  },
+  {
+    "id": "log.e0478c6a5464",
+    "parts": ["节点解析器迁移失败（吞掉，不影响启动）: ", ""],
+    "zh": "节点解析器迁移失败（吞掉，不影响启动）: {0}",
+    "en": "Node resolver migration failed; startup continues: {0}"
+  },
+  {
+    "id": "log.2525bec0c9a9",
+    "parts": ["TUN 默认值迁移后落盘失败（不阻断，下次重试）: ", ""],
+    "zh": "TUN 默认值迁移后落盘失败（不阻断，下次重试）: {0}",
+    "en": "Failed to persist TUN defaults migration; retry on next load: {0}"
+  },
+  {
+    "id": "log.49336a735bbf",
+    "parts": ["TUN 默认值迁移失败（吞掉，不影响启动）: ", ""],
+    "zh": "TUN 默认值迁移失败（吞掉，不影响启动）: {0}",
+    "en": "TUN defaults migration failed; startup continues: {0}"
+  },
+  {
+    "id": "log.392ca1e605b0",
+    "parts": ["代理停止后落位 staged 内核异常: ", ""],
+    "zh": "代理停止后落位 staged 内核异常: {0}",
+    "en": "Failed to apply staged core after proxy stopped: {0}"
+  },
+  {
+    "id": "log.e2181ff6f44d",
+    "parts": ["内核自动更新周期检查异常: ", ""],
+    "zh": "内核自动更新周期检查异常: {0}",
+    "en": "Periodic core update check failed: {0}"
+  },
+  {
+    "id": "log.32866d9d3344",
+    "parts": ["正在检查 Sing-box 核心更新..."],
+    "zh": "正在检查 Sing-box 核心更新...",
+    "en": "Checking sing-box core updates"
+  },
+  {
+    "id": "log.9926486965e6",
+    "parts": ["检测到第三方（非官方）内核，已禁用在线检查更新"],
+    "zh": "检测到第三方（非官方）内核，已禁用在线检查更新",
+    "en": "Third-party core detected; official online updates disabled"
+  },
+  {
+    "id": "log.9b7acc74cf59",
+    "parts": ["当前版本: ", ", 最新版本: ", ""],
+    "zh": "当前版本: {0}, 最新版本: {1}",
+    "en": "Current version: {0}; latest version: {1}"
+  },
+  {
+    "id": "log.acda08def727",
+    "parts": ["最新版本 ", " 曾验证失败，已跳过自动更新"],
+    "zh": "最新版本 {0} 曾验证失败，已跳过自动更新",
+    "en": "Latest version {0} previously failed validation; skipping automatic update"
+  },
+  {
+    "id": "log.ef6836f7c646",
+    "parts": ["最新版本 ", " 跨越当前兼容版本带，不自动更新"],
+    "zh": "最新版本 {0} 跨越当前兼容版本带，不自动更新",
+    "en": "Latest version {0} crosses the compatible version range; not updating automatically"
+  },
+  {
+    "id": "log.10fedc3eb469",
+    "parts": ["Found suitable asset: ", ""],
+    "zh": "找到适用的安装文件：{0}",
+    "en": "Found suitable asset: {0}"
+  },
+  {
+    "id": "log.e13d702d96be",
+    "parts": ["检查核心更新失败: ", ""],
+    "zh": "检查核心更新失败: {0}",
+    "en": "Failed to check core updates: {0}"
+  },
+  {
+    "id": "log.cb74dff8b21e",
+    "parts": ["重新解析内核资产摘要失败（将拒绝安装未校验的内核）: ", ""],
+    "zh": "重新解析内核资产摘要失败（将拒绝安装未校验的内核）: {0}",
+    "en": "Failed to resolve core asset checksum; unverified installation will be rejected: {0}"
+  },
+  {
+    "id": "log.5450a8198e9b",
+    "parts": ["开始下载核心文件..."],
+    "zh": "开始下载核心文件...",
+    "en": "Downloading core"
+  },
+  {
+    "id": "log.ce8390371c18",
+    "parts": ["正在解压核心文件..."],
+    "zh": "正在解压核心文件...",
+    "en": "Extracting core"
+  },
+  {
+    "id": "log.663ac0e1001b",
+    "parts": ["正在停止代理服务..."],
+    "zh": "正在停止代理服务...",
+    "en": "Stopping proxy service"
+  },
+  {
+    "id": "log.aeb96a08f95c",
+    "parts": ["已清理临时解压目录"],
+    "zh": "已清理临时解压目录",
+    "en": "Temporary extraction directory removed"
+  },
+  {
+    "id": "log.37613b01d519",
+    "parts": ["清理临时解压目录失败: ", ""],
+    "zh": "清理临时解压目录失败: {0}",
+    "en": "Failed to remove temporary extraction directory: {0}"
+  },
+  {
+    "id": "log.91637cc06708",
+    "parts": ["正在重启代理服务..."],
+    "zh": "正在重启代理服务...",
+    "en": "Restarting proxy service"
+  },
+  {
+    "id": "log.d12ec62e90c4",
+    "parts": ["无法获取配置，代理未自动重启，请在主界面手动连接"],
+    "zh": "无法获取配置，代理未自动重启，请在主界面手动连接",
+    "en": "Configuration unavailable; connect manually to restart proxy"
+  },
+  {
+    "id": "log.715887c4e7f4",
+    "parts": ["更新核心失败: ", ""],
+    "zh": "更新核心失败: {0}",
+    "en": "Core update failed: {0}"
+  },
+  {
+    "id": "log.9e20f62a047d",
+    "parts": ["正在替换核心文件..."],
+    "zh": "正在替换核心文件...",
+    "en": "Replacing core executable"
+  },
+  {
+    "id": "log.0cd49c679998",
+    "parts": ["正在复制: ", ""],
+    "zh": "正在复制: {0}",
+    "en": "Copying: {0}"
+  },
+  {
+    "id": "log.f9a46375fb88",
+    "parts": ["已完成 macOS Gatekeeper 签名处理"],
+    "zh": "已完成 macOS Gatekeeper 签名处理",
+    "en": "macOS Gatekeeper signing completed"
+  },
+  {
+    "id": "log.03bf118c1e29",
+    "parts": ["macOS 签名处理失败 (可能需要手动运行 sudo codesign --force -s -): ", ""],
+    "zh": "macOS 签名处理失败 (可能需要手动运行 sudo codesign --force -s -): {0}",
+    "en": "macOS signing failed; manual codesign may be required: {0}"
+  },
+  {
+    "id": "log.7d312d3a02b7",
+    "parts": ["核心文件替换成功"],
+    "zh": "核心文件替换成功",
+    "en": "Core executable replaced"
+  },
+  {
+    "id": "log.b8ad15f6a44a",
+    "parts": [
+      "naive 节点依赖随 app 打包的 libcronet；本次核心更新后如遇 naive 不可用，请回滚核心或等待 app 整体更新"
+    ],
+    "zh": "naive 节点依赖随 app 打包的 libcronet；本次核心更新后如遇 naive 不可用，请回滚核心或等待 app 整体更新",
+    "en": "Naive requires the bundled libcronet; if unavailable after this update, roll back the core or update the whole application"
+  },
+  {
+    "id": "log.cc37829352c7",
+    "parts": ["核心更新待验证窗口超时未见首启事件，解除自动重启抑制"],
+    "zh": "核心更新待验证窗口超时未见首启事件，解除自动重启抑制",
+    "en": "Core validation window expired without a first-start event; automatic restart suppression lifted"
+  },
+  {
+    "id": "log.32b9d5f19cff",
+    "parts": ["macOS 无 helper：一次性授权安装随包核 ", " 到受保护目录..."],
+    "zh": "macOS 无 helper：一次性授权安装随包核 {0} 到受保护目录...",
+    "en": "macOS without helper: authorizing bundled core {0} installation into protected directory"
+  },
+  {
+    "id": "log.c9f10633414b",
+    "parts": [
+      "随包核 elevated 安装未完成（",
+      "），延后；可在「设置·内核·重置到出厂」手动切回随包核"
+    ],
+    "zh": "随包核 elevated 安装未完成（{0}），延后；可在「设置·内核·重置到出厂」手动切回随包核",
+    "en": "Elevated bundled core installation incomplete ({0}); deferred, reset core in settings to retry"
+  },
+  {
+    "id": "log.f84ccd91f82c",
+    "parts": ["清除 staged 暂存目录失败: ", ""],
+    "zh": "清除 staged 暂存目录失败: {0}",
+    "en": "Failed to remove staged core directory: {0}"
+  },
+  {
+    "id": "log.7e5562a1f3cb",
+    "parts": ["新内核 ", " 已下载预检通过，暂存待代理停止后落位"],
+    "zh": "新内核 {0} 已下载预检通过，暂存待代理停止后落位",
+    "en": "Core {0} downloaded and prechecked; staged until proxy stops"
+  },
+  {
+    "id": "log.eae535904566",
+    "parts": ["当前内核 ", " 已追上跨带提示版本 ", "，清除跨带提示"],
+    "zh": "当前内核 {0} 已追上跨带提示版本 {1}，清除跨带提示",
+    "en": "Current core {0} reached previously reported version {1}; clearing version-range warning"
+  },
+  {
+    "id": "log.cc502a6e6995",
+    "parts": ["检测到跨版本带新版 ", "（当前 ", "），不自动更新，已提示用户手动处理"],
+    "zh": "检测到跨版本带新版 {0}（当前 {1}），不自动更新，已提示用户手动处理",
+    "en": "New core {0} crosses current version range ({1}); manual update required"
+  },
+  {
+    "id": "log.db35d2c551e1",
+    "parts": ["自动更新中止：无法获取内核资产的官方 sha256 摘要（拒绝安装未经校验的内核）"],
+    "zh": "自动更新中止：无法获取内核资产的官方 sha256 摘要（拒绝安装未经校验的内核）",
+    "en": "Automatic update aborted: official SHA-256 digest unavailable; refusing unverified core"
+  },
+  {
+    "id": "log.5deea1b4fcea",
+    "parts": ["自动更新预检失败，放弃 ", "：", ""],
+    "zh": "自动更新预检失败，放弃 {0}：{1}",
+    "en": "Automatic update precheck failed; abandoning {0}: {1}"
+  },
+  {
+    "id": "log.555058d684fb",
+    "parts": ["当前为第三方内核，作废暂存的官方内核（不覆盖用户内核）"],
+    "zh": "当前为第三方内核，作废暂存的官方内核（不覆盖用户内核）",
+    "en": "Third-party core selected; discarding staged official core without replacing user core"
+  },
+  {
+    "id": "log.af5430c2050a",
+    "parts": ["自动更新已关闭，内核 ", " 保持暂存不自动落位（", "）"],
+    "zh": "自动更新已关闭，内核 {0} 保持暂存不自动落位（{1}）",
+    "en": "Automatic update disabled; core {0} remains staged ({1})"
+  },
+  {
+    "id": "log.4bdfa0aa6d88",
+    "parts": ["staged 内核 ", " 不再适用（当前 ", "），清理暂存"],
+    "zh": "staged 内核 {0} 不再适用（当前 {1}），清理暂存",
+    "en": "Staged core {0} no longer applicable (current {1}); removing it"
+  },
+  {
+    "id": "log.802e8847258f",
+    "parts": ["代理运行中，内核 ", " 暂不落位，待停止后生效（", "）"],
+    "zh": "代理运行中，内核 {0} 暂不落位，待停止后生效（{1}）",
+    "en": "Proxy running; core {0} remains staged until proxy stops ({1})"
+  },
+  {
+    "id": "log.c52223fea52f",
+    "parts": ["staged 暂存核心缺失，清理：", ""],
+    "zh": "staged 暂存核心缺失，清理：{0}",
+    "en": "Staged core missing; clearing: {0}"
+  },
+  {
+    "id": "log.4cda88ebbe70",
+    "parts": ["落位前重预检失败，放弃 staged ", "：", ""],
+    "zh": "落位前重预检失败，放弃 staged {0}：{1}",
+    "en": "Final precheck failed; abandoning staged core {0}: {1}"
+  },
+  {
+    "id": "log.d78a1cc20f73",
+    "parts": ["内核已自动更新落位至 ", "（", "）"],
+    "zh": "内核已自动更新落位至 {0}（{1}）",
+    "en": "Core automatically updated to {0} ({1})"
+  },
+  {
+    "id": "log.3c20f3b93308",
+    "parts": ["staged 落位失败: ", ""],
+    "zh": "staged 落位失败: {0}",
+    "en": "Failed to apply staged core: {0}"
+  },
+  {
+    "id": "log.708c0e5687f3",
+    "parts": ["用户点「立即应用」，停止代理以落位新内核..."],
+    "zh": "用户点「立即应用」，停止代理以落位新内核...",
+    "en": "Apply now selected; stopping proxy to apply new core"
+  },
+  {
+    "id": "log.a0eb72f18cef",
+    "parts": ["Copy failed (attempt ", "/", "): ", ""],
+    "zh": "复制失败（第 {0}/{1} 次）：{2}",
+    "en": "Copy failed (attempt {0}/{1}): {2}"
+  },
+  {
+    "id": "log.9163e0eb9581",
+    "parts": ["File locked, attempting to force kill sing-box.exe..."],
+    "zh": "文件被占用，正在尝试停止 sing-box.exe",
+    "en": "File locked, attempting to force kill sing-box.exe..."
+  },
+  {
+    "id": "log.b7011e4af2e4",
+    "parts": ["内核版本 ", " 成功运行"],
+    "zh": "内核版本 {0} 成功运行",
+    "en": "Core version {0} ran successfully"
+  },
+  {
+    "id": "log.69cfe04d38e2",
+    "parts": ["记录版本失败: ", ""],
+    "zh": "记录版本失败: {0}",
+    "en": "Failed to record core version: {0}"
+  },
+  {
+    "id": "log.9cf7381b41e3",
+    "parts": ["回滚前停止代理服务..."],
+    "zh": "回滚前停止代理服务...",
+    "en": "Stopping proxy before rollback"
+  },
+  {
+    "id": "log.095ee8d68556",
+    "parts": ["核心回滚成功（写回受保护目录）"],
+    "zh": "核心回滚成功（写回受保护目录）",
+    "en": "Core rollback completed in protected directory"
+  },
+  {
+    "id": "log.adae68eda6f5",
+    "parts": ["正在回滚核心: ", " → ", ""],
+    "zh": "正在回滚核心: {0} → {1}",
+    "en": "Rolling back core: {0} → {1}"
+  },
+  {
+    "id": "log.fb91a2a1ca61",
+    "parts": ["回滚：已完成 macOS 签名处理"],
+    "zh": "回滚：已完成 macOS 签名处理",
+    "en": "Rollback: macOS signing completed"
+  },
+  {
+    "id": "log.5cf5bfbd609a",
+    "parts": ["回滚签名处理失败: ", ""],
+    "zh": "回滚签名处理失败: {0}",
+    "en": "Rollback signing failed: {0}"
+  },
+  {
+    "id": "log.daa6be2067b0",
+    "parts": ["核心回滚成功"],
+    "zh": "核心回滚成功",
+    "en": "Core rollback completed"
+  },
+  {
+    "id": "log.34edcc18ab75",
+    "parts": ["手动替换核心：停止代理服务..."],
+    "zh": "手动替换核心：停止代理服务...",
+    "en": "Manual core replacement: stopping proxy"
+  },
+  {
+    "id": "log.8a82961c27eb",
+    "parts": ["手动替换核心已写入受保护/受管核目录"],
+    "zh": "手动替换核心已写入受保护/受管核目录",
+    "en": "Manually replaced core in protected/managed directory"
+  },
+  {
+    "id": "log.07e23b0b370f",
+    "parts": ["手动替换完成，正在重启代理服务..."],
+    "zh": "手动替换完成，正在重启代理服务...",
+    "en": "Manual replacement completed; restarting proxy"
+  },
+  {
+    "id": "log.82b82bcdf943",
+    "parts": ["手动替换核心失败: ", ""],
+    "zh": "手动替换核心失败: {0}",
+    "en": "Manual core replacement failed: {0}"
+  },
+  {
+    "id": "log.7a1502047e03",
+    "parts": ["手动替换核心: ", " → ", ""],
+    "zh": "手动替换核心: {0} → {1}",
+    "en": "Manual core replacement: {0} → {1}"
+  },
+  {
+    "id": "log.fc868a8a5e6d",
+    "parts": ["手动替换签名处理失败: ", ""],
+    "zh": "手动替换签名处理失败: {0}",
+    "en": "Manual replacement signing failed: {0}"
+  },
+  {
+    "id": "log.0e96e70feb97",
+    "parts": ["重置内核到出厂版本..."],
+    "zh": "重置内核到出厂版本...",
+    "en": "Resetting core to bundled version"
+  },
+  {
+    "id": "log.4c6e55cf3405",
+    "parts": ["重置内核被拒绝：", ""],
+    "zh": "重置内核被拒绝：{0}",
+    "en": "Core reset rejected: {0}"
+  },
+  {
+    "id": "log.0567d035869d",
+    "parts": ["内核已重置到出厂版本"],
+    "zh": "内核已重置到出厂版本",
+    "en": "Core reset to bundled version"
+  },
+  {
+    "id": "log.4e698fa90e05",
+    "parts": ["预检：新核心 ", " 可执行（无活动配置，跳过 check）"],
+    "zh": "预检：新核心 {0} 可执行（无活动配置，跳过 check）",
+    "en": "Precheck: core {0} is executable; no active configuration to check"
+  },
+  {
+    "id": "log.6265cf22f113",
+    "parts": ["预检通过：新核心 ", " 可解析当前配置"],
+    "zh": "预检通过：新核心 {0} 可解析当前配置",
+    "en": "Precheck passed: core {0} accepts current configuration"
+  },
+  {
+    "id": "log.c24b1d58d993",
+    "parts": ["新核心已稳定运行，已删除旧核心备份"],
+    "zh": "新核心已稳定运行，已删除旧核心备份",
+    "en": "New core stable; previous core backup removed"
+  },
+  {
+    "id": "log.f9a5928e44d4",
+    "parts": ["新核心 ", " 已稳定运行 ", "s，删除旧核心备份"],
+    "zh": "新核心 {0} 已稳定运行 {1}s，删除旧核心备份",
+    "en": "Core {0} stable for {1}s; removing previous backup"
+  },
+  {
+    "id": "log.1b9fd9226be7",
+    "parts": ["待验证版本 ", " 距更新已超 ", " 分钟仍未成功运行，本次错误不触发回滚"],
+    "zh": "待验证版本 {0} 距更新已超 {1} 分钟仍未成功运行，本次错误不触发回滚",
+    "en": "Core {0} not yet running successfully after {1} minutes; current error will not trigger rollback"
+  },
+  {
+    "id": "log.af562416daaf",
+    "parts": ["新核心 ", " 启动失败，自动回滚到备份核心"],
+    "zh": "新核心 {0} 启动失败，自动回滚到备份核心",
+    "en": "Core {0} failed to start; automatically rolling back to backup"
+  },
+  {
+    "id": "log.add1f6640906",
+    "parts": ["自动回滚失败: ", ""],
+    "zh": "自动回滚失败: {0}",
+    "en": "Automatic rollback failed: {0}"
+  },
+  {
+    "id": "log.39507d15624a",
+    "parts": ["已备份当前核心到: ", ""],
+    "zh": "已备份当前核心到: {0}",
+    "en": "Current core backed up to: {0}"
+  },
+  {
+    "id": "log.5aa349b17a9b",
+    "parts": ["已从备份恢复核心（受保护目录）"],
+    "zh": "已从备份恢复核心（受保护目录）",
+    "en": "Core restored from backup into protected directory"
+  },
+  {
+    "id": "log.212c36d61586",
+    "parts": ["已从备份恢复核心"],
+    "zh": "已从备份恢复核心",
+    "en": "Core restored from backup"
+  },
+  {
+    "id": "log.911b45270579",
+    "parts": ["恢复备份失败"],
+    "zh": "恢复备份失败",
+    "en": "Failed to restore core backup"
+  },
+  {
+    "id": "log.0eee13771095",
+    "parts": ["helper 烧录路径不符: plist=", " 当前=", ""],
+    "zh": "helper 烧录路径不符: plist={0} 当前={1}",
+    "en": "Helper installation path differs: plist={0}, current={1}"
+  },
+  {
+    "id": "log.8847f8112c95",
+    "parts": ["helper 二进制缺失: ", ""],
+    "zh": "helper 二进制缺失: {0}",
+    "en": "Helper binary missing: {0}"
+  },
+  {
+    "id": "log.82b7b40539f3",
+    "parts": ["helper 安装并就绪"],
+    "zh": "helper 安装并就绪",
+    "en": "Helper installed and ready"
+  },
+  {
+    "id": "log.c4b14a924948",
+    "parts": ["helper 已安装但未在预期内就绪"],
+    "zh": "helper 已安装但未在预期内就绪",
+    "en": "Helper installed but did not become ready in time"
+  },
+  {
+    "id": "log.ad2257bd7283",
+    "parts": ["helper 已卸载"],
+    "zh": "helper 已卸载",
+    "en": "Helper uninstalled"
+  },
+  {
+    "id": "log.8100d2506fcd",
+    "parts": [
+      "[SM] statusForLegacyURL=",
+      "（0=未注册 1=已启用 2=需批准/「允许在后台」关 3=未找到）"
+    ],
+    "zh": "[SM] statusForLegacyURL={0}（0=未注册 1=已启用 2=需批准/「允许在后台」关 3=未找到）",
+    "en": "[SM] statusForLegacyURL={0} (0=not registered, 1=enabled, 2=approval required/background disabled, 3=not found)"
+  },
+  {
+    "id": "log.ae26d56d7a8f",
+    "parts": ["[BTM] 读 .btm 目录失败 code=", "", ""],
+    "zh": "[BTM] 读 .btm 目录失败 code={0}{1}",
+    "en": "[BTM] Failed to read .btm directory, code={0}{1}"
+  },
+  {
+    "id": "log.bf8b3cf0bfee",
+    "parts": [
+      "[BTM] plutil 读 .btm 失败 code=",
+      "（生产 GUI 无 FDA 属预期，已改用 SMAppService 判后台开关）"
+    ],
+    "zh": "[BTM] plutil 读 .btm 失败 code={0}（生产 GUI 无 FDA 属预期，已改用 SMAppService 判后台开关）",
+    "en": "[BTM] plutil failed to read .btm, code={0}; expected without Full Disk Access, using SMAppService for background status"
+  },
+  {
+    "id": "log.4f1dfcd36c18",
+    "parts": ["Failed to create log directory:"],
+    "zh": "创建日志目录失败：",
+    "en": "Failed to create log directory:"
+  },
+  {
+    "id": "log.fb2f307f5bc6",
+    "parts": ["Failed to write log to file:"],
+    "zh": "日志写盘失败：",
+    "en": "Failed to write log to file:"
+  },
+  {
+    "id": "log.d5fc64f5a645",
+    "parts": ["Failed to clear log files:"],
+    "zh": "清空日志文件失败：",
+    "en": "Failed to clear log files:"
+  },
+  {
+    "id": "log.3b1835451a49",
+    "parts": ["Failed to clear main log file:"],
+    "zh": "清空主日志文件失败：",
+    "en": "Failed to clear main log file:"
+  },
+  {
+    "id": "log.f3f4ac445c0c",
+    "parts": ["Failed to delete rotated log file ", ":"],
+    "zh": "删除轮转日志文件 {0} 失败：",
+    "en": "Failed to delete rotated log file {0}:"
+  },
+  {
+    "id": "log.32879b333c6b",
+    "parts": ["Failed to write log entry:"],
+    "zh": "写入日志记录失败：",
+    "en": "Failed to write log entry:"
+  },
+  {
+    "id": "log.178788249462",
+    "parts": ["Failed to check log file size:"],
+    "zh": "读取日志文件大小失败：",
+    "en": "Failed to check log file size:"
+  },
+  {
+    "id": "log.aa52439b7420",
+    "parts": ["Failed to delete oldest log file:"],
+    "zh": "删除最旧日志文件失败：",
+    "en": "Failed to delete oldest log file:"
+  },
+  {
+    "id": "log.d7e58666fb48",
+    "parts": ["Failed to rename log file ", ":"],
+    "zh": "重命名日志文件 {0} 失败：",
+    "en": "Failed to rename log file {0}:"
+  },
+  {
+    "id": "log.e4c8f804627c",
+    "parts": ["Failed to rotate log files:"],
+    "zh": "日志轮转失败：",
+    "en": "Failed to rotate log files:"
+  },
+  {
+    "id": "log.ff4d7c2e1ba5",
+    "parts": ["修复文件权限: ", ""],
+    "zh": "修复文件权限: {0}",
+    "en": "Repairing file permissions: {0}"
+  },
+  {
+    "id": "log.e5f20ef63df1",
+    "parts": ["已删除需要重新创建的文件: ", ""],
+    "zh": "已删除需要重新创建的文件: {0}",
+    "en": "Removed file that needs recreation: {0}"
+  },
+  {
+    "id": "log.eb50d8c0c4e7",
+    "parts": ["无法修复文件权限: ", "，请手动删除或运行: sudo chown ", " \"", "\""],
+    "zh": "无法修复文件权限: {0}，请手动删除或运行: sudo chown {1} \"{2}\"",
+    "en": "Cannot repair file permissions: {0}; remove manually or run sudo chown {1} \"{2}\""
+  },
+  {
+    "id": "log.6a3689c0908c",
+    "parts": ["Direct copy failed (", "), attempting elevated PowerShell copy..."],
+    "zh": "直接复制失败（{0}），正在尝试通过管理员 PowerShell 复制",
+    "en": "Direct copy failed ({0}), attempting elevated PowerShell copy..."
+  },
+  {
+    "id": "log.1a3e27b906f4",
+    "parts": ["正在经提权 helper 停止 sing-box (PID: ", ")（免授权）..."],
+    "zh": "正在经提权 helper 停止 sing-box (PID: {0})（免授权）...",
+    "en": "Stopping sing-box (PID {0}) through privileged helper, without authorization prompt"
+  },
+  {
+    "id": "log.7712c7f10587",
+    "parts": ["helper 停止未生效，退出语境跳过提权弹框（cleanup 兜底）"],
+    "zh": "helper 停止未生效，退出语境跳过提权弹框（cleanup 兜底）",
+    "en": "Helper stop did not take effect; skipping authorization prompt during exit, cleanup will handle it"
+  },
+  {
+    "id": "log.4d1bf81964c8",
+    "parts": ["helper 停止未生效，退回提权强制终止"],
+    "zh": "helper 停止未生效，退回提权强制终止",
+    "en": "Helper stop did not take effect; falling back to elevated termination"
+  },
+  {
+    "id": "log.818a2f8a3a30",
+    "parts": ["sing-box 已由提权 helper 停止（免授权）"],
+    "zh": "sing-box 已由提权 helper 停止（免授权）",
+    "en": "Privileged helper stopped sing-box without authorization prompt"
+  },
+  {
+    "id": "log.93795131fcfe",
+    "parts": ["sing-box 进程已不在，跳过提权终止"],
+    "zh": "sing-box 进程已不在，跳过提权终止",
+    "en": "sing-box process no longer exists; skipping elevated termination"
+  },
+  {
+    "id": "log.074dc418ca82",
+    "parts": ["正在停止 sing-box (PID: ", ")，通知看护脚本..."],
+    "zh": "正在停止 sing-box (PID: {0})，通知看护脚本...",
+    "en": "Stopping sing-box (PID {0}); notifying watchdog"
+  },
+  {
+    "id": "log.c42afa144de9",
+    "parts": ["写 stopflag 失败: ", ""],
+    "zh": "写 stopflag 失败: {0}",
+    "en": "Failed to write stopflag: {0}"
+  },
+  {
+    "id": "log.c3636020c6c7",
+    "parts": ["sing-box 已由看护脚本停止（无需提权）"],
+    "zh": "sing-box 已由看护脚本停止（无需提权）",
+    "en": "Watchdog stopped sing-box without elevation"
+  },
+  {
+    "id": "log.ff5727a7d053",
+    "parts": ["看护脚本未及时停止，退出语境跳过提权弹框（下次启动清扫孤儿）"],
+    "zh": "看护脚本未及时停止，退出语境跳过提权弹框（下次启动清扫孤儿）",
+    "en": "Watchdog stop timed out; skipping authorization prompt during exit, cleaning orphan at next startup"
+  },
+  {
+    "id": "log.54207913ae93",
+    "parts": ["看护脚本未及时停止 sing-box，退回提权终止"],
+    "zh": "看护脚本未及时停止 sing-box，退回提权终止",
+    "en": "Watchdog stop timed out; falling back to elevated termination"
+  },
+  {
+    "id": "log.151b6aa1a909",
+    "parts": ["进程未响应 SIGTERM，尝试强制终止..."],
+    "zh": "进程未响应 SIGTERM，尝试强制终止...",
+    "en": "Process did not respond to SIGTERM; attempting force termination"
+  },
+  {
+    "id": "log.0aee473d29e5",
+    "parts": ["sing-box 进程已停止"],
+    "zh": "sing-box 进程已停止",
+    "en": "sing-box process stopped"
+  },
+  {
+    "id": "log.4522614803b7",
+    "parts": ["停止 sing-box 进程可能失败，退出码: ", ""],
+    "zh": "停止 sing-box 进程可能失败，退出码: {0}",
+    "en": "sing-box may not have stopped; exit code {0}"
+  },
+  {
+    "id": "log.de8c64ebcd0c",
+    "parts": ["停止 sing-box 进程失败: ", ""],
+    "zh": "停止 sing-box 进程失败: {0}",
+    "en": "Failed to stop sing-box process: {0}"
+  },
+  {
+    "id": "log.9c8e9e8af908",
+    "parts": ["sing-box 已由看护脚本停止（无需 UAC）"],
+    "zh": "sing-box 已由看护脚本停止（无需 UAC）",
+    "en": "Watchdog stopped sing-box without UAC"
+  },
+  {
+    "id": "log.b2a7742cc75b",
+    "parts": [
+      "看护脚本未及时停止 sing-box（PID ",
+      "），退出语境跳过 UAC 弹框（父死看护/下次启动清扫兜底）"
+    ],
+    "zh": "看护脚本未及时停止 sing-box（PID {0}），退出语境跳过 UAC 弹框（父死看护/下次启动清扫兜底）",
+    "en": "Watchdog stop timed out (PID {0}); skipping UAC during exit, relying on parent watchdog or next startup cleanup"
+  },
+  {
+    "id": "log.b35bd38d84f9",
+    "parts": ["看护脚本未及时停止 sing-box，退回提权 taskkill（需要 UAC 授权）..."],
+    "zh": "看护脚本未及时停止 sing-box，退回提权 taskkill（需要 UAC 授权）...",
+    "en": "Watchdog stop timed out; falling back to elevated taskkill with UAC authorization"
+  },
+  {
+    "id": "log.6525377591ce",
+    "parts": ["taskkill stderr: ", ""],
+    "zh": "taskkill 标准错误：{0}",
+    "en": "taskkill stderr: {0}"
+  },
+  {
+    "id": "log.6cb9111eb1ab",
+    "parts": ["停止进程结果: code=", ""],
+    "zh": "停止进程结果: code={0}",
+    "en": "Process termination result: code={0}"
+  },
+  {
+    "id": "log.fc7f113492ce",
+    "parts": ["Linux TUN 首次配置：请求一次管理员授权（赋核心网络权限 + 安装 DNS polkit 规则）..."],
+    "zh": "Linux TUN 首次配置：请求一次管理员授权（赋核心网络权限 + 安装 DNS polkit 规则）...",
+    "en": "First Linux TUN setup: requesting administrator authorization for network capabilities and DNS polkit rules"
+  },
+  {
+    "id": "log.0a510e21f70f",
+    "parts": ["Linux TUN 提权配置完成（核心已赋权，DNS polkit 规则已安装）"],
+    "zh": "Linux TUN 提权配置完成（核心已赋权，DNS polkit 规则已安装）",
+    "en": "Linux TUN setup completed; core capabilities and DNS polkit rules installed"
+  },
+  {
+    "id": "log.a71361863504",
+    "parts": ["发现 ", " 个残留的 sing-box 进程，正在清理: ", ""],
+    "zh": "发现 {0} 个残留的 sing-box 进程，正在清理: {1}",
+    "en": "Found {0} leftover sing-box processes; cleaning: {1}"
+  },
+  {
+    "id": "log.17a9b1fc0130",
+    "parts": ["残留进程已清理"],
+    "zh": "残留进程已清理",
+    "en": "Leftover processes cleaned"
+  },
+  {
+    "id": "log.b2a48f6b64a7",
+    "parts": ["清理残留进程可能失败，退出码: ", ""],
+    "zh": "清理残留进程可能失败，退出码: {0}",
+    "en": "Leftover process cleanup may have failed; exit code {0}"
+  },
+  {
+    "id": "log.a46af1aacc1a",
+    "parts": ["清理残留进程失败: ", ""],
+    "zh": "清理残留进程失败: {0}",
+    "en": "Failed to clean leftover processes: {0}"
+  },
+  {
+    "id": "log.5fb131d7c00e",
+    "parts": ["发现 ", " 个残留的 sing-box 进程，尝试零提权清理: ", ""],
+    "zh": "发现 {0} 个残留的 sing-box 进程，尝试零提权清理: {1}",
+    "en": "Found {0} leftover sing-box processes; attempting cleanup without elevation: {1}"
+  },
+  {
+    "id": "log.59bbdceea068",
+    "parts": ["已清理 ", " 个用户态残留: ", ""],
+    "zh": "已清理 {0} 个用户态残留: {1}",
+    "en": "Cleaned {0} user-owned leftover processes: {1}"
+  },
+  {
+    "id": "log.72fda717ddeb",
+    "parts": ["", " 个 root 残留用户态杀不动(EPERM): ", "，需提权清理"],
+    "zh": "{0} 个 root 残留用户态杀不动(EPERM): {1}，需提权清理",
+    "en": "Cannot terminate {0} root-owned leftover processes (EPERM): {1}; elevation required"
+  },
+  {
+    "id": "log.4fbc277a5e34",
+    "parts": [
+      "[孤儿] 即将弹提权框清理 root 残留 ",
+      "（osascript）—— 若长时间无响应可能是授权框被遮挡"
+    ],
+    "zh": "[孤儿] 即将弹提权框清理 root 残留 {0}（osascript）—— 若长时间无响应可能是授权框被遮挡",
+    "en": "[orphan] Requesting osascript authorization to clean root leftovers {0}; prompt may be hidden if unresponsive"
+  },
+  {
+    "id": "log.aede8caab9b7",
+    "parts": ["已提权清理 ", " 个 root 残留: ", ""],
+    "zh": "已提权清理 {0} 个 root 残留: {1}",
+    "en": "Cleaned {0} root-owned leftover processes with elevation: {1}"
+  },
+  {
+    "id": "log.4cfe630975dd",
+    "parts": ["非提权清理失败: ", "（疑似提权孤儿，交启动期提权看护脚本清扫）"],
+    "zh": "非提权清理失败: {0}（疑似提权孤儿，交启动期提权看护脚本清扫）",
+    "en": "Cleanup without elevation failed: {0}; elevated startup watchdog will clean suspected orphans"
+  },
+  {
+    "id": "log.50fadb41e474",
+    "parts": ["枚举残留 sing-box 进程失败: ", ""],
+    "zh": "枚举残留 sing-box 进程失败: {0}",
+    "en": "Failed to enumerate leftover sing-box processes: {0}"
+  },
+  {
+    "id": "log.3cf172e6d372",
+    "parts": ["Hysteria2 节点 \"", "\" 的 obfs 参数（", "）不受支持，已忽略混淆配置"],
+    "zh": "Hysteria2 节点 \"{0}\" 的 obfs 参数（{1}）不受支持，已忽略混淆配置",
+    "en": "Hysteria2 node \"{0}\" has unsupported obfs ({1}); ignoring obfuscation settings"
+  },
+  {
+    "id": "log.11b107545c87",
+    "parts": ["解析 shadow-tls Base64 JSON 参数失败: ", ""],
+    "zh": "解析 shadow-tls Base64 JSON 参数失败: {0}",
+    "en": "Failed to parse shadow-tls Base64 JSON: {0}"
+  },
+  {
+    "id": "log.8289a14fb98b",
+    "parts": ["启动已让位（检测到更新的启动/停止操作接管）"],
+    "zh": "启动已让位（检测到更新的启动/停止操作接管）",
+    "en": "Startup superseded by a newer start/stop operation"
+  },
+  {
+    "id": "log.c7206e5d0f09",
+    "parts": ["Linux 核心准备失败: ", ""],
+    "zh": "Linux 核心准备失败: {0}",
+    "en": "Failed to prepare Linux core: {0}"
+  },
+  {
+    "id": "log.399fdf9e750a",
+    "parts": ["检测到 sing-box 核心版本: ", ""],
+    "zh": "检测到 sing-box 核心版本: {0}",
+    "en": "Detected sing-box core version: {0}"
+  },
+  {
+    "id": "log.1d76e2c71794",
+    "parts": ["正在预解析节点域名以防止 TUN 回流..."],
+    "zh": "正在预解析节点域名以防止 TUN 回流...",
+    "en": "Resolving node domain before startup to prevent TUN routing loops"
+  },
+  {
+    "id": "log.731cd2812bfa",
+    "parts": ["DNS 接管：内网/captive 域名将经原 LAN 解析器 ", " 解析"],
+    "zh": "DNS 接管：内网/captive 域名将经原 LAN 解析器 {0} 解析",
+    "en": "DNS takeover: LAN/captive domains will use original LAN resolver {0}"
+  },
+  {
+    "id": "log.e225902de18c",
+    "parts": ["sing-box 配置文件已生成"],
+    "zh": "sing-box 配置文件已生成",
+    "en": "sing-box configuration generated"
+  },
+  {
+    "id": "log.847dc6b281e3",
+    "parts": ["sing-box 起核较慢，正在自动重试（第 ", " 次）: ", ""],
+    "zh": "sing-box 起核较慢，正在自动重试（第 {0} 次）: {1}",
+    "en": "sing-box slow to start; retrying automatically (attempt {0}): {1}"
+  },
+  {
+    "id": "log.2f4ceb995fbd",
+    "parts": ["启动 gate 引用修正失败（将按现有配置重试）: ", ""],
+    "zh": "启动 gate 引用修正失败（将按现有配置重试）: {0}",
+    "en": "Failed to correct startup gate references; retrying existing configuration: {0}"
+  },
+  {
+    "id": "log.41d935acab3b",
+    "parts": ["内核启动失败疑因 libcronet 缺失/损坏，正在强校验自愈（hash）后重启一次: ", ""],
+    "zh": "内核启动失败疑因 libcronet 缺失/损坏，正在强校验自愈（hash）后重启一次: {0}",
+    "en": "Core startup may have failed due to missing/corrupted libcronet; restoring with hash verification and retrying once: {0}"
+  },
+  {
+    "id": "log.8eb891dd04c1",
+    "parts": ["libcronet 已从内置恢复，重启内核一次..."],
+    "zh": "libcronet 已从内置恢复，重启内核一次...",
+    "en": "libcronet restored from bundle; restarting core once"
+  },
+  {
+    "id": "log.04ceb91c5277",
+    "parts": ["sing-box 经 ", " 次就绪重试后启动成功"],
+    "zh": "sing-box 经 {0} 次就绪重试后启动成功",
+    "en": "sing-box started after {0} readiness retries"
+  },
+  {
+    "id": "log.d32af08eaed5",
+    "parts": ["系统代理状态同步失败: ", ""],
+    "zh": "系统代理状态同步失败: {0}",
+    "en": "Failed to synchronize system proxy status: {0}"
+  },
+  {
+    "id": "log.191cd0c23d67",
+    "parts": ["系统 DNS 接管状态同步失败: ", ""],
+    "zh": "系统 DNS 接管状态同步失败: {0}",
+    "en": "Failed to synchronize system DNS takeover status: {0}"
+  },
+  {
+    "id": "log.917a4727de6a",
+    "parts": ["selector 校正放弃：选中节点 ", " 不在运行核 tag 映射，待启动后对账收敛"],
+    "zh": "selector 校正放弃：选中节点 {0} 不在运行核 tag 映射，待启动后对账收敛",
+    "en": "Cannot correct selector; selected node {0} absent from running core tag map, reconciling after startup"
+  },
+  {
+    "id": "log.0e7c5531b784",
+    "parts": ["selector-settled 放行出口首探（", "）"],
+    "zh": "selector-settled 放行出口首探（{0}）",
+    "en": "selector-settled: allowing initial exit probe ({0})"
+  },
+  {
+    "id": "log.5c77a21e32f0",
+    "parts": ["已记录系统默认路由网关 ", "（停核安全网）"],
+    "zh": "已记录系统默认路由网关 {0}（停核安全网）",
+    "en": "Recorded system default gateway {0} for post-stop recovery"
+  },
+  {
+    "id": "log.bf93039e86e3",
+    "parts": [
+      "停核后系统默认路由缺失，经 helper 补回 ",
+      "（当前网关；sing-tun setRoutes EEXIST 善后误删、unsetRoutes 不回填）"
+    ],
+    "zh": "停核后系统默认路由缺失，经 helper 补回 {0}（当前网关；sing-tun setRoutes EEXIST 善后误删、unsetRoutes 不回填）",
+    "en": "Default route missing after core stopped; helper restored current gateway {0} after sing-tun route cleanup"
+  },
+  {
+    "id": "log.d4764a570f1a",
+    "parts": ["退出停止代理失败: ", ""],
+    "zh": "退出停止代理失败: {0}",
+    "en": "Failed to stop proxy during exit: {0}"
+  },
+  {
+    "id": "log.10181b54a8c5",
+    "parts": ["Windows TUN 适配器 ", " 已释放，继续启动"],
+    "zh": "Windows TUN 适配器 {0} 已释放，继续启动",
+    "en": "Windows TUN adapter {0} released; continuing startup"
+  },
+  {
+    "id": "log.5e8269e7e586",
+    "parts": ["Windows TUN 适配器 ", " 释放等待超时，仍继续启动（如起核失败将自动重试）"],
+    "zh": "Windows TUN 适配器 {0} 释放等待超时，仍继续启动（如起核失败将自动重试）",
+    "en": "Timed out waiting for Windows TUN adapter {0} release; continuing, startup failure will trigger retry"
+  },
+  {
+    "id": "log.fd24b47a7f6a",
+    "parts": ["生命周期后配置重放失败: ", ""],
+    "zh": "生命周期后配置重放失败: {0}",
+    "en": "Failed to replay configuration after lifecycle operation: {0}"
+  },
+  {
+    "id": "log.47707df6a4d4",
+    "parts": ["去抖重启结束: ", ""],
+    "zh": "去抖重启结束: {0}",
+    "en": "Debounced restart completed: {0}"
+  },
+  {
+    "id": "log.c47effa57ee7",
+    "parts": ["启用后连接 flush：管理 API CloseAllConnections → ok"],
+    "zh": "启用后连接 flush：管理 API CloseAllConnections → ok",
+    "en": "Post-enable connection flush: management API CloseAllConnections succeeded"
+  },
+  {
+    "id": "log.29323eab6ce7",
+    "parts": ["启用后连接 flush：管理 API CloseAllConnections 失败(", ")"],
+    "zh": "启用后连接 flush：管理 API CloseAllConnections 失败({0})",
+    "en": "Post-enable connection flush: management API CloseAllConnections failed ({0})"
+  },
+  {
+    "id": "log.39c0ebcb5756",
+    "parts": ["外化规则文件写失败，已删旧副本回退 inline: ", " (", ")"],
+    "zh": "外化规则文件写失败，已删旧副本回退 inline: {0} ({1})",
+    "en": "Failed to write external rule file; removed stale copy and using inline rules: {0} ({1})"
+  },
+  {
+    "id": "log.23d04a456b14",
+    "parts": ["落盘外化规则文件失败（回退 inline）: ", ""],
+    "zh": "落盘外化规则文件失败（回退 inline）: {0}",
+    "en": "Failed to persist external rule files; using inline rules: {0}"
+  },
+  {
+    "id": "log.565d20cfe3c0",
+    "parts": ["热更外化规则文件失败，退回去抖重启: ", ""],
+    "zh": "热更外化规则文件失败，退回去抖重启: {0}",
+    "en": "Failed to hot-reload external rule files; scheduling debounced restart: {0}"
+  },
+  {
+    "id": "log.99412681c459",
+    "parts": ["热切换失败，退回重启式切换"],
+    "zh": "热切换失败，退回重启式切换",
+    "en": "Hot switch failed; falling back to restart-based switching"
+  },
+  {
+    "id": "log.302c42b1d168",
+    "parts": ["仅新增未引用节点（订阅刷新等），免重启应用（新节点下次启动/被选中时生效）"],
+    "zh": "仅新增未引用节点（订阅刷新等），免重启应用（新节点下次启动/被选中时生效）",
+    "en": "Only unreferenced nodes added; no restart needed, new nodes activate when selected or at next startup"
+  },
+  {
+    "id": "log.ef982af3d4b1",
+    "parts": ["配置已更改，调度去抖重启以应用..."],
+    "zh": "配置已更改，调度去抖重启以应用...",
+    "en": "Configuration changed; scheduling debounced restart"
+  },
+  {
+    "id": "log.70bb3aad0ee6",
+    "parts": ["切换节点断连：管理 API 客户端未就绪，跳过"],
+    "zh": "切换节点断连：管理 API 客户端未就绪，跳过",
+    "en": "Node switch connection cleanup skipped; management API client not ready"
+  },
+  {
+    "id": "log.eff29d45b976",
+    "parts": ["切换节点断连：连接列表首帧超时，跳过"],
+    "zh": "切换节点断连：连接列表首帧超时，跳过",
+    "en": "Node switch connection cleanup skipped; initial connection list timed out"
+  },
+  {
+    "id": "log.cd376ba4159d",
+    "parts": ["切换节点断连：关旧成员存量连接 ", " 条（pairs=", "）"],
+    "zh": "切换节点断连：关旧成员存量连接 {0} 条（pairs={1}）",
+    "en": "Node switch: closing {0} existing connections from previous members (pairs={1})"
+  },
+  {
+    "id": "log.09d66ce9bbe5",
+    "parts": ["管理 API 客户端未就绪，无法热切换 ", ""],
+    "zh": "管理 API 客户端未就绪，无法热切换 {0}",
+    "en": "Management API client not ready; cannot hot-switch {0}"
+  },
+  {
+    "id": "log.9fcba7d80049",
+    "parts": ["管理 API 热切换 ", " 失败：", ""],
+    "zh": "管理 API 热切换 {0} 失败：{1}",
+    "en": "Management API hot switch {0} failed: {1}"
+  },
+  {
+    "id": "log.06240a3eca01",
+    "parts": ["已热切换 ", " → ", "（管理 API，无重启）"],
+    "zh": "已热切换 {0} → {1}（管理 API，无重启）",
+    "en": "Hot-switched {0} → {1} through management API, without restart"
+  },
+  {
+    "id": "log.a01de64464c7",
+    "parts": ["TS 出口恢复腿异常: ", ""],
+    "zh": "TS 出口恢复腿异常: {0}",
+    "en": "Tailscale exit recovery failed: {0}"
+  },
+  {
+    "id": "log.100a6c4f46e0",
+    "parts": ["热重设 exit_node 跳过：peers 未解到 stableID（exitNode=", "）"],
+    "zh": "热重设 exit_node 跳过：peers 未解到 stableID（exitNode={0}）",
+    "en": "Skipping exit_node hot reset; peers did not resolve stableID (exitNode={0})"
+  },
+  {
+    "id": "log.94a1510d007a",
+    "parts": ["已热重设 TS exit_node → ", "（stableID=", "）"],
+    "zh": "已热重设 TS exit_node → {0}（stableID={1}）",
+    "en": "Tailscale exit_node hot reset to {0} (stableID={1})"
+  },
+  {
+    "id": "log.6d6baec75586",
+    "parts": ["热重设 exit_node 失败: ", ""],
+    "zh": "热重设 exit_node 失败: {0}",
+    "en": "Failed to hot-reset exit_node: {0}"
+  },
+  {
+    "id": "log.20fc839ca76e",
+    "parts": ["组网出口「", "」尚未登录，登录期默认路由让位直连"],
+    "zh": "组网出口「{0}」尚未登录，登录期默认路由让位直连",
+    "en": "Mesh exit \"{0}\" not logged in; temporarily using direct route for login"
+  },
+  {
+    "id": "log.97ec260685e8",
+    "parts": ["组网出口让位撤销：找不到出口 tag（", "），跳过 selector 切回"],
+    "zh": "组网出口让位撤销：找不到出口 tag（{0}），跳过 selector 切回",
+    "en": "Cannot revoke mesh exit fallback; exit tag {0} missing, skipping selector restoration"
+  },
+  {
+    "id": "log.818ddc728a41",
+    "parts": ["组网出口「", "」让位撤销，默认路由切回该出口"],
+    "zh": "组网出口「{0}」让位撤销，默认路由切回该出口",
+    "en": "Mesh exit \"{0}\" fallback revoked; default route restored to that exit"
+  },
+  {
+    "id": "log.46fd4ce9d07e",
+    "parts": ["官方内核 ", " 旧于随包基线 ", "，用随包核替换..."],
+    "zh": "官方内核 {0} 旧于随包基线 {1}，用随包核替换...",
+    "en": "Official core {0} older than bundled baseline {1}; replacing with bundled core"
+  },
+  {
+    "id": "log.b3d27cbc2d0c",
+    "parts": ["内核已用随包版刷新至 ", ""],
+    "zh": "内核已用随包版刷新至 {0}",
+    "en": "Core refreshed to bundled version {0}"
+  },
+  {
+    "id": "log.121e7da3bf5d",
+    "parts": [
+      "随包内核刷新未生效（仍为 ",
+      "，期望 ≥ ",
+      "）",
+      "；请退出代理后在「设置 · 内核 · 重置到出厂」手动切回随包核"
+    ],
+    "zh": "随包内核刷新未生效（仍为 {0}，期望 ≥ {1}）{2}；请退出代理后在「设置 · 内核 · 重置到出厂」手动切回随包核",
+    "en": "Bundled core refresh did not take effect (still {0}, expected >= {1}){2}; stop proxy and reset core in settings"
+  },
+  {
+    "id": "log.508ca9215df5",
+    "parts": [
+      "检测到非官方内核 ",
+      " 低于随包基线 ",
+      "，可能与新版配置不兼容（连接异常/功能缺失）；建议手动升级内核或在「设置 · 内核 · 重置到出厂」切回随包官方核"
+    ],
+    "zh": "检测到非官方内核 {0} 低于随包基线 {1}，可能与新版配置不兼容（连接异常/功能缺失）；建议手动升级内核或在「设置 · 内核 · 重置到出厂」切回随包官方核",
+    "en": "Unofficial core {0} older than bundled baseline {1}; configuration may be incompatible, upgrade manually or reset to bundled core"
+  },
+  {
+    "id": "log.769386b10a0c",
+    "parts": ["启动期随包核对齐异常: ", ""],
+    "zh": "启动期随包核对齐异常: {0}",
+    "en": "Failed to align bundled core at startup: {0}"
+  },
+  {
+    "id": "log.f236e2710c3d",
+    "parts": ["获取核心版本失败: ", ""],
+    "zh": "获取核心版本失败: {0}",
+    "en": "Failed to get core version: {0}"
+  },
+  {
+    "id": "log.2f03afc98337",
+    "parts": ["获取核心版本行失败: ", ""],
+    "zh": "获取核心版本行失败: {0}",
+    "en": "Failed to read core version line: {0}"
+  },
+  {
+    "id": "log.79f4672320a8",
+    "parts": ["预检配置生成失败: ", ""],
+    "zh": "预检配置生成失败: {0}",
+    "en": "Failed to generate precheck configuration: {0}"
+  },
+  {
+    "id": "log.72820042c12c",
+    "parts": ["节点域名 race 解析就绪：127.0.0.1:", "（Tier1 ", " / Tier2 ", "）"],
+    "zh": "节点域名 race 解析就绪：127.0.0.1:{0}（Tier1 {1} / Tier2 {2}）",
+    "en": "Node DNS race resolver ready at 127.0.0.1:{0} (Tier1 {1} / Tier2 {2})"
+  },
+  {
+    "id": "log.365570b1b10a",
+    "parts": ["race server 启动失败，降级单上游(dns-bootstrap): ", ""],
+    "zh": "race server 启动失败，降级单上游(dns-bootstrap): {0}",
+    "en": "DNS race server failed; falling back to single upstream dns-bootstrap: {0}"
+  },
+  {
+    "id": "log.58670876ade2",
+    "parts": ["配置已生成: inbounds=", ", outbounds=", ", rule_set=", ""],
+    "zh": "配置已生成: inbounds={0}, outbounds={1}, rule_set={2}",
+    "en": "Configuration generated: inbounds={0}, outbounds={1}, rule_set={2}"
+  },
+  {
+    "id": "log.d1dcad68b110",
+    "parts": ["sing-box 日志文件已清空"],
+    "zh": "sing-box 日志文件已清空",
+    "en": "sing-box log file cleared"
+  },
+  {
+    "id": "log.67263a694da0",
+    "parts": ["清空 sing-box 日志文件失败: ", ""],
+    "zh": "清空 sing-box 日志文件失败: {0}",
+    "en": "Failed to clear sing-box log file: {0}"
+  },
+  {
+    "id": "log.5a54df5970f0",
+    "parts": ["启动前配置校验跳过（核心不可执行/校验超时），按现有配置直接启动"],
+    "zh": "启动前配置校验跳过（核心不可执行/校验超时），按现有配置直接启动",
+    "en": "Startup configuration check skipped (core not executable/check timed out); starting existing configuration"
+  },
+  {
+    "id": "log.b83bb0a8e3d0",
+    "parts": ["启动前配置校验剔除了 ", " 个非法节点，已用剩余节点启动"],
+    "zh": "启动前配置校验剔除了 {0} 个非法节点，已用剩余节点启动",
+    "en": "Startup check removed {0} invalid nodes; starting remaining nodes"
+  },
+  {
+    "id": "log.5a2805af13bd",
+    "parts": ["启动前配置校验已剔除非法出站「", "」"],
+    "zh": "启动前配置校验已剔除非法出站「{0}」",
+    "en": "Startup check removed invalid outbound \"{0}\""
+  },
+  {
+    "id": "log.ba13e0fa7693",
+    "parts": ["TUN 模式经提权 helper 启动 sing-box（免授权）", "..."],
+    "zh": "TUN 模式经提权 helper 启动 sing-box（免授权）{0}...",
+    "en": "Starting sing-box in TUN mode through privileged helper, without authorization prompt{0}"
+  },
+  {
+    "id": "log.b38b612b2015",
+    "parts": ["sing-box 已由提权 helper 启动成功（免授权）"],
+    "zh": "sing-box 已由提权 helper 启动成功（免授权）",
+    "en": "Privileged helper started sing-box successfully without authorization prompt"
+  },
+  {
+    "id": "log.d0c515e7128e",
+    "parts": ["Windows TUN 适配器 ", " 存在性无法确认（探测失败），fail-open 继续"],
+    "zh": "Windows TUN 适配器 {0} 存在性无法确认（探测失败），fail-open 继续",
+    "en": "Cannot verify Windows TUN adapter {0}; probe failed, continuing startup"
+  },
+  {
+    "id": "log.b37360d0158f",
+    "parts": ["sing-box 启动失败：", ""],
+    "zh": "sing-box 启动失败：{0}",
+    "en": "sing-box startup failed: {0}"
+  },
+  {
+    "id": "log.9057125d37e7",
+    "parts": ["sing-box FATAL 原文：", ""],
+    "zh": "sing-box FATAL 原文：{0}",
+    "en": "Original sing-box FATAL: {0}"
+  },
+  {
+    "id": "log.dc6165ea08e6",
+    "parts": ["TUN 地址冲突，停止重试：", ""],
+    "zh": "TUN 地址冲突，停止重试：{0}",
+    "en": "TUN address conflict; no more retries: {0}"
+  },
+  {
+    "id": "log.5dc47dc75167",
+    "parts": ["TUN 地址冲突：正在探测可用地址并重试一次..."],
+    "zh": "TUN 地址冲突：正在探测可用地址并重试一次...",
+    "en": "TUN address conflict; probing available addresses and retrying once"
+  },
+  {
+    "id": "log.108df50f6d4e",
+    "parts": [
+      "TUN 地址冲突已避让：",
+      " → 本次改用 ",
+      "。占用方常是其它 VPN/TUN 客户端的残留网卡（可能已断开或隐藏，设备管理器默认不显示）"
+    ],
+    "zh": "TUN 地址冲突已避让：{0} → 本次改用 {1}。占用方常是其它 VPN/TUN 客户端的残留网卡（可能已断开或隐藏，设备管理器默认不显示）",
+    "en": "Avoided TUN address conflict: {0} → {1}; often caused by a leftover adapter from another VPN/TUN client"
+  },
+  {
+    "id": "log.ebfe4a14336d",
+    "parts": [
+      "TUN 地址候选池无一可用（",
+      "），回落默认 ",
+      "——若起核失败请检查本机是否有占用该网段的残留网卡"
+    ],
+    "zh": "TUN 地址候选池无一可用（{0}），回落默认 {1}——若起核失败请检查本机是否有占用该网段的残留网卡",
+    "en": "No TUN address candidates available ({0}); using default {1}, check leftover adapters if startup fails"
+  },
+  {
+    "id": "log.d2a39b6da1bc",
+    "parts": [
+      "Windows TUN 适配器（",
+      "）持续未建立，起核重试预算耗尽 → 终态诊断，停止无谓重试（常见 wintun 被拦/驱动异常/冲突 VPN，亦可能配置/端口/内核致起核失败——开诊断采集看日志拍板）"
+    ],
+    "zh": "Windows TUN 适配器（{0}）持续未建立，起核重试预算耗尽 → 终态诊断，停止无谓重试（常见 wintun 被拦/驱动异常/冲突 VPN，亦可能配置/端口/内核致起核失败——开诊断采集看日志拍板）",
+    "en": "Windows TUN adapter {0} still missing; startup retry budget exhausted, check diagnostic logs for driver, VPN conflict or core errors"
+  },
+  {
+    "id": "log.b155fd9f112c",
+    "parts": [
+      "helper「允许在后台」被系统关闭：本次走 osascript 看护脚本（不依赖 BTM，避免 daemon 被系统收割）。请在「系统设置 > 通用 > 登录项与扩展」重新打开开关以恢复免授权启停"
+    ],
+    "zh": "helper「允许在后台」被系统关闭：本次走 osascript 看护脚本（不依赖 BTM，避免 daemon 被系统收割）。请在「系统设置 > 通用 > 登录项与扩展」重新打开开关以恢复免授权启停",
+    "en": "Helper background permission disabled by system; using osascript watchdog. Re-enable it in System Settings > General > Login Items & Extensions for prompt-free operation"
+  },
+  {
+    "id": "log.22f7af822288",
+    "parts": ["helper 启动失败，回退 osascript 看护脚本: ", ""],
+    "zh": "helper 启动失败，回退 osascript 看护脚本: {0}",
+    "en": "Helper startup failed; using osascript watchdog: {0}"
+  },
+  {
+    "id": "log.d3e5e667d675",
+    "parts": ["helper 已安装但未就绪，本次回退 osascript 授权路径"],
+    "zh": "helper 已安装但未就绪，本次回退 osascript 授权路径",
+    "en": "Helper installed but not ready; using osascript authorization"
+  },
+  {
+    "id": "log.d1c29af90a04",
+    "parts": ["helper 服务启动失败，回退 UAC 路径: ", ""],
+    "zh": "helper 服务启动失败，回退 UAC 路径: {0}",
+    "en": "Helper service startup failed; falling back to UAC: {0}"
+  },
+  {
+    "id": "log.94c938251724",
+    "parts": ["helper 启动失败，回退 setcap 路径: ", ""],
+    "zh": "helper 启动失败，回退 setcap 路径: {0}",
+    "en": "Helper startup failed; falling back to setcap: {0}"
+  },
+  {
+    "id": "log.d07175fc8311",
+    "parts": ["TUN 模式需要管理员权限", "，正在请求（仅此一次，后续启停免授权）..."],
+    "zh": "TUN 模式需要管理员权限{0}，正在请求（仅此一次，后续启停免授权）...",
+    "en": "TUN requires administrator permission{0}; requesting once for prompt-free future start/stop"
+  },
+  {
+    "id": "log.d48a47774a9d",
+    "parts": ["TUN 模式需要管理员权限", "，正在请求 UAC 授权（仅启动这一次，停止/退出免授权）..."],
+    "zh": "TUN 模式需要管理员权限{0}，正在请求 UAC 授权（仅启动这一次，停止/退出免授权）...",
+    "en": "TUN requires administrator permission{0}; requesting UAC for this start only, stop/exit needs no prompt"
+  },
+  {
+    "id": "log.151bb742abb4",
+    "parts": ["正在启动 sing-box（权限提升进程 PID: ", "）..."],
+    "zh": "正在启动 sing-box（权限提升进程 PID: {0}）...",
+    "en": "Starting sing-box through elevated process (PID {0})"
+  },
+  {
+    "id": "log.b27318b524f4",
+    "parts": ["正在启动 sing-box 进程 (PID: ", ")..."],
+    "zh": "正在启动 sing-box 进程 (PID: {0})...",
+    "en": "Starting sing-box process (PID {0})"
+  },
+  {
+    "id": "log.c9198f3e9798",
+    "parts": ["sing-box process error: ", ""],
+    "zh": "sing-box 进程错误：{0}",
+    "en": "sing-box process error: {0}"
+  },
+  {
+    "id": "log.4295ab750d34",
+    "parts": ["sing-box process exited with code ", ", signal ", ""],
+    "zh": "sing-box 进程已退出，退出码 {0}，信号 {1}",
+    "en": "sing-box process exited with code {0}, signal {1}"
+  },
+  {
+    "id": "log.93cde64a7339",
+    "parts": ["sing-box 进程启动成功"],
+    "zh": "sing-box 进程启动成功",
+    "en": "sing-box process started successfully"
+  },
+  {
+    "id": "log.c2df8483acfa",
+    "parts": ["启动 sing-box 进程时发生异常: ", ""],
+    "zh": "启动 sing-box 进程时发生异常: {0}",
+    "en": "Exception while starting sing-box: {0}"
+  },
+  {
+    "id": "log.9239eeaf929d",
+    "parts": ["正在经提权服务停止 sing-box (PID: ", ")（免 UAC）..."],
+    "zh": "正在经提权服务停止 sing-box (PID: {0})（免 UAC）...",
+    "en": "Stopping sing-box (PID {0}) through privileged service, without UAC"
+  },
+  {
+    "id": "log.0cf5e469dbe1",
+    "parts": ["sing-box 已由提权服务停止（免 UAC）"],
+    "zh": "sing-box 已由提权服务停止（免 UAC）",
+    "en": "Privileged service stopped sing-box without UAC"
+  },
+  {
+    "id": "log.16ebcb338e04",
+    "parts": ["helper 服务停止未生效，回退提权路径"],
+    "zh": "helper 服务停止未生效，回退提权路径",
+    "en": "Helper service stop did not take effect; falling back to elevation"
+  },
+  {
+    "id": "log.dfed2a778f99",
+    "parts": ["正在经提权 helper 停止 sing-box (PID: ", ")（免提权）..."],
+    "zh": "正在经提权 helper 停止 sing-box (PID: {0})（免提权）...",
+    "en": "Stopping sing-box (PID {0}) through helper, without elevation prompt"
+  },
+  {
+    "id": "log.df29ca5d097c",
+    "parts": ["helper 停止未生效，回退同 uid 直接终止"],
+    "zh": "helper 停止未生效，回退同 uid 直接终止",
+    "en": "Helper stop did not take effect; falling back to same-UID termination"
+  },
+  {
+    "id": "log.7e2e9f37ba27",
+    "parts": ["sing-box 已停止（helper 路径）"],
+    "zh": "sing-box 已停止（helper 路径）",
+    "en": "sing-box stopped through helper"
+  },
+  {
+    "id": "log.f4652b7e8a36",
+    "parts": ["sing-box 进程已退出，直接收尾（不等 exit 事件）"],
+    "zh": "sing-box 进程已退出，直接收尾（不等 exit 事件）",
+    "en": "sing-box already exited; finishing without waiting for exit event"
+  },
+  {
+    "id": "log.12321fc4f1d0",
+    "parts": ["sing-box process did not exit gracefully, force killing"],
+    "zh": "sing-box 未正常退出，正在强制终止",
+    "en": "sing-box process did not exit gracefully, force killing"
+  },
+  {
+    "id": "log.47ff7007e714",
+    "parts": ["stop 等待进程退出超时（8s），强制收尾"],
+    "zh": "stop 等待进程退出超时（8s），强制收尾",
+    "en": "Timed out waiting for process exit (8s); forcing cleanup"
+  },
+  {
+    "id": "log.827aa4914403",
+    "parts": ["强制终止被取消，sing-box 仍在运行（下次启动会自动清理占用端口）"],
+    "zh": "强制终止被取消，sing-box 仍在运行（下次启动会自动清理占用端口）",
+    "en": "Force termination cancelled; sing-box still running, next startup will clean occupied port"
+  },
+  {
+    "id": "log.22f89027f418",
+    "parts": ["刷新 DNS 缓存失败: ", ""],
+    "zh": "刷新 DNS 缓存失败: {0}",
+    "en": "Failed to flush DNS cache: {0}"
+  },
+  {
+    "id": "log.4010302d136f",
+    "parts": ["DNS 缓存已刷新"],
+    "zh": "DNS 缓存已刷新",
+    "en": "DNS cache flushed"
+  },
+  {
+    "id": "log.bf9370cf1475",
+    "parts": ["已启动进程健康检查"],
+    "zh": "已启动进程健康检查",
+    "en": "Process health checks started"
+  },
+  {
+    "id": "log.43bf5a104e66",
+    "parts": [
+      "进程内存偏高（阈值 ",
+      "MB/进程）：",
+      "；疑内存泄漏，建议「设置→关于→报告问题」导出诊断报告查看逐进程内存"
+    ],
+    "zh": "进程内存偏高（阈值 {0}MB/进程）：{1}；疑内存泄漏，建议「设置→关于→报告问题」导出诊断报告查看逐进程内存",
+    "en": "High process memory (threshold {0} MB/process): {1}; possible leak, export diagnostics to inspect process memory"
+  },
+  {
+    "id": "log.f8dbb7b622cb",
+    "parts": ["检测到 sing-box 进程 (PID: ", ") 已意外退出", ""],
+    "zh": "检测到 sing-box 进程 (PID: {0}) 已意外退出{1}",
+    "en": "sing-box (PID {0}) exited unexpectedly{1}"
+  },
+  {
+    "id": "log.9e528404b5d1",
+    "parts": ["sing-box 退出原因：", ""],
+    "zh": "sing-box 退出原因：{0}",
+    "en": "sing-box exit reason: {0}"
+  },
+  {
+    "id": "log.8660d3b07f64",
+    "parts": ["内核更新进行中，已拒绝手动", "（防撞半替换核）"],
+    "zh": "内核更新进行中，已拒绝手动{0}（防撞半替换核）",
+    "en": "Core update in progress; manual {0} rejected to avoid partially replaced core"
+  },
+  {
+    "id": "log.049f440723c1",
+    "parts": ["正在尝试自动重启 sing-box (第 ", "/", " 次，", "s 后)..."],
+    "zh": "正在尝试自动重启 sing-box (第 {0}/{1} 次，{2}s 后)...",
+    "en": "Attempting automatic sing-box restart ({0}/{1}) in {2}s"
+  },
+  {
+    "id": "log.15e1a2b8dcfb",
+    "parts": ["接管会话在退避期内崩溃，补发一次自动重启兜底"],
+    "zh": "接管会话在退避期内崩溃，补发一次自动重启兜底",
+    "en": "Takeover session crashed during backoff; scheduling one recovery restart"
+  },
+  {
+    "id": "log.ade72d1acee5",
+    "parts": ["自动重启已让位（检测到更新的启动/停止操作接管）"],
+    "zh": "自动重启已让位（检测到更新的启动/停止操作接管）",
+    "en": "Automatic restart superseded by newer start/stop operation"
+  },
+  {
+    "id": "log.90babd8a0e79",
+    "parts": ["自动重启已让位（start 期被更新的启动/停止操作接管）"],
+    "zh": "自动重启已让位（start 期被更新的启动/停止操作接管）",
+    "en": "Automatic restart superseded during startup by newer start/stop operation"
+  },
+  {
+    "id": "log.481957bf2171",
+    "parts": ["sing-box 自动重启成功"],
+    "zh": "sing-box 自动重启成功",
+    "en": "sing-box automatically restarted"
+  },
+  {
+    "id": "log.cd5e60f6ad88",
+    "parts": ["自动重启失败: ", ""],
+    "zh": "自动重启失败: {0}",
+    "en": "Automatic restart failed: {0}"
+  },
+  {
+    "id": "log.db3bd5aa4bb2",
+    "parts": ["自动重启已取消（用户主动停止）"],
+    "zh": "自动重启已取消（用户主动停止）",
+    "en": "Automatic restart cancelled by user stop"
+  },
+  {
+    "id": "log.82a54341e832",
+    "parts": ["终态已清除系统代理（曾指向 FlowZ，避免死端口致全网断）"],
+    "zh": "终态已清除系统代理（曾指向 FlowZ，避免死端口致全网断）",
+    "en": "Terminal failure: removed this application's system proxy to prevent a dead proxy port"
+  },
+  {
+    "id": "log.2a79e2775b75",
+    "parts": ["终态清除系统代理失败: ", ""],
+    "zh": "终态清除系统代理失败: {0}",
+    "en": "Failed to remove system proxy after terminal failure: {0}"
+  },
+  {
+    "id": "log.1571d0fa5065",
+    "parts": [
+      "系统代理仍指向 FlowZ 自身(",
+      ")但清理未净——非外部残留，跳过提示，下个终态点重试清理"
+    ],
+    "zh": "系统代理仍指向 FlowZ 自身({0})但清理未净——非外部残留，跳过提示，下个终态点重试清理",
+    "en": "System proxy still points to this application ({0}); cleanup incomplete, retrying on next terminal state"
+  },
+  {
+    "id": "log.93692cee83f8",
+    "parts": [
+      "TUN 模式下检测到非 FlowZ 设置的系统代理仍开启(",
+      ")，已提示用户（不自动清，避免误伤其它代理软件）"
+    ],
+    "zh": "TUN 模式下检测到非 FlowZ 设置的系统代理仍开启({0})，已提示用户（不自动清，避免误伤其它代理软件）",
+    "en": "External system proxy still enabled in TUN mode ({0}); notifying user without changing other proxy software"
+  },
+  {
+    "id": "log.fe6ee17253d4",
+    "parts": ["已按用户请求关闭系统代理（TUN 残留提示）"],
+    "zh": "已按用户请求关闭系统代理（TUN 残留提示）",
+    "en": "System proxy disabled at user request after TUN warning"
+  },
+  {
+    "id": "log.381bee40bdef",
+    "parts": ["终态还原系统 DNS 失败: ", ""],
+    "zh": "终态还原系统 DNS 失败: {0}",
+    "en": "Failed to restore system DNS after terminal failure: {0}"
+  },
+  {
+    "id": "log.9d23c2a77630",
+    "parts": ["[dns-flush:", "] ", ""],
+    "zh": "[dns-flush:{0}] {1}",
+    "en": "[dns-flush:{0}] {1}"
+  },
+  {
+    "id": "log.d96ae2e857fe",
+    "parts": ["链路变化 watcher 已启动（热插/换网/唤醒 → 重灌 DNS 接管 + 刷缓存）"],
+    "zh": "链路变化 watcher 已启动（热插/换网/唤醒 → 重灌 DNS 接管 + 刷缓存）",
+    "en": "Network change watcher started; hotplug, network switch and wake will restore DNS takeover and flush cache"
+  },
+  {
+    "id": "log.dc57e3bea3f3",
+    "parts": ["启动链路变化 watcher 失败: ", ""],
+    "zh": "启动链路变化 watcher 失败: {0}",
+    "en": "Failed to start network change watcher: {0}"
+  },
+  {
+    "id": "log.eee2921d7a5f",
+    "parts": ["停止 DNS 接口 watcher 失败: ", ""],
+    "zh": "停止 DNS 接口 watcher 失败: {0}",
+    "en": "Failed to stop DNS interface watcher: {0}"
+  },
+  {
+    "id": "log.9b81865108fa",
+    "parts": ["自动重启已", ""],
+    "zh": "自动重启已{0}",
+    "en": "Automatic restart {0}"
+  },
+  {
+    "id": "log.ab49c18ac927",
+    "parts": ["sing-box 后台进程 PID: ", ""],
+    "zh": "sing-box 后台进程 PID: {0}",
+    "en": "Background sing-box PID: {0}"
+  },
+  {
+    "id": "log.8417f122c731",
+    "parts": ["PID 文件等待超时"],
+    "zh": "PID 文件等待超时",
+    "en": "Timed out waiting for PID file"
+  },
+  {
+    "id": "log.bdf8774ca772",
+    "parts": ["内置规则补种失败: ", ""],
+    "zh": "内置规则补种失败: {0}",
+    "en": "Failed to restore built-in rules: {0}"
+  },
+  {
+    "id": "log.8a96424248a5",
+    "parts": ["Tailscale 节点「", "」需要登录授权"],
+    "zh": "Tailscale 节点「{0}」需要登录授权",
+    "en": "Tailscale node \"{0}\" requires login authorization"
+  },
+  {
+    "id": "log.873819a23570",
+    "parts": ["Tailscale 节点「", "」登录超时，已停止登录进程"],
+    "zh": "Tailscale 节点「{0}」登录超时，已停止登录进程",
+    "en": "Tailscale login timed out for \"{0}\"; login process stopped"
+  },
+  {
+    "id": "log.a9c1ff8b5656",
+    "parts": ["Tailscale 登录进程启动失败: ", ""],
+    "zh": "Tailscale 登录进程启动失败: {0}",
+    "en": "Failed to start Tailscale login process: {0}"
+  },
+  {
+    "id": "log.ba638e157a31",
+    "parts": ["Tailscale 节点「", "」开始登录（已启动登录进程）"],
+    "zh": "Tailscale 节点「{0}」开始登录（已启动登录进程）",
+    "en": "Tailscale login started for \"{0}\""
+  },
+  {
+    "id": "log.f213d11797bd",
+    "parts": ["Tailscale 登录 URL 非法已忽略: ", ""],
+    "zh": "Tailscale 登录 URL 非法已忽略: {0}",
+    "en": "Invalid Tailscale login URL ignored: {0}"
+  },
+  {
+    "id": "log.a7e7f71eb095",
+    "parts": ["Tailscale 节点「", "」已打开浏览器登录页"],
+    "zh": "Tailscale 节点「{0}」已打开浏览器登录页",
+    "en": "Opened Tailscale login page for \"{0}\" in browser"
+  },
+  {
+    "id": "log.49f8c3ad37bf",
+    "parts": ["已取消 Tailscale 节点登录"],
+    "zh": "已取消 Tailscale 节点登录",
+    "en": "Tailscale login cancelled"
+  },
+  {
+    "id": "log.3a335980107e",
+    "parts": ["Tailscale api 登出失败（已回退清 state 目录）: ", ""],
+    "zh": "Tailscale api 登出失败（已回退清 state 目录）: {0}",
+    "en": "Tailscale API logout failed; clearing state directory instead: {0}"
+  },
+  {
+    "id": "log.1cd89886f72d",
+    "parts": ["Tailscale 节点已退出登录"],
+    "zh": "Tailscale 节点已退出登录",
+    "en": "Tailscale node logged out"
+  },
+  {
+    "id": "log.49416e960a1f",
+    "parts": ["sing-box process exited: ", ""],
+    "zh": "sing-box 进程已退出：{0}",
+    "en": "sing-box process exited: {0}"
+  },
+  {
+    "id": "log.1e6722d83b83",
+    "parts": ["sing-box异常退出: ", ""],
+    "zh": "sing-box异常退出: {0}",
+    "en": "sing-box exited abnormally: {0}"
+  },
+  {
+    "id": "log.175305427a71",
+    "parts": ["启动前 libcronet 自愈：已从内置恢复到 ", ""],
+    "zh": "启动前 libcronet 自愈：已从内置恢复到 {0}",
+    "en": "Pre-start libcronet repair: restored bundled library to {0}"
+  },
+  {
+    "id": "log.c1afdb7eca97",
+    "parts": ["启动前 libcronet 自愈失败：", "（naive 节点可能不可用）"],
+    "zh": "启动前 libcronet 自愈失败：{0}（naive 节点可能不可用）",
+    "en": "Pre-start libcronet repair failed; naive nodes may be unavailable: {0}"
+  },
+  {
+    "id": "log.cee3a1fd0f23",
+    "parts": ["随包内核重播种失败: ", ""],
+    "zh": "随包内核重播种失败: {0}",
+    "en": "Failed to restore bundled core: {0}"
+  },
+  {
+    "id": "log.5ca4fbabdfcf",
+    "parts": ["随包内核刷新失败: ", ""],
+    "zh": "随包内核刷新失败: {0}",
+    "en": "Failed to refresh bundled core: {0}"
+  },
+  {
+    "id": "log.b09965d9aad7",
+    "parts": ["受管核重播种失败: ", ""],
+    "zh": "受管核重播种失败: {0}",
+    "en": "Failed to restore managed core: {0}"
+  },
+  {
+    "id": "log.b5c8ee569c1f",
+    "parts": ["受管核刷新失败: ", ""],
+    "zh": "受管核刷新失败: {0}",
+    "en": "Failed to refresh managed core: {0}"
+  },
+  {
+    "id": "log.afe7e328f8ba",
+    "parts": ["libcronet 自愈：restored（", "）→ ", ""],
+    "zh": "libcronet 自愈：restored（{0}）→ {1}",
+    "en": "libcronet repaired ({0}) → {1}"
+  },
+  {
+    "id": "log.1037dc7094e1",
+    "parts": ["libcronet 自愈失败（naive 暂不可用）：", " → ", "：", ""],
+    "zh": "libcronet 自愈失败（naive 暂不可用）：{0} → {1}：{2}",
+    "en": "libcronet repair failed; naive unavailable: {0} → {1}: {2}"
+  },
+  {
+    "id": "log.98e06394ca7e",
+    "parts": ["规则资源启动补更异常: ", ""],
+    "zh": "规则资源启动补更异常: {0}",
+    "en": "Startup rule resource refresh failed: {0}"
+  },
+  {
+    "id": "log.ec7c6f8072dc",
+    "parts": ["规则资源周期更新异常: ", ""],
+    "zh": "规则资源周期更新异常: {0}",
+    "en": "Periodic rule resource update failed: {0}"
+  },
+  {
+    "id": "log.a22b33a9bcb5",
+    "parts": ["[", "] 资源库目录已刷新"],
+    "zh": "[{0}] 资源库目录已刷新",
+    "en": "[{0}] Resource catalog refreshed"
+  },
+  {
+    "id": "log.d7ce730f2939",
+    "parts": ["资源库目录刷新跳过: ", ""],
+    "zh": "资源库目录刷新跳过: {0}",
+    "en": "Resource catalog refresh skipped: {0}"
+  },
+  {
+    "id": "log.019f3d0e1c6f",
+    "parts": ["[", "] 规则资源自动更新：成功 ", "，失败 ", "", ""],
+    "zh": "[{0}] 规则资源自动更新：成功 {1}，失败 {2}{3}",
+    "en": "[{0}] Rule resource automatic update: {1} succeeded, {2} failed{3}"
+  },
+  {
+    "id": "log.9ba21f2fe530",
+    "parts": ["开始测速: ", " 个节点（经主核探测池，", " 槽）"],
+    "zh": "开始测速: {0} 个节点（经主核探测池，{1} 槽）",
+    "en": "Testing {0} nodes through main-core probe pool ({1} slots)"
+  },
+  {
+    "id": "log.ebe925895912",
+    "parts": ["开始测速: ", " 个节点（经代理 urltest）"],
+    "zh": "开始测速: {0} 个节点（经代理 urltest）",
+    "en": "Testing {0} nodes through proxy urltest"
+  },
+  {
+    "id": "log.dba7e911d837",
+    "parts": ["测速完成"],
+    "zh": "测速完成",
+    "en": "Latency tests completed"
+  },
+  {
+    "id": "log.856b2d8e82dd",
+    "parts": ["测速失败 ", ": ", ""],
+    "zh": "测速失败 {0}: {1}",
+    "en": "Latency test failed for {0}: {1}"
+  },
+  {
+    "id": "log.6d0fb28455b3",
+    "parts": ["测速失败原因分布：", ""],
+    "zh": "测速失败原因分布：{0}",
+    "en": "Latency test failure distribution: {0}"
+  },
+  {
+    "id": "log.670104b29226",
+    "parts": ["临时 sing-box 进程退出 (code=", "): ", ""],
+    "zh": "临时 sing-box 进程退出 (code={0}): {1}",
+    "en": "Temporary sing-box exited (code={0}): {1}"
+  },
+  {
+    "id": "log.88efc999ae63",
+    "parts": ["sing-box 测速进程未就绪: ", ""],
+    "zh": "sing-box 测速进程未就绪: {0}",
+    "en": "sing-box test process not ready: {0}"
+  },
+  {
+    "id": "log.dbff9db35f2a",
+    "parts": ["测速异常: ", ""],
+    "zh": "测速异常: {0}",
+    "en": "Latency test exception: {0}"
+  },
+  {
+    "id": "log.3372e7dd318d",
+    "parts": ["临时 sing-box 测速输出：", ""],
+    "zh": "临时 sing-box 测速输出：{0}",
+    "en": "Temporary sing-box test output: {0}"
+  },
+  {
+    "id": "log.1b31797f7c3e",
+    "parts": ["主核测速异常: ", ""],
+    "zh": "主核测速异常: {0}",
+    "en": "Main-core latency test exception: {0}"
+  },
+  {
+    "id": "log.7edbcc0c5673",
+    "parts": ["出口伴测失败 (", ") target=", ":", " port=", ""],
+    "zh": "出口伴测失败 ({0}) target={1}:{2} port={3}",
+    "en": "Companion exit probe failed ({0}) target={1}:{2} port={3}"
+  },
+  {
+    "id": "log.cc0abd43fffe",
+    "parts": ["stats 模拟器 resubscribe()（dev 工具，ticker 不受代理生命周期影响，忽略）"],
+    "zh": "stats 模拟器 resubscribe()（dev 工具，ticker 不受代理生命周期影响，忽略）",
+    "en": "Stats simulator resubscribe ignored; development ticker independent of proxy lifecycle"
+  },
+  {
+    "id": "log.9e44c6676cab",
+    "parts": ["stats 模拟器 stop()（dev 工具，ticker 持续，忽略）"],
+    "zh": "stats 模拟器 stop()（dev 工具，ticker 持续，忽略）",
+    "en": "Stats simulator stop ignored; development ticker remains active"
+  },
+  {
+    "id": "log.2a848e007bbf",
+    "parts": ["stats 模拟器 dispose()，ticker 已停"],
+    "zh": "stats 模拟器 dispose()，ticker 已停",
+    "en": "Stats simulator disposed; ticker stopped"
+  },
+  {
+    "id": "log.a609072b5809",
+    "parts": ["stats worker spawn 失败: ", ""],
+    "zh": "stats worker spawn 失败: {0}",
+    "en": "Failed to spawn stats worker: {0}"
+  },
+  {
+    "id": "log.4c3ca7d72767",
+    "parts": ["stats worker 退出(code=", ")，", "ms 后重启"],
+    "zh": "stats worker 退出(code={0})，{1}ms 后重启",
+    "en": "Stats worker exited (code={0}); restarting in {1} ms"
+  },
+  {
+    "id": "log.67d6f989a415",
+    "parts": ["订阅启动补更异常: ", ""],
+    "zh": "订阅启动补更异常: {0}",
+    "en": "Startup subscription refresh failed: {0}"
+  },
+  {
+    "id": "log.3780cf2ce2be",
+    "parts": ["订阅周期更新异常: ", ""],
+    "zh": "订阅周期更新异常: {0}",
+    "en": "Periodic subscription refresh failed: {0}"
+  },
+  {
+    "id": "log.b799b847c6c9",
+    "parts": ["代理就绪补更异常: ", ""],
+    "zh": "代理就绪补更异常: {0}",
+    "en": "Proxy-ready subscription refresh failed: {0}"
+  },
+  {
+    "id": "log.3dd85846dadc",
+    "parts": ["订阅「", "」经代理更新但代理未运行，本轮跳过（待代理就绪后自动补更）"],
+    "zh": "订阅「{0}」经代理更新但代理未运行，本轮跳过（待代理就绪后自动补更）",
+    "en": "Subscription \"{0}\" requires proxy, but proxy not running; deferring update until ready"
+  },
+  {
+    "id": "log.0459de14eb00",
+    "parts": ["[", "] 订阅 [", "] 更新失败(第 ", " 次)，", " 分钟后重试: ", ""],
+    "zh": "[{0}] 订阅 [{1}] 更新失败(第 {2} 次)，{3} 分钟后重试: {4}",
+    "en": "[{0}] Subscription [{1}] update failed (attempt {2}); retrying in {3} minutes: {4}"
+  },
+  {
+    "id": "log.41a55adffc10",
+    "parts": ["跳过 snell outbound \"", "\"：版本 ", " 不受支持（sing-box 仅支持 4/6）"],
+    "zh": "跳过 snell outbound \"{0}\"：版本 {1} 不受支持（sing-box 仅支持 4/6）",
+    "en": "Skipping snell outbound \"{0}\"; unsupported version {1}, sing-box supports only 4/6"
+  },
+  {
+    "id": "log.9bcc1df59218",
+    "parts": ["跳过 snell outbound \"", "\"：缺 psk"],
+    "zh": "跳过 snell outbound \"{0}\"：缺 psk",
+    "en": "Skipping snell outbound \"{0}\"; psk missing"
+  },
+  {
+    "id": "log.3560d5a4a66c",
+    "parts": ["解析 sing-box outbound \"", "\" 失败: ", ""],
+    "zh": "解析 sing-box outbound \"{0}\" 失败: {1}",
+    "en": "Failed to parse sing-box outbound \"{0}\": {1}"
+  },
+  {
+    "id": "log.90cd964f8903",
+    "parts": ["跳过不支持的 outbound 类型: ", ""],
+    "zh": "跳过不支持的 outbound 类型: {0}",
+    "en": "Skipping unsupported outbound type: {0}"
+  },
+  {
+    "id": "log.af21e6abfbca",
+    "parts": ["跳过不支持的传输层类型: ", ""],
+    "zh": "跳过不支持的传输层类型: {0}",
+    "en": "Skipping unsupported transport type: {0}"
+  },
+  {
+    "id": "log.588a090bf1c9",
+    "parts": ["跳过 ", " 个缺 server/port 的 outbound"],
+    "zh": "跳过 {0} 个缺 server/port 的 outbound",
+    "en": "Skipped {0} outbounds without server/port"
+  },
+  {
+    "id": "log.7dd58e4de802",
+    "parts": ["检测到 sing-box JSON 格式，解析 outbounds..."],
+    "zh": "检测到 sing-box JSON 格式，解析 outbounds...",
+    "en": "Detected sing-box JSON; parsing outbounds"
+  },
+  {
+    "id": "log.343fca2e8464",
+    "parts": ["成功从 sing-box 订阅解析了 ", " 个节点"],
+    "zh": "成功从 sing-box 订阅解析了 {0} 个节点",
+    "en": "Parsed {0} nodes from sing-box subscription"
+  },
+  {
+    "id": "log.b7359705246d",
+    "parts": ["检测到 JSON 编码的 Clash 配置，解析 proxies..."],
+    "zh": "检测到 JSON 编码的 Clash 配置，解析 proxies...",
+    "en": "Detected JSON-encoded Clash configuration; parsing proxies"
+  },
+  {
+    "id": "log.9ae65ffd7801",
+    "parts": ["检测到 Clash YAML 格式，解析 proxies..."],
+    "zh": "检测到 Clash YAML 格式，解析 proxies...",
+    "en": "Detected Clash YAML; parsing proxies"
+  },
+  {
+    "id": "log.7cda911dcdaa",
+    "parts": ["尝试 Base64 解码失败，可能原本就是明文"],
+    "zh": "尝试 Base64 解码失败，可能原本就是明文",
+    "en": "Base64 decoding failed; input may already be plain text"
+  },
+  {
+    "id": "log.8ef0880721fd",
+    "parts": ["解析订阅中的节点失败: ", ""],
+    "zh": "解析订阅中的节点失败: {0}",
+    "en": "Failed to parse subscription node: {0}"
+  },
+  {
+    "id": "log.7e57982647a7",
+    "parts": ["跳过不支持的协议链接: ", ""],
+    "zh": "跳过不支持的协议链接: {0}",
+    "en": "Skipping unsupported protocol link: {0}"
+  },
+  {
+    "id": "log.5f9bbc40119e",
+    "parts": ["成功从订阅解析了 ", " 个节点", ""],
+    "zh": "成功从订阅解析了 {0} 个节点{1}",
+    "en": "Parsed {0} nodes from subscription{1}"
+  },
+  {
+    "id": "log.6f4bfbdfcd01",
+    "parts": ["provider 内容再嵌套 proxy-providers，已忽略（不递归，深度封顶 2 层）"],
+    "zh": "provider 内容再嵌套 proxy-providers，已忽略（不递归，深度封顶 2 层）",
+    "en": "Ignored nested proxy-providers in provider content; recursion capped at two levels"
+  },
+  {
+    "id": "log.16a36d61f509",
+    "parts": ["Clash 订阅解析完成：内联 ", " + provider ", " → 去重后 ", " 个节点", ""],
+    "zh": "Clash 订阅解析完成：内联 {0} + provider {1} → 去重后 {2} 个节点{3}",
+    "en": "Clash subscription parsed: {0} inline + {1} provider → {2} deduplicated nodes{3}"
+  },
+  {
+    "id": "log.7020fcff0820",
+    "parts": ["正在拉取订阅: ", "（", "）"],
+    "zh": "正在拉取订阅: {0}（{1}）",
+    "en": "Fetching subscription: {0} ({1})"
+  },
+  {
+    "id": "log.a1fc5627b77f",
+    "parts": ["订阅无变化（304），跳过解析"],
+    "zh": "订阅无变化（304），跳过解析",
+    "en": "Subscription unchanged (304); skipping parsing"
+  },
+  {
+    "id": "log.b206fcd8ccd6",
+    "parts": ["订阅流量信息已获取"],
+    "zh": "订阅流量信息已获取",
+    "en": "Subscription traffic information received"
+  },
+  {
+    "id": "log.6375b4ef6d88",
+    "parts": ["拉取订阅失败 (", "): ", ""],
+    "zh": "拉取订阅失败 ({0}): {1}",
+    "en": "Failed to fetch subscription ({0}): {1}"
+  },
+  {
+    "id": "log.78ee95c64c1b",
+    "parts": ["写入系统 DNS marker 失败: ", ""],
+    "zh": "写入系统 DNS marker 失败: {0}",
+    "en": "Failed to write system DNS marker: {0}"
+  },
+  {
+    "id": "log.eed68e33b0d0",
+    "parts": ["删除系统 DNS marker 失败:"],
+    "zh": "删除系统 DNS marker 失败:",
+    "en": "Failed to remove system DNS marker:"
+  },
+  {
+    "id": "log.e607712756de",
+    "parts": ["受控 DNS IP ", " 在 bootstrap-direct 列表，拒绝接管（会逃逸 hijack）"],
+    "zh": "受控 DNS IP {0} 在 bootstrap-direct 列表，拒绝接管（会逃逸 hijack）",
+    "en": "Managed DNS IP {0} listed in bootstrap-direct; refusing takeover to prevent DNS hijack bypass"
+  },
+  {
+    "id": "log.9321af2df568",
+    "parts": ["正在接管系统 DNS（TUN 模式）"],
+    "zh": "正在接管系统 DNS（TUN 模式）",
+    "en": "Taking over system DNS for TUN mode"
+  },
+  {
+    "id": "log.94ae848b697a",
+    "parts": ["获取网络服务列表失败，跳过 DNS 接管: ", ""],
+    "zh": "获取网络服务列表失败，跳过 DNS 接管: {0}",
+    "en": "Cannot list network services; skipping DNS takeover: {0}"
+  },
+  {
+    "id": "log.7fdbeb7818da",
+    "parts": ["无可接管的网络服务，跳过 DNS 接管"],
+    "zh": "无可接管的网络服务，跳过 DNS 接管",
+    "en": "No eligible network services; skipping DNS takeover"
+  },
+  {
+    "id": "log.5544dfb30d7e",
+    "parts": ["设置系统 DNS 失败，正在进行第 ", " 次重试: ", ""],
+    "zh": "设置系统 DNS 失败，正在进行第 {0} 次重试: {1}",
+    "en": "System DNS setup failed; retry {0}: {1}"
+  },
+  {
+    "id": "log.e5d7bf5ee8d8",
+    "parts": ["系统 DNS 已接管为 ", ""],
+    "zh": "系统 DNS 已接管为 {0}",
+    "en": "System DNS set to {0}"
+  },
+  {
+    "id": "log.f4dbff0240dd",
+    "parts": ["接管系统 DNS 失败: ", ""],
+    "zh": "接管系统 DNS 失败: {0}",
+    "en": "Failed to take over system DNS: {0}"
+  },
+  {
+    "id": "log.334d5cb096ac",
+    "parts": ["失败兜底还原系统 DNS 失败: ", ""],
+    "zh": "失败兜底还原系统 DNS 失败: {0}",
+    "en": "Failed to restore system DNS after setup failure: {0}"
+  },
+  {
+    "id": "log.066a4eb34e4e",
+    "parts": ["重灌服务 \"", "\" DNS 失败: ", ""],
+    "zh": "重灌服务 \"{0}\" DNS 失败: {1}",
+    "en": "Failed to reapply DNS to service \"{0}\": {1}"
+  },
+  {
+    "id": "log.3289caeef73a",
+    "parts": ["DNS 重灌：", " 个未受控服务接管为 ", ""],
+    "zh": "DNS 重灌：{0} 个未受控服务接管为 {1}",
+    "en": "DNS reapplied: {0} unmanaged services set to {1}"
+  },
+  {
+    "id": "log.23497bc689db",
+    "parts": ["正在还原系统 DNS"],
+    "zh": "正在还原系统 DNS",
+    "en": "Restoring system DNS"
+  },
+  {
+    "id": "log.ae732f739905",
+    "parts": ["还原网络服务 \"", "\" 的 DNS 失败: ", ""],
+    "zh": "还原网络服务 \"{0}\" 的 DNS 失败: {1}",
+    "en": "Failed to restore DNS for network service \"{0}\": {1}"
+  },
+  {
+    "id": "log.ddf90f6b176b",
+    "parts": ["系统 DNS 已还原"],
+    "zh": "系统 DNS 已还原",
+    "en": "System DNS restored"
+  },
+  {
+    "id": "log.a0cd64728614",
+    "parts": ["部分网络服务 DNS 还原失败，保留 marker 交下次启动重试"],
+    "zh": "部分网络服务 DNS 还原失败，保留 marker 交下次启动重试",
+    "en": "Some network services failed DNS restoration; keeping marker for next startup retry"
+  },
+  {
+    "id": "log.b88c215b8700",
+    "parts": ["同步还原系统 DNS 失败: ", ""],
+    "zh": "同步还原系统 DNS 失败: {0}",
+    "en": "Synchronous system DNS restoration failed: {0}"
+  },
+  {
+    "id": "log.37433a4b0326",
+    "parts": [
+      "Windows 不接管系统 DNS（sing-box TUN strict_route/WFP 已在路由层劫持 :53；netsh set 需管理员、GUI 非提权必失败）"
+    ],
+    "zh": "Windows 不接管系统 DNS（sing-box TUN strict_route/WFP 已在路由层劫持 :53；netsh set 需管理员、GUI 非提权必失败）",
+    "en": "Skipping Windows system DNS takeover; sing-box TUN strict_route/WFP already intercepts port 53, netsh requires elevation"
+  },
+  {
+    "id": "log.e2efe4891b72",
+    "parts": [
+      "本机无 resolvectl（非 systemd-resolved 发行版），不接管系统 DNS（TUN DNS 仍由 sing-box auto_route 劫持）"
+    ],
+    "zh": "本机无 resolvectl（非 systemd-resolved 发行版），不接管系统 DNS（TUN DNS 仍由 sing-box auto_route 劫持）",
+    "en": "resolvectl unavailable; skipping system DNS takeover, sing-box TUN auto_route still intercepts DNS"
+  },
+  {
+    "id": "log.1f68a302fe2a",
+    "parts": ["systemd-resolved 不可用（", "），本次不接管系统 DNS"],
+    "zh": "systemd-resolved 不可用（{0}），本次不接管系统 DNS",
+    "en": "systemd-resolved unavailable ({0}); skipping system DNS takeover"
+  },
+  {
+    "id": "log.1a7778a7b65c",
+    "parts": ["无权修改 systemd-resolved 链路配置（", "），本次不接管系统 DNS"],
+    "zh": "无权修改 systemd-resolved 链路配置（{0}），本次不接管系统 DNS",
+    "en": "No permission to change systemd-resolved link configuration ({0}); skipping system DNS takeover"
+  },
+  {
+    "id": "log.10c57c5f00b0",
+    "parts": ["未取得 TUN 地址，跳过 Linux 系统 DNS 接管（不按接口名猜，避免误改他人链路）"],
+    "zh": "未取得 TUN 地址，跳过 Linux 系统 DNS 接管（不按接口名猜，避免误改他人链路）",
+    "en": "TUN address unavailable; skipping Linux system DNS takeover without guessing interface names"
+  },
+  {
+    "id": "log.9205632337a0",
+    "parts": ["未找到地址为 ", " 的 TUN 接口，跳过系统 DNS 接管"],
+    "zh": "未找到地址为 {0} 的 TUN 接口，跳过系统 DNS 接管",
+    "en": "TUN interface with address {0} not found; skipping system DNS takeover"
+  },
+  {
+    "id": "log.e32aa167b8a8",
+    "parts": ["Linux 系统 DNS 接管目标链路：", ""],
+    "zh": "Linux 系统 DNS 接管目标链路：{0}",
+    "en": "Linux system DNS takeover target link: {0}"
+  },
+  {
+    "id": "log.b73fd59bb341",
+    "parts": ["还原链路 \"", "\" 的 DNS 失败，保留 marker 交下次启动重试: ", ""],
+    "zh": "还原链路 \"{0}\" 的 DNS 失败，保留 marker 交下次启动重试: {1}",
+    "en": "Failed to restore DNS for link \"{0}\"; keeping marker for next startup retry: {1}"
+  },
+  {
+    "id": "log.83560edf98a1",
+    "parts": ["写入系统代理 marker 失败: ", ""],
+    "zh": "写入系统代理 marker 失败: {0}",
+    "en": "Failed to write system proxy marker: {0}"
+  },
+  {
+    "id": "log.d1bd5af18336",
+    "parts": ["删除系统代理 marker 失败:"],
+    "zh": "删除系统代理 marker 失败:",
+    "en": "Failed to remove system proxy marker:"
+  },
+  {
+    "id": "log.da5d9cb0b592",
+    "parts": ["正在设置 Windows 系统代理"],
+    "zh": "正在设置 Windows 系统代理",
+    "en": "Setting Windows system proxy"
+  },
+  {
+    "id": "log.d5c10016f2c2",
+    "parts": ["已保存原始代理设置"],
+    "zh": "已保存原始代理设置",
+    "en": "Original proxy settings saved"
+  },
+  {
+    "id": "log.9f61f9f5e014",
+    "parts": ["无法获取原始代理设置: ", ""],
+    "zh": "无法获取原始代理设置: {0}",
+    "en": "Cannot read original proxy settings: {0}"
+  },
+  {
+    "id": "log.0689035a9c14",
+    "parts": ["Windows 代理 bypass 含 cmd 非法字符，已跳过该项（不静默改写主机名）: ", ""],
+    "zh": "Windows 代理 bypass 含 cmd 非法字符，已跳过该项（不静默改写主机名）: {0}",
+    "en": "Windows proxy bypass contains invalid cmd characters; item skipped without changing host name: {0}"
+  },
+  {
+    "id": "log.af2af360f8ed",
+    "parts": ["设置系统代理失败，正在进行第 ", " 次重试: ", ""],
+    "zh": "设置系统代理失败，正在进行第 {0} 次重试: {1}",
+    "en": "System proxy setup failed; retry {0}: {1}"
+  },
+  {
+    "id": "log.b1035cbea2b3",
+    "parts": ["Windows 系统代理设置成功"],
+    "zh": "Windows 系统代理设置成功",
+    "en": "Windows system proxy configured"
+  },
+  {
+    "id": "log.10ffe981c2b7",
+    "parts": ["设置 Windows 系统代理失败: ", ""],
+    "zh": "设置 Windows 系统代理失败: {0}",
+    "en": "Failed to configure Windows system proxy: {0}"
+  },
+  {
+    "id": "log.b976f024dd75",
+    "parts": ["失败兜底关闭/恢复系统代理失败: ", ""],
+    "zh": "失败兜底关闭/恢复系统代理失败: {0}",
+    "en": "Failed to disable/restore system proxy after setup failure: {0}"
+  },
+  {
+    "id": "log.4ac06d6445eb",
+    "parts": ["正在禁用 Windows 系统代理"],
+    "zh": "正在禁用 Windows 系统代理",
+    "en": "Disabling Windows system proxy"
+  },
+  {
+    "id": "log.c544213f291d",
+    "parts": ["正在恢复原始代理设置"],
+    "zh": "正在恢复原始代理设置",
+    "en": "Restoring original proxy settings"
+  },
+  {
+    "id": "log.46043538d3e0",
+    "parts": ["已恢复原始代理设置"],
+    "zh": "已恢复原始代理设置",
+    "en": "Original proxy settings restored"
+  },
+  {
+    "id": "log.c7b750f1b808",
+    "parts": ["已禁用系统代理"],
+    "zh": "已禁用系统代理",
+    "en": "System proxy disabled"
+  },
+  {
+    "id": "log.6ff824250a39",
+    "parts": ["禁用 Windows 系统代理失败: ", ""],
+    "zh": "禁用 Windows 系统代理失败: {0}",
+    "en": "Failed to disable Windows system proxy: {0}"
+  },
+  {
+    "id": "log.28a46fb81cf8",
+    "parts": ["同步禁用 Windows 系统代理失败: ", ""],
+    "zh": "同步禁用 Windows 系统代理失败: {0}",
+    "en": "Synchronous Windows system proxy disable failed: {0}"
+  },
+  {
+    "id": "log.76c0bb474b67",
+    "parts": ["通知系统刷新代理设置失败: ", ""],
+    "zh": "通知系统刷新代理设置失败: {0}",
+    "en": "Failed to notify system of proxy settings change: {0}"
+  },
+  {
+    "id": "log.6e5e4c23c205",
+    "parts": ["正在设置 macOS 系统代理"],
+    "zh": "正在设置 macOS 系统代理",
+    "en": "Setting macOS system proxy"
+  },
+  {
+    "id": "log.86fdc0bb26c9",
+    "parts": ["找到 ", " 个网络服务"],
+    "zh": "找到 {0} 个网络服务",
+    "en": "Found {0} network services"
+  },
+  {
+    "id": "log.2f19974dd883",
+    "parts": ["正在为网络服务 \"", "\" 设置代理"],
+    "zh": "正在为网络服务 \"{0}\" 设置代理",
+    "en": "Setting proxy for network service \"{0}\""
+  },
+  {
+    "id": "log.6473e3ae89b4",
+    "parts": ["网络服务 \"", "\" 代理设置完成"],
+    "zh": "网络服务 \"{0}\" 代理设置完成",
+    "en": "Proxy configured for network service \"{0}\""
+  },
+  {
+    "id": "log.133c810d52da",
+    "parts": ["macOS 系统代理设置成功"],
+    "zh": "macOS 系统代理设置成功",
+    "en": "macOS system proxy configured"
+  },
+  {
+    "id": "log.f50322e20886",
+    "parts": ["设置 macOS 系统代理失败: ", ""],
+    "zh": "设置 macOS 系统代理失败: {0}",
+    "en": "Failed to configure macOS system proxy: {0}"
+  },
+  {
+    "id": "log.d8b580789b60",
+    "parts": ["正在禁用 macOS 系统代理"],
+    "zh": "正在禁用 macOS 系统代理",
+    "en": "Disabling macOS system proxy"
+  },
+  {
+    "id": "log.a0ee1ead477b",
+    "parts": ["正在禁用网络服务 \"", "\" 的代理"],
+    "zh": "正在禁用网络服务 \"{0}\" 的代理",
+    "en": "Disabling proxy for network service \"{0}\""
+  },
+  {
+    "id": "log.a5abfc2577ee",
+    "parts": ["禁用 macOS 系统代理失败: ", ""],
+    "zh": "禁用 macOS 系统代理失败: {0}",
+    "en": "Failed to disable macOS system proxy: {0}"
+  },
+  {
+    "id": "log.f72c2d9f9e58",
+    "parts": ["同步禁用 macOS 系统代理失败: ", ""],
+    "zh": "同步禁用 macOS 系统代理失败: {0}",
+    "en": "Synchronous macOS system proxy disable failed: {0}"
+  },
+  {
+    "id": "log.71d01fc59c6f",
+    "parts": ["正在设置 Linux 系统代理"],
+    "zh": "正在设置 Linux 系统代理",
+    "en": "Setting Linux system proxy"
+  },
+  {
+    "id": "log.1f9936b78e80",
+    "parts": ["Linux 系统代理设置成功"],
+    "zh": "Linux 系统代理设置成功",
+    "en": "Linux system proxy configured"
+  },
+  {
+    "id": "log.f81ece46d685",
+    "parts": ["设置 Linux 系统代理失败: ", ""],
+    "zh": "设置 Linux 系统代理失败: {0}",
+    "en": "Failed to configure Linux system proxy: {0}"
+  },
+  {
+    "id": "log.5d06c189366c",
+    "parts": ["正在禁用 Linux 系统代理"],
+    "zh": "正在禁用 Linux 系统代理",
+    "en": "Disabling Linux system proxy"
+  },
+  {
+    "id": "log.36dee8ba242b",
+    "parts": ["禁用 Linux 系统代理失败（保留 marker 供下次重试）: ", ""],
+    "zh": "禁用 Linux 系统代理失败（保留 marker 供下次重试）: {0}",
+    "en": "Failed to disable Linux system proxy; keeping marker for retry: {0}"
+  },
+  {
+    "id": "log.489e061559db",
+    "parts": ["Tray already exists"],
+    "zh": "托盘已创建",
+    "en": "Tray already exists"
+  },
+  {
+    "id": "log.f1c669df2a90",
+    "parts": ["Tray icon created"],
+    "zh": "托盘图标已创建",
+    "en": "Tray icon created"
+  },
+  {
+    "id": "log.9f4474ae88a6",
+    "parts": ["Failed to create tray icon: ", ""],
+    "zh": "创建托盘图标失败：{0}",
+    "en": "Failed to create tray icon: {0}"
+  },
+  {
+    "id": "log.59e38517f76f",
+    "parts": ["Tray icon destroyed"],
+    "zh": "托盘图标已销毁",
+    "en": "Tray icon destroyed"
+  },
+  {
+    "id": "log.ec64fc27d152",
+    "parts": ["Cannot update tray icon: tray not created"],
+    "zh": "无法更新托盘图标：尚未创建托盘",
+    "en": "Cannot update tray icon: tray not created"
+  },
+  {
+    "id": "log.5b8149b06aaa",
+    "parts": ["Tray icon updated to state: ", ""],
+    "zh": "托盘图标状态已更新：{0}",
+    "en": "Tray icon updated to state: {0}"
+  },
+  {
+    "id": "log.b2cff6b3ddab",
+    "parts": ["Failed to update tray icon: ", ""],
+    "zh": "更新托盘图标失败：{0}",
+    "en": "Failed to update tray icon: {0}"
+  },
+  {
+    "id": "log.ce25d1f1013e",
+    "parts": ["Cannot update tray menu: tray not created"],
+    "zh": "无法更新托盘菜单：尚未创建托盘",
+    "en": "Cannot update tray menu: tray not created"
+  },
+  {
+    "id": "log.211168357cc0",
+    "parts": ["Tray menu updated"],
+    "zh": "托盘菜单已更新",
+    "en": "Tray menu updated"
+  },
+  {
+    "id": "log.2855e3629416",
+    "parts": ["Loaded tray icon from: ", ""],
+    "zh": "托盘图标已加载：{0}",
+    "en": "Loaded tray icon from: {0}"
+  },
+  {
+    "id": "log.ba9bb4de7dac",
+    "parts": ["Tray icon not found: ", ", using default"],
+    "zh": "找不到托盘图标 {0}，使用默认图标",
+    "en": "Tray icon not found: {0}, using default"
+  },
+  {
+    "id": "log.f22c1be82e16",
+    "parts": ["Tray icon clicked"],
+    "zh": "点击了托盘图标",
+    "en": "Tray icon clicked"
+  },
+  {
+    "id": "log.bc7ecc0fdc5e",
+    "parts": ["Start proxy clicked from tray"],
+    "zh": "通过托盘启动代理",
+    "en": "Start proxy clicked from tray"
+  },
+  {
+    "id": "log.fd87d270b24f",
+    "parts": ["Stop proxy clicked from tray"],
+    "zh": "通过托盘停止代理",
+    "en": "Stop proxy clicked from tray"
+  },
+  {
+    "id": "log.09f973c7ad9a",
+    "parts": ["Enter lightweight mode clicked from tray"],
+    "zh": "通过托盘进入轻量模式",
+    "en": "Enter lightweight mode clicked from tray"
+  },
+  {
+    "id": "log.2bd436712bc0",
+    "parts": ["Enter privacy mode clicked from tray"],
+    "zh": "通过托盘进入隐私模式",
+    "en": "Enter privacy mode clicked from tray"
+  },
+  {
+    "id": "log.a408bb48cb7d",
+    "parts": ["Show window clicked from tray"],
+    "zh": "通过托盘显示窗口",
+    "en": "Show window clicked from tray"
+  },
+  {
+    "id": "log.b1559dddb179",
+    "parts": ["Quit clicked from tray"],
+    "zh": "通过托盘退出应用",
+    "en": "Quit clicked from tray"
+  },
+  {
+    "id": "log.989d944d3fea",
+    "parts": ["Server selected from tray: ", ""],
+    "zh": "通过托盘选择节点：{0}",
+    "en": "Server selected from tray: {0}"
+  },
+  {
+    "id": "log.e35db552ca5b",
+    "parts": ["Proxy mode changed from tray: ", ""],
+    "zh": "通过托盘切换代理模式：{0}",
+    "en": "Proxy mode changed from tray: {0}"
+  },
+  {
+    "id": "log.acf346f2c2c0",
+    "parts": ["Takeover mode changed from tray: ", ""],
+    "zh": "通过托盘切换接管方式：{0}",
+    "en": "Takeover mode changed from tray: {0}"
+  },
+  {
+    "id": "log.870cf9b15aca",
+    "parts": ["Open settings clicked from tray"],
+    "zh": "通过托盘打开设置",
+    "en": "Open settings clicked from tray"
+  },
+  {
+    "id": "log.6ceef0d8468e",
+    "parts": ["Check update clicked from tray"],
+    "zh": "通过托盘检查更新",
+    "en": "Check update clicked from tray"
+  },
+  {
+    "id": "log.be4e3f6cf96e",
+    "parts": ["Manage servers clicked from tray"],
+    "zh": "通过托盘管理节点",
+    "en": "Manage servers clicked from tray"
+  },
+  {
+    "id": "log.6933d69bdac5",
+    "parts": ["Speed test clicked from tray"],
+    "zh": "通过托盘启动测速",
+    "en": "Speed test clicked from tray"
+  },
+  {
+    "id": "log.410634bd5e57",
+    "parts": ["开始检查更新..."],
+    "zh": "开始检查更新...",
+    "en": "Checking application updates"
+  },
+  {
+    "id": "log.df9ed3ec342f",
+    "parts": ["未找到任何发布版本"],
+    "zh": "未找到任何发布版本",
+    "en": "No releases found"
+  },
+  {
+    "id": "log.a958a95d485d",
+    "parts": ["当前已是最新版本: ", ""],
+    "zh": "当前已是最新版本: {0}",
+    "en": "Already up to date: {0}"
+  },
+  {
+    "id": "log.7c52e7335fd8",
+    "parts": ["未找到适合当前平台的安装包"],
+    "zh": "未找到适合当前平台的安装包",
+    "en": "No installer available for this platform"
+  },
+  {
+    "id": "log.bbaf688915a6",
+    "parts": ["版本 ", " 已被用户跳过"],
+    "zh": "版本 {0} 已被用户跳过",
+    "en": "Version {0} skipped by user"
+  },
+  {
+    "id": "log.6e15e4491d99",
+    "parts": ["发现新版本: ", ""],
+    "zh": "发现新版本: {0}",
+    "en": "New version found: {0}"
+  },
+  {
+    "id": "log.bf5bb49a77a2",
+    "parts": ["网络切换中，5s 后重试检查更新: ", ""],
+    "zh": "网络切换中，5s 后重试检查更新: {0}",
+    "en": "Network switching; retrying update check in 5s: {0}"
+  },
+  {
+    "id": "log.cb6040d91bed",
+    "parts": ["检查更新失败: ", ""],
+    "zh": "检查更新失败: {0}",
+    "en": "Update check failed: {0}"
+  },
+  {
+    "id": "log.bb6f6a74041e",
+    "parts": ["开始下载更新: ", ""],
+    "zh": "开始下载更新: {0}",
+    "en": "Downloading update: {0}"
+  },
+  {
+    "id": "log.899b46070b8f",
+    "parts": ["更新下载完成: ", ""],
+    "zh": "更新下载完成: {0}",
+    "en": "Update download completed: {0}"
+  },
+  {
+    "id": "log.609e26ffb241",
+    "parts": ["下载更新失败: ", ""],
+    "zh": "下载更新失败: {0}",
+    "en": "Update download failed: {0}"
+  },
+  {
+    "id": "log.bf2e4e682249",
+    "parts": ["准备安装更新: ", ""],
+    "zh": "准备安装更新: {0}",
+    "en": "Preparing to install update: {0}"
+  },
+  {
+    "id": "log.cf6faee706a7",
+    "parts": ["安装包不存在: ", ""],
+    "zh": "安装包不存在: {0}",
+    "en": "Installer missing: {0}"
+  },
+  {
+    "id": "log.9a7b713dbff8",
+    "parts": ["deb 更新被用户取消（授权说明框）"],
+    "zh": "deb 更新被用户取消（授权说明框）",
+    "en": "deb update cancelled by user in authorization explanation dialog"
+  },
+  {
+    "id": "log.464b59356f42",
+    "parts": ["正在停止代理进程..."],
+    "zh": "正在停止代理进程...",
+    "en": "Stopping proxy process"
+  },
+  {
+    "id": "log.61dfd65e2484",
+    "parts": ["代理进程已停止"],
+    "zh": "代理进程已停止",
+    "en": "Proxy process stopped"
+  },
+  {
+    "id": "log.57107f9162f5",
+    "parts": ["停止代理进程时出错: ", ""],
+    "zh": "停止代理进程时出错: {0}",
+    "en": "Failed to stop proxy process: {0}"
+  },
+  {
+    "id": "log.5d8fb02f6647",
+    "parts": ["更新脚本已启动，正在退出应用..."],
+    "zh": "更新脚本已启动，正在退出应用...",
+    "en": "Update script started; exiting application"
+  },
+  {
+    "id": "log.aa26283771ce",
+    "parts": ["DMG 文件将在应用退出后打开..."],
+    "zh": "DMG 文件将在应用退出后打开...",
+    "en": "DMG will open after application exits"
+  },
+  {
+    "id": "log.ca7ee064ab42",
+    "parts": ["更新包形态与运行形态不匹配，交系统处理: ", ""],
+    "zh": "更新包形态与运行形态不匹配，交系统处理: {0}",
+    "en": "Update package format differs from running format; letting system handle it: {0}"
+  },
+  {
+    "id": "log.025a3b56cf98",
+    "parts": ["安装更新失败: ", ""],
+    "zh": "安装更新失败: {0}",
+    "en": "Update installation failed: {0}"
+  },
+  {
+    "id": "log.22086aae9900",
+    "parts": ["已跳过版本: ", ""],
+    "zh": "已跳过版本: {0}",
+    "en": "Version skipped: {0}"
+  },
+  {
+    "id": "log.77b2483fb315",
+    "parts": ["更新弹窗加载失败: ", ""],
+    "zh": "更新弹窗加载失败: {0}",
+    "en": "Update popup failed to load: {0}"
+  },
+  {
+    "id": "log.2a65960cebc5",
+    "parts": ["用户取消更新下载", ""],
+    "zh": "用户取消更新下载{0}",
+    "en": "Update download cancelled by user{0}"
+  },
+  {
+    "id": "log.78a96bfff3ae",
+    "parts": ["下载出错，尝试使用加速镜像: ", ""],
+    "zh": "下载出错，尝试使用加速镜像: {0}",
+    "en": "Download failed; trying acceleration mirror: {0}"
+  },
+  {
+    "id": "log.32176cbf8f33",
+    "parts": ["WARP 待注销队列文件损坏（JSON 解析失败），按空队列处理"],
+    "zh": "WARP 待注销队列文件损坏（JSON 解析失败），按空队列处理",
+    "en": "WARP pending deregistration queue corrupted (invalid JSON); using empty queue"
+  },
+  {
+    "id": "log.882a1457e9e5",
+    "parts": ["WARP 设备 ", "… 入队 ", " 天仍未注销，超阈值放弃（本地节点早已删、可忽略）"],
+    "zh": "WARP 设备 {0}… 入队 {1} 天仍未注销，超阈值放弃（本地节点早已删、可忽略）",
+    "en": "WARP device {0}… not deregistered after {1} days; abandoning expired item, local node already removed"
+  },
+  {
+    "id": "log.a9ce7eeff67a",
+    "parts": ["WARP 设备 ", "… 已注销，出队"],
+    "zh": "WARP 设备 {0}… 已注销，出队",
+    "en": "WARP device {0}… deregistered and removed from queue"
+  },
+  {
+    "id": "log.c7c3c5c0038c",
+    "parts": ["WARP 设备 ", "… 凭据失效，放弃出队"],
+    "zh": "WARP 设备 {0}… 凭据失效，放弃出队",
+    "en": "WARP device {0}… credentials expired; removing item from queue"
+  },
+  {
+    "id": "log.ae862dc5912c",
+    "parts": [
+      "WARP 待注销 drain：done=",
+      " drop=",
+      " expire=",
+      " retry=",
+      "（剩 ",
+      "，本次至多 ",
+      "）"
+    ],
+    "zh": "WARP 待注销 drain：done={0} drop={1} expire={2} retry={3}（剩 {4}，本次至多 {5}）",
+    "en": "WARP deregistration queue drain: done={0}, dropped={1}, expired={2}, retry={3} (remaining {4}, batch limit {5})"
+  },
+  {
+    "id": "log.33aa0d85c08d",
+    "parts": ["WARP 待注销 drain 异常（忽略，下次重试）: ", ""],
+    "zh": "WARP 待注销 drain 异常（忽略，下次重试）: {0}",
+    "en": "WARP deregistration queue drain failed; retrying later: {0}"
+  },
+  {
+    "id": "log.9a408ad73d70",
+    "parts": ["WARP 待注销队列已满，丢弃最旧条目 ", "…"],
+    "zh": "WARP 待注销队列已满，丢弃最旧条目 {0}…",
+    "en": "WARP deregistration queue full; dropping oldest item {0}…"
+  },
+  {
+    "id": "log.f02e34790559",
+    "parts": ["WARP 设备 ", "… 入待注销队列（剩 ", "）"],
+    "zh": "WARP 设备 {0}… 入待注销队列（剩 {1}）",
+    "en": "WARP device {0}… added to deregistration queue (remaining {1})"
+  },
+  {
+    "id": "log.1fa7d01112d3",
+    "parts": ["WARP 注册中（version=", "）…"],
+    "zh": "WARP 注册中（version={0}）…",
+    "en": "Registering WARP (version={0})"
+  },
+  {
+    "id": "log.5fd165d48286",
+    "parts": ["WARP+ license 应用失败（降级免费版）: ", ""],
+    "zh": "WARP+ license 应用失败（降级免费版）: {0}",
+    "en": "Failed to apply WARP+ license; using free plan: {0}"
+  },
+  {
+    "id": "log.9401815891f5",
+    "parts": ["WARP 注册成功：", ":", "（warp_plus=", "）"],
+    "zh": "WARP 注册成功：{0}:{1}（warp_plus={2}）",
+    "en": "WARP registered: {0}:{1} (warp_plus={2})"
+  },
+  {
+    "id": "log.78b529bde9c8",
+    "parts": ["WARP+ license 已应用（", "…，warp_plus=", "）"],
+    "zh": "WARP+ license 已应用（{0}…，warp_plus={1}）",
+    "en": "WARP+ license applied ({0}…, warp_plus={1})"
+  },
+  {
+    "id": "log.472cb09d3ed1",
+    "parts": ["WARP 设备注销 ", "… → HTTP ", "（", "）"],
+    "zh": "WARP 设备注销 {0}… → HTTP {1}（{2}）",
+    "en": "WARP device {0}… deregistration → HTTP {1} ({2})"
+  },
+  {
+    "id": "log.7d6215fe5114",
+    "parts": ["WARP 设备注销 ", "… 网络异常（", "）: ", ""],
+    "zh": "WARP 设备注销 {0}… 网络异常（{1}）: {2}",
+    "en": "WARP device {0}… deregistration network error ({1}): {2}"
+  },
+  {
+    "id": "log.f67163c82506",
+    "parts": ["helper 服务安装并就绪"],
+    "zh": "helper 服务安装并就绪",
+    "en": "Helper service installed and ready"
+  },
+  {
+    "id": "log.df3ca488cc15",
+    "parts": ["helper 服务已安装但未在预期内就绪"],
+    "zh": "helper 服务已安装但未在预期内就绪",
+    "en": "Helper service installed but did not become ready in time"
+  },
+  {
+    "id": "log.3361c0aa7989",
+    "parts": ["解析下载 URL 后缀失败: ", ""],
+    "zh": "解析下载 URL 后缀失败: {0}",
+    "en": "Failed to parse download URL suffix: {0}"
+  },
+  {
+    "id": "log.0e73124143bd",
+    "parts": ["写入内核自动更新状态失败: ", ""],
+    "zh": "写入内核自动更新状态失败: {0}",
+    "en": "Failed to persist core automatic update state: {0}"
+  },
+  {
+    "id": "log.08f59f547e19",
+    "parts": ["已标记问题版本 ", "，自动更新将跳过"],
+    "zh": "已标记问题版本 {0}，自动更新将跳过",
+    "en": "Problematic version {0} recorded; automatic updates will skip it"
+  },
+  {
+    "id": "log.43f19cca48ae",
+    "parts": ["出口路由托管 reconcile 失败(不影响代理): ", ""],
+    "zh": "出口路由托管 reconcile 失败(不影响代理): {0}",
+    "en": "Failed to reconcile exit routes; proxy unaffected: {0}"
+  },
+  {
+    "id": "log.ef5209f6787c",
+    "parts": ["出口路由重申:接口 ", " 已不在 → 复位重装"],
+    "zh": "出口路由重申:接口 {0} 已不在 → 复位重装",
+    "en": "Exit route renewal: interface {0} disappeared; resetting and reinstalling routes"
+  },
+  {
+    "id": "log.6ce12aea4dff",
+    "parts": ["出口路由重申失败(不影响代理): ", ""],
+    "zh": "出口路由重申失败(不影响代理): {0}",
+    "en": "Failed to renew exit routes; proxy unaffected: {0}"
+  },
+  {
+    "id": "log.f8ae659d5f0e",
+    "parts": ["出口路由:接口 ", " 已随停核移除,ifscope 路由自动清理,跳过 route delete(防误删主表)"],
+    "zh": "出口路由:接口 {0} 已随停核移除,ifscope 路由自动清理,跳过 route delete(防误删主表)",
+    "en": "Exit route: interface {0} removed after core stopped; scoped routes cleared automatically, skipping route delete to protect main table"
+  },
+  {
+    "id": "log.72ac43081eef",
+    "parts": ["出口路由已清理: ", " ", ""],
+    "zh": "出口路由已清理: {0} {1}",
+    "en": "Exit route removed: {0} {1}"
+  },
+  {
+    "id": "log.0d8e74f4867b",
+    "parts": ["出口路由清理失败(best-effort): ", ""],
+    "zh": "出口路由清理失败(best-effort): {0}",
+    "en": "Exit route cleanup failed (best effort): {0}"
+  },
+  {
+    "id": "log.8958cbf83de1",
+    "parts": ["出口路由托管:未找到 TS 内核接口(tailnet 100.x),跳过装路由"],
+    "zh": "出口路由托管:未找到 TS 内核接口(tailnet 100.x),跳过装路由",
+    "en": "Exit route management: Tailscale tailnet 100.x interface not found; skipping route installation"
+  },
+  {
+    "id": "log.a22b02f477bb",
+    "parts": ["出口路由已装: ", " ", "(System TS exit 出网)"],
+    "zh": "出口路由已装: {0} {1}(System TS exit 出网)",
+    "en": "Exit route installed: {0} {1} (system Tailscale exit)"
+  },
+  {
+    "id": "log.c68b9f8cc994",
+    "parts": ["反查 TS 接口失败: ", ""],
+    "zh": "反查 TS 接口失败: {0}",
+    "en": "Failed to find Tailscale interface: {0}"
+  },
+  {
+    "id": "log.09b5e9050fa7",
+    "parts": ["出口路由托管:helper 不可用,无法装路由(System+exit 出网将不通)"],
+    "zh": "出口路由托管:helper 不可用,无法装路由(System+exit 出网将不通)",
+    "en": "Exit route management: helper unavailable; cannot install route for system Tailscale exit"
+  },
+  {
+    "id": "log.93b9b584b399",
+    "parts": ["helper 路由", "失败(可能 helper 版本过旧需重装 v7): ", ""],
+    "zh": "helper 路由{0}失败(可能 helper 版本过旧需重装 v7): {1}",
+    "en": "Helper route {0} failed; older helper may need reinstallation: {1}"
+  },
+  {
+    "id": "log.7a03b70d79bb",
+    "parts": ["[dns-race] socket error: ", ""],
+    "zh": "[dns-race] 套接字错误：{0}",
+    "en": "[dns-race] socket error: {0}"
+  },
+  {
+    "id": "log.e2af5ed045fe",
+    "parts": ["[dns-race] listening 127.0.0.1:", ""],
+    "zh": "[dns-race] 正在监听 127.0.0.1:{0}",
+    "en": "[dns-race] listening 127.0.0.1:{0}"
+  },
+  {
+    "id": "log.53e5cec8245f",
+    "parts": ["[dns-race] re-listen 失败: ", ""],
+    "zh": "[dns-race] re-listen 失败: {0}",
+    "en": "[dns-race] Failed to restart listener: {0}"
+  },
+  {
+    "id": "log.fcc08c96be0e",
+    "parts": ["[dns-race] handle 异常: ", ""],
+    "zh": "[dns-race] handle 异常: {0}",
+    "en": "[dns-race] Request handling exception: {0}"
+  },
+  {
+    "id": "log.172a7b596f0b",
+    "parts": ["已刷新系统 DNS 缓存（", "）：", ""],
+    "zh": "已刷新系统 DNS 缓存（{0}）：{1}",
+    "en": "System DNS cache flushed ({0}): {1}"
+  },
+  {
+    "id": "log.5d7d029cb644",
+    "parts": ["已刷新系统 DNS 缓存（", "）"],
+    "zh": "已刷新系统 DNS 缓存（{0}）",
+    "en": "System DNS cache flushed ({0})"
+  },
+  {
+    "id": "log.9b216af69657",
+    "parts": ["helper flush-dns 不可用（", "），降级用户级 dscacheutil"],
+    "zh": "helper flush-dns 不可用（{0}），降级用户级 dscacheutil",
+    "en": "Helper flush-dns unavailable ({0}); falling back to user-level dscacheutil"
+  },
+  {
+    "id": "log.4e2c16974b2e",
+    "parts": ["刷新系统 DNS 缓存失败（", "）: ", ""],
+    "zh": "刷新系统 DNS 缓存失败（{0}）: {1}",
+    "en": "Failed to flush system DNS cache ({0}): {1}"
+  },
+  {
+    "id": "log.e7f33209d201",
+    "parts": ["ruleSet 规则引用的内置资源文件缺失/损坏，已跳过: ", ""],
+    "zh": "ruleSet 规则引用的内置资源文件缺失/损坏，已跳过: {0}",
+    "en": "Built-in resource file referenced by ruleSet missing/corrupted; skipped: {0}"
+  },
+  {
+    "id": "log.907e1928670e",
+    "parts": ["ruleSet 规则引用的资源不存在，已跳过: ", ""],
+    "zh": "ruleSet 规则引用的资源不存在，已跳过: {0}",
+    "en": "Resource referenced by ruleSet not found; skipped: {0}"
+  },
+  {
+    "id": "log.310d56ad0959",
+    "parts": ["ruleSet 规则引用的资源文件缺失/损坏，已跳过: ", ""],
+    "zh": "ruleSet 规则引用的资源文件缺失/损坏，已跳过: {0}",
+    "en": "Resource file referenced by ruleSet missing/corrupted; skipped: {0}"
+  },
+  {
+    "id": "log.05efcf27a93e",
+    "parts": ["ruleSet 规则的远程 URL 已不再支持，请改用「规则资源」下载后引用，已跳过: ", ""],
+    "zh": "ruleSet 规则的远程 URL 已不再支持，请改用「规则资源」下载后引用，已跳过: {0}",
+    "en": "Remote ruleSet URLs no longer supported; download through Rule Resources and reference locally, skipped: {0}"
+  },
+  {
+    "id": "log.1ad175667dc7",
+    "parts": ["legacy 远程规则集已不再支持（请用「规则资源」），已跳过: ", ""],
+    "zh": "legacy 远程规则集已不再支持（请用「规则资源」），已跳过: {0}",
+    "en": "Legacy remote rule sets no longer supported; use Rule Resources, skipped: {0}"
+  },
+  {
+    "id": "log.3d454cdd5b56",
+    "parts": ["国内 DNS 无法解析，已回退默认 doh.pub: ", ""],
+    "zh": "国内 DNS 无法解析，已回退默认 doh.pub: {0}",
+    "en": "Cannot parse domestic DNS; falling back to doh.pub: {0}"
+  },
+  {
+    "id": "log.02d47869910c",
+    "parts": ["境外 DNS 无法解析，已回退默认 dns.google: ", ""],
+    "zh": "境外 DNS 无法解析，已回退默认 dns.google: {0}",
+    "en": "Cannot parse overseas DNS; falling back to dns.google: {0}"
+  },
+  {
+    "id": "log.84494cfa504c",
+    "parts": ["local DNS 邻居解析后缀: ", ""],
+    "zh": "local DNS 邻居解析后缀: {0}",
+    "en": "Local DNS neighbor suffixes: {0}"
+  },
+  {
+    "id": "log.26854bb695c9",
+    "parts": ["DNS rule1 节点域名规则: ", " 个域名"],
+    "zh": "DNS rule1 节点域名规则: {0} 个域名",
+    "en": "DNS rule1: {0} node domains"
+  },
+  {
+    "id": "log.9ddca70d680e",
+    "parts": ["Tailscale 按名解析已启用：tailnet 名 → ", "(endpoint=", ")"],
+    "zh": "Tailscale 按名解析已启用：tailnet 名 → {0}(endpoint={1})",
+    "en": "Tailscale name resolution enabled: tailnet name → {0} (endpoint={1})"
+  },
+  {
+    "id": "log.2c621662e6cc",
+    "parts": ["Tailscale 按名解析已开启，但未能定位选中节点的 endpoint tag，已跳过"],
+    "zh": "Tailscale 按名解析已开启，但未能定位选中节点的 endpoint tag，已跳过",
+    "en": "Tailscale name resolution enabled, but selected endpoint tag missing; skipped"
+  },
+  {
+    "id": "log.951034769778",
+    "parts": ["Windows bypassLAN 排除表已为 ", " 个生效组网段开洞（进 TUN 走组网，防架空）：", ""],
+    "zh": "Windows bypassLAN 排除表已为 {0} 个生效组网段开洞（进 TUN 走组网，防架空）：{1}",
+    "en": "Windows bypassLAN exclusions allow {0} active mesh subnets through TUN: {1}"
+  },
+  {
+    "id": "log.ec2f7f8d2436",
+    "parts": [
+      "Windows：",
+      " 个组网段与保护段（本机物理子网/回环/链路本地/多播）重叠，为保护它未开洞（仍绕过 TUN；本地访问不依赖 TUN，但该段经组网的远端对等将不可达）：",
+      ""
+    ],
+    "zh": "Windows：{0} 个组网段与保护段（本机物理子网/回环/链路本地/多播）重叠，为保护它未开洞（仍绕过 TUN；本地访问不依赖 TUN，但该段经组网的远端对等将不可达）：{1}",
+    "en": "Windows: {0} mesh subnets overlap protected local/loopback/link-local/multicast ranges; preserving TUN bypass, remote mesh peers in those ranges may be unreachable: {1}"
+  },
+  {
+    "id": "log.ab8f05531c48",
+    "parts": [
+      "Windows：",
+      " 段「绕过局域网」清单条目与非直连（走代理/拦截）自定义规则段重叠——该段在内核层被排除、自定义规则不生效；如需生效请从「绕过局域网」清单移除该条目：",
+      ""
+    ],
+    "zh": "Windows：{0} 段「绕过局域网」清单条目与非直连（走代理/拦截）自定义规则段重叠——该段在内核层被排除、自定义规则不生效；如需生效请从「绕过局域网」清单移除该条目：{1}",
+    "en": "Windows: {0} LAN bypass ranges overlap proxy/block custom rules; kernel exclusions take precedence, remove bypass entries to apply these rules: {1}"
+  },
+  {
+    "id": "log.cb6c0a9d84c3",
+    "parts": [
+      "Linux：服务端回包已由内核策略路由天然保护，「连入来源排除」不生效且会重新触发路由表分解引入回归，已忽略 ",
+      " 条声明段。"
+    ],
+    "zh": "Linux：服务端回包已由内核策略路由天然保护，「连入来源排除」不生效且会重新触发路由表分解引入回归，已忽略 {0} 条声明段。",
+    "en": "Linux: policy routing already protects server replies; ignored {0} inbound source exclusion ranges to avoid routing regressions"
+  },
+  {
+    "id": "log.49720a0a3ba7",
+    "parts": [
+      "「连入来源排除」剔除 ",
+      " 条非法/过宽网段（须合法 CIDR、不含 0.0.0.0/0 等过宽段）。"
+    ],
+    "zh": "「连入来源排除」剔除 {0} 条非法/过宽网段（须合法 CIDR、不含 0.0.0.0/0 等过宽段）。",
+    "en": "Inbound source exclusion: removed {0} invalid/overly broad CIDRs"
+  },
+  {
+    "id": "log.771b660ecabb",
+    "parts": [
+      "「连入来源排除」",
+      " 段与生效组网(WG/Tailscale)路由段重叠，已跳过排除（该段经组网节点）：",
+      ""
+    ],
+    "zh": "「连入来源排除」{0} 段与生效组网(WG/Tailscale)路由段重叠，已跳过排除（该段经组网节点）：{1}",
+    "en": "Inbound source exclusion: {0} ranges overlap active WireGuard/Tailscale routes; exclusions skipped to preserve mesh routing: {1}"
+  },
+  {
+    "id": "log.76cd030593c0",
+    "parts": [
+      "macOS：「连入来源排除」",
+      " 段与本机物理 LAN 相交，已跳过（排除物理 LAN 会触发 NetworkExtension 反向路由丢包）：",
+      ""
+    ],
+    "zh": "macOS：「连入来源排除」{0} 段与本机物理 LAN 相交，已跳过（排除物理 LAN 会触发 NetworkExtension 反向路由丢包）：{1}",
+    "en": "macOS: {0} inbound source exclusion ranges overlap physical LAN; skipped to avoid NetworkExtension reverse-route packet loss: {1}"
+  },
+  {
+    "id": "log.9edb22d5f373",
+    "parts": [
+      "「连入来源排除」",
+      " 段与非直连（走代理/拦截）自定义规则段重叠：排除使其出/入均绕过 TUN 走直连，该自定义规则对这些段将不生效：",
+      ""
+    ],
+    "zh": "「连入来源排除」{0} 段与非直连（走代理/拦截）自定义规则段重叠：排除使其出/入均绕过 TUN 走直连，该自定义规则对这些段将不生效：{1}",
+    "en": "Inbound source exclusion: {0} ranges overlap proxy/block custom rules; exclusions bypass TUN in both directions, custom rules will not apply: {1}"
+  },
+  {
+    "id": "log.bc0de48212c4",
+    "parts": [
+      "Linux：",
+      " 个组网段与本机接口网段重叠，本机侧按直连优先（远端组网对等仍经组网可达）：",
+      ""
+    ],
+    "zh": "Linux：{0} 个组网段与本机接口网段重叠，本机侧按直连优先（远端组网对等仍经组网可达）：{1}",
+    "en": "Linux: {0} mesh ranges overlap local interfaces; local destinations go direct, remote mesh peers still use mesh: {1}"
+  },
+  {
+    "id": "log.602566c47f4b",
+    "parts": ["跳过不可用节点「", "」：NaiveProxy 缺少 libcronet 核心库"],
+    "zh": "跳过不可用节点「{0}」：NaiveProxy 缺少 libcronet 核心库",
+    "en": "Skipping unavailable node \"{0}\": NaiveProxy requires libcronet"
+  },
+  {
+    "id": "log.fd4f9fe7911a",
+    "parts": [
+      "组网节点「",
+      "」：当前非 TUN 模式，按 gVisor（用户态栈）发射（System 内核接口需 TUN + 提权 helper）"
+    ],
+    "zh": "组网节点「{0}」：当前非 TUN 模式，按 gVisor（用户态栈）发射（System 内核接口需 TUN + 提权 helper）",
+    "en": "Mesh node \"{0}\": using gVisor user-space stack outside TUN mode; system interface requires TUN and privileged helper"
+  },
+  {
+    "id": "log.0e0078266f1d",
+    "parts": ["跳过组网节点「", "」：已关闭外网访问且无可路由网段（无外网访问权限）"],
+    "zh": "跳过组网节点「{0}」：已关闭外网访问且无可路由网段（无外网访问权限）",
+    "en": "Skipping mesh node \"{0}\": external access disabled and no routable subnet"
+  },
+  {
+    "id": "log.256e9f49bd74",
+    "parts": ["组网节点「", "」", "：仅路由其指定网段，不承载默认出网流量"],
+    "zh": "组网节点「{0}」{1}：仅路由其指定网段，不承载默认出网流量",
+    "en": "Mesh node \"{0}\" {1}: routes only specified subnets, not default internet traffic"
+  },
+  {
+    "id": "log.4fad7625a32e",
+    "parts": ["生成 WireGuard endpoint 失败，已跳过: ", " (", ")"],
+    "zh": "生成 WireGuard endpoint 失败，已跳过: {0} ({1})",
+    "en": "Failed to generate WireGuard endpoint; skipped: {0} ({1})"
+  },
+  {
+    "id": "log.1f61b032e6c5",
+    "parts": ["生成 Tailscale endpoint 失败，已跳过: ", " (", ")"],
+    "zh": "生成 Tailscale endpoint 失败，已跳过: {0} ({1})",
+    "en": "Failed to generate Tailscale endpoint; skipped: {0} ({1})"
+  },
+  {
+    "id": "log.866bb4395e2e",
+    "parts": ["检测到代理链成环，已跳过 detour: ", ""],
+    "zh": "检测到代理链成环，已跳过 detour: {0}",
+    "en": "Proxy chain loop detected; detour skipped: {0}"
+  },
+  {
+    "id": "log.008fcb426df9",
+    "parts": [
+      "endpoint 节点（WireGuard/Tailscale）不支持作为前置代理(detour)目标，已忽略「",
+      "」的代理链"
+    ],
+    "zh": "endpoint 节点（WireGuard/Tailscale）不支持作为前置代理(detour)目标，已忽略「{0}」的代理链",
+    "en": "WireGuard/Tailscale endpoints cannot be detour targets; proxy chain for \"{0}\" ignored"
+  },
+  {
+    "id": "log.61ca55b31204",
+    "parts": ["生成节点出站失败，已跳过: ", " (", ")"],
+    "zh": "生成节点出站失败，已跳过: {0} ({1})",
+    "en": "Failed to generate node outbound; skipped: {0} ({1})"
+  },
+  {
+    "id": "log.0831bac5d5f4",
+    "parts": ["启动前配置校验：节点「", "」的 detour 引用无效，已剔除"],
+    "zh": "启动前配置校验：节点「{0}」的 detour 引用无效，已剔除",
+    "en": "Startup check: node \"{0}\" has invalid detour reference; removed"
+  },
+  {
+    "id": "log.d433c35e45a1",
+    "parts": [
+      "",
+      " 个自定义规则网段（",
+      "",
+      "）与组网(WG/Tailscale)路由段重叠：按优先级将覆盖组网路由，该段可能不走组网节点。如非有意请调整规则或组网配置。"
+    ],
+    "zh": "{0} 个自定义规则网段（{1}{2}）与组网(WG/Tailscale)路由段重叠：按优先级将覆盖组网路由，该段可能不走组网节点。如非有意请调整规则或组网配置。",
+    "en": "{0} custom-rule ranges ({1}{2}) overlap WireGuard/Tailscale routes; custom rule priority overrides mesh routing, review if unintended"
+  },
+  {
+    "id": "log.c62c2ed7ed2a",
+    "parts": [
+      "选中的组网节点已关闭外网访问：外网流量已回退直连（具体网段仍经组网节点），如需经此节点全隧道请开启该节点「允许访问外网」"
+    ],
+    "zh": "选中的组网节点已关闭外网访问：外网流量已回退直连（具体网段仍经组网节点），如需经此节点全隧道请开启该节点「允许访问外网」",
+    "en": "Selected mesh node disallows external access; internet traffic falls back to direct, specified subnets still use mesh. Enable external access for full tunnel"
+  },
+  {
+    "id": "log.8773475f0e4b",
+    "parts": ["", " 个 endpoint 路由段被多个节点重复声明，已按节点顺序去重（先声明者生效）"],
+    "zh": "{0} 个 endpoint 路由段被多个节点重复声明，已按节点顺序去重（先声明者生效）",
+    "en": "{0} endpoint route ranges claimed by multiple nodes; deduplicated in node order, first declaration wins"
+  },
+  {
+    "id": "log.1e01120a32c8",
+    "parts": ["旁路局域网清单含与 FakeIP 段(", ")相交的条目，已剔除以免假 IP 被当私网直连：", ""],
+    "zh": "旁路局域网清单含与 FakeIP 段({0})相交的条目，已剔除以免假 IP 被当私网直连：{1}",
+    "en": "LAN bypass entries overlap FakeIP range ({0}); removed to prevent fake addresses being routed directly: {1}"
+  },
+  {
+    "id": "log.830ed98b62cc",
+    "parts": ["Speed test skipped: no servers"],
+    "zh": "没有节点，已跳过测速",
+    "en": "Speed test skipped: no servers"
+  },
+  {
+    "id": "log.0ecff1079eb4",
+    "parts": ["Speed test failed: ", ""],
+    "zh": "测速失败：{0}",
+    "en": "Speed test failed: {0}"
+  },
+  {
+    "id": "log.c29094c53e4b",
+    "parts": ["启动期落位 staged 内核异常: ", ""],
+    "zh": "启动期落位 staged 内核异常: {0}",
+    "en": "Failed to apply staged core at startup: {0}"
+  },
+  {
+    "id": "log.d019518496e9",
+    "parts": ["启动时自动连接已启用，正在连接..."],
+    "zh": "启动时自动连接已启用，正在连接...",
+    "en": "Connect on startup enabled; connecting"
+  },
+  {
+    "id": "log.0962d910d6c8",
+    "parts": ["启动时自动连接成功"],
+    "zh": "启动时自动连接成功",
+    "en": "Connected automatically at startup"
+  },
+  {
+    "id": "log.b17cd5141879",
+    "parts": ["启动时自动连接已启用，但未选择服务器"],
+    "zh": "启动时自动连接已启用，但未选择服务器",
+    "en": "Connect on startup enabled, but no server selected"
+  },
+  {
+    "id": "log.213170b37871",
+    "parts": ["启动时自动连接失败: ", ""],
+    "zh": "启动时自动连接失败: {0}",
+    "en": "Automatic startup connection failed: {0}"
+  },
+  {
+    "id": "log.0a675b3c5c62",
+    "parts": ["正在自动检查更新..."],
+    "zh": "正在自动检查更新...",
+    "en": "Checking updates automatically"
+  },
+  {
+    "id": "log.a0c8b1c40b94",
+    "parts": ["自动检查更新失败: ", ""],
+    "zh": "自动检查更新失败: {0}",
+    "en": "Automatic update check failed: {0}"
+  },
+  {
+    "id": "log.b774e7438452",
+    "parts": ["当前已经是最新版本"],
+    "zh": "当前已经是最新版本",
+    "en": "Already up to date"
+  },
+  {
+    "id": "log.c8087f577eab",
+    "parts": ["自动检查更新异常: ", ""],
+    "zh": "自动检查更新异常: {0}",
+    "en": "Automatic update check exception: {0}"
+  },
+  {
+    "id": "log.ce53aefbcfc7",
+    "parts": ["Proxy started from tray"],
+    "zh": "已通过托盘启动代理",
+    "en": "Proxy started from tray"
+  },
+  {
+    "id": "log.0aea9d721983",
+    "parts": ["Failed to start proxy: ", ""],
+    "zh": "启动代理失败：{0}",
+    "en": "Failed to start proxy: {0}"
+  },
+  {
+    "id": "log.c7a5e3200fe6",
+    "parts": ["Proxy stopped from tray"],
+    "zh": "已通过托盘停止代理",
+    "en": "Proxy stopped from tray"
+  },
+  {
+    "id": "log.62b3deef5fd0",
+    "parts": ["Failed to stop proxy: ", ""],
+    "zh": "停止代理失败：{0}",
+    "en": "Failed to stop proxy: {0}"
+  },
+  {
+    "id": "log.e4626e96dd8e",
+    "parts": ["Applied server switch from tray"],
+    "zh": "已应用托盘节点切换",
+    "en": "Applied server switch from tray"
+  },
+  {
+    "id": "log.b49828b929ba",
+    "parts": ["Failed to select server: ", ""],
+    "zh": "选择节点失败：{0}",
+    "en": "Failed to select server: {0}"
+  },
+  {
+    "id": "log.86d053b609f6",
+    "parts": ["Proxy restarted with new mode"],
+    "zh": "已用新分流模式重启代理",
+    "en": "Proxy restarted with new mode"
+  },
+  {
+    "id": "log.f24d9cc8d93b",
+    "parts": ["Failed to change proxy mode: ", ""],
+    "zh": "切换分流模式失败：{0}",
+    "en": "Failed to change proxy mode: {0}"
+  },
+  {
+    "id": "log.ed55be3de5f8",
+    "parts": ["FakeIP 已随 TUN 自动启用（迁移冻结纠正）"],
+    "zh": "FakeIP 已随 TUN 自动启用（迁移冻结纠正）",
+    "en": "FakeIP automatically enabled with TUN (migration correction)"
+  },
+  {
+    "id": "log.2553ce6d2c98",
+    "parts": ["Proxy restarted with new takeover mode"],
+    "zh": "已用新接管方式重启代理",
+    "en": "Proxy restarted with new takeover mode"
+  },
+  {
+    "id": "log.77db798081c8",
+    "parts": ["Failed to change takeover mode: ", ""],
+    "zh": "切换接管方式失败：{0}",
+    "en": "Failed to change takeover mode: {0}"
+  },
+  {
+    "id": "log.2c4dd5dd9b26",
+    "parts": ["[Paths] Failed to set userData path:"],
+    "zh": "[Paths] 设置用户数据路径失败：",
+    "en": "[Paths] Failed to set userData path:"
+  },
+  {
+    "id": "log.6f463ed8dc0b",
+    "parts": ["[Paths] Failed to create portable data directory:"],
+    "zh": "[Paths] 创建便携数据目录失败：",
+    "en": "[Paths] Failed to create portable data directory:"
+  },
+  {
+    "id": "log.465d15c24b98",
+    "parts": ["dns-race: 上游返回 decoy 答案，判 POISONED 丢弃（first-clean-wins）"],
+    "zh": "DNS 并发解析：已丢弃上游返回的干扰地址，采用首个有效响应（POISONED）",
+    "en": "dns-race: decoy answer from upstream rejected as POISONED (first-clean-wins)"
+  }
+]

@@ -78,7 +78,10 @@ function stubExecFile(plan: Record<string, string | Error>): {
 function dnsOut(iface: string, ...ips: string[]): string {
   const head = `接口 "${iface}" 的配置`;
   const body = ips.length
-    ? [`    静态配置的 DNS 服务器:            ${ips[0]}`, ...ips.slice(1).map((i) => `                                      ${i}`)]
+    ? [
+        `    静态配置的 DNS 服务器:            ${ips[0]}`,
+        ...ips.slice(1).map((i) => `                                      ${i}`),
+      ]
     : ['    静态配置的 DNS 服务器:            无'];
   return [head, ...body, ''].join('\r\n');
 }

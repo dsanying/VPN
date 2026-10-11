@@ -1,26 +1,22 @@
+import { BACKGROUND_REFRESH_MS } from '../../../shared/background-refresh';
 /**
  * 解锁检测编排器（main）。
  *
- * 职责：懒建/重 pin 检测专用 session（走用户真实分流出口）→ 打 trace 取 egress（兼作缓存 key）→
- * 6 checker `Promise.allSettled` 逐个 settle 即广播 progress → 组装 UnlockSnapshot 缓存/返回。
- * gating（核未运行短路）、单飞、缓存/节流、切节点失效全在此。
+ * 生产环境逐网站经过已应用的普通路由入口；未连接时检测普通网络。
+ * 专用强制出口路径仅供兼容调用者使用。
+ * 网站 checker 并行运行，逐个广播进度；单飞、缓存、节流及跨代结果隔离在此统一处理。
  *
- * 关键不变量（见 flowz-unlock-detection.md 硬约束）：
- *  - session 兜底：setProxy reject → 本轮放弃（返回全 timeout），**绝不落 default session**（那会测宿主 IP）；
- *  - 端口取 localProxyPort 单一真值（由 getMixedPort 注入），端口变才重 pin（对齐 UpdateNetwork）；
- *  - **就绪门**（H6）：核刚起时进程在跑但 mixed inbound 尚未真正路由 → egress trace 兼作就绪探针。首次即时探
- *    （核已就绪则零延迟），失败退避重试；拿到有效 egress = 就绪才跑 checker。重试耗尽 → notReady，不提交
- *    快照/缓存（不污染成假 timeout），后续 invalidate/手动刷新会重试。退避 sleep 受 epoch 守卫（对齐 H1）；
- *  - egress 探得（就绪）后失败不再发生；缓存 key=egressIp，切节点天然失效、不写缓存；
- *  - **warmup 补测**：就绪门只证「单点连通」非「各端点已热」→ 首轮个别 checker 撞冷隧道 8s 超时。commit 前仅对
- *    timeout 服务退避补测 ≤SETTLE_RETRY_MAX_ROUNDS 轮（保留高置信结果），缓存只写收敛快照（epoch 守卫同就绪门）；
- *  - force 绕 TTL 但保底硬下限（防手点连发触发对端限频）；非 force 命中 TTL 直接返回缓存。
+ * - 停核使用独立 direct session，不继承系统 HTTP 代理；运行中的直连检测固定到直连探针入口。
+ * - 节点检测固定到代理探针入口，出口探测兼作就绪确认与缓存标识。
+ * - 会话配置失败或入口缺失不回落默认 session，避免把其他网络的结果标作当前网络。
+ * - 普通网络的各站独立检测，不因海外出口信息站失败而整轮短路。
+ * - 切节点、起停和分流变化通过 epoch 作废旧结果；强制刷新仍保留限频下限。
  */
 
 import { session as electronSession, type Session } from 'electron';
+import { isIP } from 'net';
 import {
   SERVICE_IDS,
-  isRestrictedEgressRegion,
   type ServiceId,
   type UnlockEgress,
   type UnlockProgress,
@@ -30,7 +26,7 @@ import {
 import type { ProxyExitBlock } from '../../../shared/types';
 import { parseTrace } from '../IpInfoService';
 import { CHECKERS } from './checkers';
-import { CHECKER_BUDGET_MS, EGRESS_TRACE_URL, REQ_TIMEOUT_MS, UA } from './unlock-endpoints';
+import { CHECKER_BUDGET_MS, EGRESS_TRACE_URL, REQ_TIMEOUT_MS } from './unlock-endpoints';
 import {
   makeUnlockFetch,
   type UnlockFetch,
@@ -85,10 +81,16 @@ const MIN_OP_BUDGET_MS = 500;
 export const RECHECK_DELAY_MS = 5000;
 
 export interface UnlockServiceDeps {
-  /** 当前 mixed inbound 端口（= localProxyPort(config)，pin 目标）。 */
+  /** Force-direct inlet while a core is running (including TUN). Otherwise use a dedicated direct session. */
+  getDirectPort?: () => number;
+  /** Ordinary applied rule inlet: every website follows its actual domain/app routing. */
+  getRoutingPort?: () => number;
+  /** Dedicated force-proxy HTTP probe port; never the user mixed/rule inlet. */
   getMixedPort: () => number;
-  /** sing-box 是否在运行（gating）。 */
+  /** 代理内核是否运行，用于选择检测路径。 */
   isRunning: () => boolean;
+  /** 直连模式或登录出口让位期间不得将直连结果标作节点结果。 */
+  isProxySelected?: () => boolean | Promise<boolean>;
   /** 选中 TS 出口 API 直判无效（未选出口设备/离线/未广告）→ 非空即短路检测（零网络）。缺省视作出口有效。 */
   getExitBlock?: () => ProxyExitBlock | null;
   /**
@@ -107,6 +109,7 @@ export interface UnlockServiceDeps {
    * 切回时 get() 拿到 null（in-flight 未 commit）→ 复位重跑。补此事件使渲染端 store 跨卸载持有终态，切回直接展示。
    */
   onComplete?: (snap: UnlockSnapshot) => void;
+  initialSnapshot?: UnlockSnapshot | null;
   /** 可选调试日志（§12.2 X2）：per-leg 传输失败逐条记（host/err/phase/bytes/elapsed），供真机 V36 分诊 WARP 下
    *  ChatGPT/Gemini「超时」归因（服务侧网络层拦截 vs 我方 false-timeout）。缺省不记（单测/未注入零副作用）。 */
   log?: (msg: string) => void;
@@ -117,6 +120,8 @@ export interface UnlockServiceDeps {
 }
 
 export class UnlockDetectionService {
+  private directSession: Session | null = null;
+  private directPort: number | null = null;
   private proxiedSession: Session | null = null;
   private pinnedPort: number | null = null;
   /** key = egressIp。 */
@@ -141,7 +146,10 @@ export class UnlockDetectionService {
   /** F-B 出口归属 bracket：连续「轮首/轮尾 egress 不符」次数——达 2 判出口 IP 轮换型（WARP 多 IP），按 lowConfidence 落定防死循环。 */
   private bracketMissStreak = 0;
 
-  constructor(private readonly deps: UnlockServiceDeps) {}
+  constructor(private readonly deps: UnlockServiceDeps) {
+    this.lastSnapshot = deps.initialSnapshot ?? null;
+    this.lastRunAt = this.lastSnapshot?.checkedAt ?? 0;
+  }
 
   private now(): number {
     return this.deps.now?.() ?? Date.now();
@@ -197,12 +205,18 @@ export class UnlockDetectionService {
    * 单飞：在飞任务仍新鲜（epoch 未变）→ 直接 join；已被 invalidate 作废 → 链在其后重跑一轮（H1）。
    */
   async run(force = false): Promise<UnlockSnapshot> {
-    if (!this.deps.isRunning()) {
-      return { results: {}, checkedAt: null, egress: null, blockedReason: 'proxy-not-running' };
-    }
+    const direct =
+      !this.deps.isRunning() ||
+      !!(this.deps.isProxySelected && !(await this.deps.isProxySelected()));
+    if (
+      !this.deps.getRoutingPort &&
+      this.lastSnapshot &&
+      (this.lastSnapshot.route === 'direct') !== direct
+    )
+      this.invalidate();
     // 选中 TS 出口 API 直判无效 → 短路（零网络零就绪门）：经死出口检测只会空转就绪门数十秒。所有触发面
     // （挂载/跃迁/invalidate/手动/未来新增）都汇聚此处，一处短路全局生效；出口恢复由翻转对账 invalidate 重检。
-    if (this.deps.getExitBlock?.()) {
+    if (!this.deps.getRoutingPort && !direct && this.deps.getExitBlock?.()) {
       return { results: {}, checkedAt: null, egress: null, blockedReason: 'exit-invalid' };
     }
     if (this.inflight) {
@@ -266,13 +280,33 @@ export class UnlockDetectionService {
    * 懒建/重 pin 检测 session，返回绑定其上的 fetch。端口无效 / setProxy reject → 返回 null（本轮放弃，
    * 绝不回落 default session）。测试经 deps.transport 注入 fake 传输，跳过真实 net.request。
    */
-  private async ensureFetch(): Promise<UnlockFetch | null> {
-    const port = this.deps.getMixedPort();
+  private async ensureFetch(direct = false): Promise<UnlockFetch | null> {
+    if (direct) {
+      const port = this.deps.isRunning() ? (this.deps.getDirectPort?.() ?? 0) : 0;
+      // A running TUN needs an explicit bypass inlet; never silently send through its selected node.
+      if (this.deps.isRunning() && !port) return null;
+      try {
+        const s = this.directSession ?? electronSession.fromPartition(`${PARTITION}-direct`);
+        if (!this.directSession || this.directPort !== port) {
+          await s.setProxy(
+            port
+              ? { mode: 'fixed_servers', proxyRules: `http://127.0.0.1:${port}` }
+              : { mode: 'direct' }
+          );
+          this.directSession = s;
+          this.directPort = port;
+        }
+        return this.deps.transport ? (req) => this.deps.transport!(s, req) : makeUnlockFetch(s);
+      } catch {
+        return null;
+      }
+    }
+    const port = this.deps.getRoutingPort?.() ?? this.deps.getMixedPort();
     if (!port || port <= 0) return null;
     try {
       if (!this.proxiedSession || this.pinnedPort !== port) {
         const s = this.proxiedSession ?? electronSession.fromPartition(PARTITION);
-        await s.setProxy({ proxyRules: `socks5://127.0.0.1:${port}` });
+        await s.setProxy({ proxyRules: `http://127.0.0.1:${port}` });
         this.proxiedSession = s;
         this.pinnedPort = port;
       }
@@ -280,6 +314,7 @@ export class UnlockDetectionService {
       return null; // setProxy reject → 不冒险走未 pin 会话
     }
     const s = this.proxiedSession;
+    if (this.deps.getRoutingPort) await s.closeAllConnections?.();
     const transport = this.deps.transport;
     const base: UnlockFetch = transport ? (req) => transport(s, req) : makeUnlockFetch(s);
     const log = this.deps.log;
@@ -311,11 +346,27 @@ export class UnlockDetectionService {
     if (startEpoch !== this.epoch) {
       return this.commit({ results: {}, checkedAt: null, egress: null }, startEpoch, null);
     }
+    if (this.deps.getRoutingPort) {
+      await this.deps.whenExitSettled?.();
+      return this.doDirectRun(force, startEpoch);
+    }
+    if (
+      !this.deps.isRunning() ||
+      (this.deps.isProxySelected && !(await this.deps.isProxySelected()))
+    )
+      return this.doDirectRun(force, startEpoch);
     // F-A：等 selector 校正完成（对齐 IpInfo S1）再探测——防落「核起→reassert 完成」boot 窗口经 cache_file 复活的旧出口
     // 探测致结果错标。等待在 deadline 取值之前 → 不吃 10s 检测预算。等待期被 invalidate（epoch 变）→ 作废本轮。
     await this.deps.whenExitSettled?.();
     if (startEpoch !== this.epoch) {
       return this.commit({ results: {}, checkedAt: null, egress: null }, startEpoch, null);
+    }
+    if (this.deps.isProxySelected && !(await this.deps.isProxySelected())) {
+      return this.commit(
+        { results: {}, checkedAt: null, egress: null, blockedReason: 'proxy-not-selected' },
+        startEpoch,
+        null
+      );
     }
     // issue 1：整轮 wall-clock 死线（就绪门 + checker 主轮 + settle-retry 共享），贯穿各段防加法累加超界。
     const deadline = this.now() + TOTAL_DETECTION_BUDGET_MS;
@@ -346,20 +397,14 @@ export class UnlockDetectionService {
       );
     }
 
-    // 受限地区出口（issue 7）：egress.region ∈ RESTRICTED（CN）→ 海外服务 timeout 是结构性预期、非低置信瞬态
-    // （出口远端解析被投毒 + 连接层拦截、真实流量同死）。据此下方：正常 30min TTL（免 2min churn）、跳过 settle-retry、
-    // 不标 lowConfidence/partialTimeout（免 warm 补测 + G-flip2 循环 invalidate）。就绪门已过 → egress 必非空。
-    const restricted = isRestrictedEgressRegion(egress.region);
-
     // 缓存命中（非 force + 未过 TTL + 本轮未被作废）→ 直接返回缓存（不重打 checker）。
     if (!force && startEpoch === this.epoch) {
       const c = this.cache.get(egress.ip);
       // R3：TTL 挂置信度——含 timeout 的快照（partial-timeout 补测轮写入）用短 TTL（2min）自然重检；全高置信 30min。
-      // issue 7：受限出口的 timeout 是高置信结构性终态 → 用正常 30min TTL（不走 2min churn）。
       const hasTimeout = c
-        ? Object.values(c.snap.results).some((r) => r.status === 'timeout')
+        ? Object.values(c.snap.results).some((r) => ['timeout', 'error'].includes(r.status))
         : false;
-      if (c && this.now() - c.at < (hasTimeout && !restricted ? TIMEOUT_TTL_MS : TTL_MS)) {
+      if (c && this.now() - c.at < (hasTimeout ? TIMEOUT_TTL_MS : TTL_MS)) {
         this.lastSnapshot = c.snap;
         return c.snap;
       }
@@ -384,9 +429,10 @@ export class UnlockDetectionService {
     // 个别 checker（大 body / 多请求链）会撞 8s 超时。timeout 是低置信瞬态兜底，不该与命中 marker 的 ok/blocked/partial
     // 同权落定并缓存 30min。故 commit 前仅对 timeout 的服务退避补测 ≤N 轮（保留高置信结果、只重打灰的，对端友好），
     // 收敛后再 commit → 缓存写收敛快照。退避 sleep 复用就绪门句柄（invalidate 可唤醒放弃，单飞保证同时至多一个）。
-    // issue 7：受限出口的 timeout 是结构性终态、补测无意义（deadline 下本近似死代码）→ 显式跳过，免灰点 spinner 抖动。
-    for (let round = 1; !restricted && round <= SETTLE_RETRY_MAX_ROUNDS; round++) {
-      const timeoutIds = SERVICE_IDS.filter((id) => results[id]?.status === 'timeout');
+    for (let round = 1; round <= SETTLE_RETRY_MAX_ROUNDS; round++) {
+      const timeoutIds = SERVICE_IDS.filter((id) =>
+        ['timeout', 'error'].includes(results[id]?.status)
+      );
       if (timeoutIds.length === 0) break; // 全部高置信 → 快路径零额外开销
       if (startEpoch !== this.epoch) break; // 本轮已作废 → commit 守卫会丢弃
       // issue 1：本轮退避会跨整轮 deadline → 停止补测，保留现有 timeout 终态（交 G-flip2/下一触发重检）。
@@ -400,18 +446,18 @@ export class UnlockDetectionService {
       await Promise.allSettled(timeoutIds.map(runOne));
     }
 
-    // B2 低置信不缓存：就绪门撞运气过（egress 非 null）但 6 checker 全 timeout（flap 期典型）→ 提交 lastSnapshot
+    // B2 低置信不缓存：就绪门撞运气过（egress 非 null）但所有 checker 全 timeout（flap 期典型）→ 提交 lastSnapshot
     // 使 UI 如实显示灰/超时 + mount 水合零网络，但**跳过 cache 写入**（传 null egress 键）+ 标 lowConfidence——避免垃圾
     // 快照按 egressIp 锁 30min，下一真触发（含 G-flip2 伴测成功）即重检。命中任一 marker 的高置信结果照常入缓存。
     // R1/R2 修：settle-retry 对 slow-timeout 结构性不可达（budget 恒烧到 deadline → 补测退避跨界 break）。partial-timeout
     // （个别 checker 超时、非全超，冷启 NF 典型）原会照写 30min 缓存 + G-flip2 不认 partial + commit 后无后续触发事件 →
     // 陈旧 timeout 驻留到手动刷新。修：partial-timeout **不锁 30min 缓存** + 挂**一次性** warm 定向补测（隧道此时已热
     // ~10s，+RECHECK_DELAY_MS 后单发重打 timeout 项，非加轮内轮数、单发不循环）。全超(lowConfidence)/全绿行为原封。
-    const timeoutIds = SERVICE_IDS.filter((id) => results[id]?.status === 'timeout');
-    // issue 7：受限出口（CN）的 timeout 是高置信结构性终态 → 不标 lowConfidence（G-flip2 出口探成功不再反复 invalidate 重跑）、
-    // 不标 partialTimeout（不挂 5s warm 补测）、正常写 egressIp 缓存（下方 commit 的 egress 键放行）。非受限出口行为原封。
-    const lowConfidence = !restricted && timeoutIds.length === SERVICE_IDS.length;
-    const partialTimeout = !restricted && timeoutIds.length > 0 && !lowConfidence;
+    const timeoutIds = SERVICE_IDS.filter((id) =>
+      ['timeout', 'error'].includes(results[id]?.status)
+    );
+    const lowConfidence = timeoutIds.length === SERVICE_IDS.length;
+    const partialTimeout = timeoutIds.length > 0 && !lowConfidence;
     // F-B 出口归属 bracket（类保险，兜 F-C/F-A 覆盖不到的未来翻转源）：checker 轮收口后复测 egress，与开轮 egress 比对。
     // 不符 = 轮中出口被 invalidate 契约外路径（reassert/登录让位/未来新增 hotSwitchSelector 直调）翻转 → 本轮结果属另一
     // 出口 → 丢弃 + invalidate（onInvalidated → GAP-1 self-run 自动重跑正确出口）。confirm 失败(null)≠不符（网络瞬态不触发）；
@@ -441,6 +487,46 @@ export class UnlockDetectionService {
       this.scheduleRecheck(timeoutIds, egress, startEpoch);
     }
     return snap;
+  }
+
+  private async doDirectRun(force: boolean, startEpoch: number): Promise<UnlockSnapshot> {
+    if (startEpoch !== this.epoch)
+      return this.getSnapshot() ?? { results: {}, checkedAt: null, egress: null };
+    if (
+      !force &&
+      this.lastSnapshot?.route ===
+        (this.deps.getRoutingPort && this.deps.isRunning() ? 'routed' : 'direct') &&
+      this.lastSnapshot.checkedAt &&
+      this.now() - this.lastSnapshot.checkedAt < BACKGROUND_REFRESH_MS
+    ) {
+      return this.getSnapshot() as UnlockSnapshot;
+    }
+    const fetch = await this.ensureFetch(!(this.deps.getRoutingPort && this.deps.isRunning()));
+    if (startEpoch !== this.epoch)
+      return this.getSnapshot() ?? { results: {}, checkedAt: null, egress: null };
+    const deadline = this.now() + TOTAL_DETECTION_BUDGET_MS;
+    this.lastRunAt = this.now();
+    const results: Record<string, UnlockResult> = {};
+    // No overseas IP lookup prerequisite: each website independently reports the normal network's reachability.
+    await Promise.allSettled(
+      SERVICE_IDS.map(async (id) => {
+        const result = fetch
+          ? await this.runChecker(id, fetch, deadline).catch(() => ({ status: 'error' as const }))
+          : { status: 'error' as const };
+        results[id] = result;
+        if (startEpoch === this.epoch) this.deps.onProgress({ serviceId: id, result });
+      })
+    );
+    return this.commit(
+      {
+        route: this.deps.getRoutingPort && this.deps.isRunning() ? 'routed' : 'direct',
+        results,
+        checkedAt: this.now(),
+        egress: null,
+      },
+      startEpoch,
+      null
+    );
   }
 
   /**
@@ -531,6 +617,7 @@ export class UnlockDetectionService {
       return this.getSnapshot() ?? { results: {}, checkedAt: null, egress: null };
     }
     this.lastSnapshot = snap;
+    if (snap.checkedAt && !snap.route) snap.route = 'proxy';
     if (egress) this.cache.set(egress.ip, { snap, at: this.now() }); // egress 失败不写缓存
     // issue 2：终态广播给渲染端 store（跨组件卸载持有）。仅 fresh commit 触发（陈旧 epoch 上方已 return）。
     this.deps.onComplete?.(this.getSnapshot() as UnlockSnapshot);
@@ -538,7 +625,7 @@ export class UnlockDetectionService {
   }
 
   /**
-   * N3：给单 checker 加总预算（Promise.race 兜底）。单请求各 8s 传输超时，但 Disney 主链+备法可 4 连请求串联、
+   * N3：给单 checker 加总预算（Promise.race 兜底）。单请求各 8s 传输超时，但 地区拒绝复核可能追加一个短 GET、
    * 最坏尾延迟累加 → 此处对整个 checker 封顶 CHECKER_BUDGET_MS，超预算落 timeout（有界即可，非精确）。
    */
   private runChecker(id: ServiceId, fetch: UnlockFetch, deadline: number): Promise<UnlockResult> {
@@ -616,15 +703,25 @@ export class UnlockDetectionService {
   }
 
   private async probeEgress(fetch: UnlockFetch, deadline: number): Promise<UnlockEgress | null> {
-    // issue 1：单次就绪门探测按整轮剩余时间收紧超时（默认 8s），防「11s 就绪门后再等一个 8s 探测」冲破总上限。
-    const timeoutMs = Math.max(MIN_OP_BUDGET_MS, Math.min(REQ_TIMEOUT_MS, deadline - this.now()));
-    try {
-      const res = await fetch({ url: EGRESS_TRACE_URL, headers: { 'User-Agent': UA }, timeoutMs });
-      if (res.status !== 200 || !res.body) return null;
-      const info = parseTrace(res.body);
-      return info ? { ip: info.ip, region: info.countryCode } : null;
-    } catch {
-      return null;
+    // 出口信息主用 Cloudflare，独立 HTTPS ipify 兜底，避免单个信息站故障阻断网站检测。
+    for (const url of [EGRESS_TRACE_URL, 'https://api.ipify.org/?format=json']) {
+      const remaining = deadline - this.now();
+      if (remaining <= 0) return null;
+      const timeoutMs = Math.max(MIN_OP_BUDGET_MS, Math.min(REQ_TIMEOUT_MS, remaining));
+      try {
+        const res = await fetch({ url, headers: {}, timeoutMs, maxBodyBytes: 8192 });
+        if (res.status !== 200 || !res.body) continue;
+        if (url === EGRESS_TRACE_URL) {
+          const info = parseTrace(res.body);
+          if (info) return { ip: info.ip, region: info.countryCode };
+        } else {
+          const data = JSON.parse(res.body) as { ip?: unknown };
+          if (typeof data.ip === 'string' && isIP(data.ip)) return { ip: data.ip };
+        }
+      } catch {
+        /* 当前端点失败后尝试独立端点，仍共享整轮预算。 */
+      }
     }
+    return null;
   }
 }

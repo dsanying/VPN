@@ -1,0 +1,282 @@
+[
+  {
+    "zh": "# 暗影VPN 诊断报告",
+    "en": "# Shadow VPN diagnostic report"
+  },
+  {
+    "zh": "> 本报告用于排障，可附到 GitHub issue。**密钥与节点身份已脱敏**（uuid/密码/私钥/订阅 token 已打码；",
+    "en": "> This report supports troubleshooting and GitHub issues. **Credentials and node identities are redacted** (UUIDs, passwords, private keys and subscription tokens;"
+  },
+  {
+    "zh": "节点域名/IP/SNI/节点名已替换为 `<domain-N>`/`<ip-N>`/`<node-N>` 占位符）。日志明细可能仍含访问过的**其它**域名/IP——介意可自行删减后再上传。",
+    "en": "node domains/IPs/SNI/names use `<domain-N>`/`<ip-N>`/`<node-N>` placeholders). Other visited domains/IPs can remain in logs; review before sharing."
+  },
+  {
+    "zh": "> 提示：{0}",
+    "en": "> Hint: {0}"
+  },
+  {
+    "zh": "## 环境",
+    "en": "## Environment"
+  },
+  {
+    "zh": "- 生成时间：{0}",
+    "en": "- Generated: {0}"
+  },
+  {
+    "zh": "- 暗影VPN 版本：{0}",
+    "en": "- App version: {0}"
+  },
+  {
+    "zh": "- 内核版本：{0}",
+    "en": "- Core version: {0}"
+  },
+  {
+    "zh": "- 系统：{0}",
+    "en": "- OS: {0}"
+  },
+  {
+    "zh": "## 运行态",
+    "en": "## Runtime"
+  },
+  {
+    "zh": "- 代理模式：{0} / {1}",
+    "en": "- Routing / takeover mode: {0} / {1}"
+  },
+  {
+    "zh": "- 代理运行中：{0}",
+    "en": "- Proxy running: {0}"
+  },
+  {
+    "zh": "- 经提权 helper 启动：{0}",
+    "en": "- Started through privileged helper: {0}"
+  },
+  {
+    "zh": "- Helper 状态：{0}",
+    "en": "- Helper status: {0}"
+  },
+  {
+    "zh": "- 系统代理实际值：{0}",
+    "en": "- Effective system proxy: {0}"
+  },
+  {
+    "zh": "- 生效系统 DNS：{0}",
+    "en": "- Effective system DNS: {0}"
+  },
+  {
+    "zh": "- 节点域名解析档位：{0}",
+    "en": "- Node domain resolver: {0}"
+  },
+  {
+    "zh": "- 日志级别：{0}",
+    "en": "- Log level: {0}"
+  },
+  {
+    "zh": "- 诊断采集中：{0}",
+    "en": "- Diagnostic capture active: {0}"
+  },
+  {
+    "zh": "- libcronet 状态：{0}",
+    "en": "- libcronet status: {0}"
+  },
+  {
+    "zh": "- libcronet 自愈：触发 {0} 次 / 失败 {1} 次",
+    "en": "- libcronet recovery: {0} attempts / {1} failures"
+  },
+  {
+    "zh": "- 最近一次起核经 {0} 次就绪重试才成功（起核慢，多因 Windows 重启争用下 wintun 适配器未及时释放；非核崩溃）",
+    "en": "- Last core startup required {0} readiness retries (slow startup can indicate Windows adapter contention, rather than a core crash)"
+  },
+  {
+    "zh": "- 系统 DNS 缓存刷新：**失败**（{0}，{1}，{2}s 前）：{3}",
+    "en": "- System DNS cache flush: **failed** ({0}, {1}, {2}s ago): {3}"
+  },
+  {
+    "zh": "- 系统 DNS 缓存刷新：本平台无对应机制，已跳过（{0}）",
+    "en": "- System DNS cache flush: unsupported on this platform, skipped ({0})"
+  },
+  {
+    "zh": "- 系统 DNS 缓存刷新：**部分成功**（{0}，{1}s 前，{2}）：{3}",
+    "en": "- System DNS cache flush: **partially succeeded** ({0}, {1}s ago, {2}): {3}"
+  },
+  {
+    "zh": "- 系统 DNS 缓存刷新：成功（{0}，{1}s 前，{2}）",
+    "en": "- System DNS cache flush: succeeded ({0}, {1}s ago, {2})"
+  },
+  {
+    "zh": "- 系统 DNS 缓存刷新：本会话从未触发",
+    "en": "- System DNS cache flush: never triggered in this session"
+  },
+  {
+    "zh": "## 生成的 sing-box 配置（脱敏）",
+    "en": "## Generated sing-box configuration (redacted)"
+  },
+  {
+    "zh": "## 用户配置（脱敏）",
+    "en": "## User configuration (redacted)"
+  },
+  {
+    "zh": "## 最近一次测速诊断",
+    "en": "## Most recent latency diagnostics"
+  },
+  {
+    "zh": "- 生成时间：{0}",
+    "en": "- Generated: {0}"
+  },
+  {
+    "zh": "- 测速目标：{0}",
+    "en": "- Test target: {0}"
+  },
+  {
+    "zh": "- 节点数：total={0} / usable={1} / failed={2}",
+    "en": "- Nodes: total={0} / usable={1} / failed={2}"
+  },
+  {
+    "zh": "| 节点 ID | 节点名 | 出站 tag | reason |",
+    "en": "| Node ID | Node name | Outbound tag | Reason |"
+  },
+  {
+    "zh": "### 失败 endpoint 目标解析探测",
+    "en": "### Failed endpoint resolution probes"
+  },
+  {
+    "zh": "| 节点 ID | 节点名 | 出站 tag | 目标域名 | resolver path | resolved IPs | error |",
+    "en": "| Node ID | Node name | Outbound tag | Target domain | Resolver path | Resolved IPs | Error |"
+  },
+  {
+    "zh": "### 临时测速 sing-box 配置（脱敏）",
+    "en": "### Temporary sing-box test configuration (redacted)"
+  },
+  {
+    "zh": "## app.log（近期）",
+    "en": "## app.log (recent)"
+  },
+  {
+    "zh": "## singbox.log（近期）",
+    "en": "## singbox.log (recent)"
+  },
+  {
+    "zh": "## singbox_startup.log（近期{0}）",
+    "en": "## singbox_startup.log (recent{0})"
+  },
+  {
+    "zh": "## flowz-win-watchdog.log（近期 · Windows UAC 看护脚本自述）",
+    "en": "## flowz-win-watchdog.log (recent · Windows UAC watchdog output)"
+  },
+  {
+    "zh": "## 进程内存",
+    "en": "## Process memory"
+  },
+  {
+    "zh": "- 合计：{0} MB（{1} 个进程，按内存降序）",
+    "en": "- Total: {0} MB ({1} processes, descending by memory)"
+  },
+  {
+    "zh": "| 类型 | PID | 内存(MB) | 峰值(MB) | CPU(%) | 标识 | 创建时刻 |",
+    "en": "| Type | PID | Memory (MB) | Peak (MB) | CPU (%) | Label | Created |"
+  },
+  {
+    "zh": "## 渲染进程堆分层",
+    "en": "## Renderer heap"
+  },
+  {
+    "zh": "- 进程 residentSet：{0} MB",
+    "en": "- Process residentSet: {0} MB"
+  },
+  {
+    "zh": "- Blink 资源缓存(live)：{0} MB",
+    "en": "- Blink live resource cache: {0} MB"
+  },
+  {
+    "zh": "## sing-box 核进程",
+    "en": "## sing-box core process"
+  },
+  {
+    "zh": "## 内存时间线（每 5min 一帧，最多 24h）",
+    "en": "## Memory timeline (every 5 min, up to 24 h)"
+  },
+  {
+    "zh": "## 渲染进程内存看护",
+    "en": "## Renderer memory watchdog"
+  },
+  {
+    "zh": "- 阈值：{0} MB",
+    "en": "- Threshold: {0} MB"
+  },
+  {
+    "zh": "- 隐藏态回收（discard）：{0} 次",
+    "en": "- Hidden-window discards: {0}"
+  },
+  {
+    "zh": "- 可见态告警（warn）：{0} 次",
+    "en": "- Visible-window warnings: {0}"
+  },
+  {
+    "zh": "(无日志文件)",
+    "en": "(no log file)"
+  },
+  {
+    "zh": "(读取失败: {0})",
+    "en": "(read failed: {0})"
+  },
+  {
+    "zh": "写侧 helper 服务：核 stdout+stderr，只追加不截断",
+    "en": "Writer: helper service; core stdout+stderr, append only"
+  },
+  {
+    "zh": "写侧 osascript wrapper：核 stdout+stderr，每次启动截断",
+    "en": "Writer: osascript wrapper; core stdout+stderr, truncated at each startup"
+  },
+  {
+    "zh": "写侧 UAC 看护脚本：核 stderr（-RedirectStandardError），每次起核截断；看护脚本自述行见下一段",
+    "en": "Writer: UAC watchdog; core stderr (-RedirectStandardError), truncated at each startup; watchdog output follows"
+  },
+  {
+    "zh": "非 helper 路径（直起）：核输出走 app.log 管道，本文件不被写入",
+    "en": "Direct startup without helper; core output goes to app.log, this file is not written"
+  },
+  {
+    "zh": "{0} · {1} MB · 最后写入 {2}",
+    "en": "{0} · {1} MB · Last written {2}"
+  },
+  {
+    "zh": "生成失败: {0}",
+    "en": "Generation failed: {0}"
+  },
+  {
+    "zh": "脱敏失败: {0}",
+    "en": "Redaction failed: {0}"
+  },
+  {
+    "zh": "脱敏失败: {0}",
+    "en": "Redaction failed: {0}"
+  },
+  {
+    "zh": "unavailable（核进程采样失败/平台不支持，如 Windows 本批未采）",
+    "en": "unavailable (core sampling failed or unsupported on this platform)"
+  },
+  {
+    "zh": "unavailable（代理未运行，或核 PID 不可得，如 Linux helper 托管路径）",
+    "en": "unavailable (proxy stopped or core PID unavailable)"
+  },
+  {
+    "zh": "{0}（运行中核实例）",
+    "en": "{0} (running core instance)"
+  },
+  {
+    "zh": "{0}（配置值，核未运行或配置文件不可读）",
+    "en": "{0} (configured value; core stopped or configuration unreadable)"
+  },
+  {
+    "zh": "(已启用)",
+    "en": "(enabled)"
+  },
+  {
+    "zh": "(未启用)",
+    "en": "(disabled)"
+  },
+  {
+    "zh": "当前日志级别为 {0}，日志中已有连接/DNS 错误。请在设置中将日志级别改为 debug，复现后再次导出。",
+    "en": "Connection/DNS errors were detected at log level {0}. Select debug in Settings, reproduce the problem, then export again."
+  }
+]

@@ -1,0 +1,20 @@
+.vpn-nodes-page__stack { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.vpn-nodes-page__stack { gap: var(--ds-space-8); }
+.vpn-nodes-page__stack > * { flex: none; }
+.vpn-nodes-page__stack > .vpn-nodes-page__list { flex: 1; min-height: calc(var(--ds-control-height) * 2); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.vpn-nodes-page__filters { gap: var(--ds-space-8); align-items: center; flex-wrap: nowrap; overflow-x: auto; min-height: var(--ds-control-height); }
+.vpn-node-filter { min-width: calc(var(--ds-space-32) * 3); }
+.vpn-nodes-page .ds-inline-control-form {
+  min-width: 0;
+  max-width: 100%;
+}
+.vpn-nodes-page .ds-inline-control-form .ant-form-item {
+  min-width: 0;
+  max-width: 100%;
+  margin-inline-end: 0;
+}
+.vpn-nodes-page .ds-inline-control-form .ant-form-item-control {
+  min-width: 0;
+}
+
+.vpn-region-option { display: inline-flex; align-items: center; gap: var(--ds-space-8); white-space: nowrap; }

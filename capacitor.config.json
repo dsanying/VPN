@@ -1,0 +1,9 @@
+{
+  "appId": "com.dsanying.shadowvpn.app",
+  "appName": "暗影VPN",
+  "webDir": "dist/renderer",
+  "android": {
+    "allowMixedContent": false
+  },
+  "loggingBehavior": "none"
+}

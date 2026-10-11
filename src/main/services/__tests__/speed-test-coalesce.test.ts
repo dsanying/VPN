@@ -107,3 +107,36 @@ describe('SpeedTestService.testAllServers 覆盖感知并发编排', () => {
     expect(await p2).toEqual(new Map([['a', 12]]));
   });
 });
+
+it.each(['target', 'transport'])(
+  'changed %s with the same node id queues a new measurement',
+  async (change) => {
+    const { svc, calls, deferreds } = makeSvc();
+    const node = srv('a');
+    const first = svc.testAllServers([node], undefined, undefined, 'https://example.com/check');
+    const second = svc.testAllServers(
+      [change === 'transport' ? ({ ...(node as object), port: 8443 } as never) : node],
+      undefined,
+      undefined,
+      change === 'target' ? 'https://example.com/other' : 'https://example.com/check'
+    );
+    expect(calls).toHaveLength(1);
+    deferreds[0](new Map([['a', 10]]));
+    await first;
+    await flush();
+    expect(calls).toHaveLength(2);
+    deferreds[1](new Map([['a', 20]]));
+    expect(await second).toEqual(new Map([['a', 20]]));
+  }
+);
+it('missing full outbound builder fails closed instead of labeling a TCP port as a usable proxy', async () => {
+  const svc = new SpeedTestService(mockLog);
+  const connect = jest.spyOn(require('net'), 'createConnection');
+  try {
+    const result = await svc.testAllServers([srv('a')]);
+    expect(result.results.get('a')).toBeNull();
+    expect(connect).not.toHaveBeenCalled();
+  } finally {
+    connect.mockRestore();
+  }
+});

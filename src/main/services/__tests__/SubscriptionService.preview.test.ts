@@ -47,7 +47,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
   it('HTTP 403 → errorKind=http, httpStatus=403', async () => {
     const svc = newService();
     spyFetch(svc).mockRejectedValue(new Error('HTTP Error: 403 Forbidden'));
-    const r = await svc.previewSubscription('https://sub.example.com/c', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.ok).toBe(false);
     expect(r.errorKind).toBe('http');
     expect(r.httpStatus).toBe(403);
@@ -58,7 +58,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
     spyFetch(svc).mockRejectedValue(
       Object.assign(new Error('connect ECONNREFUSED 1.2.3.4:443'), { code: 'ECONNREFUSED' })
     );
-    const r = await svc.previewSubscription('https://sub.example.com/c', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.ok).toBe(false);
     expect(r.errorKind).toBe('refused');
     expect(r.httpStatus).toBeUndefined();
@@ -69,7 +69,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
     spyFetch(svc).mockRejectedValue(
       Object.assign(new Error('getaddrinfo ENOTFOUND sub.example.com'), { code: 'ENOTFOUND' })
     );
-    const r = await svc.previewSubscription('https://sub.example.com/c', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.ok).toBe(false);
     expect(r.errorKind).toBe('dns');
   });
@@ -79,7 +79,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
     spyFetch(svc).mockRejectedValue(
       Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } })
     );
-    const r = await svc.previewSubscription('https://sub.example.com/c', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.errorKind).toBe('refused');
   });
 
@@ -91,9 +91,14 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
       '  - { name: n2, type: trojan, server: 5.6.7.8, port: 443, password: p2 }',
     ].join('\n');
     spyFetch(svc).mockResolvedValue({ text: yaml });
-    const r = await svc.previewSubscription('https://sub.example.com/c', { viaProxy: false });
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.ok).toBe(true);
     expect(r.nodeCount).toBe(2);
+    expect(r.protocols).toEqual([
+      { protocol: 'trojan', count: 1 },
+      { protocol: 'vless', count: 1 },
+    ]);
+    expect(JSON.stringify(r)).not.toContain('password');
     expect(r.errorKind).toBeUndefined();
   });
 
@@ -102,7 +107,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
     // 全不支持类型 → parseSubscriptionContent(throwOnEmpty:true) 抛 "0 个可用节点"。
     const yaml = ['proxies:', '  - { name: bad, type: ssr, server: 1.1.1.1, port: 1 }'].join('\n');
     spyFetch(svc).mockResolvedValue({ text: yaml });
-    const r = await svc.previewSubscription('https://sub.example.com/c', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.ok).toBe(false);
     expect(r.errorKind).toBe('empty');
   });
@@ -110,7 +115,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
   it('message 已脱敏（不含 query token）', async () => {
     const svc = newService();
     spyFetch(svc).mockRejectedValue(new Error('boom https://x.example.com/p?token=SECRET123'));
-    const r = await svc.previewSubscription('https://sub.example.com/c?token=SECRET123', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c?token=SECRET123');
     expect(r.ok).toBe(false);
     expect(r.message ?? '').not.toContain('SECRET123');
   });
@@ -121,7 +126,7 @@ describe('previewSubscription — 预检分类（不写 config）', () => {
     fetchSpy.mockResolvedValue({
       text: 'proxies:\n  - { name: n, type: vless, server: 1.2.3.4, port: 443, uuid: u }',
     });
-    const r = await svc.previewSubscription('https://sub.example.com/c', {});
+    const r = await svc.previewSubscription('https://sub.example.com/c');
     expect(r.ok).toBe(true);
     // 第 3 个实参为 userAgent：缺省时用 defaultSubscriptionUserAgent() = clash.meta（electron mock 版本）。
     expect(fetchSpy.mock.calls[0][2]).toBe('clash.meta');

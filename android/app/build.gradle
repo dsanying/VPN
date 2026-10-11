@@ -1,0 +1,117 @@
+apply plugin: 'com.android.application'
+
+def clientVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json')).version
+def versionParts = clientVersion.tokenize('.').collect { Integer.parseInt(it) }
+if (versionParts.size() != 3 || versionParts.any { it < 0 || it > 999 }) throw new GradleException('Client version must be stable semver with components <= 999')
+def clientVersionCode = versionParts[0] * 1000000 + versionParts[1] * 1000 + versionParts[2]
+def sourceGit = { List<String> arguments ->
+    def stdout = new StringBuffer()
+    def stderr = new StringBuffer()
+    def process = (['git'] + arguments).execute(null, rootProject.projectDir.parentFile)
+    process.waitForProcessOutput(stdout, stderr)
+    if (process.exitValue() != 0) throw new GradleException('Cannot resolve APK build source identity')
+    stdout.toString().trim()
+}
+def clientBuildCommit = sourceGit(['rev-parse', 'HEAD'])
+if (!(clientBuildCommit ==~ /[a-f0-9]{40}/)) throw new GradleException('APK build commit is invalid')
+def clientBuildDirty = !sourceGit(['status', '--porcelain']).isEmpty()
+
+android {
+    namespace = "com.dsanying.shadowvpn.app"
+    buildFeatures { buildConfig = true }
+    // Instrument the actual signed release on isolated devices when explicitly selected.
+    testBuildType = project.findProperty('shadowTestBuildType') ?: 'debug'
+    if (!(testBuildType in ['debug', 'release'])) throw new GradleException('Unsupported instrumentation build type')
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.dsanying.shadowvpn.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        ndk { abiFilters 'arm64-v8a' }
+        versionCode clientVersionCode
+        versionName clientVersion
+        buildConfigField 'String', 'SOURCE_COMMIT', '"' + clientBuildCommit + '"'
+        buildConfigField 'boolean', 'SOURCE_DIRTY', clientBuildDirty.toString()
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    sourceSets { androidTest.assets.srcDirs += rootProject.file('../resources/data') }
+    signingConfigs {
+        release {
+            if (System.getenv('SHADOW_ANDROID_KEYSTORE')) {
+                storeFile file(System.getenv('SHADOW_ANDROID_KEYSTORE'))
+                storePassword System.getenv('SHADOW_ANDROID_STORE_PASSWORD')
+                keyAlias System.getenv('SHADOW_ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('SHADOW_ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    // Align Kotlin artifacts brought by AndroidX and instrumentation dependencies.
+    implementation platform("org.jetbrains.kotlin:kotlin-bom:1.8.22")
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation "androidx.javascriptengine:javascriptengine:1.1.1"
+    implementation "androidx.work:work-runtime:2.11.2"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Gradle 直接调用也不能绕过产品发布前置条件。
+tasks.configureEach { task ->
+    if (task.name == 'mergeReleaseAssets' || task.name == 'mergeDebugAssets') { task.dependsOn 'buildHeadlessServiceAsset' }
+    if (task.name == 'mergeReleaseAndroidTestAssets' || task.name == 'mergeDebugAndroidTestAssets') {
+        task.dependsOn 'buildHeadlessInstrumentationAsset'
+    }
+    if (task.name == 'preReleaseBuild') {
+        task.doFirst {
+            exec { commandLine 'node', rootProject.file('../scripts/check-android-release.mjs').absolutePath }
+        }
+    }
+}
+
+tasks.register('buildHeadlessInstrumentationAsset', Exec) {
+    workingDir rootProject.file('..')
+    commandLine 'node', rootProject.file('../web/scripts/build-headless-environment.mjs').absolutePath
+}
+
+tasks.register('buildHeadlessServiceAsset', Exec) {
+    workingDir rootProject.file('..')
+    commandLine 'node', rootProject.file('../web/scripts/build-headless-service.mjs').absolutePath
+}

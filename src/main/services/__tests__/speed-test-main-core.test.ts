@@ -1,8 +1,8 @@
 /**
  * §15 测速全主核化 —— doTestAllServers 分流 + testServersViaMainCore 编排单测（mock mainCoreProbe，无网络/无核）。
  * 验证：
- *  · available()+isRunning() → 走主核池路径：按波 selectSlot（node[k]→槽 k）、measureViaTunnel 以 poolPort[k] 调用、
- *    波间串行（同槽先测完再重定向）；不触 testServersViaProxy。
+ *  · available()+isRunning() → 走主核池路径：worker 绑定槽 k，measureViaTunnel 以 poolPort[k] 调用、
+ *    同槽先测完再重定向；空闲槽立即补位，不触 testServersViaProxy。
  *  · available()=false 或 isRunning()=false → 走临时核 testServersViaProxy（不触 selectSlot，行为不回归）。
  * measureViaTunnel（私有）经 spy 打桩返 {latency:port}，用返回的 latency=port 反证「node 用了 poolPort[k]」。
  */
@@ -47,7 +47,7 @@ function makeProbe(
 }
 
 describe('§15 doTestAllServers 分流 + testServersViaMainCore 编排', () => {
-  it('主核可用 → 池路径：波内 node[k] 用 poolPort[k]、波间串行、不触临时核', async () => {
+  it('主核可用 → worker 固定绑定 poolPort，同槽测完再重用，不触临时核', async () => {
     const events: string[] = [];
     const selectCalls: { k: number; tag: string }[] = [];
     const probe = makeProbe({}, events, selectCalls);
@@ -87,9 +87,8 @@ describe('§15 doTestAllServers 分流 + testServersViaMainCore 编排', () => {
     // measureViaTunnel 以 poolPort[k] 调：100(s1),101(s2),100(s3)。
     expect(measureSpy.mock.calls.map((c) => c[0]).sort()).toEqual([100, 100, 101]);
 
-    // 波间串行：wave1 的 selectSlot 必在 wave0 两次 measure 之后（同槽先测完再重定向）。
+    // 同槽先测完再重定向；另一槽的独立进度不构成批次屏障。
     expect(events.indexOf('sel-0-tag-s3')).toBeGreaterThan(events.indexOf('meas-100'));
-    expect(events.indexOf('sel-0-tag-s3')).toBeGreaterThan(events.indexOf('meas-101'));
 
     // 不回退临时核。
     expect(proxySpy).not.toHaveBeenCalled();
@@ -159,6 +158,108 @@ describe('§15 doTestAllServers 分流 + testServersViaMainCore 编排', () => {
     const { results } = await svc.testAllServers([vless('s1')]);
     expect(proxySpy).toHaveBeenCalledTimes(1);
     expect(results.get('s1')).toBe(77);
+  });
+});
+
+describe('主核测速完成即补位', () => {
+  it.each(['select', 'measure'] as const)(
+    '慢 %s 只占本槽，另一槽继续测后续节点且不会串节点',
+    async (phase) => {
+      let release!: () => void;
+      const slow = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const selected = new Map<number, string>();
+      const finished: string[] = [];
+      let fastDone!: () => void;
+      const fast = new Promise<void>((resolve) => {
+        fastDone = resolve;
+      });
+      const probe = makeProbe(
+        {
+          selectSlot: async (k, tag) => {
+            selected.set(k, tag);
+            if (phase === 'select' && tag === 'tag-s1') await slow;
+          },
+        },
+        [],
+        []
+      );
+      const svc = new SpeedTestService(mockLog, undefined, () => probe);
+      jest
+        .spyOn(
+          svc as unknown as { measureViaTunnel: (p: number) => Promise<unknown> },
+          'measureViaTunnel'
+        )
+        .mockImplementation(async (port) => {
+          const tag = selected.get(port - 100);
+          if (phase === 'measure' && tag === 'tag-s1') await slow;
+          expect(selected.get(port - 100)).toBe(tag);
+          return { latency: port };
+        });
+      const run = svc.testAllServers(['s1', 's2', 's3', 's4'].map(vless), (id) => {
+        finished.push(id);
+        if (id === 's4') fastDone();
+      });
+      try {
+        await fast;
+        expect(finished).toEqual(['s2', 's3', 's4']);
+        expect(selected.get(0)).toBe('tag-s1');
+      } finally {
+        release();
+      }
+      const result = await run;
+      expect(result.results.size).toBe(4);
+      expect(result.results.get('s1')).toBe(100);
+      for (const id of ['s2', 's3', 's4']) expect(result.results.get(id)).toBe(101);
+    }
+  );
+
+  it('16 个槽均参与测量，80 个双目标超时任务只占 5 轮、每目标 8 秒预算', async () => {
+    jest.useFakeTimers();
+    try {
+      const selected = new Map<number, string>();
+      const busy = new Set<number>();
+      let maxActive = 0;
+      const probe = makeProbe(
+        {
+          poolPorts: Array.from({ length: 16 }, (_, k) => 100 + k),
+          selectSlot: async (k, tag) => {
+            expect(busy.has(100 + k)).toBe(false);
+            selected.set(k, tag);
+          },
+        },
+        [],
+        []
+      );
+      const svc = new SpeedTestService(mockLog, undefined, () => probe);
+      const measure = jest
+        .spyOn(
+          svc as unknown as { measureViaTunnel: (p: number) => Promise<unknown> },
+          'measureViaTunnel'
+        )
+        .mockImplementation(async (port) => {
+          busy.add(port);
+          maxActive = Math.max(maxActive, busy.size);
+          const tag = selected.get(port - 100);
+          await new Promise((resolve) => setTimeout(resolve, 8000));
+          expect(selected.get(port - 100)).toBe(tag);
+          busy.delete(port);
+          return { latency: null, reason: 'timeout' };
+        });
+      const start = Date.now();
+      const run = svc.testAllServers(Array.from({ length: 80 }, (_, i) => vless(`s${i}`)));
+      await jest.runAllTimersAsync();
+      const result = await run;
+      expect(result.results.size).toBe(80);
+      expect([...result.results.values()].every((value) => value === null)).toBe(true);
+      expect(measure).toHaveBeenCalledTimes(160);
+      expect(maxActive).toBe(16);
+      expect(busy.size).toBe(0);
+      expect(Date.now() - start).toBe(80000);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

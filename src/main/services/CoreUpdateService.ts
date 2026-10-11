@@ -757,7 +757,7 @@ export class CoreUpdateService {
    * 唯一入口由 CoreUpdateScheduler.cycleIfDue 调用；isUpdating 防重入。
    * 不变量：自动路径恒强制 sameMajorMinor（跨 minor 绝不自动），不受 restrictCoreUpdateToCompatibleMinor 影响。
    */
-  async runAutoUpdateCycle(): Promise<void> {
+  async runAutoUpdateCycle(unified = false): Promise<void> {
     if (this.isUpdating) return;
     // H1：入口同步持闸（与 isUpdating 检查间无 await，原子），覆盖 check→下载→解压→预检→暂存→落位全程，
     // 防与手动 updateCore 并发双换核（原仅末尾 tryApplyStaged 持闸，数十秒下载/暂存段 isUpdating=false 留并发
@@ -766,9 +766,10 @@ export class CoreUpdateService {
     this.isUpdating = true;
     try {
       const cfg = this.configProvider ? await this.configProvider() : null;
-      if (cfg?.autoUpdateCore !== true) return;
+      if (!unified && cfg?.autoUpdateCore !== true) return;
 
       const check = await this.checkUpdate();
+      if (unified && check.error) throw new Error(check.error);
       // 仅成功检查才刷新 lastCheckAt：失败轮（network/API 限流等，check.error 有值）保留旧值，
       // 让 6h tick 在下个周期重试，而非把整 24h due 推迟（原无条件刷新致失败后停检一整天）。
       if (!check.error) {
@@ -819,7 +820,7 @@ export class CoreUpdateService {
       // 带内：若已有相同版本 staged，直接尝试落位（避免重复下载）
       const staged = this.loadAutoState().staged;
       if (staged && staged.version === latest) {
-        await this.tryApplyStaged('staged-same-version', true);
+        await this.tryApplyStaged(unified ? 'manual-apply' : 'staged-same-version', true);
         return;
       }
 
@@ -838,6 +839,7 @@ export class CoreUpdateService {
             '自动更新中止：无法获取内核资产的官方 sha256 摘要（拒绝安装未经校验的内核）',
             'CoreUpdateService'
           );
+          if (unified) throw new Error('Core asset checksum unavailable');
           return;
         }
         tempPath = await this.coreDownloader.downloadFile(check.downloadUrl, false, sha256);
@@ -851,13 +853,14 @@ export class CoreUpdateService {
             `自动更新预检失败，放弃 ${latest}：${preflight.reason}`,
             'CoreUpdateService'
           );
+          if (unified) throw new Error('Core compatibility validation failed');
           return;
         }
         // 暂存（从解压目录复制到 core-staged，因临时目录随后清理）
         this.stageCore(path.dirname(extracted.corePath), preflight.version ?? latest);
         this.emitAutoStatus();
         // 下载后立即尝试落位（代理未运行→直接换；运行中→保持 staged，延到安全窗口）
-        await this.tryApplyStaged('post-download', true);
+        await this.tryApplyStaged(unified ? 'manual-apply' : 'post-download', true);
       } finally {
         try {
           if (tempPath) fs.unlinkSync(tempPath);

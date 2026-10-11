@@ -28,6 +28,7 @@ export interface SubscriptionPreviewResult {
   ok: boolean;
   /** ok=true：解析出的可用节点数。 */
   nodeCount?: number;
+  protocols?: { protocol: string; count: number }[];
   /** ok=false：错误分类。 */
   errorKind?: SubscriptionErrorKind;
   /** errorKind='http' 时的状态码。 */
@@ -53,9 +54,10 @@ export interface SubscriptionErrorSignal {
  *  3) Electron net::ERR_* 与中文/英文文案关键字兜底（net.fetch 常把 code 藏在 message）。
  * 真机若出现未覆盖的 message 形态 → 落 unknown（UI 给通用文案 + 原始 message 供上报），不误判。
  */
-export function classifySubscriptionError(
-  sig: SubscriptionErrorSignal
-): { errorKind: SubscriptionErrorKind; httpStatus?: number } {
+export function classifySubscriptionError(sig: SubscriptionErrorSignal): {
+  errorKind: SubscriptionErrorKind;
+  httpStatus?: number;
+} {
   const status = sig.httpStatus;
   if (typeof status === 'number' && status >= 400) {
     return { errorKind: 'http', httpStatus: status };
@@ -91,7 +93,10 @@ export function classifySubscriptionError(
     return { errorKind: 'refused' };
 
   // 解析类文案（parseSubscriptionContent 的结构/格式错误）。
-  if (/解析失败|无法识别|结构异常|格式错误|不是有效|parse|yaml|json/.test(m) || /解析|识别|格式/.test(msg))
+  if (
+    /解析失败|无法识别|结构异常|格式错误|不是有效|parse|yaml|json/.test(m) ||
+    /解析|识别|格式/.test(msg)
+  )
     return { errorKind: 'parse' };
 
   return { errorKind: 'unknown' };

@@ -1,3 +1,4 @@
+import { formatDeviceDateTime } from '../device-time';
 import {
   redactDeep,
   redactUrlValue,
@@ -220,7 +221,7 @@ describe('buildDiagnosticReport', () => {
 
   it('含核心区块与脱敏 JSON', () => {
     const md = buildDiagnosticReport(base);
-    expect(md).toContain('# FlowZ 诊断报告');
+    expect(md).toContain('# 暗影VPN 诊断报告');
     expect(md).toContain('## 环境');
     expect(md).toContain('## 运行态');
     expect(md).toContain('## 生成的 sing-box 配置（脱敏）');
@@ -502,7 +503,7 @@ describe('buildDiagnosticReport × issue #242 §6 观测随包新字段', () => 
     });
     expect(md).toContain('| 类型 | PID | 内存(MB) | 峰值(MB) | CPU(%) | 标识 | 创建时刻 |');
     expect(md).toContain(
-      `| Utility | 100 | 2048 | 2200 | 5 | flowz-stats | ${new Date(Date.UTC(2026, 6, 2, 8, 0, 0)).toISOString()} |`
+      `| Utility | 100 | 2048 | 2200 | 5 | flowz-stats | ${formatDeviceDateTime(Date.UTC(2026, 6, 2, 8, 0, 0))} |`
     );
   });
 

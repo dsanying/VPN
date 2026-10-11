@@ -1,0 +1,5 @@
+.ds-update-restart {
+  color: var(--ds-color-warning);
+  border-color: var(--ds-color-warning-border);
+  background: var(--ds-color-warning-surface);
+}

@@ -2,7 +2,7 @@
  * 节点测速目标 URL 解析（纯函数，主进程 SpeedTestService + 单测共用；不经网络）。
  *
  * 测速经临时 sing-box 的各节点 HTTP 代理出站、CONNECT 隧道上发两次 GET 量 warm TTFB（mihomo `unified-delay` 等价）。
- * 默认 generate_204（204 空响应、可立即复用连接）。用户可自配（如 gstatic/自建端点），
+ * 应用统一使用 generate_204（204 空响应、可立即复用连接）；低层解析器接受测试和内部调用的目标，
  * HTTP/HTTPS 同走 CONNECT 隧道（https 目标先在隧道上 TLS 握手）。非法/非 http(s)/无 host → 调用方回落默认。
  */
 
@@ -16,7 +16,7 @@ import type { ServerConfig } from './types';
  * 为何 gstatic 的国内 CDN 镜像在此不成问题：测速目标域名由【每个被测节点的出口】远程解析，**不经本机 AliDNS**
  * （localhost 实验确证 sing-box 把域名 ATYP=domain 透传给出站，见 docs/design/speedtest-remote-resolve-154.md）——
  * 故各节点拿到本区域 IP，目标是否任播 / 有无国内镜像均与测速无关，海外出口绝不会被钉到国内镜像 IP。
- * 端点选择由此从「必须任播的脆弱依赖」降级为「次要、用户可在设置自配」。
+ * 应用端点由统一运行策略管理，不读取旧用户配置。
  */
 export const DEFAULT_SPEED_TEST_URL = 'https://www.gstatic.com/generate_204';
 
@@ -41,21 +41,33 @@ const DEFAULT_TARGET: SpeedTestTarget = parseSpeedTestUrl(DEFAULT_SPEED_TEST_URL
  * 解析测速 URL 为 SpeedTestTarget。非法 / 非 http(s) / 无 host → null（调用方回落默认）。纯函数，不查网络/FS。
  */
 export function parseSpeedTestUrl(raw: string | undefined | null): SpeedTestTarget | null {
-  if (!raw || typeof raw !== 'string') return null;
+  if (
+    !raw ||
+    typeof raw !== 'string' ||
+    Array.from(raw).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+  )
+    return null;
   let u: URL;
   try {
     u = new URL(raw.trim());
   } catch {
     return null;
   }
-  if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname) return null;
+  if (
+    (u.protocol !== 'http:' && u.protocol !== 'https:') ||
+    !u.hostname ||
+    u.username ||
+    u.password
+  )
+    return null;
   const https = u.protocol === 'https:';
   const defaultPort = https ? 443 : 80;
   const port = u.port ? Number(u.port) : defaultPort;
   if (!Number.isFinite(port) || port <= 0 || port > 65535) return null;
-  const host = u.hostname;
+  const host = u.hostname.replace(/^\[([^\]]+)\]$/, '$1');
+  const authorityHost = host.includes(':') ? `[${host}]` : host;
   const path = (u.pathname || '/') + (u.search || '');
-  const hostHeader = port === defaultPort ? host : `${host}:${port}`;
+  const hostHeader = port === defaultPort ? authorityHost : `${authorityHost}:${port}`;
   return { https, host, port, path, hostHeader, absoluteUri: `http://${hostHeader}${path}` };
 }
 
@@ -88,12 +100,13 @@ export function isAcceptableSpeedTestStatus(code: number): boolean {
 
 /**
  * 主核测速探测池大小（§15，测速全主核化）：主核 config 注入 K 个 probe-in-k(http 入站) + K 个 probe-selector-k
- * + K 条 route + K 个 dns-probe-exit-k，测速时按波把节点分配到 K 槽经 gRPC selectOutbound 热切、复用现成
+ * + K 条 route + K 个 dns-probe-exit-k，测速时由各槽独立领取节点，经 gRPC selectOutbound 热切、复用现成
  * measureViaTunnel（warm-TTFB 保真）→ 同核单会话，结构性消除 WG/WARP 双会话超时（G1）。K=16 对齐
- * PROXY_TEST_CONCURRENCY；大订阅可下调换 config 体积；=0 使池不注入（回退临时核，回滚锚点）。
+ * SPEED_TEST_CONCURRENCY；=0 使池不注入（回退临时核，回滚锚点）。
  * ProxyManager（端口分配）+ SpeedTestService（编排）+ 四个 builder（config 注入）共用单一真值。
  */
-export const PROBE_POOL_SIZE = 16;
+export const SPEED_TEST_CONCURRENCY = 16;
+export const PROBE_POOL_SIZE = SPEED_TEST_CONCURRENCY;
 
 /**
  * 主核测速探测池句柄（ProxyManager.getSpeedTestMainCoreProbe 产出，SpeedTestService 消费）：主核运行且池就绪
@@ -141,6 +154,7 @@ export interface SpeedTestRunResult {
   results: Map<string, number | null>;
   outcome: SpeedTestOutcome;
   skipped: SpeedTestSkipped;
+  details?: Record<string, NodeProbeDetails>;
 }
 
 /** SERVER_SPEED_TEST invoke 返回（renderer 消费 §16.2/§16.3.3）：Record 化结果（null→-1）+ outcome + 波前缺席两列表
@@ -150,4 +164,36 @@ export interface SpeedTestInvokeResult {
   outcome: SpeedTestOutcome;
   notInPool: string[];
   tsNotReady: string[];
+  details?: Record<string, NodeProbeDetails>;
+}
+
+export interface EntryProbeResult {
+  status: 'ok' | 'timeout' | 'failed' | 'unsupported' | 'unavailable';
+  latencyMs?: number;
+  /** Socket error code only, never a message containing a node address or credentials. */
+  reason?: string;
+}
+export interface NodeProbeDetails {
+  exit?: { ip: string; countryCode?: string; measuredAt: number; provider: string };
+  entry: EntryProbeResult;
+  proxyTarget?: string;
+  proxyReason?: string;
+}
+
+/** Preserve the distinction between certificate rejection and a reset during TLS negotiation. */
+export function classifySpeedTestFailure(
+  reason?: string
+): 'timeout' | 'http' | 'certificate' | 'network' {
+  const classify = (leg: string): 'timeout' | 'http' | 'certificate' | 'network' => {
+    if (/^http-\d+/.test(leg)) return 'http';
+    if (
+      /tls-error:(?:CERT_|ERR_TLS_CERT|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT|UNABLE_TO_(?:VERIFY|GET_ISSUER_CERT))/.test(
+        leg
+      )
+    )
+      return 'certificate';
+    return leg.includes('timeout') || !leg ? 'timeout' : 'network';
+  };
+  const legs = (reason ?? '').split('; fallback:').map(classify);
+  return legs.every((kind) => kind === legs[0]) ? legs[0] : 'network';
 }

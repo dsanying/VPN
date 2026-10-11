@@ -17,12 +17,7 @@ import { isEndpointProtocol } from './endpoint-routes';
 import { isDirectSelection } from './direct-selection';
 
 export type BackupCategory =
-  | 'manualNodes'
-  | 'meshNodes'
-  | 'subscriptions'
-  | 'customRules'
-  | 'appRules'
-  | 'generalSettings';
+  'manualNodes' | 'meshNodes' | 'subscriptions' | 'customRules' | 'appRules' | 'generalSettings';
 
 /** 有序类别清单（UI 展示顺序 + 全选基准）。 */
 export const BACKUP_CATEGORIES: readonly BackupCategory[] = [
@@ -54,7 +49,6 @@ const DATA_FIELDS: readonly string[] = [
   'subscriptions',
   'customRules',
   'customRuleSets',
-  'ruleResources',
   'appRules',
   'appRulesSeeded',
   'customAppPresets',
@@ -66,7 +60,10 @@ const EXCLUDED_FROM_BACKUP: readonly string[] = [
   'clashApiSecret', // clash_api 明文密钥，不跨机
   'privacyPassword', // 隐私解锁密码（loadConfig 已清明文为空串，此处纵深防御兜底，绝不入备份）
   'diagnosticCapture', // 临时诊断态（提级日志）
-  'builtinGeoMeta', // 内置 geo 元数据（随包，无需备份）
+  'builtinGeoMeta',
+  'ruleResources',
+  'ruleResourceAutoUpdate',
+  'ruleResourceUpdateIntervalHours',
 ];
 
 function isGeneralKey(key: string): boolean {
@@ -131,7 +128,6 @@ export function pickCategories(
   if (sel.has('customRules')) {
     out.customRules = config.customRules;
     out.customRuleSets = config.customRuleSets ?? [];
-    if (config.ruleResources) out.ruleResources = config.ruleResources;
   }
   if (sel.has('appRules')) {
     if (config.appRules) out.appRules = config.appRules;
@@ -202,7 +198,6 @@ export function mergeCategories(
       // 整类替换：rules + ruleSets + ruleResources（被 ruleSet 规则按 res:<id> 引用）同进同出。
       result.customRules = backup.customRules ?? [];
       result.customRuleSets = backup.customRuleSets ?? [];
-      result.ruleResources = backup.ruleResources ?? [];
     } else {
       skipped.push('customRules');
     }

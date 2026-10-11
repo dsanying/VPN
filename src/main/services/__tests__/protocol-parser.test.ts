@@ -752,13 +752,9 @@ describe('传输层归一化与白名单（issue #263）', () => {
     expect(parser.parseUrl('vless://u@a.com:443?type=WS&path=%2Fp#n').network).toBe('ws');
   });
 
-  it('vless/trojan type=xhttp|splithttp|kcp（sing-box 不支持）→ 整节点拒绝且消息可检索', () => {
-    expect(() => parser.parseUrl('vless://u@a.com:443?type=xhttp#n')).toThrow(
-      /不支持的传输层类型: xhttp/
-    );
-    expect(() => parser.parseUrl('trojan://pw@a.com:443?type=splithttp#n')).toThrow(
-      /不支持的传输层类型: splithttp/
-    );
+  it('XHTTP aliases use the compatibility core; unknown transports still reject', () => {
+    expect(parser.parseUrl('vless://u@example.com:443?type=xhttp#n').network).toBe('xhttp');
+    expect(parser.parseUrl('trojan://pw@example.com:443?type=splithttp#n').network).toBe('xhttp');
     expect(() => parser.parseUrl('vless://u@a.com:443?type=kcp#n')).toThrow(
       /不支持的传输层类型: kcp/
     );
@@ -965,7 +961,7 @@ describe('ALPN 归一化（逗号串 → 数组统一 dedupeTrim：修剪空白 
       expect(c.tlsSettings?.alpn).toEqual(['h2', 'h3', 'http/1.1']);
     });
 
-    it('纯空白输入 → 空数组而非 [\'\']', () => {
+    it("纯空白输入 → 空数组而非 ['']", () => {
       const c = parser.parseUrl(
         'hysteria2://pw@d.example.com:8443?sni=h.com&' + `alpn=${encodeURIComponent('  ,  ')}#n`
       );

@@ -121,3 +121,33 @@ describe('isAcceptableSpeedTestStatus（③ 仅 2xx 判成功）', () => {
     expect(isAcceptableSpeedTestStatus(199)).toBe(false);
   });
 });
+
+import { classifySpeedTestFailure } from '../speed-test';
+it.each([
+  ['tls-error:ECONNRESET', 'network'],
+  ['tls-error:ERR_SSL_WRONG_VERSION_NUMBER', 'network'],
+  ['tls-error:CERT_HAS_EXPIRED', 'certificate'],
+  ['tls-error:ERR_TLS_CERT_ALTNAME_INVALID', 'certificate'],
+  ['http-403', 'http'],
+  ['timeout; fallback:timeout', 'timeout'],
+  ['http-403; fallback:tls-error:ECONNRESET', 'network'],
+])(
+  'failure %s is reported as %s without mislabeling a TLS reset as a bad certificate',
+  (reason, expected) => {
+    expect(classifySpeedTestFailure(reason)).toBe(expected);
+  }
+);
+
+it('IPv6 uses an unbracketed TLS host and bracketed HTTP authority', () => {
+  expect(parseSpeedTestUrl('https://[2001:db8::1]:8443/check')).toMatchObject({
+    host: '2001:db8::1',
+    port: 8443,
+    hostHeader: '[2001:db8::1]:8443',
+  });
+});
+it.each(['https://user:password@example.com/check', 'https://example.com/\r\ncheck'])(
+  'invalid/credential-bearing URL does not silently change the requested target',
+  (url) => {
+    expect(parseSpeedTestUrl(url)).toBeNull();
+  }
+);

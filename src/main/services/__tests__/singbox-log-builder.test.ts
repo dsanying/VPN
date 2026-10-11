@@ -16,7 +16,7 @@ const cfg = (over: Partial<UserConfig>): UserConfig => over as unknown as UserCo
 describe('buildLogConfig', () => {
   it('默认 info + timestamp；privacyMode=true → 抬到 ≥warn', () => {
     expect(buildLogConfig(cfg({}), false)).toMatchObject({ level: 'info', timestamp: true });
-    const priv = buildLogConfig(cfg({ logLevel: 'info' }), true);
+    const priv = buildLogConfig(cfg({}), true);
     expect(['warn', 'error', 'fatal']).toContain(priv.level); // 隐私从源头不记连接明细
   });
 

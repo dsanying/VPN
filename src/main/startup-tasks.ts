@@ -1,3 +1,4 @@
+import { prepareAutomaticTakeover } from '../shared/automatic-takeover';
 /**
  * 启动期任务调度 —— 从 index.ts whenReady 抽出。
  *
@@ -43,7 +44,7 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
   setTimeout(async () => {
     const proxyManager = getProxyManager();
     try {
-      const config = await configManager.loadConfig();
+      const config = prepareAutomaticTakeover(await configManager.loadConfig());
 
       // 内核自动更新：App 启动序列的安全窗口（代理尚未 autoConnect）→ 先尝试落位上轮暂存的 staged 内核，
       // 再做版本变更检测+autoConnect。落位仅在代理未运行时发生（此刻必然未连），不断流硬不变量。
@@ -88,34 +89,7 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
     }
   }, 2000);
 
-  // 启动后自动检查更新（延迟 5 秒，避免影响启动体验）
-  setTimeout(async () => {
-    try {
-      const config = await configManager.loadConfig();
-      if (deps.allowAppUpdates && config.autoCheckUpdate !== false) {
-        logManager.addLog('info', '正在自动检查更新...', 'Main');
-        const result = await updateService.checkForUpdate();
-        if (result.hasUpdate && result.updateInfo) {
-          logManager.addLog('info', `发现新版本: ${result.updateInfo.version}`, 'Main');
-          const action = await updateService.showUpdateDialog(result.updateInfo);
-          if (action === 'update') {
-            const filePath = await updateService.downloadUpdateWithProgress(result.updateInfo);
-            if (filePath) {
-              await updateService.installUpdate(filePath);
-            }
-          } else if (action === 'skip') {
-            updateService.skipVersion(result.updateInfo.version);
-          }
-        } else if (result.error) {
-          logManager.addLog('warn', `自动检查更新失败: ${result.error}`, 'Main');
-        } else {
-          logManager.addLog('info', '当前已经是最新版本', 'Main');
-        }
-      }
-    } catch (error) {
-      logManager.addLog('error', `自动检查更新异常: ${error}`, 'Main');
-    }
-  }, 5000);
+  if (deps.allowAppUpdates) updateService.startAutomaticUpdates();
 
   // 启动后机会式 drain WARP 待注销队列（延迟 8 秒，让网络/服务先就绪；fire-and-forget 不阻塞、绝不抛）。
   // 与「成功注册 WARP 后」并为两个触发点；无常驻定时器——不重开 app 者既不 drain 也不产生新孤儿（副作用自洽）。

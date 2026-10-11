@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"shadowvpn/helperrpc"
 	"strings"
 	"syscall"
 	"time"
@@ -22,11 +23,19 @@ import (
 // 新进程组是 stop 走 GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, pid) 优雅停的前提（CTRL_BREAK 按进程组投递）。
 // 早期 stdout/stderr 重定向到 app 日志文件（镜像 macOS start），便于诊断启动问题。
 func startSingbox(singboxBin, cfg, logPath string) (*exec.Cmd, *os.File, *os.File, error) {
+	return startManagedCore(singboxBin, cfg, logPath, false)
+}
+
+func startManagedCore(singboxBin, cfg, logPath string, mihomo bool) (*exec.Cmd, *os.File, *os.File, error) {
 	configFile, actualConfig, err := openConfinedFile(cfg, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	c := exec.Command(singboxBin, "run", "-c", actualConfig)
+	binary, launchArgs := singboxBin, []string{"run", "-c", actualConfig}
+	if mihomo {
+		binary, launchArgs = helperrpc.MihomoPath(singboxBin), helperrpc.MihomoArguments(actualConfig)
+	}
+	c := exec.Command(binary, launchArgs...)
 	// CREATE_NEW_PROCESS_GROUP：使 child 成为独立进程组组长，可被定向投递 CTRL_BREAK_EVENT。
 	// 注意：CREATE_NEW_PROCESS_GROUP 会令 child 默认忽略 CTRL_C（仅 CTRL_BREAK 可达），故 stop 用 CTRL_BREAK。
 	c.SysProcAttr = &syscall.SysProcAttr{

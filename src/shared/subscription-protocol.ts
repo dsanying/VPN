@@ -1,28 +1,12 @@
-import type { ServerConfig, Protocol } from './types';
-export const SUBSCRIPTION_PROTOCOLS = [
-  'auto',
-  'vmess',
-  'vless',
-  'shadowsocks',
-  'trojan',
-  'hysteria2',
-  'tuic',
-  'anytls',
-  'snell',
-  'socks',
-  'http',
-  'ssh',
-  'naive',
-  'wireguard',
-] as const;
-export function selectSubscriptionProtocol(
-  servers: ServerConfig[],
-  preference?: Protocol | 'auto'
-): ServerConfig[] {
-  if (!preference || preference === 'auto') return servers;
-  if (!(SUBSCRIPTION_PROTOCOLS as readonly string[]).includes(preference))
-    throw new Error('Unsupported subscription protocol');
-  const selected = servers.filter((server) => server.protocol === preference);
-  if (!selected.length) throw new Error(`订阅没有所选协议：${preference}（0 个可用节点）`);
-  return selected;
+import type { ServerConfig } from './types';
+
+/** 只返回协议与数量，预览不会向渲染层泄露节点凭据。 */
+export function summarizeNodeProtocols(
+  servers: readonly ServerConfig[]
+): { protocol: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const server of servers) counts.set(server.protocol, (counts.get(server.protocol) ?? 0) + 1);
+  return [...counts]
+    .map(([protocol, count]) => ({ protocol, count }))
+    .sort((a, b) => a.protocol.localeCompare(b.protocol));
 }

@@ -115,3 +115,40 @@ src/shared/build-info.ts
 
 # Linux 提权 helper 构建产物
 resources/linux/shadowvpn-helper-linux
+resources/mac-*/shadowvpn-network-events
+
+# 前端浏览器检查产物（包含构建、截图及 trace）
+/web/.playwright/
+
+# Official compatibility cores fetched with pinned hashes
+resources/*/xray
+resources/*/xray.exe
+resources/*/mihomo
+resources/*/mihomo.exe
+
+# Android local SDK, generated builds and private signing material
+/android/local.properties
+/android/.gradle/
+/android/**/build/
+/android/app/src/main/assets/public/
+/android/app/src/androidTest/assets/headless/
+/android/app/src/main/assets/capacitor.config.json
+/android/app/src/main/assets/capacitor.plugins.json
+/android/capacitor-cordova-android-plugins/
+*.jks
+*.keystore
+/artifacts/
+
+# Android engine outputs; pinned source manifest and owned overlay remain in Git.
+# Publish the complete modified GPL source archive alongside each release APK.
+android/app/libs/*.aar
+android/app/libs/*.jar
+android/app/libs/sing-box-android-source-*.tar.gz
+android/app/libs/libbox-build.json
+android/app/libs/*-sources.jar
+android/app/src/main/assets/licenses/
+
+# Isolated native validation builds
+/dist-validation*/
+
+/android/app/src/main/assets/headless/

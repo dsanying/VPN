@@ -573,6 +573,16 @@ describe('#57 错误归因：translateErrorMessage / classifyCoreError 同序镜
     expect(classify(msg)).toBe(ProxyErrorCode.CONNECTION_TIMEOUT);
   });
 
+  it('direct target rejection must not blame the proxy node', () => {
+    const message =
+      'connection: open connection to example.com:443 using outbound/direct[direct]: dial tcp: connection refused';
+    expect(translate(message)).toBe(`连接被拒绝 [${message}]`);
+    expect(translate(message)).not.toContain('代理服务器');
+    expect(translate('connection: report handshake success: connection refused')).toBe(
+      '目标连接被拒绝 [connection: report handshake success: connection refused]'
+    );
+  });
+
   it('connection refused 仍优先于 DNS 分支（同序镜像未破坏既有顺序）', () => {
     const msg = 'connect: connection refused';
     expect(classify(msg)).toBe(ProxyErrorCode.CONNECTION_REFUSED);

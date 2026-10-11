@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -18,15 +22,31 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@/*": ["./src/renderer/*"],
-      "@shared/*": ["./src/shared/*"],
-      "@main/*": ["./src/main/*"],
-      "@renderer/*": ["./src/renderer/*"]
+      "@/*": [
+        "./web/src/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "@main/*": [
+        "./src/main/*"
+      ],
+      "@renderer/*": [
+        "./web/src/*"
+      ]
     },
-    "types": ["node", "jest"]
+    "types": [
+      "node",
+      "jest"
+    ]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

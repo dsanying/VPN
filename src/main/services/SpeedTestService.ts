@@ -5,15 +5,23 @@
  * 计进延迟，数值虚高且协议越重越偏，等价 mihomo `unified-delay:false`）。
  * 关键:端口通≠代理可用——裸 TCP ping 只测到入口的 RTT、测不出鉴权/协议/中继失败,故不再用于真实测速。
  *
- * 出站由 index.ts 注入 ProxyManager.buildSpeedTestOutbound 构造（全协议）。未注入（单测/兜底）时退回旧的 TCP ping + UDP 代理拆分。
+ * 出站由 index.ts 注入 ProxyManager.buildSpeedTestOutbound 构造（全协议）。未注入构造器时也仅通过代理请求判定，绝不将 TCP 建连当作代理可用。
  */
 
+import { IpInfoService } from './IpInfoService';
+import { measurementFingerprint } from './NodeMeasurementStore';
+import type { NodeProbeDetails } from '../../shared/speed-test';
+import { CompatibilityCoreService, allocateCompatibilityPort } from './CompatibilityCoreService';
+import { compatibilityEngine } from '../../shared/core-capabilities';
+import { buildBridgeOutbound } from './compatibility-config';
+import { nodeDialDiagnostic } from './node-dial-diagnostic';
 import * as net from 'net';
+import { performance } from 'perf_hooks';
 import * as http from 'http';
 import tls = require('tls');
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execFile, ChildProcess } from 'child_process';
 import type { ServerConfig } from '../../shared/types';
 import type { LogManager } from './LogManager';
 import { resourceManager } from './ResourceManager';
@@ -22,6 +30,7 @@ import {
   resolveSpeedTestTarget,
   parseHttpStatusCode,
   isAcceptableSpeedTestStatus,
+  SPEED_TEST_CONCURRENCY,
   type SpeedTestTarget,
   type MainCoreProbe,
   type SpeedTestOutcome,
@@ -38,9 +47,6 @@ interface SpeedTestRunContext {
 }
 import { isEndpointProtocol, isSpeedTestable } from '../../shared/endpoint-routes';
 import { normalizeDuration } from '../../shared/duration';
-
-/** 基于 UDP/QUIC 的协议，需要走真实代理测速 */
-const UDP_PROTOCOLS = new Set(['hysteria2', 'tuic']);
 
 // Respect the same trust boundary as the OS/browser, including locally trusted enterprise CAs.
 const SPEED_TEST_CA =
@@ -88,12 +94,43 @@ export interface SpeedTestDiagnosticSnapshot {
 }
 
 export class SpeedTestService {
+  private measuredTargets = new Map<number, { target: string; reason?: string }>();
+  private nodeMeasurements = new Map<
+    string,
+    { target?: string; reason?: string; exit?: NodeProbeDetails['exit'] }
+  >();
+  private regionDetection = false;
+  enableRegionDetection(): void {
+    this.regionDetection = true;
+  }
+  isTesting(): boolean {
+    return !!this.currentTest;
+  }
+  private async detectExit(port: number): Promise<NodeProbeDetails['exit']> {
+    if (!this.regionDetection) return undefined;
+    const info = await new IpInfoService(
+      () => null,
+      () => false,
+      () => {}
+    ).queryViaProxy(port);
+    return info?.countryCode
+      ? {
+          ip: info.ip,
+          countryCode: info.countryCode,
+          measuredAt: Date.now(),
+          provider: 'Cloudflare',
+        }
+      : undefined;
+  }
+  getNodeMeasurement(
+    id: string
+  ): { target?: string; reason?: string; exit?: NodeProbeDetails['exit'] } | undefined {
+    return this.nodeMeasurements.get(id);
+  }
+
   private logManager: LogManager;
-  private readonly MAX_CONCURRENT = 5; // TCP 并发数（仅兜底裸 ping 路径）
-  /** 经代理 urltest 的测速并发上限：大订阅时分波，避免 N 路握手同时打出→请求风暴假超时。
-   *  小订阅(≤此值)等价全并行、零额外延迟。取 4=限制同时冷握手的数量（warm 计量已把握手挪出上报值，并发主要影响
-   *  总测速时长与争用、非延迟数值）；调大更快、调小更稳。 */
-  private static readonly PROXY_TEST_CONCURRENCY = 4;
+  /** 主核、临时核和入口检测使用相同的并发上限；完成一项立即补位，不等待整批慢节点。 */
+  private static readonly PROXY_TEST_CONCURRENCY = SPEED_TEST_CONCURRENCY;
   /** 单节点测速总超时（ms）：覆盖冷建连(CONNECT+到代理/目标握手)+两次 GET；上报值只取第二次 warm RTT，与此无关。
    *  取 8s 给大订阅并发冷启动留足头寸，超时即判该节点不可达(null)。 */
   private static readonly MEASURE_TIMEOUT_MS = 8000;
@@ -102,7 +139,7 @@ export class SpeedTestService {
   /**
    * 出站构造器（由 index.ts 注入 ProxyManager.buildSpeedTestOutbound）：注入后**所有协议**统一走「临时 sing-box
    * 经代理 urltest」真实测速（端口通≠代理可用，裸 TCP ping 测不出鉴权/中继失败）；返回 null=该节点不可用（如 naive
-   * 缺 libcronet）→ 跳过。未注入（兜底/单测）时退回旧的 TCP ping + UDP 代理拆分。
+   * 缺 libcronet）→ 跳过。未注入时仅支持原有 UDP 构造器，其他协议失败关闭。
    */
   private buildOutboundFn?: (server: ServerConfig, tag: string) => Record<string, unknown> | null;
 
@@ -115,7 +152,7 @@ export class SpeedTestService {
 
   /**
    * §15.11 核生命周期世代取值器（由 index.ts 注入，call-time 拉 ProxyManager.getLifecycleGeneration）：测速起测时
-   * 快照 gen0，逐波/每 report 前比对——超代（核 start/stop/restart 中途跃迁）即 abort，保留已测、绝不给未测节点写假
+   * 快照 gen0，每节点/每 report 前比对——超代（核 start/stop/restart 中途跃迁）即 abort，保留已测、绝不给未测节点写假
    * -1。缺省 `() => 0`（未注入=单测/兜底）→ 恒不超代，行为与今日一致（回归保护）。
    */
   private getCoreGeneration: () => number;
@@ -124,7 +161,7 @@ export class SpeedTestService {
    *  子集）时按「覆盖」编排——新请求 ⊆ 在飞集 → 复用同一次（零重跑、避免双临时 sing-box 端口冲突）；未覆盖 → 串行链
    *  在其后（不同分组/单节点/子集先-全量后 各自被完整测到，永不并发双 sing-box、无静默漏测）。 */
   private currentTest: Promise<SpeedTestRunResult> | null = null;
-  private currentTestIds: Set<string> | null = null;
+  private currentTestIds: Map<string, string> | null = null;
   private lastDiagnostics: SpeedTestDiagnosticSnapshot | null = null;
 
   constructor(
@@ -172,8 +209,12 @@ export class SpeedTestService {
     // 并发编排（多入口各传不同子集）：按「在飞测速是否覆盖本次请求」决定复用 or 串行。
     const inFlight = this.currentTest;
     const inFlightIds = this.currentTestIds;
-    const requestIds = new Set(testable.map((s) => s.id));
-    if (inFlight && inFlightIds && [...requestIds].every((id) => inFlightIds.has(id))) {
+    const requestIds = new Map(testable.map((s) => [s.id, measurementFingerprint(s, testUrl)]));
+    if (
+      inFlight &&
+      inFlightIds &&
+      [...requestIds].every(([id, fingerprint]) => inFlightIds.get(id) === fingerprint)
+    ) {
       // 覆盖态（在飞集 ⊇ 本次请求）：复用同一次测速，零重跑。second caller 拿同一份 final results，其 onResult/
       // onProgress 不驱动（流式只由 first caller），但 EVENT_SPEED_TEST_RESULT/PROGRESS 是 IPC broadcast，
       // 本 caller 的 renderer 仍收得到（latencyMap/进度照常更新）。
@@ -208,6 +249,7 @@ export class SpeedTestService {
   ): Promise<SpeedTestRunResult> {
     // §15.11：起测时快照核生命周期世代——本次测速 = 绑定于 gen0 的作业，任一核 start/stop/restart/config-regen
     // 中途跃迁 → getCoreGeneration()!==gen0 → 超代 abort（保留已测、未测节点缺席 map、绝不写假 -1）。缺省 ()=>0 恒不超代。
+    for (const server of servers) this.nodeMeasurements.delete(server.id);
     const gen0 = this.getCoreGeneration();
     // §16.2 一次运行的可变上下文：各路径就地填 outcome（abort 点置 interrupted）+ skipped（波前缺席）。
     const runCtx: SpeedTestRunContext = {
@@ -280,104 +322,16 @@ export class SpeedTestService {
       return { results, outcome: runCtx.outcome, skipped: runCtx.skipped };
     }
 
-    // 兜底路径（未注入构造器，如单测）：旧的 TCP 裸 ping + UDP 代理拆分。无 gen 语义 → 恒 completed。
-    const tcpServers = servers.filter((s) => !UDP_PROTOCOLS.has(s.protocol.toLowerCase()));
-    const udpServers = servers.filter((s) => UDP_PROTOCOLS.has(s.protocol.toLowerCase()));
-    const results = new Map<string, number | null>();
-    const [tcpResults, udpResults] = await Promise.all([
-      this.testTcpServers(tcpServers, onResult),
-      udpServers.length > 0
-        ? this.testServersViaProxy(udpServers, gen0, runCtx, onResult, undefined, testUrl)
-        : new Map<string, number | null>(),
-    ]);
-    for (const [id, latency] of tcpResults) results.set(id, latency);
-    for (const [id, latency] of udpResults) results.set(id, latency);
-    this.logManager.addLog('info', '测速完成', 'SpeedTest');
+    // A missing injected builder must never turn a TCP port into a usable proxy result.
+    const results = await this.testServersViaProxy(
+      servers,
+      gen0,
+      runCtx,
+      onResult,
+      onProgress,
+      testUrl
+    );
     return { results, outcome: runCtx.outcome, skipped: runCtx.skipped };
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  TCP Ping（原有逻辑，保持不变）
-  // ═══════════════════════════════════════════════════════════════
-
-  private async testTcpServers(
-    servers: ServerConfig[],
-    onResult?: (serverId: string, latency: number | null) => void
-  ): Promise<Map<string, number | null>> {
-    const results = new Map<string, number | null>();
-    if (servers.length === 0) return results;
-
-    for (let i = 0; i < servers.length; i += this.MAX_CONCURRENT) {
-      const batch = servers.slice(i, i + this.MAX_CONCURRENT);
-      const batchResults = await Promise.all(batch.map((server) => this.testTcpServer(server)));
-
-      batchResults.forEach((result) => {
-        results.set(result.serverId, result.latency);
-        onResult?.(result.serverId, result.latency);
-        if (result.error) {
-          this.logManager.addLog(
-            'warn',
-            `测速失败 ${result.serverId}: ${result.error}`,
-            'SpeedTest'
-          );
-        }
-      });
-    }
-
-    return results;
-  }
-
-  private async testTcpServer(server: ServerConfig): Promise<SpeedTestResult> {
-    const start = Date.now();
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const socket = new net.Socket();
-        const timeout = 5000;
-
-        socket.setTimeout(timeout);
-
-        socket.on('connect', () => {
-          socket.destroy();
-          resolve();
-        });
-
-        socket.on('timeout', () => {
-          socket.destroy();
-          reject(new Error('Timeout'));
-        });
-
-        socket.on('error', (err) => {
-          socket.destroy();
-          reject(err);
-        });
-
-        // 如果是 IPv6 且带有中括号，去除中括号以供 net.Socket 使用
-        const isIpv6 = server.address.includes(':');
-        const connectAddress =
-          isIpv6 && server.address.startsWith('[') && server.address.endsWith(']')
-            ? server.address.slice(1, -1)
-            : server.address;
-
-        socket.connect({
-          port: server.port,
-          host: connectAddress,
-          family: isIpv6 ? 6 : 0,
-        });
-      });
-
-      const latency = Date.now() - start;
-      return {
-        serverId: server.id,
-        latency,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return {
-        serverId: server.id,
-        latency: null,
-        error: errorMessage,
-      };
-    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -422,6 +376,13 @@ export class SpeedTestService {
       failReasons.set(reason, (failReasons.get(reason) ?? 0) + 1);
     const noteNodeFail = (reason: string, server: ServerConfig, tag?: string): void => {
       noteFail(reason);
+      this.nodeMeasurements.set(server.id, {
+        ...this.nodeMeasurements.get(server.id),
+        target:
+          this.nodeMeasurements.get(server.id)?.target ??
+          `${target.https ? 'https' : 'http'}://${target.hostHeader}${target.path}`,
+        reason,
+      });
       failures.push({
         serverId: server.id,
         serverName: server.name,
@@ -443,66 +404,139 @@ export class SpeedTestService {
     let stderrOutput = '';
     let stdoutOutput = '';
 
+    const compatibility = new CompatibilityCoreService(
+      (engine) => resourceManager.getCompatibilityCorePath(engine),
+      (level, message, source) => this.logManager.addLog(level, message, source)
+    );
+    let compatibilityDirectPort = 0;
     // 构造各节点出站；不可用（naive 缺 libcronet / 异常）→ 直接 null，不进临时核（避免预初始化 FATAL 拖垮整批）。
     const getOutbound =
       this.buildOutboundFn ?? ((s: ServerConfig, t: string) => this.buildOutbound(s, t));
     const usable: { server: ServerConfig; tag: string; outbound: Record<string, unknown> }[] = [];
-    for (const s of servers) {
-      const tag = `out-${s.id}`;
-      const ob = getOutbound(s, tag);
-      if (ob) usable.push({ server: s, tag, outbound: ob });
-      else {
-        results.set(s.id, null);
-        noteNodeFail('unusable', s, tag); // naive 缺 libcronet / 构造异常 → 不可测节点
-        report(s.id, null);
-      }
-    }
-    // 解析测速端点（一次，预热+正式共用）；非法 testUrl 经 resolveSpeedTestTarget 回落默认 generate_204。
     const target = resolveSpeedTestTarget(testUrl);
-    if (usable.length === 0) {
-      this.lastDiagnostics = {
-        generatedAt: new Date().toISOString(),
-        target,
-        total,
-        usable: 0,
-        failures: [...failures],
-        resolvedIpProbes: [],
-      };
-      logFailDist();
-      return results;
-    }
-
     try {
+      if (servers.some((server) => compatibilityEngine(server))) {
+        compatibilityDirectPort = await allocateCompatibilityPort();
+        await compatibility.prepare(
+          servers.map((server) => ({ ...server, detour: undefined })),
+          compatibilityDirectPort
+        );
+      }
+      if (this.getCoreGeneration() !== gen0) {
+        if (runCtx) runCtx.outcome = 'interrupted';
+        return results;
+      }
+      for (const s of servers) {
+        const tag = `out-${s.id}`;
+        const bridge = compatibility.bridges.get(s.id);
+        let ob: Record<string, unknown> | null;
+        try {
+          ob = compatibilityEngine(s)
+            ? bridge
+              ? buildBridgeOutbound(tag, bridge)
+              : null
+            : getOutbound(s, tag);
+        } catch {
+          results.set(s.id, null);
+          noteNodeFail('outbound-invalid', s, tag);
+          report(s.id, null);
+          continue;
+        }
+        if (ob) usable.push({ server: s, tag, outbound: ob });
+        else {
+          results.set(s.id, null);
+          noteNodeFail('unusable', s, tag); // naive 缺 libcronet / 构造异常 → 不可测节点
+          report(s.id, null);
+        }
+      }
+      // 解析测速端点（一次，预热+正式共用）；非法 testUrl 经 resolveSpeedTestTarget 回落默认 generate_204。
+      if (usable.length === 0) {
+        this.lastDiagnostics = {
+          generatedAt: new Date().toISOString(),
+          target,
+          total,
+          usable: 0,
+          failures: [...failures],
+          resolvedIpProbes: [],
+        };
+        logFailDist();
+        return results;
+      }
+
       // 1. 为可用节点分配 HTTP 代理端口
       const ports = await this.findFreePorts(usable.length);
       const serverPortMap = new Map<string, number>(); // serverId → HTTP proxy port
       usable.forEach((u, idx) => serverPortMap.set(u.server.id, ports[idx]));
 
       // 2. 生成临时 sing-box 配置（每节点独立 HTTP 入站 → 该节点出站；端点目标解析走穿隧道 223.5.5.5，geo 正确）
-      const config = this.generateProxyTestConfig(usable, serverPortMap);
-      tempConfig = config;
-
-      // 3. 写入临时配置文件
+      const makeConfig = (batch: typeof usable) => {
+        const config = this.generateProxyTestConfig(batch, serverPortMap);
+        if (compatibilityDirectPort) {
+          (config.inbounds as Record<string, unknown>[]).push({
+            type: 'mixed',
+            tag: 'compat-direct-in',
+            listen: '127.0.0.1',
+            listen_port: compatibilityDirectPort,
+          });
+          (config.route as { rules: Record<string, unknown>[] }).rules.unshift({
+            inbound: ['compat-direct-in'],
+            action: 'route',
+            outbound: 'direct',
+          });
+        }
+        return config;
+      };
       const userDataPath = getUserDataPath();
       configFilePath = path.join(userDataPath, `speedtest_${Date.now()}.json`);
-      await fs.writeFile(configFilePath, JSON.stringify(config, null, 2), { mode: 0o600 });
+      const singboxPath = resourceManager.getSingBoxPath();
+      // One malformed native node must not prevent all other subscriptions from being tested.
+      // The normal path costs one check; split failing batches until the offending nodes are isolated.
+      const isolate = async (batch: typeof usable): Promise<typeof usable> => {
+        if (this.getCoreGeneration() !== gen0) return [];
+        if (await this.checkProbeConfig(singboxPath, configFilePath!, makeConfig(batch)))
+          return batch;
+        if (batch.length === 1) {
+          const node = batch[0];
+          results.set(node.server.id, null);
+          noteNodeFail('outbound-invalid', node.server, node.tag);
+          report(node.server.id, null);
+          return [];
+        }
+        const middle = Math.floor(batch.length / 2);
+        return [
+          ...(await isolate(batch.slice(0, middle))),
+          ...(await isolate(batch.slice(middle))),
+        ];
+      };
+      const valid = await isolate(usable);
+      if (this.getCoreGeneration() !== gen0) {
+        if (runCtx) runCtx.outcome = 'interrupted';
+        return results;
+      }
+      usable.splice(0, usable.length, ...valid);
+      if (!usable.length) return results;
+      const config = makeConfig(usable);
+      tempConfig = config;
+      await fs.writeFile(configFilePath, JSON.stringify(config), { mode: 0o600 });
 
       // 4. 启动临时 sing-box 进程
-      const singboxPath = resourceManager.getSingBoxPath();
       singboxProcess = spawn(singboxPath, ['run', '-c', configFilePath], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
       // 收集临时核输出用于调试。正常退出也在 finally 以 debug 写 app.log；日志级别非 debug 时自动被 LogManager 过滤。
       singboxProcess.stdout?.on('data', (data: Buffer) => {
-        stdoutOutput += data.toString();
+        stdoutOutput = (stdoutOutput + data.toString()).slice(-65536);
       });
       singboxProcess.stderr?.on('data', (data: Buffer) => {
-        stderrOutput += data.toString();
+        stderrOutput = (stderrOutput + data.toString()).slice(-65536);
       });
 
       // 监听进程异常退出
       let processExited = false;
+      singboxProcess.on('error', () => {
+        processExited = true;
+      });
       singboxProcess.on('exit', (code) => {
         processExited = true;
         if (code !== null && code !== 0) {
@@ -515,7 +549,11 @@ export class SpeedTestService {
       });
 
       // 5. 等待 sing-box 就绪（连第一个 HTTP 代理端口）。应用分流规则集下载可能耗时，给 10s。
-      const ready = await this.waitForPortReady(ports[0], 10000);
+      const ready = await this.waitForPortReady(serverPortMap.get(usable[0].server.id)!, 10000);
+      if (this.getCoreGeneration() !== gen0) {
+        if (runCtx) runCtx.outcome = 'interrupted';
+        return results;
+      }
       if (!ready || processExited) {
         this.logManager.addLog(
           'warn',
@@ -532,8 +570,7 @@ export class SpeedTestService {
 
       // 6. 测速：每节点经各自 HTTP 代理建一条 CONNECT 隧道，在同一条隧道上发两次 GET、只计第二次（warm RTT）——
       //    对齐 mihomo unified-delay：第一次承担建连+握手暖身（丢弃计时），第二次是不含握手的纯请求延迟＝「实际请求
-      //    时间」。冷握手挪到被丢弃的第一次，故 32 并发的争用也不污染上报值；measureViaTunnel 内部已暖身，无需独立
-      //    预热轮。并发上限避免大订阅 N 路握手同时打出→请求风暴假超时；小订阅(≤上限)等价全并行。
+      //    时间」。measureViaTunnel 内部已暖身，无需独立预热轮；仍限制并发以减少网络争用和请求风暴假超时。
       //    每测完一个节点立即回调 onResult（UI 流式显示），不等队列。
       await this.runWithLimit(usable, SpeedTestService.PROXY_TEST_CONCURRENCY, async (u) => {
         // §15.11 R-b：核中途 START（临时核 + 新主核瞬态双会话）→ gen 变 → 丢弃、不 report（未测节点不写假 -1）。
@@ -553,6 +590,13 @@ export class SpeedTestService {
           if (runCtx) runCtx.outcome = 'interrupted';
           return;
         }
+        const exit =
+          latency !== null && this.regionDetection ? await this.detectExit(port) : undefined;
+        if (this.regionDetection && this.getCoreGeneration() !== gen0) {
+          if (runCtx) runCtx.outcome = 'interrupted';
+          return;
+        }
+        this.nodeMeasurements.set(u.server.id, { ...this.measuredTargets.get(port), exit });
         results.set(u.server.id, latency);
         if (latency === null) {
           noteNodeFail(reason ?? 'unknown', u.server, u.tag); // ③ 记失败模式
@@ -576,14 +620,28 @@ export class SpeedTestService {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.logManager.addLog('error', `测速异常: ${msg}`, 'SpeedTest');
-      for (const u of usable) {
-        if (!results.has(u.server.id)) {
-          results.set(u.server.id, null);
-          noteNodeFail('exception', u.server, u.tag);
-          report(u.server.id, null);
+      if (this.getCoreGeneration() !== gen0) {
+        if (runCtx) runCtx.outcome = 'interrupted';
+      } else
+        for (const u of usable) {
+          if (!results.has(u.server.id)) {
+            results.set(u.server.id, null);
+            noteNodeFail('exception', u.server, u.tag);
+            report(u.server.id, null);
+          }
         }
-      }
     } finally {
+      await compatibility.close();
+      const coreOutput = [stderrOutput, stdoutOutput].filter(Boolean).join('\n').trim();
+      for (const { server } of usable) {
+        if (results.get(server.id) !== null) continue;
+        const code = nodeDialDiagnostic(coreOutput, server);
+        const measurement = this.nodeMeasurements.get(server.id);
+        if (!code || !measurement) continue;
+        measurement.reason = `node-dial:${code}; ${measurement.reason ?? 'unknown'}`;
+        const failure = failures.find((item) => item.serverId === server.id);
+        if (failure) failure.reason = measurement.reason;
+      }
       this.lastDiagnostics = {
         generatedAt: new Date().toISOString(),
         target,
@@ -594,7 +652,6 @@ export class SpeedTestService {
         tempConfig,
       };
       logFailDist(); // ③ 末尾打失败原因分布（normal/not-ready/catch 路径都经 finally）
-      const coreOutput = [stderrOutput, stdoutOutput].filter(Boolean).join('\n').trim();
       if (coreOutput) {
         this.logManager.addLog(
           'debug',
@@ -602,17 +659,7 @@ export class SpeedTestService {
           'SpeedTest'
         );
       }
-      if (singboxProcess && !singboxProcess.killed) {
-        singboxProcess.kill('SIGTERM');
-        const forceKillTimer = setTimeout(() => {
-          try {
-            singboxProcess?.kill('SIGKILL');
-          } catch {
-            // 进程可能已退出
-          }
-        }, 2000);
-        singboxProcess.on('exit', () => clearTimeout(forceKillTimer));
-      }
+      if (singboxProcess) await stopProbeProcess(singboxProcess);
       if (configFilePath) {
         try {
           await fs.unlink(configFilePath);
@@ -632,13 +679,13 @@ export class SpeedTestService {
    */
   /**
    * §15 主核测速（方案 A）：经**已运行的主核**探测池测全部节点，结构性消除临时核 WG/WARP 双会话超时（G1）。
-   * 编排（§15.5）：把 usable 按 K（池槽数）分波；每波先 gRPC selectOutbound 把 K 槽热切到本波各节点（1:1，
+   * 编排（§15.5）：K 个 worker 各自绑定探测槽；每项先 gRPC selectOutbound 将本槽热切到该节点（1:1，
    * 节点[k]→probe-selector-k），再经 probe-in-k 端口跑**现成 measureViaTunnel**（warm-TTFB 逐字复用，唯一变量=
-   * CONNECT 目标端口 poolPort[k]）。波间串行——同槽跨波复用，先测完（finish 已 destroy 隧道）再 selectOutbound
+   * CONNECT 目标端口 poolPort[k]）。各槽独立推进——同槽先测完（finish 已 destroy 隧道）再 selectOutbound
    * 重定向，interrupt_exist_connections 清残留、无跨节点串味。report/失败分布/onResult/onProgress 与临时核路径同款。
    * 池测结果权威（同 endpoint tag=同 WG 会话，成功真值），如实上报（含 null=真不通）；不再被临时核 null 覆盖。
-   * §15.11：绑定起测世代 gen0——逐波前 + 每 report 前比对 getCoreGeneration()，超代（核 stop/restart/regen 中途跃迁，
-   * R-a/R-c）即停发新波、丢在飞结果、return 已测部分 map（未测节点缺席 → 合并语义保留旧值，绝不写假 -1）。
+   * §15.11：绑定起测世代 gen0——每节点前 + 每 report 前比对 getCoreGeneration()，超代（核 stop/restart/regen 中途跃迁，
+   * R-a/R-c）即停发请求、丢在飞结果、return 已测部分 map（未测节点缺席 → 合并语义保留旧值，绝不写假 -1）。
    */
   private async testServersViaMainCore(
     probe: MainCoreProbe,
@@ -715,75 +762,69 @@ export class SpeedTestService {
     const superseded = () => this.getCoreGeneration() !== gen0 || !probe.isRunning();
 
     try {
-      for (let base = 0; base < poolTestable.length; base += K) {
-        // §15.11 超代①：核跃迁/崩溃 → 停发新波，return 已测部分 map（未测节点缺席，不写假 -1）。§16.2 标 interrupted。
+      // 每个 worker 永久绑定一个槽及端口；只有本槽测量和诊断结束后才重定向。
+      // 慢节点占用自己的槽，其余槽完成后立即领取下一个，避免整批等待。
+      await this.runWithLimit(poolTestable, K, async (node, k) => {
         if (superseded()) {
           runCtx.outcome = 'interrupted';
-          return results;
+          return;
         }
-        const wave = poolTestable.slice(base, base + K);
-        // 1. 本波各节点按槽热切 selector（node[k] → probe-selector-k，gRPC live 生效 15.3）。逐槽记成败：
-        //    naive 缺库等被主核跳过的节点其 tag 非 selector 成员 → selectOutbound 抛错 → 记 select-failed（如实不可测）。
-        const selected = await Promise.all(
-          wave.map(async (node, k) => {
-            try {
-              await probe.selectSlot(k, probe.tagOf(node.id));
-              return true;
-            } catch {
-              return false;
-            }
-          })
+        const tag = probe.tagOf(node.id);
+        let selected = false;
+        try {
+          await probe.selectSlot(k, tag);
+          selected = true;
+        } catch {
+          // 核生命周期检查后再决定是否是真实选择失败。
+        }
+        if (superseded()) {
+          runCtx.outcome = 'interrupted';
+          return;
+        }
+        if (!selected) {
+          results.set(node.id, null);
+          noteNodeFail('select-failed', node, tag);
+          report(node.id, null);
+          return;
+        }
+        const port = poolPorts[k];
+        const { latency, reason } = await this.measureWithFallback(
+          port,
+          SpeedTestService.MEASURE_TIMEOUT_MS,
+          target,
+          () => !superseded()
         );
-        // 2. 本波并发测量，槽 k 严格用 poolPort[k]（1:1 绑定，不经 runWithLimit worker 池——那会丢失 k↔端口对应）。
-        await Promise.all(
-          wave.map(async (node, k) => {
-            const tag = probe.tagOf(node.id);
-            // §15.11 超代（selectSlot 期间核可能已跃迁/崩溃，stale-tag selectOutbound throw → selected[k]=false）：
-            //   诚实性根基——超代导致的「未测/select 失败」绝不 report(-1)；仅 gen0 期核仍在的真实 select 失败才记 select-failed。
-            if (superseded()) {
-              runCtx.outcome = 'interrupted';
-              return;
-            }
-            if (!selected[k]) {
-              results.set(node.id, null);
-              noteNodeFail('select-failed', node, tag); // 该节点非 probe-selector 成员（被主核跳过/不可用）
-              report(node.id, null);
-              return;
-            }
-            const port = poolPorts[k];
-            const { latency, reason } = await this.measureWithFallback(
-              port,
-              SpeedTestService.MEASURE_TIMEOUT_MS,
-              target,
-              () => !superseded()
+        if (superseded()) {
+          runCtx.outcome = 'interrupted';
+          return;
+        }
+        const exit =
+          latency !== null && this.regionDetection ? await this.detectExit(port) : undefined;
+        if (this.regionDetection && this.getCoreGeneration() !== gen0) {
+          if (runCtx) runCtx.outcome = 'interrupted';
+          return;
+        }
+        this.nodeMeasurements.set(node.id, { ...this.measuredTargets.get(port), exit });
+        results.set(node.id, latency);
+        if (latency === null) {
+          noteNodeFail(reason ?? 'unknown', node, tag);
+          report(node.id, null);
+          // 诊断仍占用本槽；不能在 DNS 请求完成前把同一端口改指另一个节点。
+          if (isEndpointProtocol(node.protocol)) {
+            resolvedIpProbes.push(
+              await this.probeEndpointTargetResolvedIps(
+                port,
+                node,
+                tag,
+                target.host,
+                SpeedTestService.DNS_PROBE_TIMEOUT_MS
+              )
             );
-            // §15.11 超代②：measure 期间核跃迁/崩溃 → 丢在飞结果、不 report、不写假 -1（超代未测 vs 真实失败 -1 分流处）。
-            if (superseded()) {
-              runCtx.outcome = 'interrupted';
-              return;
-            }
-            results.set(node.id, latency);
-            if (latency === null) {
-              noteNodeFail(reason ?? 'unknown', node, tag);
-              report(node.id, null);
-              // 端点失败结构化 DNS 探测：必须在本波内 await 完（下一波会把该槽 selector 重定向到别的节点）。
-              if (isEndpointProtocol(node.protocol)) {
-                resolvedIpProbes.push(
-                  await this.probeEndpointTargetResolvedIps(
-                    port,
-                    node,
-                    tag,
-                    target.host,
-                    SpeedTestService.DNS_PROBE_TIMEOUT_MS
-                  )
-                );
-              }
-              return;
-            }
-            report(node.id, latency);
-          })
-        );
-      }
+          }
+          return;
+        }
+        report(node.id, latency);
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.logManager.addLog('error', `主核测速异常: ${msg}`, 'SpeedTest');
@@ -823,9 +864,11 @@ export class SpeedTestService {
     const outbounds: Record<string, unknown>[] = [];
     const endpoints: Record<string, unknown>[] = [];
     const routeRules: Record<string, unknown>[] = [];
-    // 解析节点 server 地址的国内 DNS（见下「两类解析不变量」）；端点另加穿隧道 DNS（dns-exit-<id8>）。
+    // 解析节点 server 地址的当前网络 DNS（见下「两类解析不变量」）；端点另加穿隧道 DNS（dns-exit-<id8>）。
     const dnsServers: Record<string, unknown>[] = [
-      { tag: 'dns-direct', type: 'udp', server: '223.5.5.5', server_port: 53 },
+      // 节点地址解析遵循当前网络的 DNS，不依赖校园网/企业网可能封锁的公网 UDP 53。
+      // local 仅读取系统解析配置，临时测速不写系统 DNS。
+      { tag: 'dns-direct', type: 'local' },
     ];
     const dnsRules: Record<string, unknown>[] = [];
 
@@ -841,7 +884,7 @@ export class SpeedTestService {
       if (isEndpointProtocol(outbound.type as string)) {
         endpoints.push(outbound);
         // 端点是 L3（运 IP 包、不认域名）→ sing-box 强制**本地解析**目标域名（wireguard/endpoint.go 空 QueryOptions，
-        // 过 dns.rules + default）。默认 dns-direct(223.5.5.5) 从**本机**解析 → 本机 geo 的 IP；但端点出口可能在别处
+        // 过 dns.rules + default）。默认 dns-direct 从**本机**解析 → 本机 geo 的 IP；但端点出口可能在别处
         // （境外 WARP / 国内自建 WG），本机 geo IP 出口够不着 → 超时/失真。故把目标解析经 inbound 键控 dns.rule 定向到
         // 「穿本节点隧道」的 223.5.5.5：查询从**出口**发出，AliDNS（有大陆节点 + ECS）按**出口地理**返 IP（境外出口→境外 IP、
         // 国内出口→国内 IP），出口恒够得着。真机双证：WARP→142.251.x(境外)/204、国内 WG→58.63.x(国内)/204；1.1.1.1 因
@@ -925,8 +968,10 @@ export class SpeedTestService {
     return config;
   }
 
-  private buildOutbound(server: ServerConfig, tag: string): Record<string, unknown> {
+  private buildOutbound(server: ServerConfig, tag: string): Record<string, unknown> | null {
     const protocol = server.protocol.toLowerCase();
+    // This legacy builder only owns these two protocols. Other nodes require the full builder.
+    if (!['hysteria2', 'tuic'].includes(protocol)) return null;
 
     const outbound: Record<string, unknown> = {
       type: protocol,
@@ -1013,7 +1058,12 @@ export class SpeedTestService {
     target: SpeedTestTarget,
     isCurrent: () => boolean = () => true
   ): Promise<{ latency: number | null; reason?: string }> {
+    const describe = (t: SpeedTestTarget) =>
+      `${t.https ? 'https' : 'http'}://${t.hostHeader}${t.path}`;
+    // 每个检测目标拥有独立超时；主目标超时不能耗尽备用目标的预算。
+    this.measuredTargets.delete(proxyPort);
     const first = await this.measureViaTunnel(proxyPort, timeout, target);
+    this.measuredTargets.set(proxyPort, { target: describe(target), reason: first.reason });
     if (
       first.latency !== null ||
       !isCurrent() ||
@@ -1028,17 +1078,24 @@ export class SpeedTestService {
       timeout,
       resolveSpeedTestTarget('https://cp.cloudflare.com/generate_204')
     );
+    this.measuredTargets.set(proxyPort, {
+      target: 'https://cp.cloudflare.com/generate_204',
+      reason: fallback.reason,
+    });
     if (fallback.latency !== null) return fallback;
-    return {
-      latency: null,
-      reason: `${first.reason ?? 'failed'}; fallback:${fallback.reason ?? 'failed'}`,
-    };
+    const reason = `${first.reason ?? 'failed'}; fallback:${fallback.reason ?? 'failed'}`;
+    this.measuredTargets.set(proxyPort, {
+      target: 'https://cp.cloudflare.com/generate_204',
+      reason,
+    });
+    return { latency: null, reason };
   }
 
   private measureViaTunnel(
     proxyPort: number,
     timeout: number,
-    target: SpeedTestTarget
+    target: SpeedTestTarget,
+    requiredStatus?: number
   ): Promise<{ latency: number | null; reason?: string }> {
     return new Promise((resolve) => {
       // 持有所有已建立句柄，finish 时统一 destroy（防 fd/socket 泄漏：大订阅并发 32 时累积）。
@@ -1060,7 +1117,7 @@ export class SpeedTestService {
       const timer = setTimeout(() => finish(null, 'timeout'), timeout);
 
       // CONNECT 始终显式 host:port（标准端口也带，避免非标端口拼接歧义）。
-      const connectHost = `${target.host}:${target.port}`;
+      const connectHost = `${net.isIP(target.host) === 6 ? `[${target.host}]` : target.host}:${target.port}`;
       connectReq = http.request({
         host: '127.0.0.1',
         port: proxyPort,
@@ -1084,14 +1141,20 @@ export class SpeedTestService {
         if (target.https) {
           // 隧道上做一次 TLS 握手（仅一次，归入第一次暖身）；必须校验证书，防拦截页被误判成代理可用。
           tlsSock = tls.connect(
-            { socket, servername: target.host, rejectUnauthorized: true, ca: SPEED_TEST_CA },
-            () => this.measureWarmRtt(tlsSock!, target, finish)
+            {
+              socket,
+              host: target.host,
+              servername: net.isIP(target.host) ? undefined : target.host,
+              rejectUnauthorized: true,
+              ca: SPEED_TEST_CA,
+            },
+            () => this.measureWarmRtt(tlsSock!, target, finish, requiredStatus)
           );
           tlsSock.on('error', (error: NodeJS.ErrnoException) =>
             finish(null, `tls-error:${error.code ?? 'unknown'}`)
           );
         } else {
-          this.measureWarmRtt(socket, target, finish);
+          this.measureWarmRtt(socket, target, finish, requiredStatus);
         }
       });
       connectReq.end();
@@ -1103,6 +1166,17 @@ export class SpeedTestService {
    * 完全相同的 CONNECT 隧道 + 2×GET 量 warm TTFB —— 产出口径 == latencyMap 的测速值（同端点/同算法/同 warm 语义），
    * 故可合法写入节点延迟。返回 null = 隧道不可用/超时/非 2xx/对端过早关闭 → 调用方放弃写入（绝不写 -1）。
    */
+  async checkProxyHealth(proxyPort: number): Promise<boolean> {
+    for (const url of [
+      'https://www.gstatic.com/generate_204',
+      'https://cp.cloudflare.com/generate_204',
+    ]) {
+      const result = await this.measureViaTunnel(proxyPort, 5000, resolveSpeedTestTarget(url), 204);
+      if (result.latency !== null) return true;
+    }
+    return false;
+  }
+
   async measureWarmRttViaHttpProxy(proxyPort: number, testUrl?: string): Promise<number | null> {
     const target = resolveSpeedTestTarget(testUrl);
     const { latency, reason } = await this.measureWithFallback(
@@ -1310,78 +1384,137 @@ export class SpeedTestService {
   /**
    * 在一条已建立的隧道（net.Socket 或隧道上的 tls.TLSSocket）上发两次 GET，只计第二次「响应头收齐」的耗时（warm RTT）。
    *
-   * 按 HTTP 报文边界（`\r\n\r\n`）在**连续缓冲**上数两次响应，**不是**见字节就判定——否则第一次响应的跨 chunk 残余
-   * （TLS record/TCP 分段/CDN 多次 write）会被误当第二次首字节，使上报值塌成 ≈0ms（比虚高更危险，会误选坏节点）。
-   * 切到第二次前**整段清空 buf**（连第一次响应的 body 残余一并丢弃——第二次请求此刻才发出，残余绝不含第二次数据）；
-   * 计到第二次响应头收齐，与 mihomo `client.Do`（收齐响应头即返回）同口径。用 GET 而非 HEAD：默认端点 generate_204
-   * 为 GET 设计、204 规范无 body，连接可立即复用；HEAD 可能 405/行为不一。
+   * 按 Content-Length/chunked 边界消费第一次响应后再发第二次请求；正文不能冒充响应头。
+   * 支持分段、chunk 扩展/尾部和信息响应；无法复用或畸形报文返回失败，缓冲受限。
+   * 第二次响应头收齐且状态码满足检测要求才产生延迟值。
    * 请求用 origin-form（隧道直连 origin，路径非代理绝对 URI）。
    */
   private measureWarmRtt(
     conn: net.Socket | tls.TLSSocket,
     target: SpeedTestTarget,
-    finish: (latency: number | null, reason?: string) => void
+    finish: (latency: number | null, reason?: string) => void,
+    requiredStatus?: number
   ): void {
-    const HEADER_END = '\r\n\r\n';
-    const request =
-      `GET ${target.path} HTTP/1.1\r\n` +
-      `Host: ${target.hostHeader}\r\n` +
-      `Connection: keep-alive\r\n\r\n`;
+    const request = `GET ${target.path} HTTP/1.1\r\nHost: ${target.hostHeader}\r\nConnection: keep-alive\r\n\r\n`;
     let buf = '';
     let firstDone = false;
     let start = 0;
-
+    let finished = false;
+    const complete = (latency: number | null, reason?: string) => {
+      if (finished) return;
+      finished = true;
+      finish(latency, reason);
+    };
     conn.on('data', (chunk: Buffer) => {
-      // latin1 单字节编码：逐 chunk 拼接不会把多字节字符跨 chunk 错位，ASCII 的响应头与 \r\n\r\n 边界检测安全。
-      // 勿改 utf8（会引入跨 chunk 截断）。
+      if (finished) return;
       buf += chunk.toString('latin1');
-      if (!firstDone) {
-        if (buf.indexOf(HEADER_END) < 0) return; // 第一次响应头未收齐，继续累积（跨 chunk 安全）
-        // 第一次（暖身）响应头收齐：整段清空 buf（含可能的 body 残余）。第二次请求此刻才发出（下行 write），
-        // 故残余绝不含第二次响应数据——只 slice 到响应头会让自配「非 204 带 body」端点的 body（含空行）污染
-        // 第二次判定、塌成 ≈0ms，故整段丢弃。计时发第二次。
-        firstDone = true;
-        buf = '';
-        start = Date.now();
-        conn.write(request);
-      } else {
-        // 第二次响应：从第二次状态行 `HTTP/` 锚定起判「响应头收齐」，跳过可能先于第二次响应到达的第一次 body 残余
-        // （自配非 204 端点 + header/body 分段时，body 残余会先入清空后的 buf；不从 HTTP/ 起算会把它误当第二次）。
-        const sl = buf.indexOf('HTTP/');
-        if (sl < 0 || buf.indexOf(HEADER_END, sl) < 0) return; // 第二次状态行/响应头未到齐
-        // issue #154 ③ 校验响应码：非 2xx（如 cp.cloudflare 经 CF-Workers 的 403）判失败，不再把错误页当成功记 TTFB。
-        const code = parseHttpStatusCode(buf.slice(sl));
-        // code===null：响应头收齐但状态行无法解析出 3 位码（畸形/非标准）——无法确认 2xx，判失败，
-        // 否则畸形响应会被当成功记 TTFB，软重引入 #154 修复前「错误页当成功」的问题。
-        if (code === null || !isAcceptableSpeedTestStatus(code)) {
-          finish(null, code === null ? 'http-unparsable' : `http-${code}`);
+      // Bound untrusted headers/body buffering; generate_204 has no body.
+      if (buf.length > 1024 * 1024) {
+        complete(null, 'http-response-too-large');
+        return;
+      }
+      try {
+        while (true) {
+          const end = buf.indexOf('\r\n\r\n');
+          if (end < 0) {
+            if (buf.length > 65536) complete(null, 'http-header-too-large');
+            return;
+          }
+          if (end > 65536) {
+            complete(null, 'http-header-too-large');
+            return;
+          }
+          const header = buf.slice(0, end);
+          const code = parseHttpStatusCode(header);
+          if (code === null) {
+            complete(null, 'http-unparsable');
+            return;
+          }
+          if (code >= 100 && code < 200 && code !== 101) {
+            buf = buf.slice(end + 4);
+            continue;
+          }
+          if (!firstDone) {
+            const length = warmResponseLength(buf, header, end + 4, code);
+            if (length === undefined) return;
+            buf = buf.slice(length);
+            if (buf.length) {
+              complete(null, 'http-framing-invalid');
+              return;
+            }
+            firstDone = true;
+            start = performance.now();
+            conn.write(request);
+            return;
+          }
+          if (
+            !isAcceptableSpeedTestStatus(code) ||
+            (requiredStatus !== undefined && code !== requiredStatus)
+          ) {
+            complete(null, `http-${code}`);
+          } else {
+            complete(Math.round(performance.now() - start));
+          }
           return;
         }
-        finish(Date.now() - start); // 收齐第二次响应头且 2xx = 不含握手的纯请求往返
+      } catch {
+        complete(null, 'http-framing-invalid');
       }
     });
-    conn.on('error', () => finish(null, 'tunnel-error'));
-    conn.on('end', () => finish(null, 'early-close')); // 对端在测完前关闭 → 失败
+    conn.on('error', () => complete(null, 'tunnel-error'));
+    conn.on('end', () => complete(null, 'early-close')); // 对端在测完前关闭 → 失败
     conn.write(request); // 第一次（暖身，丢弃计时）
   }
 
   /**
    * 并发上限执行（固定大小 worker 池）：最多 `limit` 个任务同时进行，其余排队。
-   * 用于预热/测速——小订阅(items≤limit)即全并行，大订阅分波，消除请求风暴假超时。
+   * 用于测速——完成即补位，workerIndex 在整个任务期间固定，用于绑定探测端口。
    */
   private async runWithLimit<T>(
     items: T[],
     limit: number,
-    fn: (item: T) => Promise<void>
+    fn: (item: T, workerIndex: number) => Promise<void>
   ): Promise<void> {
     let idx = 0;
-    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (idx < items.length) {
-        const i = idx++;
-        await fn(items[i]);
+    let failed = false;
+    const workers = Array.from(
+      { length: Math.min(limit, items.length) },
+      async (_, workerIndex) => {
+        while (!failed && idx < items.length) {
+          const i = idx++;
+          try {
+            await fn(items[i], workerIndex);
+          } catch (error) {
+            failed = true;
+            throw error;
+          }
+        }
       }
+    );
+    // 不提前返回：同槽还有在飞请求时不能结束任务并允许下一次测速重用该槽。
+    const settled = await Promise.allSettled(workers);
+    const rejection = settled.find((result) => result.status === 'rejected');
+    if (rejection?.status === 'rejected') throw rejection.reason;
+  }
+
+  private async checkProbeConfig(
+    binary: string,
+    file: string,
+    config: Record<string, unknown>
+  ): Promise<boolean> {
+    await fs.writeFile(file, JSON.stringify(config), { mode: 0o600 });
+    return new Promise((resolve, reject) => {
+      execFile(
+        binary,
+        ['check', '-c', file],
+        { timeout: 5000, maxBuffer: 65536, windowsHide: true },
+        (error) => {
+          if (!error) resolve(true);
+          else if (typeof error.code === 'number' && !error.killed) resolve(false);
+          else reject(new Error('Probe core validation unavailable'));
+        }
+      );
     });
-    await Promise.all(workers);
   }
 
   private async findFreePorts(count: number): Promise<number[]> {
@@ -1438,4 +1571,82 @@ export class SpeedTestService {
     }
     return false;
   }
+}
+
+/** Consume the first response body before issuing the timed request on the same connection. */
+function warmResponseLength(
+  buf: string,
+  header: string,
+  bodyStart: number,
+  code: number
+): number | undefined {
+  if (code === 204 || code === 304) return bodyStart;
+  const lengths = [...header.matchAll(/^content-length:\s*(.*?)\s*$/gim)].map((m) => m[1]);
+  const encodings = [...header.matchAll(/^transfer-encoding:\s*(.*?)\s*$/gim)].map((m) =>
+    m[1].toLowerCase()
+  );
+  if (encodings.length) {
+    if (lengths.length || encodings.length !== 1 || encodings[0] !== 'chunked')
+      throw new Error('ambiguous-framing');
+    let offset = bodyStart;
+    while (true) {
+      const lineEnd = buf.indexOf('\r\n', offset);
+      if (lineEnd < 0) return undefined;
+      const line = buf.slice(offset, lineEnd);
+      if (!/^[0-9a-f]+(?:;[^\r\n]*)?$/i.test(line)) throw new Error('invalid-chunk');
+      const size = Number.parseInt(line.split(';')[0], 16);
+      if (!Number.isSafeInteger(size) || size > 1024 * 1024) throw new Error('invalid-size');
+      offset = lineEnd + 2;
+      if (size === 0) {
+        if (buf.slice(offset, offset + 2) === '\r\n') return offset + 2;
+        const trailersEnd = buf.indexOf('\r\n\r\n', offset);
+        return trailersEnd < 0 ? undefined : trailersEnd + 4;
+      }
+      if (buf.length < offset + size + 2) return undefined;
+      if (buf.slice(offset + size, offset + size + 2) !== '\r\n')
+        throw new Error('invalid-chunk-end');
+      offset += size + 2;
+    }
+  }
+  // Close-delimited responses cannot be reused for a warm request.
+  if (!lengths.length || lengths.some((value) => !/^\d+$/.test(value) || value !== lengths[0]))
+    throw new Error('missing-length');
+  const length = Number(lengths[0]);
+  if (!Number.isSafeInteger(length) || length > 1024 * 1024) throw new Error('invalid-length');
+  return buf.length >= bodyStart + length ? bodyStart + length : undefined;
+}
+
+/** Do not release the single-flight slot while the previous temporary kernel still owns sessions. */
+async function stopProbeProcess(child: ChildProcess): Promise<void> {
+  if (child.exitCode != null || child.signalCode != null) return;
+  await new Promise<void>((resolve) => {
+    let done = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      child.removeListener('exit', finish);
+      child.removeListener('close', finish);
+      child.removeListener('error', finish);
+      resolve();
+    };
+    child.once('exit', finish);
+    child.once('close', finish);
+    child.once('error', finish);
+    timer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // The process may already have exited between the deadline and signal delivery.
+      } finally {
+        finish();
+      }
+    }, 2000);
+    try {
+      if (!child.kill('SIGTERM')) finish();
+    } catch {
+      finish();
+    }
+  });
 }

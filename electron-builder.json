@@ -4,20 +4,37 @@
   "copyright": "Copyright © 2025",
   "directories": {
     "output": "dist-package",
-    "buildResources": "build"
+    "buildResources": "build",
+    "app": "dist-package/app-source"
   },
-  "files": ["dist/**/*", "package.json", "LICENSE.txt", "NOTICE.md"],
-  "electronLanguages": ["zh-CN", "zh-TW", "en-US", "ru", "fa"],
+  "files": [
+    "dist/**/*",
+    "package.json",
+    "LICENSE.txt",
+    "NOTICE.md",
+    "licenses/**/*"
+  ],
+  "electronLanguages": [
+    "zh-CN",
+    "zh-TW",
+    "en-US",
+    "ru",
+    "fa"
+  ],
   "asar": true,
   "win": {
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       },
       {
         "target": "portable",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "icon": "build/icon.ico",
@@ -26,22 +43,31 @@
       {
         "from": "resources",
         "to": ".",
-        "filter": ["app.png", "app-gray.png"]
+        "filter": [
+          "app.png",
+          "app-gray.png"
+        ]
       },
       {
         "from": "resources/win",
         "to": "win",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/data",
         "to": "data",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/dashboard",
         "to": "dashboard",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
@@ -66,7 +92,10 @@
     "target": [
       {
         "target": "dir",
-        "arch": ["arm64", "x64"]
+        "arch": [
+          "arm64",
+          "x64"
+        ]
       }
     ],
     "icon": "build/icon.icns",
@@ -75,29 +104,44 @@
     "identity": null,
     "gatekeeperAssess": false,
     "extendInfo": {
-      "CFBundleLocalizations": ["en", "zh-Hans", "zh-Hant", "ru", "fa"],
+      "CFBundleLocalizations": [
+        "en",
+        "zh-Hans",
+        "zh-Hant",
+        "ru",
+        "fa"
+      ],
       "CFBundleAllowMixedLocalizations": true
     },
     "extraResources": [
       {
         "from": "resources/mac-${arch}",
         "to": "mac",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/data",
         "to": "data",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/dashboard",
         "to": "dashboard",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources",
         "to": ".",
-        "filter": ["app.png", "app-gray.png"]
+        "filter": [
+          "app.png",
+          "app-gray.png"
+        ]
       }
     ]
   },
@@ -123,7 +167,10 @@
     }
   },
   "linux": {
-    "target": ["AppImage", "deb"],
+    "target": [
+      "AppImage",
+      "deb"
+    ],
     "category": "Network",
     "icon": "build/icons",
     "synopsis": "Clean, modern cross-platform proxy client",
@@ -142,27 +189,42 @@
       {
         "from": "resources/linux",
         "to": "linux",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/data",
         "to": "data",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/dashboard",
         "to": "dashboard",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources",
         "to": ".",
-        "filter": ["app.png", "app-gray.png"]
+        "filter": [
+          "app.png",
+          "app-gray.png"
+        ]
       }
     ]
   },
   "deb": {
-    "recommends": ["policykit-1"]
+    "recommends": [
+      "policykit-1"
+    ]
   },
-  "publish": null
+  "publish": null,
+  "toolsets": {
+    "nsis": "1.2.1",
+    "winCodeSign": "1.1.0"
+  }
 }

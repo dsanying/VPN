@@ -343,7 +343,17 @@ func executeCommand(ctx context.Context, cmd string, args *helperrpc.Arguments) 
 		src := args.Next()
 		wantHash := strings.TrimSpace(args.Next())
 		fmt.Fprintln(conn, installCore(src, wantHash))
-	case "start":
+	case "install-mihomo":
+		if cred.Uid != 0 {
+			fmt.Fprintln(conn, "ERR root-required")
+			return
+		}
+		if err := helperrpc.InstallMihomo(coreBin(), args.Next(), args.Next()); err != nil {
+			fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+			return
+		}
+		fmt.Fprintln(conn, "OK installed")
+	case "start", "start-mihomo":
 		singbox := strings.TrimSpace(args.Next())
 		cfg := args.Next()
 		logPath := args.Next()
@@ -372,11 +382,15 @@ func executeCommand(ctx context.Context, cmd string, args *helperrpc.Arguments) 
 		}
 		// 核路径锁：只跑锁定的 root-owned coreDir/sing-box。客户端传的 singbox 必须与之一致（否则拒绝，杜绝
 		// 「让 helper 以特权跑任意自有二进制」）。config 必须属于对端 uid（防读别人配置）。
-		if filepath.Clean(singbox) != coreBin() {
+		binary, launchArgs := coreBin(), []string{"run", "-c", cfg}
+		if cmd == "start-mihomo" {
+			binary, launchArgs = helperrpc.MihomoPath(coreBin()), helperrpc.MihomoArguments(cfg)
+		}
+		if filepath.Clean(singbox) != binary {
 			fmt.Fprintf(conn, "ERR core-path-denied (want %s)\n", coreBin())
 			return
 		}
-		if _, err := os.Stat(coreBin()); err != nil {
+		if _, err := os.Stat(binary); err != nil {
 			fmt.Fprintf(conn, "ERR core-missing %v\n", err)
 			return
 		}
@@ -385,7 +399,7 @@ func executeCommand(ctx context.Context, cmd string, args *helperrpc.Arguments) 
 			return
 		}
 
-		c := exec.Command(coreBin(), "run", "-c", cfg)
+		c := exec.Command(binary, launchArgs...)
 		// 降权拉核：setuid/setgid 回对端登录用户 + AmbientCaps 保留 CAP_NET_ADMIN/RAW/BIND_SERVICE 建 TUN/改路由。
 		// Go runtime 在 fork 后、execve 前编排 keep-caps→setuid→raise ambient（Go≥1.19；真机验证 ambient 继承，见设计 §13）。
 		c.SysProcAttr = &syscall.SysProcAttr{

@@ -1,3 +1,4 @@
+import { nodeDisplayName, nodeGroupName } from '../../shared/node-identity';
 import {
   Tray,
   Menu,
@@ -55,6 +56,7 @@ export type TrayIconState = 'idle' | 'connected' | 'connecting';
 
 export interface TrayMenuData {
   isProxyRunning: boolean;
+  nodeRegions?: Record<string, string | undefined>;
   hasError?: boolean;
   servers: ServerConfig[];
   subscriptions?: SubscriptionConfig[];
@@ -90,7 +92,7 @@ export class TrayManager implements ITrayManager {
   private subscriptions: SubscriptionConfig[] = [];
   private selectedServerId: string | null = null;
   private proxyMode: ProxyMode = 'smart';
-  private proxyModeType: ProxyModeType = 'systemProxy';
+  private proxyModeType: ProxyModeType = 'tun';
   // 语言：托盘文案经 mt() 走主进程 i18n 中央语言持有点（据 config.language 单一真值源，启动 + config-change
   // 由 index.ts 重设并重渲染菜单），故本类不自持语言、也不再暴露 setLanguage。
 
@@ -101,15 +103,14 @@ export class TrayManager implements ITrayManager {
   private onQuit?: () => void;
   private onSelectServer?: (serverId: string) => void;
   private onChangeProxyMode?: (mode: ProxyMode) => void;
-  private onChangeProxyModeType?: (modeType: ProxyModeType) => void;
   private onOpenSettings?: () => void;
   private onCheckUpdate?: () => void;
   private onManageServers?: () => void;
   private onSpeedTest?: () => void;
   private onLightweightMode?: () => void;
-  private onEnterPrivacyMode?: () => void;
 
   // 测速结果
+  private nodeRegions: Record<string, string | undefined> = {};
   private speedTestResults: Map<string, number | null> = new Map();
   private isSpeedTesting: boolean = false;
   // 节点列表「按延迟排序」开关（默认按名称）：由渲染端经 APP_SET_NODE_SORT_BY_LATENCY 同步，使托盘列表与下拉同序。
@@ -125,7 +126,6 @@ export class TrayManager implements ITrayManager {
       onQuit?: () => void;
       onSelectServer?: (serverId: string) => void;
       onChangeProxyMode?: (mode: ProxyMode) => void;
-      onChangeProxyModeType?: (modeType: ProxyModeType) => void;
       onOpenSettings?: () => void;
       onCheckUpdate?: () => void;
       onManageServers?: () => void;
@@ -142,13 +142,11 @@ export class TrayManager implements ITrayManager {
     this.onQuit = callbacks?.onQuit;
     this.onSelectServer = callbacks?.onSelectServer;
     this.onChangeProxyMode = callbacks?.onChangeProxyMode;
-    this.onChangeProxyModeType = callbacks?.onChangeProxyModeType;
     this.onOpenSettings = callbacks?.onOpenSettings;
     this.onCheckUpdate = callbacks?.onCheckUpdate;
     this.onManageServers = callbacks?.onManageServers;
     this.onSpeedTest = callbacks?.onSpeedTest;
     this.onLightweightMode = callbacks?.onLightweightMode;
-    this.onEnterPrivacyMode = callbacks?.onEnterPrivacyMode;
   }
 
   setMainWindow(window: BrowserWindow | null): void {
@@ -166,7 +164,7 @@ export class TrayManager implements ITrayManager {
 
       // darwin 传 guid（= NSStatusItem.autosaveName）保住用户拖放的菜单栏位置；win32/linux 必须不传，见 MACOS_TRAY_GUID。
       this.tray = process.platform === 'darwin' ? new Tray(icon, MACOS_TRAY_GUID) : new Tray(icon);
-      this.tray.setToolTip('FlowZ');
+      this.tray.setToolTip(mt('productName'));
 
       // 托盘点击行为：
       // macOS —— 单击弹出菜单（setContextMenu 原生行为，再点别处自动收回），不直接开主窗口；
@@ -253,6 +251,7 @@ export class TrayManager implements ITrayManager {
       return;
     }
 
+    if (data.nodeRegions) this.nodeRegions = data.nodeRegions;
     this.isProxyRunning = data.isProxyRunning;
     this.servers = data.servers;
     this.subscriptions = data.subscriptions || [];
@@ -275,7 +274,6 @@ export class TrayManager implements ITrayManager {
 
     // 构建服务器子菜单（按订阅/自建分组：单组平铺，多组用嵌套子菜单——节点多时更易导航）
     const serverSubmenu: MenuItemConstructorOptions[] = [];
-    const maxLabelLength = 30;
 
     const buildServerItem = (server: ServerConfig): MenuItemConstructorOptions => {
       const name = server.name || server.address;
@@ -289,11 +287,15 @@ export class TrayManager implements ITrayManager {
             ? ` [${latency}ms]`
             : ` [${mt('trayTimeout')}]`
           : '';
-      // 超长只截「名字」，保「（协议）[延迟]」完整——延迟是选节点的关键信息，不应被尾部截断吃掉。
       const suffix = `（${proto}）${latencyStr}`;
-      const maxName = Math.max(6, maxLabelLength - suffix.length);
-      const shownName = name.length > maxName ? `${name.slice(0, maxName - 1)}…` : name;
-      const label = `${shownName}${suffix}`;
+      const label = `${nodeDisplayName(
+        name,
+        this.nodeRegions[server.id],
+        nodeGroupName(server, data.subscriptions, {
+          manual: mt('trayCustomNodes'),
+          mesh: mt('trayMesh'),
+        })
+      )}${suffix}`;
       return {
         label,
         type: 'radio' as const,
@@ -359,21 +361,6 @@ export class TrayManager implements ITrayManager {
       click: () => this.handleChangeProxyMode(mode),
     }));
 
-    // 接管方式（systemProxy/tun/manual）子菜单——无需打开主窗口即可切换
-    const proxyModeTypeLabels: Record<ProxyModeType, string> = {
-      systemProxy: mt('traySystemProxy'),
-      tun: mt('trayTun'),
-      manual: mt('trayLocalOnly'),
-    };
-    const proxyModeTypeSubmenu: MenuItemConstructorOptions[] = (
-      ['systemProxy', 'tun', 'manual'] as ProxyModeType[]
-    ).map((modeType) => ({
-      label: proxyModeTypeLabels[modeType],
-      type: 'radio' as const,
-      checked: data.proxyModeType === modeType,
-      click: () => this.handleChangeProxyModeType(modeType),
-    }));
-
     const contextMenu = Menu.buildFromTemplate([
       {
         label: statusLabel,
@@ -401,10 +388,6 @@ export class TrayManager implements ITrayManager {
         submenu: serverSubmenu,
       },
       {
-        label: mt('trayTakeover'),
-        submenu: proxyModeTypeSubmenu,
-      },
-      {
         label: mt('trayRouting'),
         submenu: proxyModeSubmenu,
       },
@@ -412,10 +395,6 @@ export class TrayManager implements ITrayManager {
       {
         label: mt('trayLightweightMode'),
         click: () => this.handleLightweightMode(),
-      },
-      {
-        label: mt('trayPrivacyMode'),
-        click: () => this.handleEnterPrivacyMode(),
       },
       {
         label: mt('trayOpenSettings'),
@@ -523,13 +502,6 @@ export class TrayManager implements ITrayManager {
     }
   }
 
-  private handleEnterPrivacyMode(): void {
-    this.logManager.addLog('info', 'Enter privacy mode clicked from tray', 'TrayManager');
-    // onEnterPrivacyMode 由 index.ts 构造 TrayManager 时恒注入（置主进程隐私 flag 并广播）。
-    // 此处仅经回调，不再 require('../index') 兜底——那是死分支且会形成 TrayManager→index 循环依赖。
-    this.onEnterPrivacyMode?.();
-  }
-
   private handleShowWindow(): void {
     this.logManager.addLog('info', 'Show window clicked from tray', 'TrayManager');
     if (this.onShowWindow) {
@@ -569,13 +541,6 @@ export class TrayManager implements ITrayManager {
   /** 托盘状态行的小圆点图标（绿/灰/红），替代旧 emoji。 */
   private statusDotIcon(state: 'connected' | 'disconnected' | 'error'): Electron.NativeImage {
     return nativeImage.createFromDataURL(`data:image/png;base64,${STATUS_DOT_PNG[state]}`);
-  }
-
-  private handleChangeProxyModeType(modeType: ProxyModeType): void {
-    this.logManager.addLog('info', `Takeover mode changed from tray: ${modeType}`, 'TrayManager');
-    if (this.onChangeProxyModeType) {
-      this.onChangeProxyModeType(modeType);
-    }
   }
 
   private handleOpenSettings(): void {
@@ -663,11 +628,13 @@ export class TrayManager implements ITrayManager {
     servers: ServerConfig[],
     opts: {
       toast?: boolean;
+      nodeRegions?: Record<string, string | undefined>;
       keepTestingState?: boolean;
       outcome?: SpeedTestOutcome;
       skipped?: number;
     } = {}
   ): void {
+    if (opts.nodeRegions) this.nodeRegions = opts.nodeRegions;
     this.speedTestResults = new Map([...this.speedTestResults, ...results]);
     // 出口伴测（keepTestingState）合并单节点结果时不复位「测速中」态——否则在飞的全量测速托盘态被伴测提前熄灭。
     if (!opts.keepTestingState) this.isSpeedTesting = false;

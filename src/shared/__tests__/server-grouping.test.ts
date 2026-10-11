@@ -45,3 +45,30 @@ describe('groupServersBySubscription（自建 / 组网 / 订阅 单一真值）'
     expect(groups.find((g) => g.id === 'manual')!.servers.map((s) => s.id)).toEqual(['orphanV']);
   });
 });
+
+test('管理与来源保留真实空订阅，不生成虚构的自建或组网组', () => {
+  const subscriptions = [sub('empty', '空订阅')];
+  expect(groupServersBySubscription([], subscriptions)).toEqual([]);
+  expect(
+    groupServersBySubscription([], subscriptions, { includeEmptySubscriptions: true }).map((g) => [
+      g.id,
+      g.servers.length,
+    ])
+  ).toEqual([['empty', 0]]);
+});
+
+test('有订阅归属的组网节点只属于对应订阅，删除最后一个独立节点后空组消失', () => {
+  const subscriptions = [sub('subA', '订阅A')];
+  const groups = groupServersBySubscription(
+    [srv('wg', 'wireguard', 'subA'), srv('manual', 'vless')],
+    subscriptions,
+    { includeEmptySubscriptions: true }
+  );
+  expect(groups.map((g) => g.id)).toEqual(['manual', 'subA']);
+  expect(groups[1].servers.map((s) => s.id)).toEqual(['wg']);
+  expect(
+    groupServersBySubscription([srv('wg', 'wireguard', 'subA')], subscriptions, {
+      includeEmptySubscriptions: true,
+    }).map((g) => g.id)
+  ).toEqual(['subA']);
+});

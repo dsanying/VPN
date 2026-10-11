@@ -1,0 +1,1220 @@
+[
+  {
+    "id": "native.d8cd9928bc1e",
+    "parts": [
+      "FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version"
+    ],
+    "zh": "FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version",
+    "en": "FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version"
+  },
+  {
+    "id": "native.5fbcb161de65",
+    "parts": [
+      "FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version"
+    ],
+    "zh": "FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version",
+    "en": "FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version"
+  },
+  {
+    "id": "native.a5ddf79f9db4",
+    "parts": ["选择配置文件"],
+    "zh": "选择配置文件",
+    "en": "Select Config File"
+  },
+  {
+    "id": "native.c639646105e9",
+    "parts": ["Select Config File"],
+    "zh": "选择配置文件",
+    "en": "Select Config File"
+  },
+  {
+    "id": "native.1d27f02ed278",
+    "parts": ["配置文件"],
+    "zh": "配置文件",
+    "en": "Config files"
+  },
+  {
+    "id": "native.e414952cfab5",
+    "parts": ["Config files"],
+    "zh": "配置文件",
+    "en": "Config files"
+  },
+  {
+    "id": "native.ec36ca4a1819",
+    "parts": ["所有文件"],
+    "zh": "所有文件",
+    "en": "All files"
+  },
+  {
+    "id": "native.866956901fd1",
+    "parts": ["All files"],
+    "zh": "所有文件",
+    "en": "All files"
+  },
+  {
+    "id": "native.f3a8bd509c9f",
+    "parts": ["FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换："],
+    "zh": "FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：",
+    "en": "FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
+  },
+  {
+    "id": "native.d7f4e7db2a81",
+    "parts": [
+      "FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
+    ],
+    "zh": "FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：",
+    "en": "FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
+  },
+  {
+    "id": "native.339e9e3c18d8",
+    "parts": ["更新需要一次管理员授权"],
+    "zh": "更新需要一次管理员授权",
+    "en": "Update needs a one-time administrator authorization"
+  },
+  {
+    "id": "native.da6bf2ae1229",
+    "parts": ["Update needs a one-time administrator authorization"],
+    "zh": "更新需要一次管理员授权",
+    "en": "Update needs a one-time administrator authorization"
+  },
+  {
+    "id": "native.960c36437b9e",
+    "parts": ["即将更新 FlowZ（deb 版）"],
+    "zh": "即将更新 FlowZ（deb 版）",
+    "en": "About to update FlowZ (deb build)"
+  },
+  {
+    "id": "native.588ad853e154",
+    "parts": ["About to update FlowZ (deb build)"],
+    "zh": "即将更新 FlowZ（deb 版）",
+    "en": "About to update FlowZ (deb build)"
+  },
+  {
+    "id": "native.266bdafc2b3b",
+    "parts": [
+      "deb 版装在系统目录 /opt，安装软件本身需要管理员权限，接下来系统会弹出一次授权框。这与开代理 / 用 TUN 的免密是两码事——提权助手装一次后永久免密；应用更新则每次需要一次授权（并非每次使用）。想彻底免授权更新可改用 AppImage 版。"
+    ],
+    "zh": "deb 版装在系统目录 /opt，安装软件本身需要管理员权限，接下来系统会弹出一次授权框。这与开代理 / 用 TUN 的免密是两码事——提权助手装一次后永久免密；应用更新则每次需要一次授权（并非每次使用）。想彻底免授权更新可改用 AppImage 版。",
+    "en": "The deb build is installed under the system directory /opt, and installing software itself requires administrator rights, so the system will show an authorization prompt once. This is separate from running the proxy / using TUN password-free — the privileged helper is a one-time install and then stays password-free; app updates need one authorization each time (not each use). For fully authorization-free updates, switch to the AppImage build."
+  },
+  {
+    "id": "native.0b3b0d3dfdeb",
+    "parts": [
+      "The deb build is installed under the system directory /opt, and installing software itself requires administrator rights, so the system will show an authorization prompt once. This is separate from running the proxy / using TUN password-free — the privileged helper is a one-time install and then stays password-free; app updates need one authorization each time (not each use). For fully authorization-free updates, switch to the AppImage build."
+    ],
+    "zh": "deb 版装在系统目录 /opt，安装软件本身需要管理员权限，接下来系统会弹出一次授权框。这与开代理 / 用 TUN 的免密是两码事——提权助手装一次后永久免密；应用更新则每次需要一次授权（并非每次使用）。想彻底免授权更新可改用 AppImage 版。",
+    "en": "The deb build is installed under the system directory /opt, and installing software itself requires administrator rights, so the system will show an authorization prompt once. This is separate from running the proxy / using TUN password-free — the privileged helper is a one-time install and then stays password-free; app updates need one authorization each time (not each use). For fully authorization-free updates, switch to the AppImage build."
+  },
+  {
+    "id": "native.a6d245192816",
+    "parts": ["继续更新"],
+    "zh": "继续更新",
+    "en": "Continue"
+  },
+  {
+    "id": "native.31fbef162594",
+    "parts": ["Continue"],
+    "zh": "继续更新",
+    "en": "Continue"
+  },
+  {
+    "id": "native.2cd0f3be8738",
+    "parts": ["取消"],
+    "zh": "取消",
+    "en": "Cancel"
+  },
+  {
+    "id": "native.19766ed6ccb2",
+    "parts": ["Cancel"],
+    "zh": "取消",
+    "en": "Cancel"
+  },
+  {
+    "id": "native.2dca169e16d9",
+    "parts": ["FlowZ 代理出错"],
+    "zh": "FlowZ 代理出错",
+    "en": "FlowZ Proxy Error"
+  },
+  {
+    "id": "native.17dc8a2a193b",
+    "parts": ["FlowZ Proxy Error"],
+    "zh": "FlowZ 代理出错",
+    "en": "FlowZ Proxy Error"
+  },
+  {
+    "id": "native.042b2ede5e3b",
+    "parts": ["代理已停止，请打开应用查看详情"],
+    "zh": "代理已停止，请打开应用查看详情",
+    "en": "The proxy has stopped. Open FlowZ for details."
+  },
+  {
+    "id": "native.81b503e33c66",
+    "parts": ["The proxy has stopped. Open FlowZ for details."],
+    "zh": "代理已停止，请打开应用查看详情",
+    "en": "The proxy has stopped. Open FlowZ for details."
+  },
+  {
+    "id": "native.0cb6d8de42f0",
+    "parts": ["已自动启用 FakeIP"],
+    "zh": "已自动启用 FakeIP",
+    "en": "FakeIP enabled automatically"
+  },
+  {
+    "id": "native.4be2cd44e3f1",
+    "parts": ["FakeIP enabled automatically"],
+    "zh": "已自动启用 FakeIP",
+    "en": "FakeIP enabled automatically"
+  },
+  {
+    "id": "native.fbfd0ba7618b",
+    "parts": ["切换到 TUN 模式后已自动启用 FakeIP（推荐）。可在 设置 → 网络 关闭。"],
+    "zh": "切换到 TUN 模式后已自动启用 FakeIP（推荐）。可在 设置 → 网络 关闭。",
+    "en": "FakeIP was enabled automatically for TUN mode (recommended). Turn it off in Settings → Network."
+  },
+  {
+    "id": "native.974d0ad503a5",
+    "parts": [
+      "FakeIP was enabled automatically for TUN mode (recommended). Turn it off in Settings → Network."
+    ],
+    "zh": "切换到 TUN 模式后已自动启用 FakeIP（推荐）。可在 设置 → 网络 关闭。",
+    "en": "FakeIP was enabled automatically for TUN mode (recommended). Turn it off in Settings → Network."
+  },
+  {
+    "id": "native.64ee9cc759f3",
+    "parts": ["FlowZ 提权助手被关闭"],
+    "zh": "FlowZ 提权助手被关闭",
+    "en": "FlowZ helper disabled"
+  },
+  {
+    "id": "native.2dff2aeb3629",
+    "parts": ["FlowZ helper disabled"],
+    "zh": "FlowZ 提权助手被关闭",
+    "en": "FlowZ helper disabled"
+  },
+  {
+    "id": "native.c37c79a35192",
+    "parts": ["TUN 无法自动启动，点此打开设置重新开启。"],
+    "zh": "TUN 无法自动启动，点此打开设置重新开启。",
+    "en": "TUN can't auto-start. Click to open settings and re-enable."
+  },
+  {
+    "id": "native.4b6c04ea2e34",
+    "parts": ["TUN can't auto-start. Click to open settings and re-enable."],
+    "zh": "TUN 无法自动启动，点此打开设置重新开启。",
+    "en": "TUN can't auto-start. Click to open settings and re-enable."
+  },
+  {
+    "id": "native.c9b9904f1f79",
+    "parts": ["在浏览器中完成登录授权以加入网络"],
+    "zh": "在浏览器中完成登录授权以加入网络",
+    "en": "Complete sign-in in your browser to join the network"
+  },
+  {
+    "id": "native.a6fda9f54957",
+    "parts": ["Complete sign-in in your browser to join the network"],
+    "zh": "在浏览器中完成登录授权以加入网络",
+    "en": "Complete sign-in in your browser to join the network"
+  },
+  {
+    "id": "native.3859d5e8e46e",
+    "parts": ["需手动移除应用本体"],
+    "zh": "需手动移除应用本体",
+    "en": "Remove the app manually"
+  },
+  {
+    "id": "native.f6fdd03752ca",
+    "parts": ["Remove the app manually"],
+    "zh": "需手动移除应用本体",
+    "en": "Remove the app manually"
+  },
+  {
+    "id": "native.17905b16f1b4",
+    "parts": ["FlowZ 用户数据已清除。"],
+    "zh": "FlowZ 用户数据已清除。",
+    "en": "FlowZ user data has been removed."
+  },
+  {
+    "id": "native.daea6ffcd0fc",
+    "parts": ["FlowZ user data has been removed."],
+    "zh": "FlowZ 用户数据已清除。",
+    "en": "FlowZ user data has been removed."
+  },
+  {
+    "id": "native.039145d8efba",
+    "parts": [
+      "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径："
+    ],
+    "zh": "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：",
+    "en": "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
+  },
+  {
+    "id": "native.7466193df92f",
+    "parts": [
+      "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
+    ],
+    "zh": "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：",
+    "en": "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
+  },
+  {
+    "id": "native.de32e20193ad",
+    "parts": ["知道了"],
+    "zh": "知道了",
+    "en": "Got it"
+  },
+  {
+    "id": "native.5ad3dbd1242a",
+    "parts": ["Got it"],
+    "zh": "知道了",
+    "en": "Got it"
+  },
+  {
+    "id": "native.69ba33471c5f",
+    "parts": [
+      "便携版程序位于其它磁盘卷时可能无法自动删除。卸载完成后若以下位置仍存在，请手动删除："
+    ],
+    "zh": "便携版程序位于其它磁盘卷时可能无法自动删除。卸载完成后若以下位置仍存在，请手动删除：",
+    "en": "The portable program may not be removed automatically when it resides on a different drive. If the location below still exists after uninstall, please delete it manually:"
+  },
+  {
+    "id": "native.5b144009c2d9",
+    "parts": [
+      "The portable program may not be removed automatically when it resides on a different drive. If the location below still exists after uninstall, please delete it manually:"
+    ],
+    "zh": "便携版程序位于其它磁盘卷时可能无法自动删除。卸载完成后若以下位置仍存在，请手动删除：",
+    "en": "The portable program may not be removed automatically when it resides on a different drive. If the location below still exists after uninstall, please delete it manually:"
+  },
+  {
+    "id": "native.e0d53046f33b",
+    "parts": ["连接异常"],
+    "zh": "连接异常",
+    "en": "Connection Error"
+  },
+  {
+    "id": "native.ddb621f87c5c",
+    "parts": ["Connection Error"],
+    "zh": "连接异常",
+    "en": "Connection Error"
+  },
+  {
+    "id": "native.5be0323e8adc",
+    "parts": ["已连接"],
+    "zh": "已连接",
+    "en": "Connected"
+  },
+  {
+    "id": "native.22965568d22a",
+    "parts": ["Connected"],
+    "zh": "已连接",
+    "en": "Connected"
+  },
+  {
+    "id": "native.1f0ac6953e04",
+    "parts": ["已断开"],
+    "zh": "已断开",
+    "en": "Disconnected"
+  },
+  {
+    "id": "native.04dfac3671b4",
+    "parts": ["Disconnected"],
+    "zh": "已断开",
+    "en": "Disconnected"
+  },
+  {
+    "id": "native.e512cf016f96",
+    "parts": ["超时"],
+    "zh": "超时",
+    "en": "Timeout"
+  },
+  {
+    "id": "native.70594d932950",
+    "parts": ["Timeout"],
+    "zh": "超时",
+    "en": "Timeout"
+  },
+  {
+    "id": "native.b06325c5660f",
+    "parts": ["直连"],
+    "zh": "直连",
+    "en": "Direct"
+  },
+  {
+    "id": "native.002c7c68468b",
+    "parts": ["Direct"],
+    "zh": "直连",
+    "en": "Direct"
+  },
+  {
+    "id": "native.6c2e57ed52c5",
+    "parts": ["未配置服务器"],
+    "zh": "未配置服务器",
+    "en": "No Servers Configured"
+  },
+  {
+    "id": "native.23e2abcc5e12",
+    "parts": ["No Servers Configured"],
+    "zh": "未配置服务器",
+    "en": "No Servers Configured"
+  },
+  {
+    "id": "native.17903df492d0",
+    "parts": ["组网"],
+    "zh": "组网",
+    "en": "Mesh"
+  },
+  {
+    "id": "native.f2b783e56128",
+    "parts": ["Mesh"],
+    "zh": "组网",
+    "en": "Mesh"
+  },
+  {
+    "id": "native.4c881f9ba107",
+    "parts": ["自建节点"],
+    "zh": "自建节点",
+    "en": "Custom Nodes"
+  },
+  {
+    "id": "native.f6cf18372f9a",
+    "parts": ["Custom Nodes"],
+    "zh": "自建节点",
+    "en": "Custom Nodes"
+  },
+  {
+    "id": "native.50cfabf193e1",
+    "parts": ["管理服务器"],
+    "zh": "管理服务器",
+    "en": "Manage Servers"
+  },
+  {
+    "id": "native.823e3f88323c",
+    "parts": ["Manage Servers"],
+    "zh": "管理服务器",
+    "en": "Manage Servers"
+  },
+  {
+    "id": "native.f1880deaaecc",
+    "parts": ["全局代理"],
+    "zh": "全局代理",
+    "en": "Global Proxy"
+  },
+  {
+    "id": "native.ecf9af3b8e67",
+    "parts": ["Global Proxy"],
+    "zh": "全局代理",
+    "en": "Global Proxy"
+  },
+  {
+    "id": "native.9f275fb745d1",
+    "parts": ["智能分流"],
+    "zh": "智能分流",
+    "en": "Smart Routing"
+  },
+  {
+    "id": "native.31750a6baea9",
+    "parts": ["Smart Routing"],
+    "zh": "智能分流",
+    "en": "Smart Routing"
+  },
+  {
+    "id": "native.699fe7ade540",
+    "parts": ["直连模式"],
+    "zh": "直连模式",
+    "en": "Direct Connection"
+  },
+  {
+    "id": "native.92734bd863f4",
+    "parts": ["Direct Connection"],
+    "zh": "直连模式",
+    "en": "Direct Connection"
+  },
+  {
+    "id": "native.24bbc60c5fb3",
+    "parts": ["系统代理"],
+    "zh": "系统代理",
+    "en": "System Proxy"
+  },
+  {
+    "id": "native.a9b29c8a322b",
+    "parts": ["System Proxy"],
+    "zh": "系统代理",
+    "en": "System Proxy"
+  },
+  {
+    "id": "native.9dd1922043ea",
+    "parts": ["TUN 网卡"],
+    "zh": "TUN 网卡",
+    "en": "TUN"
+  },
+  {
+    "id": "native.3f60f52a8219",
+    "parts": ["TUN"],
+    "zh": "TUN 网卡",
+    "en": "TUN"
+  },
+  {
+    "id": "native.221c5bce132b",
+    "parts": ["仅本地"],
+    "zh": "仅本地",
+    "en": "Local Only"
+  },
+  {
+    "id": "native.ff3a450e332c",
+    "parts": ["Local Only"],
+    "zh": "仅本地",
+    "en": "Local Only"
+  },
+  {
+    "id": "native.f6b64b637ba7",
+    "parts": ["打开主窗口"],
+    "zh": "打开主窗口",
+    "en": "Open Main Window"
+  },
+  {
+    "id": "native.ad6040212eda",
+    "parts": ["Open Main Window"],
+    "zh": "打开主窗口",
+    "en": "Open Main Window"
+  },
+  {
+    "id": "native.6b8f6c6cb99b",
+    "parts": ["禁用代理"],
+    "zh": "禁用代理",
+    "en": "Disable Proxy"
+  },
+  {
+    "id": "native.ff48fec3399a",
+    "parts": ["Disable Proxy"],
+    "zh": "禁用代理",
+    "en": "Disable Proxy"
+  },
+  {
+    "id": "native.2a93cbbab9f7",
+    "parts": ["启用代理"],
+    "zh": "启用代理",
+    "en": "Enable Proxy"
+  },
+  {
+    "id": "native.d8126fecea29",
+    "parts": ["Enable Proxy"],
+    "zh": "启用代理",
+    "en": "Enable Proxy"
+  },
+  {
+    "id": "native.cbf02cab259f",
+    "parts": ["选择服务器"],
+    "zh": "选择服务器",
+    "en": "Select Server"
+  },
+  {
+    "id": "native.7f67df7f9261",
+    "parts": ["Select Server"],
+    "zh": "选择服务器",
+    "en": "Select Server"
+  },
+  {
+    "id": "native.ac047d783e7d",
+    "parts": ["接管方式"],
+    "zh": "接管方式",
+    "en": "Takeover"
+  },
+  {
+    "id": "native.056c3540052c",
+    "parts": ["Takeover"],
+    "zh": "接管方式",
+    "en": "Takeover"
+  },
+  {
+    "id": "native.5f36ce08ded9",
+    "parts": ["分流策略"],
+    "zh": "分流策略",
+    "en": "Routing"
+  },
+  {
+    "id": "native.bcba696f3eb1",
+    "parts": ["Routing"],
+    "zh": "分流策略",
+    "en": "Routing"
+  },
+  {
+    "id": "native.fa73a4bca7fd",
+    "parts": ["进入轻量模式"],
+    "zh": "进入轻量模式",
+    "en": "Enter Lightweight Mode"
+  },
+  {
+    "id": "native.3482b9b1d759",
+    "parts": ["Enter Lightweight Mode"],
+    "zh": "进入轻量模式",
+    "en": "Enter Lightweight Mode"
+  },
+  {
+    "id": "native.7af552bfab94",
+    "parts": ["进入隐私模式"],
+    "zh": "进入隐私模式",
+    "en": "Enter Privacy Mode"
+  },
+  {
+    "id": "native.b53fe1afcea2",
+    "parts": ["Enter Privacy Mode"],
+    "zh": "进入隐私模式",
+    "en": "Enter Privacy Mode"
+  },
+  {
+    "id": "native.37aa6ad6a36d",
+    "parts": ["打开设置"],
+    "zh": "打开设置",
+    "en": "Open Settings"
+  },
+  {
+    "id": "native.3f940108cb1e",
+    "parts": ["Open Settings"],
+    "zh": "打开设置",
+    "en": "Open Settings"
+  },
+  {
+    "id": "native.7f68ebad19ba",
+    "parts": ["检查更新"],
+    "zh": "检查更新",
+    "en": "Check for Updates"
+  },
+  {
+    "id": "native.9ed79ee9b212",
+    "parts": ["Check for Updates"],
+    "zh": "检查更新",
+    "en": "Check for Updates"
+  },
+  {
+    "id": "native.498e1d59b4d7",
+    "parts": ["退出"],
+    "zh": "退出",
+    "en": "Quit"
+  },
+  {
+    "id": "native.b3eb37acb66b",
+    "parts": ["Quit"],
+    "zh": "退出",
+    "en": "Quit"
+  },
+  {
+    "id": "native.c68b4d010f11",
+    "parts": ["测速中..."],
+    "zh": "测速中...",
+    "en": "Testing Speed..."
+  },
+  {
+    "id": "native.acc7ed5a708e",
+    "parts": ["Testing Speed..."],
+    "zh": "测速中...",
+    "en": "Testing Speed..."
+  },
+  {
+    "id": "native.e01e4a6affb8",
+    "parts": ["服务器测速"],
+    "zh": "服务器测速",
+    "en": "Speed Test"
+  },
+  {
+    "id": "native.d23ced7772a7",
+    "parts": ["Speed Test"],
+    "zh": "服务器测速",
+    "en": "Speed Test"
+  },
+  {
+    "id": "native.0d0107586021",
+    "parts": ["FlowZ - 未连接"],
+    "zh": "FlowZ - 未连接",
+    "en": "FlowZ - Disconnected"
+  },
+  {
+    "id": "native.77931c6dcf0b",
+    "parts": ["FlowZ - Disconnected"],
+    "zh": "FlowZ - 未连接",
+    "en": "FlowZ - Disconnected"
+  },
+  {
+    "id": "native.eeead25d779a",
+    "parts": ["FlowZ - 连接中..."],
+    "zh": "FlowZ - 连接中...",
+    "en": "FlowZ - Connecting..."
+  },
+  {
+    "id": "native.f90a6fd733ea",
+    "parts": ["FlowZ - Connecting..."],
+    "zh": "FlowZ - 连接中...",
+    "en": "FlowZ - Connecting..."
+  },
+  {
+    "id": "native.c89f25d0a47f",
+    "parts": ["FlowZ - 已连接"],
+    "zh": "FlowZ - 已连接",
+    "en": "FlowZ - Connected"
+  },
+  {
+    "id": "native.473d7a38e0ca",
+    "parts": ["FlowZ - Connected"],
+    "zh": "FlowZ - 已连接",
+    "en": "FlowZ - Connected"
+  },
+  {
+    "id": "native.6e86570183c3",
+    "parts": ["当前已是最新版本"],
+    "zh": "当前已是最新版本",
+    "en": "You're on the latest version"
+  },
+  {
+    "id": "native.6232df515ee9",
+    "parts": ["You're on the latest version"],
+    "zh": "当前已是最新版本",
+    "en": "You're on the latest version"
+  },
+  {
+    "id": "native.fac2a67ad878",
+    "parts": ["确定"],
+    "zh": "确定",
+    "en": "OK"
+  },
+  {
+    "id": "native.565339bc4d33",
+    "parts": ["OK"],
+    "zh": "确定",
+    "en": "OK"
+  },
+  {
+    "id": "native.2cd0f3be8738",
+    "parts": ["取消"],
+    "zh": "取消",
+    "en": "Cancel"
+  },
+  {
+    "id": "native.19766ed6ccb2",
+    "parts": ["Cancel"],
+    "zh": "取消",
+    "en": "Cancel"
+  },
+  {
+    "id": "native.2478f36f377b",
+    "parts": ["修复并启动"],
+    "zh": "修复并启动",
+    "en": "Repair & start"
+  },
+  {
+    "id": "native.4f2753fd7ef6",
+    "parts": ["Repair & start"],
+    "zh": "修复并启动",
+    "en": "Repair & start"
+  },
+  {
+    "id": "native.4cd94a10b5f4",
+    "parts": ["安装并启动"],
+    "zh": "安装并启动",
+    "en": "Install & start"
+  },
+  {
+    "id": "native.e3d6fded0c62",
+    "parts": ["Install & start"],
+    "zh": "安装并启动",
+    "en": "Install & start"
+  },
+  {
+    "id": "native.d7eb98b770c3",
+    "parts": ["用 UAC 启动"],
+    "zh": "用 UAC 启动",
+    "en": "Use UAC"
+  },
+  {
+    "id": "native.732f98906e10",
+    "parts": ["Use UAC"],
+    "zh": "用 UAC 启动",
+    "en": "Use UAC"
+  },
+  {
+    "id": "native.fb81432cd168",
+    "parts": ["用系统授权启动"],
+    "zh": "用系统授权启动",
+    "en": "Use system auth"
+  },
+  {
+    "id": "native.de95fd1f8b17",
+    "parts": ["Use system auth"],
+    "zh": "用系统授权启动",
+    "en": "Use system auth"
+  },
+  {
+    "id": "native.0407dbdaf0dd",
+    "parts": ["打开系统设置"],
+    "zh": "打开系统设置",
+    "en": "Open System Settings"
+  },
+  {
+    "id": "native.18196b39b44d",
+    "parts": ["Open System Settings"],
+    "zh": "打开系统设置",
+    "en": "Open System Settings"
+  },
+  {
+    "id": "native.dabf1e910aa8",
+    "parts": ["本次直接启动"],
+    "zh": "本次直接启动",
+    "en": "Start this session"
+  },
+  {
+    "id": "native.7d33a7de3356",
+    "parts": ["Start this session"],
+    "zh": "本次直接启动",
+    "en": "Start this session"
+  },
+  {
+    "id": "native.01d9c8a0fdbd",
+    "parts": ["修复 Windows 提权服务？"],
+    "zh": "修复 Windows 提权服务？",
+    "en": "Repair privileged service?"
+  },
+  {
+    "id": "native.8ccf08223051",
+    "parts": ["Repair privileged service?"],
+    "zh": "修复 Windows 提权服务？",
+    "en": "Repair privileged service?"
+  },
+  {
+    "id": "native.7c86b6864738",
+    "parts": ["安装 Windows 提权服务？"],
+    "zh": "安装 Windows 提权服务？",
+    "en": "Install privileged service?"
+  },
+  {
+    "id": "native.7a49db4a7ce3",
+    "parts": ["Install privileged service?"],
+    "zh": "安装 Windows 提权服务？",
+    "en": "Install privileged service?"
+  },
+  {
+    "id": "native.b37da2232f82",
+    "parts": ["提权助手的「允许在后台」被系统关闭"],
+    "zh": "提权助手的「允许在后台」被系统关闭",
+    "en": "Helper \"Allow in Background\" is off"
+  },
+  {
+    "id": "native.c1773805cd7b",
+    "parts": ["Helper \"Allow in Background\" is off"],
+    "zh": "提权助手的「允许在后台」被系统关闭",
+    "en": "Helper \"Allow in Background\" is off"
+  },
+  {
+    "id": "native.0fe45a5239f0",
+    "parts": ["修复提权助手？"],
+    "zh": "修复提权助手？",
+    "en": "Repair privileged helper?"
+  },
+  {
+    "id": "native.3471f6e0a5dd",
+    "parts": ["Repair privileged helper?"],
+    "zh": "修复提权助手？",
+    "en": "Repair privileged helper?"
+  },
+  {
+    "id": "native.aa1fc25eebd0",
+    "parts": ["安装提权助手？"],
+    "zh": "安装提权助手？",
+    "en": "Install privileged helper?"
+  },
+  {
+    "id": "native.8d52af6beeba",
+    "parts": ["Install privileged helper?"],
+    "zh": "安装提权助手？",
+    "en": "Install privileged helper?"
+  },
+  {
+    "id": "native.6efa84fff8a5",
+    "parts": [
+      "提权服务已安装但未就绪（服务未运行或版本不符）。修复将重装服务，仅需授权一次（UAC）；也可本次用 UAC 启动。"
+    ],
+    "zh": "提权服务已安装但未就绪（服务未运行或版本不符）。修复将重装服务，仅需授权一次（UAC）；也可本次用 UAC 启动。",
+    "en": "The privileged service is installed but not ready. Repair reinstalls it (one UAC prompt); or start with UAC this time."
+  },
+  {
+    "id": "native.708988851180",
+    "parts": [
+      "The privileged service is installed but not ready. Repair reinstalls it (one UAC prompt); or start with UAC this time."
+    ],
+    "zh": "提权服务已安装但未就绪（服务未运行或版本不符）。修复将重装服务，仅需授权一次（UAC）；也可本次用 UAC 启动。",
+    "en": "The privileged service is installed but not ready. Repair reinstalls it (one UAC prompt); or start with UAC this time."
+  },
+  {
+    "id": "native.84b189864c25",
+    "parts": [
+      "安装后 Windows TUN 模式启停代理免每次 UAC（装服务需管理员授权一次）；也可本次用 UAC 启动。"
+    ],
+    "zh": "安装后 Windows TUN 模式启停代理免每次 UAC（装服务需管理员授权一次）；也可本次用 UAC 启动。",
+    "en": "After install, Windows TUN start/stop no longer needs UAC each time (installing the service needs one admin prompt); or start with UAC this time."
+  },
+  {
+    "id": "native.ec72a49c36b6",
+    "parts": [
+      "After install, Windows TUN start/stop no longer needs UAC each time (installing the service needs one admin prompt); or start with UAC this time."
+    ],
+    "zh": "安装后 Windows TUN 模式启停代理免每次 UAC（装服务需管理员授权一次）；也可本次用 UAC 启动。",
+    "en": "After install, Windows TUN start/stop no longer needs UAC each time (installing the service needs one admin prompt); or start with UAC this time."
+  },
+  {
+    "id": "native.39fbbebdcbc0",
+    "parts": ["安装 Linux 提权助手？"],
+    "zh": "安装 Linux 提权助手？",
+    "en": "Install privileged helper?"
+  },
+  {
+    "id": "native.8d52af6beeba",
+    "parts": ["Install privileged helper?"],
+    "zh": "安装 Linux 提权助手？",
+    "en": "Install privileged helper?"
+  },
+  {
+    "id": "native.d4750c1d380c",
+    "parts": ["修复 Linux 提权助手？"],
+    "zh": "修复 Linux 提权助手？",
+    "en": "Repair privileged helper?"
+  },
+  {
+    "id": "native.3471f6e0a5dd",
+    "parts": ["Repair privileged helper?"],
+    "zh": "修复 Linux 提权助手？",
+    "en": "Repair privileged helper?"
+  },
+  {
+    "id": "native.6c5d422963e4",
+    "parts": [
+      "安装后 Linux TUN 模式启停代理免每次授权（装 systemd 服务需授权一次）；也可本次用系统授权启动。"
+    ],
+    "zh": "安装后 Linux TUN 模式启停代理免每次授权（装 systemd 服务需授权一次）；也可本次用系统授权启动。",
+    "en": "After install, Linux TUN start/stop no longer prompts each time (installing the systemd service needs one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.75566babe320",
+    "parts": [
+      "After install, Linux TUN start/stop no longer prompts each time (installing the systemd service needs one authorization); or start with system auth this time."
+    ],
+    "zh": "安装后 Linux TUN 模式启停代理免每次授权（装 systemd 服务需授权一次）；也可本次用系统授权启动。",
+    "en": "After install, Linux TUN start/stop no longer prompts each time (installing the systemd service needs one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.6d5ee5d2a2c7",
+    "parts": [
+      "提权助手已安装但未就绪（服务未运行或版本不符）。修复将重装，仅需授权一次；也可本次用系统授权启动。"
+    ],
+    "zh": "提权助手已安装但未就绪（服务未运行或版本不符）。修复将重装，仅需授权一次；也可本次用系统授权启动。",
+    "en": "The privileged helper is installed but not ready (service not running or version mismatch). Repair reinstalls it (one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.144ead0c112d",
+    "parts": [
+      "The privileged helper is installed but not ready (service not running or version mismatch). Repair reinstalls it (one authorization); or start with system auth this time."
+    ],
+    "zh": "提权助手已安装但未就绪（服务未运行或版本不符）。修复将重装，仅需授权一次；也可本次用系统授权启动。",
+    "en": "The privileged helper is installed but not ready (service not running or version mismatch). Repair reinstalls it (one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.1433296e3ade",
+    "parts": [
+      "请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。"
+    ],
+    "zh": "请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。",
+    "en": "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
+  },
+  {
+    "id": "native.ee79410be857",
+    "parts": [
+      "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
+    ],
+    "zh": "请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。",
+    "en": "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
+  },
+  {
+    "id": "native.e22e913ea07b",
+    "parts": [
+      "\n注意：若系统设置「允许在后台」开关已被关闭，此修复不会恢复该开关；请到「系统设置 > 通用 > 登录项与扩展」手动重新开启。"
+    ],
+    "zh": "\n注意：若系统设置「允许在后台」开关已被关闭，此修复不会恢复该开关；请到「系统设置 > 通用 > 登录项与扩展」手动重新开启。",
+    "en": "\nNote: if the \"Allow in Background\" toggle was turned off in System Settings, this repair will NOT restore it; re-enable it manually under System Settings → General → Login Items & Extensions."
+  },
+  {
+    "id": "native.18b29b6dbc14",
+    "parts": [
+      "\nNote: if the \"Allow in Background\" toggle was turned off in System Settings, this repair will NOT restore it; re-enable it manually under System Settings → General → Login Items & Extensions."
+    ],
+    "zh": "\n注意：若系统设置「允许在后台」开关已被关闭，此修复不会恢复该开关；请到「系统设置 > 通用 > 登录项与扩展」手动重新开启。",
+    "en": "\nNote: if the \"Allow in Background\" toggle was turned off in System Settings, this repair will NOT restore it; re-enable it manually under System Settings → General → Login Items & Extensions."
+  },
+  {
+    "id": "native.2417132e1131",
+    "parts": [
+      "检测到应用位置已变更，提权助手仍指向旧路径而无法生效。修复将重新登记当前路径，仅需授权一次；也可本次用系统授权启动。"
+    ],
+    "zh": "检测到应用位置已变更，提权助手仍指向旧路径而无法生效。修复将重新登记当前路径，仅需授权一次；也可本次用系统授权启动。",
+    "en": "The app was moved and the helper still points to the old path. Repair re-registers the current path (one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.349b05a9fe25",
+    "parts": [
+      "The app was moved and the helper still points to the old path. Repair re-registers the current path (one authorization); or start with system auth this time."
+    ],
+    "zh": "检测到应用位置已变更，提权助手仍指向旧路径而无法生效。修复将重新登记当前路径，仅需授权一次；也可本次用系统授权启动。",
+    "en": "The app was moved and the helper still points to the old path. Repair re-registers the current path (one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.8ca6efd9d9b4",
+    "parts": [
+      "提权助手需要更新到新版本（功能改进）。修复将重新安装，仅需授权一次；也可本次用系统授权启动。"
+    ],
+    "zh": "提权助手需要更新到新版本（功能改进）。修复将重新安装，仅需授权一次；也可本次用系统授权启动。",
+    "en": "The privileged helper needs updating to a newer version. Repair reinstalls it (one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.4f0ec9c85030",
+    "parts": [
+      "The privileged helper needs updating to a newer version. Repair reinstalls it (one authorization); or start with system auth this time."
+    ],
+    "zh": "提权助手需要更新到新版本（功能改进）。修复将重新安装，仅需授权一次；也可本次用系统授权启动。",
+    "en": "The privileged helper needs updating to a newer version. Repair reinstalls it (one authorization); or start with system auth this time."
+  },
+  {
+    "id": "native.9a2072554cb7",
+    "parts": ["安装后 TUN 模式启停代理免每次系统授权；也可本次用系统授权启动。"],
+    "zh": "安装后 TUN 模式启停代理免每次系统授权；也可本次用系统授权启动。",
+    "en": "After install, TUN start/stop no longer needs system authorization each time; or start with system auth this time."
+  },
+  {
+    "id": "native.acb7f18654af",
+    "parts": [
+      "After install, TUN start/stop no longer needs system authorization each time; or start with system auth this time."
+    ],
+    "zh": "安装后 TUN 模式启停代理免每次系统授权；也可本次用系统授权启动。",
+    "en": "After install, TUN start/stop no longer needs system authorization each time; or start with system auth this time."
+  },
+  {
+    "id": "native.ac217e4d1ca4",
+    "parts": ["发现新版本"],
+    "zh": "发现新版本",
+    "en": "New version available"
+  },
+  {
+    "id": "native.5f2c8067cc3f",
+    "parts": ["New version available"],
+    "zh": "发现新版本",
+    "en": "New version available"
+  },
+  {
+    "id": "native.42bcba9a9f19",
+    "parts": ["正在下载更新"],
+    "zh": "正在下载更新",
+    "en": "Downloading update"
+  },
+  {
+    "id": "native.014368238675",
+    "parts": ["Downloading update"],
+    "zh": "正在下载更新",
+    "en": "Downloading update"
+  },
+  {
+    "id": "native.c1c79b63f418",
+    "parts": ["下载完成"],
+    "zh": "下载完成",
+    "en": "Download complete"
+  },
+  {
+    "id": "native.2063789a9891",
+    "parts": ["Download complete"],
+    "zh": "下载完成",
+    "en": "Download complete"
+  },
+  {
+    "id": "native.8a03e35ad323",
+    "parts": ["下载失败"],
+    "zh": "下载失败",
+    "en": "Download failed"
+  },
+  {
+    "id": "native.eae34ccbc443",
+    "parts": ["Download failed"],
+    "zh": "下载失败",
+    "en": "Download failed"
+  },
+  {
+    "id": "native.cb62ebd689ee",
+    "parts": ["当前"],
+    "zh": "当前",
+    "en": "Current"
+  },
+  {
+    "id": "native.e0d1b68224bf",
+    "parts": ["Current"],
+    "zh": "当前",
+    "en": "Current"
+  },
+  {
+    "id": "native.c96c7e36e407",
+    "parts": ["下载完成，正在安装…"],
+    "zh": "下载完成，正在安装…",
+    "en": "Downloaded, installing…"
+  },
+  {
+    "id": "native.06c8a6774e68",
+    "parts": ["Downloaded, installing…"],
+    "zh": "下载完成，正在安装…",
+    "en": "Downloaded, installing…"
+  },
+  {
+    "id": "native.e64fd8bfd899",
+    "parts": ["正在尝试通过镜像下载…"],
+    "zh": "正在尝试通过镜像下载…",
+    "en": "Trying mirror…"
+  },
+  {
+    "id": "native.b5acfd78af8e",
+    "parts": ["Trying mirror…"],
+    "zh": "正在尝试通过镜像下载…",
+    "en": "Trying mirror…"
+  },
+  {
+    "id": "native.12487befb4ba",
+    "parts": ["立即更新"],
+    "zh": "立即更新",
+    "en": "Update now"
+  },
+  {
+    "id": "native.63bf045213ce",
+    "parts": ["Update now"],
+    "zh": "立即更新",
+    "en": "Update now"
+  },
+  {
+    "id": "native.9d2ca261281a",
+    "parts": ["稍后"],
+    "zh": "稍后",
+    "en": "Later"
+  },
+  {
+    "id": "native.73b6e48a1b55",
+    "parts": ["Later"],
+    "zh": "稍后",
+    "en": "Later"
+  },
+  {
+    "id": "native.ac134aa4c071",
+    "parts": ["跳过此版本"],
+    "zh": "跳过此版本",
+    "en": "Skip this version"
+  },
+  {
+    "id": "native.6f4676c42c97",
+    "parts": ["Skip this version"],
+    "zh": "跳过此版本",
+    "en": "Skip this version"
+  },
+  {
+    "id": "native.bd50eff4af46",
+    "parts": ["查看更新日志"],
+    "zh": "查看更新日志",
+    "en": "Release notes"
+  },
+  {
+    "id": "native.1254829bd999",
+    "parts": ["Release notes"],
+    "zh": "查看更新日志",
+    "en": "Release notes"
+  },
+  {
+    "id": "native.14d1e349b140",
+    "parts": ["取消下载"],
+    "zh": "取消下载",
+    "en": "Cancel download"
+  },
+  {
+    "id": "native.de5b23e69cd1",
+    "parts": ["Cancel download"],
+    "zh": "取消下载",
+    "en": "Cancel download"
+  },
+  {
+    "id": "native.b8784c8dd563",
+    "parts": ["重试"],
+    "zh": "重试",
+    "en": "Retry"
+  },
+  {
+    "id": "native.942087cc2d41",
+    "parts": ["Retry"],
+    "zh": "重试",
+    "en": "Retry"
+  },
+  {
+    "id": "native.f3e610af41d7",
+    "parts": ["手动下载"],
+    "zh": "手动下载",
+    "en": "Download manually"
+  },
+  {
+    "id": "native.b0d7099e8479",
+    "parts": ["Download manually"],
+    "zh": "手动下载",
+    "en": "Download manually"
+  },
+  {
+    "id": "native.3fd47edce45b",
+    "parts": ["关闭"],
+    "zh": "关闭",
+    "en": "Close"
+  },
+  {
+    "id": "native.7d9eb7acb13e",
+    "parts": ["Close"],
+    "zh": "关闭",
+    "en": "Close"
+  },
+  {
+    "id": "native.d2c8897f40b0",
+    "parts": ["网络连接中断或超时，请检查网络后重试"],
+    "zh": "网络连接中断或超时，请检查网络后重试",
+    "en": "Network interrupted or timed out. Check your connection and retry."
+  },
+  {
+    "id": "native.bfd47923f66f",
+    "parts": ["Network interrupted or timed out. Check your connection and retry."],
+    "zh": "网络连接中断或超时，请检查网络后重试",
+    "en": "Network interrupted or timed out. Check your connection and retry."
+  },
+  {
+    "id": "native.d97a4aa9402d",
+    "parts": ["下载文件不完整，请重试"],
+    "zh": "下载文件不完整，请重试",
+    "en": "The downloaded file is incomplete. Please retry."
+  },
+  {
+    "id": "native.aaea40bd24a4",
+    "parts": ["The downloaded file is incomplete. Please retry."],
+    "zh": "下载文件不完整，请重试",
+    "en": "The downloaded file is incomplete. Please retry."
+  },
+  {
+    "id": "native.f400fc44adbc",
+    "parts": ["下载服务器返回错误，请稍后重试"],
+    "zh": "下载服务器返回错误，请稍后重试",
+    "en": "The download server returned an error. Please try again later."
+  },
+  {
+    "id": "native.825373dcc53e",
+    "parts": ["The download server returned an error. Please try again later."],
+    "zh": "下载服务器返回错误，请稍后重试",
+    "en": "The download server returned an error. Please try again later."
+  },
+  {
+    "id": "native.45f5dfb2c926",
+    "parts": ["下载失败，请重试"],
+    "zh": "下载失败，请重试",
+    "en": "Download failed. Please retry."
+  },
+  {
+    "id": "native.9e6790f7b4d3",
+    "parts": ["Download failed. Please retry."],
+    "zh": "下载失败，请重试",
+    "en": "Download failed. Please retry."
+  }
+]

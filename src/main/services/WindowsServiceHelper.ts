@@ -59,7 +59,6 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       supported: false,
       installed: false,
       ready: false,
-      upgradeable: false,
       version: null,
       loaded: null,
       needsRepair: false,
@@ -140,7 +139,6 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     const { exists: installed, running } = await this.queryService();
     let version: string | null = null;
     let ready = false;
-    let upgradeable = false;
     if (installed && this.token()) {
       try {
         const resp = await this.sendCommand(['ping'], 1500);
@@ -148,7 +146,6 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
         if (m) {
           version = m[1];
           ready = this.capabilities.includes('start');
-          upgradeable = false;
         }
       } catch {
         /* 未就绪 */
@@ -158,7 +155,6 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       supported: true,
       installed,
       ready,
-      upgradeable,
       version,
       capabilities: this.capabilities,
       // SCM RUNNING 即「已加载」；未安装为 null（对齐 HelperManager.loaded 语义）。

@@ -1,3 +1,7 @@
+export const DEFAULT_DNS_ENDPOINTS = Object.freeze({
+  direct: 'https://doh.pub/dns-query',
+  proxy: 'https://dns.google/dns-query',
+});
 import { isIpv4 } from './ip';
 
 /**

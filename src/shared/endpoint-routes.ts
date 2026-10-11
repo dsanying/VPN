@@ -183,7 +183,7 @@ export function customEndpointCarriesTraffic(raw: unknown): boolean {
  *   恒返 []（route-builder 不为其发 force-route）——但 raw JSON 会原样进运行核 endpoints[]，若含 `system` / broad
  *   `allowed_ips` / route-ish 键（customEndpointCarriesTraffic 命中），该端点即便未被选中也独立承载流量 → 其
  *   edit/delete 必须 force-restart（否则被 defer、旧参数残留继续导流=泄漏）→ 保守纳入引用集。无此类键者仍按未引用免重启。
- * 单一真值：ProxyManager（canSkip/getPendingNodeChanges）与 SubscriptionScheduler（自动刷新被引用节点变更判定）共用。
+ * 单一真值：ProxyManager（canSkip/getPendingNodeChanges）与订阅同步入口（自动刷新被引用节点变更判定）共用。
  */
 export function referencedServerIds(c: UserConfig): Set<string> {
   const byId = new Map(c.servers.map((s) => [s.id, s]));

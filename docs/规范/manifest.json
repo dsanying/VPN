@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 2,
+  "scope": "Electron and explicitly requested Capacitor client",
+  "runner": "web/scripts/client-checks.mjs",
+  "checks": [
+    {
+      "id": "client-ui",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-client-ui.mjs",
+        "--project",
+        ".",
+        "--source",
+        "src",
+        "--source",
+        "update-popup"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "tokens",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/generate-client-tokens.mjs",
+        "--check"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "translations",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-client-i18n.mjs"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "client-ui-negative-fixtures",
+      "phase": "static",
+      "command": [
+        "node",
+        "--test",
+        "scripts/client-ui.test.mjs",
+        "scripts/check-expanded.test.mjs",
+        "scripts/check-client-time.test.mjs"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "unit",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/run-unit-tests.mjs"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "time",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-client-time.mjs",
+        "--project",
+        ".",
+        "--source",
+        "src/pages",
+        "--source",
+        "src/components/vpn",
+        "--source",
+        "src/utils"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "dependency-builds",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-ignored-builds.mjs"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "runtime-patches",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-runtime-patches.mjs"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "logviewer",
+      "phase": "static",
+      "command": [
+        "node",
+        "--test",
+        "scripts/logviewer-runtime.test.mjs"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "types",
+      "phase": "static",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-b",
+        "--pretty",
+        "false"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "eslint",
+      "phase": "static",
+      "command": [
+        "node",
+        "node_modules/eslint/bin/eslint.js",
+        "src",
+        "update-popup",
+        "--max-warnings",
+        "0"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "production-build",
+      "phase": "build",
+      "command": [
+        "node",
+        "node_modules/vite/bin/vite.js",
+        "build"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "ui-build",
+      "phase": "ui",
+      "command": [
+        "node",
+        "scripts/run-runtime.mjs",
+        "build-ui"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "browser-contracts",
+      "phase": "ui",
+      "command": [
+        "node",
+        "scripts/run-runtime.mjs",
+        "ui"
+      ],
+      "cwd": "web"
+    }
+  ],
+  "nativeGate": "scripts/check-client-platforms.mjs --release",
+  "sourceAudit": "docs/规范/前端实现替换记录.md",
+  "browserMatrix": {
+    "widths": [
+      320,
+      768,
+      1440
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "languages": [
+      "zh-CN",
+      "en-US"
+    ]
+  }
+}

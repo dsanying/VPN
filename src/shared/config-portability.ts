@@ -1,6 +1,7 @@
 import type { RuleType, RuleCondition } from './types/rules';
 
-const isProcessRuleType = (t: RuleType): boolean => t === 'processName' || t === 'processPath';
+const isProcessRuleType = (t: RuleType): boolean =>
+  t === 'processName' || t === 'processPath' || t === 'processPathRegex';
 
 /**
  * 判断一条自定义规则是否含进程匹配条件（processName/processPath）。

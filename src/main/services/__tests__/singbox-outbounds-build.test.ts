@@ -470,7 +470,12 @@ describe('buildOutbounds — §15 主核测速探测池', () => {
     const sel = vless('s1', 'HK');
     // config=null → 命中 else if(selectedServer) fallback 分支；池端口存在时 probe-selector-k 仍须发射，
     // 与 probe-in-k/route/dns-probe-exit-k 三 builder 门控一致（否则 probe-in-k→probe-selector-k 悬空 FATAL）。
-    const r = buildOutbounds(sel, null as unknown as UserConfig, idMap([sel]), deps({ probePoolPorts: [1, 2] }));
+    const r = buildOutbounds(
+      sel,
+      null as unknown as UserConfig,
+      idMap([sel]),
+      deps({ probePoolPorts: [1, 2] })
+    );
     for (let k = 0; k < 2; k++) {
       const s = r.outbounds.find((o) => o.tag === `probe-selector-${k}`);
       expect(s).toBeTruthy();

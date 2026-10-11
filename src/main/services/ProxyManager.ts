@@ -1,8 +1,13 @@
+import { clearRetiredRuntimeSettings } from '../../shared/retired-config-data';
+import { prepareAutomaticTakeover } from '../../shared/automatic-takeover';
+import { routingDataNeeds } from '../../shared/routing-data-needs';
 /**
  * 代理管理服务
  * 负责 sing-box 进程的生命周期管理和配置生成
  */
 
+import { CompatibilityCoreService } from './CompatibilityCoreService';
+import { compatibilityEngine } from '../../shared/core-capabilities';
 import { app, BrowserWindow, shell, powerMonitor } from 'electron';
 import { notifyUser } from '../notify-user';
 import { mt } from '../i18n';
@@ -54,7 +59,6 @@ import {
   type OsDnsFlushResult,
 } from './os-dns-flush';
 import { localProxyPort, controlApiPort } from '../../shared/proxy-ports';
-import { effectiveBypassLan } from '../../shared/system-proxy-bypass';
 import { isDirectSelection, resolveGlobalExitTag } from '../../shared/direct-selection';
 import { parseDefaultGateway, parseScutilRouter } from '../../shared/default-route';
 import {
@@ -265,7 +269,12 @@ export interface IProxyManager {
   getApiClient(): SingBoxApiClient | null;
   // stats worker（T4，issue #225）：运行期管理 API 端点（host/port/secret），供 StatsWorkerHost 让 worker 重建
   // 自己的 gRPC client；核未起返回 null。
-  getStatsApiEndpoint(): { host: string; port: number; secret: string } | null;
+  getStatsApiEndpoint(): {
+    host: string;
+    port: number;
+    secret: string;
+    localProxyPorts?: number[];
+  } | null;
   generateSingBoxConfig(config: UserConfig, resolvedIps?: Record<string, string>): SingBoxConfig;
   on(
     event:
@@ -320,6 +329,11 @@ export function connectionMatchesSwitchedPairs(
 }
 
 export class ProxyManager extends EventEmitter implements IProxyManager {
+  private compatibilityCores = new CompatibilityCoreService(
+    (engine) => resourceManager.getCompatibilityCorePath(engine),
+    (level, message, source) => this.logManager?.addLog(level, message, source)
+  );
+
   private singboxProcess: ChildProcess | null = null;
   private startTime: Date | null = null;
   private pid: number | null = null;
@@ -414,6 +428,22 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * FlowZ 自己的路由操作是自触发），指纹对差才是。**成功才更新**——瞬态失败后指纹仍不同，下个事件会重试。
    */
   private lastNetworkFingerprint: string | null = null;
+  private automaticRegion: UserConfig['regionRouting'] | null = null;
+  private prepareAutomaticRegion: (() => Promise<void>) | null = null;
+
+  setAutomaticRegionPreparation(prepare: () => Promise<void>): void {
+    this.prepareAutomaticRegion = prepare;
+    this.automaticRegion = { automatic: true, enabled: false, region: '', reverse: false };
+  }
+
+  setAutomaticRegion(region: NonNullable<UserConfig['regionRouting']>): void {
+    const previous = this.automaticRegion;
+    this.automaticRegion = region;
+    if (previous?.enabled === region.enabled && previous?.region === region.region) return;
+    if (this.currentConfig?.proxyMode === 'smart' && this.getStatus().running) {
+      this.scheduleDebouncedRestart();
+    }
+  }
   /**
    * 被限频拦下的那一次 link-change 刷新的补刷定时器（issue #368 / High-1）。
    * 一次 down→up 重连会跨过去抖窗口产生两次触发，第二次（拿到新地址、真正需要刷的那次）恰好落在限频窗口内；
@@ -755,6 +785,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * fresh start 无 marker → no-op。
    */
   async start(config: UserConfig, options: { interactive?: boolean } = {}): Promise<void> {
+    config = prepareAutomaticTakeover(config);
     this.beginLifecycleOp();
     // B0：阶段耗时收集器在此建（而非 startInternal 内）——public 包装是 start 的唯一入口，且它的 finally 是
     //   成功/失败/让位三条出口的共同收口，收集器的生死与这次 start 严格同域。
@@ -831,6 +862,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     config: UserConfig,
     options: { interactive?: boolean } = {}
   ): Promise<void> {
+    const restarting = this.lifecycleDepth > 1;
     // core-swap 手动轴门控：内核替换窗口中拒绝启动（防撞半替换核 FATAL）。须在 lifecycleGeneration++ 之前——
     // 被拒时不污染世代。updateCore/applyStagedNow 自身的 start 在 installCoreFromDir 返回后调用（coreSwapInProgress
     // 已清），不受此闸影响。
@@ -884,6 +916,18 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 先保存当前配置（needsRootPrivilege 等方法需要用到）
     this.currentConfig = config;
+    // A bounded fresh lookup precedes config generation; failure leaves automatic policy proxy-only.
+    if (config.proxyMode === 'smart' && this.prepareAutomaticRegion) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        this.prepareAutomaticRegion(),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, 10_000);
+        }),
+      ]).finally(() => {
+        if (timer) clearTimeout(timer);
+      });
+    }
     // §2 待应用差集基准：快照运行核实际起于的 servers 指纹。**仅此起核路径刷新**（switchMode 的 defer/no-op 分支不刷，
     //   见 :420 字段注释）→ 后续 config 编辑相对此快照算差集（added 待入池 / modified 待生效+dirty / removed 待移出）。
     this.runningServersFingerprint = this.computeServersFingerprint(config.servers);
@@ -1054,7 +1098,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     //     重定向到它(takeover 把系统 DNS 改公网 8.8.8.8 后 dns-local 解不了内网/可能环)。必须在 generateSingBoxConfig
     //     之前读(此刻系统 DNS 尚未被 setDns 改写,scutil/netsh 反映的仍是 LAN 解析器)。无可用→null→退回 dns-local。
     this.lanResolverForDns = null;
-    if (config.proxyModeType === 'tun' && config.dnsConfig?.takeoverSystemDns !== false) {
+    if (config.proxyModeType === 'tun' && config.dnsConfig?.takeoverSystemDns === true) {
       this.lanResolverForDns =
         (await this.systemDnsManager?.getLanResolverForDns().catch(() => null)) ?? null;
       if (this.lanResolverForDns) {
@@ -1077,6 +1121,23 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // （或候选连撞导致多次 PowerShell 串行），并行化的收益名存实亡。
     await this.applyTunAddressPreflight(tunAddressPick);
     this.markStart('tunAddrPreflightWait');
+
+    if (config.servers.some((server) => compatibilityEngine(server))) {
+      const compatibilityStartGen = this.lifecycleGeneration;
+      try {
+        await this.compatibilityCores.prepare(config.servers, this.probeDirectPort || 0);
+      } catch (error) {
+        if (compatibilityStartGen !== this.lifecycleGeneration)
+          throw new CoreStartSupersededError();
+        throw error;
+      }
+      if (compatibilityStartGen !== this.lifecycleGeneration) throw new CoreStartSupersededError();
+      for (const [id, reason] of this.compatibilityCores.failures) {
+        this.logToManager('warn', `Compatibility node unavailable: ${id}: ${reason}`);
+      }
+      if (config.selectedServerId && this.compatibilityCores.failures.has(config.selectedServerId))
+        throw new Error(this.compatibilityCores.failures.get(config.selectedServerId));
+    }
 
     // 4. 生成 sing-box 配置文件
     const singboxConfig = this.generateSingBoxConfig(config, resolvedServerIps);
@@ -1258,66 +1319,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       void this.meshExitRoute.reconcile(config, !!config.enableIPv6);
     }
 
-    // 系统代理单一写者收口（拆双轨）：systemProxy 模式 → 置系统代理（marker + 防自指在 SystemProxyManager 内，
-    // 杜绝把自己当原始保存致 disable restore 死端口）；TUN/manual 模式 → 反向清掉可能残留的系统代理
-    // （覆盖「切接管方式 systemProxy→TUN 经 switchMode 去抖重启」这条不经 IPC handler 的路径）。
-    // best-effort：networksetup/reg 失败仅告警不阻断启动（enableProxy 内含重试 + 失败回滚 + 清 marker）。
-    try {
-      if (config.proxyModeType === 'systemProxy') {
-        await this.systemProxyManager?.enableProxy(
-          '127.0.0.1',
-          localProxyPort(config), // mixed-only：HTTP 与 SOCKS 同口（mac 三代理同口、win 仅 http）
-          localProxyPort(config),
-          // 系统代理「忽略列表」= 绕过局域网完整清单（CIDR+域名），受 bypassLAN 开关管理（单一真值 effectiveBypassLan）。
-          effectiveBypassLan(config)
-        );
-      } else {
-        await this.ensureSystemProxyCleared();
-        // 仅 TUN：清掉 FlowZ 自己的(marker)系统代理后，若仍有系统代理开着 = 无 marker 残留(外部/他软件/丢 marker)。
-        // TUN 下它会截走代理感知 app 的流量致连接异常；direct/manual 模式不接管路由，残留是用户自己的事，不提示。
-        // 不自动清(7890 等业内共用端口、无法证明归属，自动清会误伤别的代理软件)→ 一次性提示，交用户决定。
-        if (config.proxyModeType === 'tun') await this.adviseIfResidualSystemProxy();
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      this.logToManager('warn', `系统代理状态同步失败: ${msg}`);
-      // 非致命：核心已起但系统代理没设上 → UI 会显示「已连接」而流量实未走代理。发一条非终态提示告知用户
-      // （enableProxy 内部已 fail-closed 关掉半残留，不会留死端口），避免「显示连上、实际没代理」的静默不一致（L-4）。
-      if (config.proxyModeType === 'systemProxy') {
-        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
-          message: `系统代理设置失败：${msg}。核心已启动但流量可能未走代理，请检查系统网络权限后重试。`,
-          errorCode: ProxyErrorCode.SYSTEM_PROXY_FAILED,
-          code: -3,
-        });
-      }
-    }
-
-    this.markStart('systemProxySync'); // systemProxy 模式=置代理（mac 上的 networksetup 风暴在这一格）；TUN=反向清
-
-    // 系统 DNS 接管收口（治本 DNS，与系统代理 reconcile 正交）：仅 TUN 模式接管——on-link 的 LAN/ISP DNS 不进
-    // TUN → hijack-dns 看不到 → 需代理的域名被系统解析器解析成真实/错族 IP。故 TUN 启动把系统 DNS 改为受控、
-    // 可路由、不在 bootstrap-direct 的 8.8.8.8，使其经 TUN 被 hijack（真进 sing-box → FakeIP/远程解析）。
-    // systemProxy/manual 模式不接管 DNS（系统代理走远程解析）→ 反向还原可能残留（覆盖 TUN→其它模式切换）。
-    // best-effort：setDns 内部失败仅告警 + 回滚，绝不抛、不阻断 TUN 启动。
-    try {
-      if (config.proxyModeType === 'tun' && config.dnsConfig?.takeoverSystemDns !== false) {
-        // 地址取真值三元组的前两项（与下发给核的 builder 同源）：用户显式配置最高优先，其次冲突预检选出的
-        // 地址。只传 effective 的话，用户显式配置时 preflight 早退 → effective 恒 null → Linux 永不接管。
-        await this.systemDnsManager?.setDns({
-          tunInet4Address: config.tunConfig?.inet4Address ?? this.effectiveTunInet4Address,
-        });
-      } else {
-        // 非 TUN / 用户关掉接管开关 → 还原可能残留的受控 DNS（覆盖 TUN→其它模式切换、开→关切换）。
-        await this.ensureSystemDnsRestored();
-      }
-    } catch (e) {
-      this.logToManager(
-        'warn',
-        `系统 DNS 接管状态同步失败: ${e instanceof Error ? e.message : String(e)}`
-      );
-    }
-
-    this.markStart('dnsTakeover'); // Windows 不接管系统 DNS（见 SystemDnsManager）→ 该平台应恒 ≈0
+    // TUN-only connections never write OS proxy preferences or DNS servers.
+    // Restore only a DNS takeover owned by an older session, if one exists.
+    await this.ensureSystemDnsRestored();
+    this.markStart('dnsTakeover');
 
     // 核已成功起动、DNS 接管状态已收口 → best-effort 刷 OS DNS 缓存（fire-and-forget，不阻塞启动；让位
     // CoreStartSupersededError 与失败路径在更早处已抛、到不了这里）。清掉接管边界前系统解析器缓存的陈旧记录
@@ -1373,7 +1378,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         // 探测、结果被当新鲜 commit 污染 store/cache（epoch 守卫失明）。此处补入契约：epoch 作废 boot 窗口轮，GAP-1
         // self-run 在校正后出口重跑。同值 no-op reassert 多 emit 一次 → 与 'started' 的 invalidate 经 self-run 防抖合并，无害。
         this.emit('unlock-invalidate');
-        this.scheduleConnectionFlush(config);
+        if (!restarting) this.scheduleConnectionFlush(config);
       });
     } else {
       // 无管理 API（版本 <1.14）：无 reassert 可链，直接安排 flush（与原行为一致）。
@@ -1381,7 +1386,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 逼其重连重解析（经 FakeIP 走代理），不重启内核；node 热切换不经 startInternal、由 interrupt 开关另管。
       // S1：无管理 API（<1.14）无 reassert 可等 → 立即放行出口首探（selector default 即用户意图，无缓存携带窗口）。
       this.markSelectorSettled('无管理 API');
-      this.scheduleConnectionFlush(config);
+      if (!restarting) this.scheduleConnectionFlush(config);
     }
   }
 
@@ -1574,6 +1579,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   private async stopInner(opts?: { quitting?: boolean }): Promise<void> {
+    await this.compatibilityCores.close();
     // 出口路由托管清理：趁内核接口还在先删 exit 拆半默认路由（best-effort、绝不抛）。幂等,若已无则 no-op。
     await this.meshExitRoute.clear();
     // Phase 2：停止/退出语境一并杀掉残留的瞬态登录核（无孤儿进程）。放早退之前——列表直接点登录时
@@ -1717,8 +1723,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
   /**
    * macOS 提权 helper 引导门控（收敛单点，唯一弹窗实现）。所有 start/restart 入口（开启代理按钮/托盘/
-   * 切接管/CONFIG_CHANGED 重启/换节点回退重启…）汇入此处；仅 interactive 启动 + darwin + TUN +
-   * helper 未就绪 + 用户未 dismiss 时，经注入回调弹 native 引导（无窗口依赖）；回调返回 'abort' → 抛
+   * 切接管/CONFIG_CHANGED 重启/换节点回退重启…）汇入此处；仅 interactive 启动 + 支持平台 + TUN +
+   * helper 未就绪时，经注入回调弹 native 引导（无窗口依赖）；回调返回 'abort' → 抛
    * HELPER_GATE_ABORTED 终止启动（终态等价 osascript 取消=停止态）。崩溃自动重启(interactive:false) 跳过。
    * 注：ready 但 pathMismatch（socket 通但 plist 路径失效）必须进 gate（否则 startViaHelper 会失败→裸弹 osascript）。
    */
@@ -1728,22 +1734,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     options: { interactive?: boolean }
   ): Promise<void> {
     if (options.interactive === false) return; // 崩溃自动重启等：禁模态
-    if ((process.platform !== 'darwin' && process.platform !== 'win32') || !isTunMode) return; // 非 macOS/Windows / 非 TUN：systemProxy 绝不弹
+    if (!['darwin', 'win32', 'linux'].includes(process.platform) || !isTunMode) return; // 非 macOS/Windows / 非 TUN：systemProxy 绝不弹
     if (!this.helperManager || !this.helperGate) return;
-    const hs = await this.helperManager.getStatus().catch(() => null);
+    const hs = await this.helperManager.getStatus();
     // 关键：backgroundDisabled 时**即便 ready 也不能早退**——install-over-top 让 daemon 在跑(ready=true)但 BTM
     // 开关仍关（disposition allowed 位缺），必须进 gate 提示用户去系统设置手动开启（修 Bug2：原 `ready→return` 把
     // 混合态直接放过，用户永远收不到引导）。getStatus 已直读 disposition 判 backgroundDisabled（无需去抖）。
-    if (!hs || (hs.ready && !hs.pathMismatch && !hs.backgroundDisabled)) return;
-    if (!(hs.backgroundDisabled || hs.needsRepair || !hs.installed)) return;
-    // 尊重「不再提示」（needsRepair=路径不符 不可 dismiss）
-    const dismissed = hs.backgroundDisabled
-      ? config.helperDisabledPromptDismissed === true
-      : !hs.installed
-        ? config.helperPromptDismissed === true
-        : false;
-    if (dismissed) return; // 静默落 osascript（与今天 dismissed 行为一致）
-    const decision = await this.helperGate(hs, config).catch(() => 'proceed' as const);
+    if (hs.ready && !hs.pathMismatch && !hs.backgroundDisabled) return;
+
+    const decision = await this.helperGate(hs, config);
     if (decision === 'abort') {
       const err = new Error('用户取消了提权助手引导') as Error & { code?: string };
       err.code = 'HELPER_GATE_ABORTED';
@@ -1998,7 +1997,16 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 切换代理模式
    * 检测模式变化，如果代理正在运行则重启
    */
-  async switchMode(newConfig: UserConfig): Promise<void> {
+  private configApplyQueue: Promise<void> = Promise.resolve();
+
+  switchMode(newConfig: UserConfig): Promise<void> {
+    if (this.lifecycleDepth > 0) return this.applyLiveConfiguration(newConfig);
+    const operation = this.configApplyQueue.then(() => this.applyLiveConfiguration(newConfig));
+    this.configApplyQueue = operation.catch(() => {});
+    return operation;
+  }
+
+  private async applyLiveConfiguration(newConfig: UserConfig): Promise<void> {
     // core-swap 手动轴门控：内核替换窗口中拒绝切模式/切节点——防 clash_api 打到半替换核、防重启式切换撞核。
     this.rejectIfCoreSwapInProgress('切换代理模式');
     // 丢失更新修复（bug#5）：start/stop/restart 在飞时**绝不能**走下面「未运行」早退丢弃——restart 的 stop→spawn
@@ -2030,6 +2038,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // clash_api 热切换（不重启 sing-box）：覆盖「切全局节点」「改规则目标节点」「两者同时」三类纯值变化。
     // planHotSwitch 产出需 PUT 的 selector 列表；任一 PUT 失败 → 退回去抖重启兜底（保证一定能应用）。
     // norm 已移出 selectedServerId/targetServerId → 仅这俩值变不翻转 norm → 可经此热切换路径。
+    const ruleValuesChanged =
+      this.stableStringify(
+        this.currentConfig ? [...buildCustomRuleFiles(this.currentConfig)] : []
+      ) !== this.stableStringify([...buildCustomRuleFiles(newConfig)]);
     const plan = this.planHotSwitch(newConfig);
     if (plan.kind !== 'none') {
       // Low-3：hotSwitchSelector 有 await（PUT 在飞）——期间可能有更新的 applyConfigForcingRestart(cfgC) 置 pending。
@@ -2058,8 +2070,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         this.closeOldNodeConnectionsAfterHotSwitch(newConfig, plan);
         // L3：norm 排除了外化规则的值 → 「切节点 + 改外化规则值」同一次 save 会通过 planHotSwitch 检查，
         //   补一次文件对账防值静默丢失（通常零 diff、幂等）。降级态文件无消费者 → 改走重启重落盘（与 no-op 分支对称）。
-        if (this.customRuleFilesDegraded) this.scheduleDebouncedRestart();
-        else await this.syncCustomRuleFiles(newConfig);
+        if (this.customRuleFilesDegraded) {
+          if (ruleValuesChanged) this.scheduleDebouncedRestart();
+        } else await this.syncCustomRuleFiles(newConfig);
         // 解锁检测失效（M1）：任何热切换（global/rules/both）都可能改变解锁出口——切全局节点变全局出口；
         // 改规则目标节点变某服务（如 netflix.com）的分流出口。二者都须使 unlock 缓存失效重测。与 node-hot-switched
         // 分开发独立事件：unlock-invalidate 仅触发解锁失效，**不触发 IpInfo 重测**（纯规则变更全局出口 IP 未变）。
@@ -2102,8 +2115,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       if (this.pendingForceRestartConfig !== null) this.pendingForceRestartConfig = newConfig;
       // L3 值热更主路径：norm 结构相等但外化规则的值可能变了 ⇔ 文件内容 diff → 原子替换 + fswatch 热重载、零重启。
       // 降级桥：上次有外化规则未落盘走 inline（文件无消费者）→ 改走重启重落盘，防「写了没人消费」的值陈旧。
-      if (this.customRuleFilesDegraded) this.scheduleDebouncedRestart();
-      else await this.syncCustomRuleFiles(newConfig);
+      if (this.customRuleFilesDegraded) {
+        if (ruleValuesChanged) this.scheduleDebouncedRestart();
+      } else await this.syncCustomRuleFiles(newConfig);
       // 缺陷1：此分支含「切登录期出口让位开关」（meshLoginFallbackDirect 已排除出 norm）→ 关开关须即刻 disengage
       // 切回出口（不等 STATUS 帧/健康检查）。reconcile 幂等：未 engage / 开关仍开则 no-op。
       void this.reconcileLoginFallback(this.selectedExitBackendState());
@@ -2129,8 +2143,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       this.currentConfig = newConfig;
       // H-1：defer 更新 currentConfig 后同样刷新待决 force-restart 快照，防 timer 重启回退到旧节点（见热切腿说明）。
       if (this.pendingForceRestartConfig !== null) this.pendingForceRestartConfig = newConfig;
-      if (this.customRuleFilesDegraded) this.scheduleDebouncedRestart();
-      else await this.syncCustomRuleFiles(newConfig);
+      if (this.customRuleFilesDegraded) {
+        if (ruleValuesChanged) this.scheduleDebouncedRestart();
+      } else await this.syncCustomRuleFiles(newConfig);
       return;
     }
 
@@ -2379,28 +2394,32 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    *   成员节点（订阅刷新增删的纯代理节点）→ 运行核行为不变、可免重启。不传 serverIds = 全量（原行为，现有调用方不变）。
    */
   private configGenerationNorm(c: UserConfig, serverIds?: ReadonlySet<string>): string {
+    c = { ...c, dnsConfig: c.dnsConfig ? { ...c.dnsConfig } : undefined };
+    clearRetiredRuntimeSettings(c);
     // 用户路由（自定义规则 + 应用分流）仅 smart 模式影响生成（global=真·全局忽略用户分流、direct=全直连，均不 emit）。
     // 非 smart 下其内容/增删/编辑/换节点都不改变 sing-box 配置 → 不应翻转 norm（否则运行中编辑规则误触重启断流）。
     const userRoutingActive = (c.proxyMode || 'smart').toLowerCase() === 'smart';
-    // 被启用 ruleSet 规则引用的本地资源 id 集（只有它们影响生成；未引用资源的增删不应阻断热切换）。非 smart → 无引用。
-    const ids = new Set<string>();
-    if (userRoutingActive) {
-      for (const r of c.customRules || []) {
-        if (!r.enabled) continue;
-        for (const cond of ruleConditions(r)) {
-          if (cond.type === 'ruleSet') {
-            for (const v of cond.values) if (v.startsWith('res:')) ids.add(v.slice(4));
-          }
-        }
-      }
-    }
     return this.stableStringify({
       ...c,
+      // 宿主、调度与展示偏好不参与内核配置生成。
+      autoStart: null,
+      silentStart: null,
+      autoConnect: null,
+      minimizeToTray: null,
+      autoLightweightMode: null,
+      desktopNotifications: null,
+      rememberWindowSize: null,
+      windowBounds: null,
+      autoSwitchNode: null,
+      restrictCoreUpdateToCompatibleMinor: null,
+      autoUpdateCore: null,
+      uiTheme: null,
+      tunStackMigrated: null,
+      tunMtuMigrated: null,
+      appRulesSeeded: null,
+      forceTun: null,
       selectedServerId: null,
       ghProxyPrefix: null,
-      ruleResourceAutoUpdate: null,
-      ruleResourceUpdateIntervalHours: null,
-      builtinGeoMeta: null,
       subscriptions: null,
       mainSessionViaProxy: null,
       // 登录期出口让位开关：运行期由 ProxyManager live 读（shouldEngageLoginFallback），不喂 generateSingBoxConfig
@@ -2412,26 +2431,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 界面语言纯 UI 偏好，不影响 sing-box 生成 → 运行中切语言（写 config.language 触发 CONFIG_CHANGED→switchMode）
       // 不应重启内核断流。不排除的话每次切语言都会 norm 翻转 → 去抖重启 sing-box（旧 APP_SET_LANGUAGE 路径不写 config、零断流）。
       language: null,
-      // helper 引导/升级「不再提示」纯 UI 偏好，不影响 sing-box 生成 → 运行中勾选不应触发重启断流。
-      helperPromptDismissed: null,
-      helperDisabledPromptDismissed: null,
-      helperUpgradePromptDismissed: null,
       // 图形兼容逃生门（硬件加速 / 窗口特效）纯 Electron 窗口·GPU 偏好，不影响 sing-box 生成 → 排除出 norm。
       // 不排除的话：运行中拨这两个开关 → norm 翻转 → 去抖重启内核断流；而它们本就**需重启 FlowZ 才生效**，
       // 断用户流量换零收益（同 language / restartOnNodeChange 处置）。
       hardwareAcceleration: null,
       windowEffects: null,
-      // fakeIpToggleMigrated / fakeIpTunAutoEnable / nodeResolverMigrated 都是一次性迁移元数据标记，不影响生成
-      //   （enableFakeIp / nodeResolver* 本身仍在 norm 内 → 影响生成保留）。若不排除：未来某路径重建 dnsConfig 丢/带
-      //   该标记 → norm 翻转无谓重启断流 + 迁移重跑可能从 deprecated 字段回灌覆盖用户自选值。
-      dnsConfig: c.dnsConfig
-        ? {
-            ...c.dnsConfig,
-            fakeIpToggleMigrated: null,
-            fakeIpTunAutoEnable: null,
-            nodeResolverMigrated: null,
-          }
-        : c.dnsConfig,
+      dnsConfig: c.dnsConfig ? { ...c.dnsConfig, nodeResolverMigrated: null } : c.dnsConfig,
       // 规则投影：禁用规则不进生成（generateCustomRules / DNS 侧均跳过 disabled）→ 内容/增删不触发重启；
       //   remarks 纯展示元数据，不影响生成。顺序保留（reorder 仍重启，语义正确）。
       // 非 smart（global/direct）：用户路由不进生成 → 整体投影为 []（增删/编辑/换节点都不翻转 norm，免无谓重启）。
@@ -2478,10 +2483,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
             enabled: a.enabled,
             targetServerId: null,
           })),
-      ruleResources: (c.ruleResources || [])
-        .filter((rr) => ids.has(rr.id))
-        .map((rr) => rr.id)
-        .sort(),
       servers: [...c.servers]
         .filter((s) => !serverIds || serverIds.has(s.id)) // P2-A：传 serverIds 时仅保留被引用节点
         .sort((a, b) => a.id.localeCompare(b.id))
@@ -2647,10 +2648,20 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * worker 重连仅由 'api-client-ready'(=核重启) 驱动，而重启必重跑 startInternal 同时更新 currentConfig 与端口，
    * 故 endpoint 的 secret/port 与新核恒一致；不存在「secret 不重启被改写后 worker 拿旧值」的路径。
    */
-  getStatsApiEndpoint(): { host: string; port: number; secret: string } | null {
+  getStatsApiEndpoint(): {
+    host: string;
+    port: number;
+    secret: string;
+    localProxyPorts?: number[];
+  } | null {
     const port = this.tailscaleApiPort;
     if (!this.getStatus().running || !port) return null;
-    return { host: '127.0.0.1', port, secret: this.currentConfig?.clashApiSecret || '' };
+    return {
+      host: '127.0.0.1',
+      port,
+      secret: this.currentConfig?.clashApiSecret || '',
+      localProxyPorts: [localProxyPort(this.currentConfig ?? {})],
+    };
   }
 
   /**
@@ -3389,6 +3400,10 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   /** 当前出口 IP 探针端口；代理未启动或分配失败时返回 null。供 IpInfoService 取数用。 */
+  getRoutingProbePort(): number {
+    return this.currentConfig?.mixedPort || this.currentConfig?.httpPort || 0;
+  }
+
   getProbePorts(): { direct: number; proxy: number } | null {
     if (this.probeDirectPort && this.probeProxyPort) {
       return { direct: this.probeDirectPort, proxy: this.probeProxyPort };
@@ -3495,6 +3510,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 生成 sing-box 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
   generateSingBoxConfig(config: UserConfig, resolvedIps?: Record<string, string>): SingBoxConfig {
+    if (this.automaticRegion) config = { ...config, regionRouting: this.automaticRegion };
     // issue #147：race server 就绪(raceServerPort>0)才走 race 解析；否则（off/起失败/snapshot/preflight/诊断）
     // 强制 race off → getNodeResolverTag/buildDnsConfig 一致走单上游、不引用 dns-node-race（防 FATAL，快照零变化）。
     const cfg = this.raceServerPort > 0 ? config : this.withRaceOff(config);
@@ -3526,6 +3542,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // outbounds 须先于 route/endpoints 生成：其产出的两载体（pendingEndpoints / pendingRuleSelectors）
     // 由下方 route deps + endpoints 注入 + 末尾 currentRuleTargetMap 回填消费。回写 this.* 维持原时序。
     const outboundsResult = buildOutbounds(selectedServer, cfg, idToTagMap, {
+      bridges: this.compatibilityCores.bridges,
       gateInvalidNodes: this.gateInvalidNodes,
       log: (level, message) => this.logToManager(level, message),
       // Phase 2：reverseMesh(system 内核接口)需提权,仅 TUN 模式可行（系统代理路径不提权）。非 TUN →
@@ -3602,6 +3619,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         },
       },
     };
+
+    for (const [id, port] of this.compatibilityCores.dialPorts) {
+      const server = config.servers.find((node) => node.id === id);
+      const target = server?.detour ? idToTagMap.get(server.detour) : undefined;
+      if (!target) throw new Error('Compatibility proxy chain target missing');
+      const tag = `compat-dial-${id}`;
+      singboxConfig.inbounds.push({ type: 'mixed', tag, listen: '127.0.0.1', listen_port: port });
+      singboxConfig.route?.rules?.unshift({ inbound: [tag], action: 'route', outbound: target });
+    }
 
     // WireGuard 等 endpoint 由 generateOutbounds 收进 pendingEndpoints，注入顶层 endpoints[]（其 tag 已在
     // proxy-selector / rule-sel / route 中作为成员被引用，与 outbound 一视同仁）。
@@ -3740,7 +3766,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 此处用 isEndpointProtocol 单一真值（tailscale 已上方 return null 排除，剩余 endpoint 协议即 wireguard）。
       if (isEndpointProtocol(server.protocol)) {
         // #58：测速 WG endpoint 的域名 server（如 WARP）需 dial 级 domain_resolver——与下方普通协议同传
-        // 'dns-direct'（对齐测速临时配置的 route.default_domain_resolver: 'dns-direct'，223.5.5.5 UDP）。
+        // 'dns-direct'（对齐测速临时配置的 route.default_domain_resolver，读取当前网络 DNS）。
         // 缺它则 1.14 域名拨号无确定解析上游 → 测速超时（IP-server 节点不受影响，isIpLiteral 内部跳过下发）。
         return buildWireGuardEndpoint(server, tag, 'dns-direct');
       }
@@ -3755,6 +3781,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   private async writeSingBoxConfig(config: SingBoxConfig): Promise<void> {
+    // root 后台服务不能直接读取开发仓库的 Desktop 资源；实际落盘时使用已准备好的运行目录。
+    for (const service of config.services ?? []) {
+      if (service.dashboard?.path === resourceManager.getBundledDashboardDir()) {
+        service.dashboard.path =
+          (await resourceManager.prepareDashboardServeDir(getSingboxDashboardOverrideDir())) ??
+          undefined;
+      }
+    }
     // 纵深防御（fail-closed 后通常为 no-op）：fail-closed 改造后 generateRouteConfig 已不生成任何 type:'remote'
     // rule_set（所有 srs 统一本地、缺失剪悬空引用），故此处恒早退、零开销；保留作回滚锚点 + 防御任何未来/旁路
     // 路径意外注入 remote 时仍预检 404 剔除，杜绝 sing-box `initialize rule-set` FATAL。
@@ -4458,13 +4492,20 @@ rm -f "$STOPFLAG"
   /**
    * issue #159：等核真就绪（管理 API 端口可连）再放行。起核期进程死 / 超时未绑 API → 停掉半死核（其 wintun
    * 适配器随即开始释放，给 retry 让路）+ 抛可重试错误（文案不含 nonRetryable 关键词 → runStartWithRetry 会重试）。
-   * 无管理 API 端口（异常）→ fail-open 放行（退回旧 spawn 即成行为，绝不卡死启动）。仅 startViaHelper 调用。
+   * 无管理 API 端口时停止本次内核并报错，不能仅凭 PID 报告成功。仅 startViaHelper 调用。
    * issue #176：就绪等待期被更新的 start/stop 接管（startGen≠lifecycleGeneration）→ 抛 CoreStartSupersededError
    *   静默让位，**不调 stopCore()**（接管方已/正在拆核，本腿再 stopCore 会与之抢放 wintun 适配器、加剧风暴）。
    */
   private async waitForCoreReadyOrThrow(pid: number, startGen: number): Promise<void> {
     const port = this.tailscaleApiPort;
-    if (!port) return; // 无管理 API 端口 → 不阻断
+    if (!port) {
+      try {
+        await this.helperManager?.stopCore();
+      } finally {
+        this.cleanup();
+      }
+      throw new Error('内核管理接口未配置，无法确认启动成功');
+    }
     const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
     // issue #324：仅 win32+TUN 开正向适配器观测（tunReadyObservation 非 null 即已由 startInternal 判定 win32+TUN）。
@@ -5951,6 +5992,7 @@ rm -f "$STOPFLAG"
   }
 
   private cleanup(): void {
+    this.compatibilityCores.stop();
     this.stopLogFileWatcher();
     this.stopHealthCheck();
     // 崩溃/giveUp 走本路径而非 stopInner→meshExitRoute.clear()：复位出口托管内存态（残留 installed 会让下次 reconcile
@@ -6677,32 +6719,6 @@ rm -f "$STOPFLAG"
    * 因 7890 等是业内共用端口、无法据地址证明归属，**绝不自动清**(会误伤别的软件)→ 发一次性 advisory 交用户一键关。
    * best-effort：读状态失败/无残留则静默。
    */
-  private async adviseIfResidualSystemProxy(): Promise<void> {
-    const mgr = this.systemProxyManager;
-    if (!mgr) return;
-    try {
-      const status = await mgr.getProxyStatus().catch(() => null);
-      if (!status?.enabled) return;
-      const proxy = status.httpProxy || status.httpsProxy || status.socksProxy || '';
-      // 防自指：若残留指向 FlowZ 自己的本地端口(127.0.0.1:mixedPort)=我们自己的代理清理半失败(非外部)，不报「外部残留」
-      //（会误导）。仅 ensureSystemProxyCleared 的清理偶发部分失败时出现；下个终态点会重试清（mac/linux 误报修复）。
-      const ownHostPort = `127.0.0.1:${localProxyPort(this.currentConfig ?? {})}`;
-      if ([status.httpProxy, status.httpsProxy, status.socksProxy].some((p) => p === ownHostPort)) {
-        this.logToManager(
-          'warn',
-          `系统代理仍指向 FlowZ 自身(${proxy})但清理未净——非外部残留，跳过提示，下个终态点重试清理`
-        );
-        return;
-      }
-      this.logToManager(
-        'warn',
-        `TUN 模式下检测到非 FlowZ 设置的系统代理仍开启(${proxy || '未知地址'})，已提示用户（不自动清，避免误伤其它代理软件）`
-      );
-      this.sendEventToRenderer(IPC_CHANNELS.EVENT_SYSTEM_PROXY_RESIDUAL, { proxy });
-    } catch {
-      /* best-effort：提示失败不影响 TUN 启动 */
-    }
-  }
 
   /**
    * 用户主动关闭系统代理（TUN 残留提示的「关闭系统代理」一键动作）。用户显式意图 → 直接 disable
@@ -7068,7 +7084,14 @@ rm -f "$STOPFLAG"
    */
   private async copyRuleSetsToUserData(): Promise<void> {
     try {
-      await seedBuiltinRuleSets();
+      const config = this.currentConfig;
+      await seedBuiltinRuleSets({
+        tags: config
+          ? routingDataNeeds(
+              this.automaticRegion ? { ...config, regionRouting: this.automaticRegion } : config
+            ).tags
+          : new Set(['geosite-private']),
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logToManager('error', `内置规则补种失败: ${errorMessage}`);
@@ -8018,14 +8041,14 @@ rm -f "$STOPFLAG"
 
     // 常见错误模式匹配
     if (lowerMessage.includes('report handshake success: connection refused')) {
-      return `目标连接被拒绝：代理节点已连接，但目标服务器拒绝了连接（可能是节点限制或失效） [${message}]`;
+      return `目标连接被拒绝 [${message}]`;
     }
 
     if (
       lowerMessage.includes('connection refused') ||
       lowerMessage.includes('connect: connection refused')
     ) {
-      return `连接被拒绝：无法连接到代理服务器，请检查服务器地址和端口是否正确 [${message}]`;
+      return `连接被拒绝 [${message}]`;
     }
 
     // #57：DNS lookup 失败须先于通用 timeout 分支（`lookup x: i/o timeout` 属 DNS 失败而非连接超时）。

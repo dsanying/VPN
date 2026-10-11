@@ -235,7 +235,7 @@ describe('buildRouteConfig — WebRTC 防泄露（webrtcLeakProtection）', () =
   it('与 blockQuic 共存：STUN 规则与 udp443 reject 互不覆盖、各自存在', () => {
     const n = proxyNode();
     const rc = buildRouteConfig(
-      cfg([n], { proxyMode: 'smart', webrtcLeakProtection: 'proxy', blockQuic: true }),
+      cfg([n], { proxyMode: 'smart', webrtcLeakProtection: 'proxy' }),
       idMap([n]),
       deps([])
     );
@@ -515,3 +515,11 @@ describe('buildRouteConfig — §15 主核测速探测池', () => {
     ).toBe(false);
   });
 });
+
+it.each(['smart', 'global', 'direct'] as const)(
+  'enables process attribution without application rules in %s mode',
+  (proxyMode) => {
+    const config = cfg([], { proxyMode, appRules: [], customRules: [] });
+    expect(buildRouteConfig(config, idMap([]), deps([])).find_process).toBe(true);
+  }
+);

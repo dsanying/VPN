@@ -37,10 +37,7 @@ const EXEC_TIMEOUT_MS = 3000;
  * 三者混为一谈会让「重走一次提权就能修好」的情况和「这台机器根本没这命令」长得一模一样。
  */
 export type OsDnsFlushFailureReason =
-  | 'command-missing'
-  | 'permission-denied'
-  | 'timeout'
-  | 'unknown';
+  'command-missing' | 'permission-denied' | 'timeout' | 'unknown';
 
 /** 刷新结果。`ok:true` 且 `skipped:true` = 平台不支持的 no-op（**不是**刷新成功）。 */
 export interface OsDnsFlushResult {

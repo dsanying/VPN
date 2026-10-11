@@ -1,0 +1,78 @@
+diff --git a/dist/cjs/index.js b/dist/cjs/index.js
+index 09d396cf90e87c97d1f71f5143fd918f9a49d7a2..cd0dfff47bc57635c5bc633fd41e5010a5ccf489 100644
+--- a/dist/cjs/index.js
++++ b/dist/cjs/index.js
+@@ -6359,16 +6359,32 @@ a), b = e => d(e.t(), e.o()), x = ({i: e, l: t, u: n, h: o, S: r, p: i, t: s, v:
+         q: () => [ l.slice(), o ]
+     };
+ }, M = e => {
+-    let t;
++    // Shadow VPN: defer virtual row measurements beyond ResizeObserver delivery.
++    // Synchronous layout updates here cause Chromium/Electron observer loops.
++    let t, frame = 0;
++    const pending = new Map();
++    const deliver = entries => {
++        for (const entry of entries) pending.set(entry.target, entry);
++        if (!frame) frame = requestAnimationFrame(() => {
++            frame = 0;
++            const batch = [...pending.values()];
++            pending.clear();
++            if (batch.length) e(batch);
++        });
++    };
+     return {
+         A(n) {
+-            (t || (t = new (I(z(n)).ResizeObserver)(e))).observe(n);
++            (t || (t = new (I(z(n)).ResizeObserver)(deliver))).observe(n);
+         },
+         B(e) {
++            pending.delete(e);
+             t.unobserve(e);
+         },
+         X() {
+             t && t.disconnect();
++            if (frame) cancelAnimationFrame(frame);
++            frame = 0;
++            pending.clear();
+         }
+     };
+ }, T = (e, t, n, o, r, i, s) => {
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index cf44156c3ed51d97852e3cf88b7bba7f005cfd21..0f04f6b81b0772df589c1f328719b4928b85c193 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -6351,16 +6351,32 @@ a), b = e => d(e.t(), e.o()), x = ({i: e, l: t, u: n, h: o, S: r, p: i, t: s, v:
+         q: () => [ l.slice(), o ]
+     };
+ }, M = e => {
+-    let t;
++    // Shadow VPN: defer virtual row measurements beyond ResizeObserver delivery.
++    // Synchronous layout updates here cause Chromium/Electron observer loops.
++    let t, frame = 0;
++    const pending = new Map();
++    const deliver = entries => {
++        for (const entry of entries) pending.set(entry.target, entry);
++        if (!frame) frame = requestAnimationFrame(() => {
++            frame = 0;
++            const batch = [...pending.values()];
++            pending.clear();
++            if (batch.length) e(batch);
++        });
++    };
+     return {
+         A(n) {
+-            (t || (t = new (I(z(n)).ResizeObserver)(e))).observe(n);
++            (t || (t = new (I(z(n)).ResizeObserver)(deliver))).observe(n);
+         },
+         B(e) {
++            pending.delete(e);
+             t.unobserve(e);
+         },
+         X() {
+             t && t.disconnect();
++            if (frame) cancelAnimationFrame(frame);
++            frame = 0;
++            pending.clear();
+         }
+     };
+ }, T = (e, t, n, o, r, i, s) => {

@@ -1,3 +1,4 @@
+import { prepareAutomaticTakeover } from '../shared/automatic-takeover';
 /**
  * 托盘动作回调构造 —— 从 index.ts whenReady 抽出。
  *
@@ -15,12 +16,11 @@ import type { ProxyManager } from './services/ProxyManager';
 import type { UpdateService } from './services/UpdateService';
 import type { SpeedTestService } from './services/SpeedTestService';
 import type { TrayManager } from './services/TrayManager';
-import type { ProxyMode, ProxyModeType } from '../shared/types';
-import { applyFakeIpTunEntry } from '../shared/fakeip-tun-entry';
-import { notifyUser } from './notify-user';
+import type { ProxyMode } from '../shared/types';
 import { mt } from './i18n';
 import { ipcEventEmitter } from './ipc/ipc-events';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
+import { resourceManager } from './services/ResourceManager';
 import { runSpeedTest } from './services/speed-test-runner';
 import { releaseWindowMemory } from './services/window-memory';
 
@@ -58,7 +58,6 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
     speedTestService,
     showWindow,
     updateTrayMenuState,
-    setPrivacyMode,
     markLightweightModeTransition,
   } = deps;
 
@@ -66,7 +65,7 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
     onStartProxy: async () => {
       const proxyManager = getProxyManager();
       try {
-        const config = await configManager.loadConfig();
+        const config = prepareAutomaticTakeover(await configManager.loadConfig());
         // helper 引导已收敛到 ProxyManager.start() 单点（promptHelperGate 注入），托盘启动自动覆盖。
         if (proxyManager) {
           // 系统代理 enable/clear 已收口于 start()（拆双轨），托盘不再重复设置。
@@ -112,7 +111,7 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
     onSelectServer: async (serverId: string) => {
       const proxyManager = getProxyManager();
       try {
-        const config = await configManager.loadConfig();
+        const config = prepareAutomaticTakeover(await configManager.loadConfig());
         config.selectedServerId = serverId;
         await configManager.saveConfig(config);
         logManager.addLog('info', `Server selected from tray: ${serverId}`, 'Main');
@@ -134,8 +133,10 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
     onChangeProxyMode: async (mode: ProxyMode) => {
       const proxyManager = getProxyManager();
       try {
-        const config = await configManager.loadConfig();
-        config.proxyMode = mode;
+        const config = prepareAutomaticTakeover({
+          ...(await configManager.loadConfig()),
+          proxyMode: mode,
+        });
         await configManager.saveConfig(config);
         logManager.addLog('info', `Proxy mode changed from tray: ${mode}`, 'Main');
 
@@ -154,37 +155,6 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
         updateTrayMenuState(proxyManager?.getStatus().running ?? false);
       }
     },
-    onChangeProxyModeType: async (modeType: ProxyModeType) => {
-      const proxyManager = getProxyManager();
-      try {
-        const loaded = await configManager.loadConfig();
-        loaded.proxyModeType = modeType;
-        // 切模式前过 FakeIP-TUN 待纠正（同原 proxy-control-card，已并入 connection-control-card）：迁移冻结的 enableFakeIp:false 首次进 TUN 回 true。
-        const { config, corrected } = applyFakeIpTunEntry(loaded);
-        await configManager.saveConfig(config);
-        logManager.addLog('info', `Takeover mode changed from tray: ${modeType}`, 'Main');
-        if (corrected) {
-          logManager.addLog('info', 'FakeIP 已随 TUN 自动启用（迁移冻结纠正）', 'Main');
-          // 托盘切换常在窗口关闭时发生 → 桌面通知告知（notifyUser 内部尊重 desktopNotifications 开关）。
-          notifyUser(mt('fakeIpTunAutoEnabledTitle'), mt('fakeIpTunAutoEnabledBody'));
-        }
-
-        // 运行中则重启以应用新接管方式（走 restart()：start 腿失败清残留系统代理；成功则 start reconcile
-        // 按新模式 enable/clear——覆盖 systemProxy↔TUN 双向切换的系统代理一致性）
-        if (proxyManager && proxyManager.getStatus().running) {
-          await proxyManager.restart(config);
-          logManager.addLog('info', 'Proxy restarted with new takeover mode', 'Main');
-        }
-
-        updateTrayMenuState(proxyManager?.getStatus().running ?? false);
-        ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logManager.addLog('error', `Failed to change takeover mode: ${errorMessage}`, 'Main');
-        // helper gate 取消等导致 start 中止 → 代理已停，刷新托盘态防显示陈旧「运行中」
-        updateTrayMenuState(proxyManager?.getStatus().running ?? false);
-      }
-    },
     onOpenSettings: () => {
       const mainWindow = getMainWindow();
       showWindow();
@@ -194,17 +164,9 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
     },
     onCheckUpdate: async () => {
       const mainWindow = getMainWindow();
-      const result = await updateService.checkForUpdate();
-      if (result.hasUpdate && result.updateInfo) {
-        const action = await updateService.showUpdateDialog(result.updateInfo);
-        if (action === 'update') {
-          const filePath = await updateService.downloadUpdateWithProgress(result.updateInfo);
-          if (filePath) {
-            await updateService.installUpdate(filePath);
-          }
-        } else if (action === 'skip') {
-          updateService.skipVersion(result.updateInfo.version);
-        }
+      const result = await updateService.prepareUpdate();
+      if (result.hasUpdate) {
+        void updateService.promptReadyUpdate();
       } else if (!result.error) {
         // 没有更新，显示提示
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -230,12 +192,20 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
       // notifyTrayToast:true —— 托盘入口需要完成汇总 toast（App.tsx 监听 RESULT_LIST）；渲染入口不传（use-speed-test 自弹）。
       // runSpeedTest 内已记日志 + 复位测速态后 rethrow（IPC 入口需要它）；托盘入口 fire-and-forget，此处吞掉避免未处理 rejection。
       await runSpeedTest(
-        { configManager, speedTestService, getMainWindow, getTrayManager, logManager },
+        {
+          configManager,
+          speedTestService,
+          entryHelperPath: resourceManager.getEntryProbeHelperPath(),
+          isTunActive: () => {
+            const manager = getProxyManager();
+            return !!manager?.getStatus().running && manager.isTunModeNow();
+          },
+          getMainWindow,
+          getTrayManager,
+          logManager,
+        },
         { notifyTrayToast: true }
       ).catch(() => {});
-    },
-    onEnterPrivacyMode: () => {
-      setPrivacyMode(true); // 置主进程 flag（单一真值）并广播；避免渲染端异步回写竞态/窗口重建丢锁
     },
     onLightweightMode: () => {
       const mainWindow = getMainWindow();

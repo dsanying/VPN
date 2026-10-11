@@ -23,7 +23,9 @@ const RAW: SingBoxConnection = {
   downlinkTotal: '67890',
   // 2026-06-13T10:00:00.000Z 的 unix 纳秒（毫秒 1781258400000 × 1e6）。
   createdAt: String(Date.parse('2026-06-13T10:00:00.000Z') * 1_000_000),
-  processInfo: { processPath: '/usr/bin/curl' },
+  processInfo: { processPath: '/usr/bin/curl', processId: 123 },
+  outbound: 'actual-node',
+  outboundType: 'vless',
 };
 
 describe('trimConnection（gRPC SingBoxConnection → ConnectionEntry）', () => {
@@ -38,7 +40,10 @@ describe('trimConnection（gRPC SingBoxConnection → ConnectionEntry）', () =>
     expect(e.metadata?.sourcePort).toBe('54321'); // ← 拆 source
     expect(e.metadata?.destinationIP).toBe('93.184.216.34'); // ← 拆 destination
     expect(e.metadata?.destinationPort).toBe('443'); // ← 拆 destination
-    expect(e.metadata?.processPath).toBe('/usr/bin/curl'); // ← processInfo.processPath
+    expect(e.metadata?.processPath).toBe('/usr/bin/curl');
+    expect(e.metadata?.processId).toBe(123);
+    expect(e.outbound).toBe('actual-node');
+    expect(e.outboundType).toBe('vless'); // ← processInfo.processPath
   });
 
   it('保持 topology 原有字段（向后兼容）', () => {

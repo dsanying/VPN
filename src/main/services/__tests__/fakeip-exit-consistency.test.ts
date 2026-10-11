@@ -434,60 +434,36 @@ describe.each(FAKEIP_ARMS)(
 );
 
 describe.each(FAKEIP_ARMS)(
-  '#347 INV-EXIT-5 — 应用分流强制直连 → 两条腿都必须非隧道解析（%s）',
+  '#347 INV-EXIT-5 — installed application direct routing and DNS agree (%s)',
   (_arm, arm) => {
-    // 判据用差分（开/关应用分流的同配置之差），零夹具依赖：防环/DNS-客户端那批 process_name→direct
-    // 在两侧都有、自动抵消。直接取「所有 process_name→direct」会过采集，在未变异代码上就红。
+    const executable = '/Applications/Example.app/Contents/MacOS/Example';
     const cfg = gen(
       resolveOn({
         appRoutingEnabled: true,
-        appRules: [{ appId: 'telegram', action: 'direct', enabled: true }],
+        customAppPresets: [
+          {
+            id: 'example-app',
+            name: 'Example',
+            emoji: '',
+            geositeTags: [],
+            processPaths: [executable],
+          },
+        ],
+        appRules: [{ appId: 'example-app', action: 'direct', enabled: true }],
         ...arm,
-      } as unknown as Partial<UserConfig>)
+      } as Partial<UserConfig>)
     );
-    const off = gen(resolveOn({ ...arm }));
-
-    it('5a process_name 腿', () => {
-      const procsOf = (c: AnyCfg): Set<string> => {
-        const out = new Set<string>();
-        for (const r of routeRules(c))
-          if (r.outbound === 'direct' && Array.isArray(r.process_name))
-            for (const p of r.process_name as string[]) out.add(p);
-        return out;
-      };
-      const baseProcs = procsOf(off);
-      const added = [...procsOf(cfg)].filter((p) => !baseProcs.has(p));
-      expect(added.length).toBeGreaterThan(0); // 正向对照
-      for (const p of added) {
-        const leg = dnsRules(cfg).find(
-          (r) => Array.isArray(r.process_name) && (r.process_name as string[]).includes(p)
-        );
-        expect(leg).toBeDefined();
-        expect(isTunnelResolver(cfg, leg.server)).toBe(false);
-      }
+    it('real process identity routes directly and uses a non-tunnel DNS resolver', () => {
+      const route = routeRules(cfg).find((r) => r.process_path?.includes(executable));
+      expect(route).toMatchObject({ action: 'route', outbound: 'direct' });
+      const dns = dnsRules(cfg).find((r) => r.process_path?.includes(executable));
+      expect(dns).toBeDefined();
+      expect(isTunnelResolver(cfg, dns.server)).toBe(false);
     });
-
-    it('5b geosite 腿', () => {
-      const geoOf = (c: AnyCfg): Set<string> => {
-        const out = new Set<string>();
-        for (const r of routeRules(c)) {
-          if (r.outbound !== 'direct') continue;
-          const rs = Array.isArray(r.rule_set) ? r.rule_set : r.rule_set ? [r.rule_set] : [];
-          for (const t of rs) if (String(t).startsWith('geosite-')) out.add(String(t));
-        }
-        return out;
-      };
-      const baseGeo = geoOf(off);
-      const added = [...geoOf(cfg)].filter((t) => !baseGeo.has(t));
-      expect(added.length).toBeGreaterThan(0); // 正向对照
-      for (const tag of added) {
-        const leg = dnsRules(cfg).find((r) => {
-          const rs = Array.isArray(r.rule_set) ? r.rule_set : r.rule_set ? [r.rule_set] : [];
-          return rs.includes(tag);
-        });
-        expect(leg).toBeDefined();
-        expect(isTunnelResolver(cfg, leg.server)).toBe(false);
-      }
+    it('no service website fallback is generated for the application', () => {
+      expect(routeRules(cfg).some((r) => JSON.stringify(r).includes('geosite-telegram'))).toBe(
+        false
+      );
     });
   }
 );

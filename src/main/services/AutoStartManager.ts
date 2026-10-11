@@ -32,17 +32,26 @@ abstract class AutoStartLogBase {
 
 class ElectronAutoStart extends AutoStartLogBase implements IAutoStartManager {
   async setAutoStart(enabled: boolean): Promise<boolean> {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      path: app.getPath('exe'),
-    });
-    this.log('info', `Set openAtLogin: ${enabled}`);
-    return true;
+    try {
+      // Startup reconciliation must not rewrite an already-correct OS registration.
+      if ((await this.isAutoStartEnabled()) === enabled) return true;
+      app.setLoginItemSettings({ openAtLogin: enabled, path: app.getPath('exe') });
+      // Read the OS registration, including Windows Startup Apps' disabled state.
+      const actual = await this.isAutoStartEnabled();
+      if (actual !== enabled) return false;
+      this.log('info', `Set openAtLogin: ${enabled}`);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async isAutoStartEnabled(): Promise<boolean> {
-    const settings = app.getLoginItemSettings();
-    return settings.openAtLogin;
+    const settings = app.getLoginItemSettings({ path: app.getPath('exe') });
+    return (
+      settings.openAtLogin &&
+      (process.platform !== 'win32' || settings.executableWillLaunchAtLogin !== false)
+    );
   }
 }
 
@@ -76,9 +85,11 @@ X-GNOME-Autostart-enabled=true
 `;
         await fs.writeFile(this.desktopFilePath, desktopContent, 'utf-8');
       } else {
-        await fs.unlink(this.desktopFilePath).catch(() => {});
+        await fs.unlink(this.desktopFilePath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+        });
       }
-      return true;
+      return (await this.isAutoStartEnabled()) === enabled;
     } catch (error) {
       this.log('error', `Failed to set Linux autostart: ${error}`);
       return false;

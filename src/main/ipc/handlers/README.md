@@ -14,7 +14,6 @@
 | `proxy-handlers.ts` | 启停代理、模式切换、节点热切、流量统计 |
 | `speed-test-handlers.ts` | 节点测速（批量 + 进度广播） |
 | `rules-handlers.ts` | 自定义路由规则 CRUD + 排序 |
-| `rule-resource-handlers.ts` | 规则集（`.srs`）下载 / catalog / 自动更新 |
 | `log-handlers.ts` | 获取/清空日志、设级别、实时 `event:logReceived` 广播 |
 | `system-handlers.ts` | 系统集成（系统代理、路径、OS 相关） |
 | `helper-handlers.ts` | 提权 helper 安装 / 状态 |

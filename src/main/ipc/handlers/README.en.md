@@ -14,7 +14,6 @@ This directory holds the IPC handlers that service requests from the renderer. E
 | `proxy-handlers.ts` | Start/stop proxy, mode switch, node hot-switch, traffic stats |
 | `speed-test-handlers.ts` | Node speed test (batch + progress broadcast) |
 | `rules-handlers.ts` | Custom routing rules CRUD + ordering |
-| `rule-resource-handlers.ts` | Rule-set (`.srs`) download / catalog / auto-update |
 | `log-handlers.ts` | Get/clear logs, set level, live `event:logReceived` broadcast |
 | `system-handlers.ts` | System integration (system proxy, paths, OS bits) |
 | `helper-handlers.ts` | Privilege helper install / status |

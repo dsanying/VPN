@@ -1,3 +1,5 @@
+import { setMainLanguage } from '../../i18n';
+beforeEach(() => setMainLanguage('zh-CN'));
 /**
  * DiagnosticService 的日志取数单测：守住「报告里三段日志各读各的文件」这条路径收口。
  *
@@ -43,7 +45,11 @@ const TIMELINE_LINE = '起核阶段耗时 total=1234ms outcome=ok | killOrphans=
 
 function makeSvc(opts: { startedViaHelper?: boolean; lastDnsFlush?: unknown } = {}): any {
   const configManager: any = { loadConfig: jest.fn().mockResolvedValue({ logLevel: 'info' }) };
-  const logManager: any = { flush: jest.fn().mockResolvedValue(undefined) };
+  const logManager: any = {
+    getDiagnostics: jest.fn(() => ({ sessionId: 'test-session', droppedWrites: 0 })),
+    getLogs: jest.fn(() => []),
+    flush: jest.fn().mockResolvedValue(undefined),
+  };
   const proxyManager: any = {
     getCoreVersion: jest.fn().mockResolvedValue('1.14.0-beta.2'),
     getStatus: jest.fn().mockReturnValue({ running: false }),
@@ -80,11 +86,12 @@ describe('DiagnosticService — 日志取数路径收口', () => {
       return { seen, md: (await svc.buildReport()) as string };
     });
 
-    expect(seen).toHaveLength(3);
-    expect(new Set(seen).size).toBe(3); // 三个互不相同 → 排除「两段读同一文件」的漂移
-    expect(seen[0]).toBe(path.join(getLogsPath(), 'app.log'));
-    expect(seen[1]).toBe(getSingBoxLogPath());
-    expect(seen[2]).toBe(getSingBoxStartupLogPath());
+    expect(seen).toHaveLength(4);
+    expect(new Set(seen).size).toBe(4); // 三个互不相同 → 排除「两段读同一文件」的漂移
+    expect(seen[0]).toBe(path.join(getLogsPath(), 'app.1.log'));
+    expect(seen[1]).toBe(path.join(getLogsPath(), 'app.log'));
+    expect(seen[2]).toBe(getSingBoxLogPath());
+    expect(seen[3]).toBe(getSingBoxStartupLogPath());
     // 顺序错位（把 singboxLogTail 与 startupLogTail 调换）会被下面两条钉住
     expect(md).toMatch(/## singbox\.log（近期）[\s\S]*tail-of:singbox\.log/);
     expect(md).toMatch(/## singbox_startup\.log[\s\S]*tail-of:singbox_startup\.log/);
@@ -214,5 +221,32 @@ describe('DiagnosticService — 起核阶段耗时汇总行接线（B0）', () =
       return (await svc.buildReport()) as string;
     });
     expect(md).not.toContain('起核阶段耗时');
+  });
+});
+
+describe('Localized diagnostic evidence', () => {
+  it('English export includes session and loss evidence, all log sources, and no free-form credentials', async () => {
+    setMainLanguage('en-US');
+    const service = makeSvc();
+    jest
+      .spyOn(service, 'readTail')
+      .mockResolvedValue(
+        'Authorization: Bearer fake-secret\nhttps://example.com/fake-path-secret?token=fake-query-secret'
+      );
+    const report = await service.buildReport();
+    expect(report).toContain('# Shadow VPN diagnostic report');
+    expect(report).toContain('## Logging evidence');
+    expect(report).toContain('test-session');
+    expect(report).toContain('"flushComplete": true');
+    expect(report).toContain('app.1.log');
+    expect(report).not.toMatch(/fake-secret|fake-path-secret|fake-query-secret/);
+    expect(report).toContain('Core version');
+  });
+  it('blocked persistence cannot indefinitely block report export, and the missing flush is explicit', async () => {
+    const service = makeSvc();
+    service.logManager.flush = jest.fn(() => new Promise<void>(() => {}));
+    jest.spyOn(service, 'readTail').mockResolvedValue('');
+    const report = await service.buildReport();
+    expect(report).toContain('"flushComplete": false');
   });
 });

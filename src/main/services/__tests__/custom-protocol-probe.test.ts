@@ -55,7 +55,8 @@ function readProbeConfig(args: any[]): any {
 }
 
 function freshPm(): any {
-  // 假 singboxPath：statSync 抛 → binId='na'；getCoreVersion 真 exec 失败 → 回落 bundledCoreVersion。互不影响 probe 判定。
+  // 假路径只用于 check 夹具；版本固定，避免缓存压力测试反复启动不存在的二进制。
+  // 真实版本探测与指纹失效由 proxy-manager-core-version-cache / core-version-probe-serial 覆盖。
   const pm: any = new ProxyManager(
     undefined,
     undefined,
@@ -63,6 +64,7 @@ function freshPm(): any {
     '/fake/sing-box'
   );
   pm.logToManager = () => {};
+  jest.spyOn(pm, 'getCoreVersion').mockResolvedValue('1.14.2');
   return pm;
 }
 

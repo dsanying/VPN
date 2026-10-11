@@ -40,9 +40,18 @@ afterAll(() => {
   }
 });
 
-const mockLog = { addLog: () => {} } as unknown as ConstructorParameters<typeof SpeedTestService>[0];
+const mockLog = { addLog: () => {} } as unknown as ConstructorParameters<
+  typeof SpeedTestService
+>[0];
 const vless = (id: string): ServerConfig =>
-  ({ id, name: id.toUpperCase(), protocol: 'vless', address: `${id}.ex.com`, port: 443, uuid: 'u' }) as unknown as ServerConfig;
+  ({
+    id,
+    name: id.toUpperCase(),
+    protocol: 'vless',
+    address: `${id}.ex.com`,
+    port: 443,
+    uuid: 'u',
+  }) as unknown as ServerConfig;
 
 // K=1 探测池（单槽 → 波严格串行，超代检查时序确定）。
 const probeK1 = (): MainCoreProbe => ({
@@ -63,6 +72,8 @@ const fakeProc = (): any => {
   p.killed = false;
   p.kill = () => {
     p.killed = true;
+    queueMicrotask(() => p.emit('exit', 0));
+    return true;
   };
   return p;
 };
@@ -105,15 +116,27 @@ describe('§15.11 主核池 — 生成号超代', () => {
   });
 
   it('诚实性分流：真实失败(null) + gen 不变 → 照常记 null（下游 -1）', async () => {
-    const svc = new SpeedTestService(mockLog, undefined, () => probeK1(), () => 5); // gen 恒 5
-    jest.spyOn(svc as any, 'measureViaTunnel').mockResolvedValue({ latency: null, reason: 'timeout' });
+    const svc = new SpeedTestService(
+      mockLog,
+      undefined,
+      () => probeK1(),
+      () => 5
+    ); // gen 恒 5
+    jest
+      .spyOn(svc as any, 'measureViaTunnel')
+      .mockResolvedValue({ latency: null, reason: 'timeout' });
     const { results } = await svc.testAllServers([vless('s1')]);
     expect(results.has('s1')).toBe(true);
     expect(results.get('s1')).toBeNull(); // 真实失败 → 记 null，非缺席
   });
 
   it('切节点不 abort（R-d）：gen 恒定 → 全量结果', async () => {
-    const svc = new SpeedTestService(mockLog, undefined, () => probeK1(), () => 7); // hot-switch 不 bump → 恒 7
+    const svc = new SpeedTestService(
+      mockLog,
+      undefined,
+      () => probeK1(),
+      () => 7
+    ); // hot-switch 不 bump → 恒 7
     jest.spyOn(svc as any, 'measureViaTunnel').mockResolvedValue({ latency: 11 });
     const { results } = await svc.testAllServers([vless('s1'), vless('s2')]);
     expect(results.get('s1')).toBe(11);
@@ -140,9 +163,14 @@ describe('§15.11 主核池 — 生成号超代', () => {
       tagOf: (id: string) => `tag-${id}`,
       hasTag: () => true,
       tsNodeReady: () => true,
-  isDirty: () => false,
+      isDirty: () => false,
     };
-    const svc = new SpeedTestService(mockLog, undefined, () => probe, () => 0); // gen 恒 0（崩溃不 bump）
+    const svc = new SpeedTestService(
+      mockLog,
+      undefined,
+      () => probe,
+      () => 0
+    ); // gen 恒 0（崩溃不 bump）
     const measureSpy = jest.spyOn(svc as any, 'measureViaTunnel').mockImplementation(async () => {
       measureCall++;
       if (measureCall === 2) running = false; // s2 measure 期间核崩溃 → connect-refused
@@ -170,12 +198,15 @@ describe('§15.11 临时核兜底（R-b）— 生成号超代', () => {
     const proc = fakeProc();
     (spawn as jest.Mock).mockReturnValue(proc);
     jest.spyOn(svc as any, 'findFreePorts').mockResolvedValue([7001, 7002]);
+    jest.spyOn(svc as any, 'checkProbeConfig').mockResolvedValue(true);
     // waitForPortReady 期间核 START（临时核 + 新主核瞬态双会话）→ gen 跃迁。
     jest.spyOn(svc as any, 'waitForPortReady').mockImplementation(async () => {
       gen = 1;
       return true;
     });
-    const measureSpy = jest.spyOn(svc as any, 'measureViaTunnel').mockResolvedValue({ latency: 42 });
+    const measureSpy = jest
+      .spyOn(svc as any, 'measureViaTunnel')
+      .mockResolvedValue({ latency: 42 });
 
     const { results } = await svc.testAllServers([vless('s1'), vless('s2')]);
     proc.emit('exit', 0); // 触发 finally 挂的 exit 监听 → clearTimeout(forceKillTimer)，避免 2s 定时器泄漏
@@ -187,4 +218,32 @@ describe('§15.11 临时核兜底（R-b）— 生成号超代', () => {
     expect([...results.values()].every((v) => v !== null)).toBe(true);
     expect(proc.killed).toBe(true); // 临时核 finally 仍杀（清理不受超代影响）
   });
+});
+
+it('each selected probe slot detects its own exit before reuse; missing region is not inferred', async () => {
+  const svc = new SpeedTestService(
+    mockLog,
+    undefined,
+    () => probeK1(),
+    () => 0
+  );
+  svc.enableRegionDetection();
+  jest.spyOn(svc as any, 'measureViaTunnel').mockResolvedValue({ latency: 42 });
+  const trace = jest
+    .spyOn(require('../IpInfoService').IpInfoService.prototype, 'queryViaProxy')
+    .mockResolvedValueOnce({ ip: '192.0.2.1', countryCode: 'JP' })
+    .mockResolvedValueOnce({ ip: '192.0.2.2' });
+  try {
+    const { results } = await svc.testAllServers([vless('geo-a'), vless('geo-b')]);
+    expect([...results.values()]).toEqual([42, 42]);
+    expect(trace.mock.calls).toEqual([[100], [100]]);
+    expect(svc.getNodeMeasurement('geo-a')?.exit).toMatchObject({
+      ip: '192.0.2.1',
+      countryCode: 'JP',
+      provider: 'Cloudflare',
+    });
+    expect(svc.getNodeMeasurement('geo-b')?.exit).toBeUndefined();
+  } finally {
+    trace.mockRestore();
+  }
 });

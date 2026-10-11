@@ -1,3 +1,4 @@
+import * as https from 'https';
 /**
  * 本地节点域名解析 race DNS server（issue #147 §3/§6/§8）。主进程内嵌 UDP server（127.0.0.1:动态口）：
  * 内核 Do53 query → raceForward（多上游 DoH/UDP/system 并发 race）→ 命中上游完整响应透传回内核（回填 id）。
@@ -29,16 +30,45 @@ async function queryOneUpstream(
   signal: AbortSignal
 ): Promise<Uint8Array> {
   if (up.kind === 'doh' && !up.dot) {
-    const url = `https://${up.ip}:${up.port ?? 443}${up.path || '/dns-query'}`;
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/dns-message', accept: 'application/dns-message' },
-      body: Buffer.from(query),
-      signal,
+    return new Promise<Uint8Array>((resolve, reject) => {
+      const request = https.request(
+        {
+          hostname: up.ip,
+          port: up.port ?? 443,
+          path: up.path || '/dns-query',
+          servername: up.serverName,
+          method: 'POST',
+          rejectUnauthorized: true,
+          signal,
+          headers: {
+            Host: up.serverName ?? up.ip ?? '',
+            'content-type': 'application/dns-message',
+            accept: 'application/dns-message',
+          },
+        },
+        (response) => {
+          if (response.statusCode !== 200) {
+            response.resume();
+            reject(new Error(`doh ${response.statusCode}`));
+            return;
+          }
+          const chunks: Buffer[] = [];
+          let size = 0;
+          response.on('data', (chunk: Buffer) => {
+            size += chunk.length;
+            if (size > 65535) request.destroy(new Error('dns-response-too-large'));
+            else chunks.push(chunk);
+          });
+          response.on('error', reject);
+          response.on('aborted', () => reject(new Error('dns-response-aborted')));
+          response.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks))));
+        }
+      );
+      request.on('error', reject);
+      request.end(Buffer.from(query));
     });
-    if (!resp.ok) throw new Error(`doh ${resp.status}`);
-    return new Uint8Array(await resp.arrayBuffer());
   }
+
   if (up.kind === 'udp') {
     return udpQuery(up.ip as string, up.port ?? 53, query, signal);
   }

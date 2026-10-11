@@ -66,6 +66,8 @@ const mockLog = { addLog: () => {} } as unknown as ConstructorParameters<
 >[0];
 
 interface MockOpts {
+  firstResponse?: string;
+  secondResponse?: string;
   /** CONNECT 收齐后延迟多久才回 200（模拟建连慢）。 */
   connectDelay?: number;
   /** 第一次 GET 延迟多久回响应（模拟首请求/暖身慢）。 */
@@ -109,7 +111,10 @@ function serveOrigin(stream: net.Socket | tls.TLSSocket, opts: MockOpts): void {
       setTimeout(() => {
         try {
           const body = isFirst ? opts.firstBody : undefined;
-          if (body && opts.splitFirstHeaderBody) {
+          const raw = isFirst ? opts.firstResponse : opts.secondResponse;
+          if (raw) {
+            stream.write(raw);
+          } else if (body && opts.splitFirstHeaderBody) {
             // header 先发、body 后发（独立 chunk）：body 残余会先于第二次响应进入清空后的 buf。
             stream.write(`HTTP/1.1 200 OK\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n`);
             setTimeout(() => {
@@ -197,7 +202,8 @@ type Measurable = {
   measureViaTunnel(
     proxyPort: number,
     timeout: number,
-    target: ReturnType<typeof resolveSpeedTestTarget>
+    target: ReturnType<typeof resolveSpeedTestTarget>,
+    requiredStatus?: number
   ): Promise<{ latency: number | null; reason?: string }>;
 };
 
@@ -261,19 +267,16 @@ describe('SpeedTestService.measureViaTunnel（warm RTT，对齐 mihomo unified-d
     }
   });
 
-  it('第一次响应跨 chunk 残余不污染第二次计时（防塌成 ≈0ms）', async () => {
-    // 第一次响应头后 10ms 再发一段无 \r\n\r\n 的残余 chunk；旧相位机会把它当第二次首字节 → latency≈10；
-    // 正确实现应忽略残余、计到真正的第二次响应（secondDelay=100）。
+  it('undeclared response bytes cannot be accepted as the timed HTTP response', async () => {
     const proxy = await startMockProxy({
       firstDelay: 20,
       secondDelay: 100,
-      firstTrailer: 'X-Leftover: stray-bytes-without-header-end\r\n',
+      firstTrailer: 'X-Leftover: stray-bytes\r\n',
     });
     try {
-      const latency = await measureLatency(proxy.port, 8000, HTTP_TARGET);
-      expect(latency).not.toBeNull();
-      expect(latency!).toBeGreaterThanOrEqual(50); // ≈secondDelay(100)，证明残余未被计为第二次
-      expect(latency!).toBeLessThan(260);
+      const result = await svc.measureViaTunnel(proxy.port, 2000, HTTP_TARGET);
+      expect(result.latency).toBeNull();
+      expect(result.reason).toBe('http-unparsable');
     } finally {
       await proxy.close();
     }
@@ -385,4 +388,84 @@ describe('SpeedTestService.measureWarmRttViaHttpProxy（出口伴测薄包装：
     expect(rtt).toBeNull();
     expect(spy).toHaveBeenCalledWith(6002, 8000, resolveSpeedTestTarget('https://x.example/y'));
   });
+});
+
+describe('health verification requires the expected response rather than an arbitrary captive page', () => {
+  it('HTTP 200 is reachable but cannot satisfy an expected generate_204 response', async () => {
+    const proxy = await startMockProxy({ status: 200 });
+    try {
+      expect(await svc.measureViaTunnel(proxy.port, 1000, HTTP_TARGET, 204)).toMatchObject({
+        latency: null,
+        reason: 'http-200',
+      });
+    } finally {
+      await proxy.close();
+    }
+  });
+  it('HTTP 204 satisfies the health response contract', async () => {
+    const proxy = await startMockProxy({ status: 204 });
+    try {
+      expect(
+        (await svc.measureViaTunnel(proxy.port, 1000, HTTP_TARGET, 204)).latency
+      ).not.toBeNull();
+    } finally {
+      await proxy.close();
+    }
+  });
+});
+
+it('a split warm-up body containing a fake HTTP status cannot produce a usable result', async () => {
+  const proxy = await startMockProxy({
+    firstBody: 'HTTP/1.1 200 OK\r\n\r\n',
+    splitFirstHeaderBody: true,
+    secondDelay: 100,
+    status: 403,
+  });
+  try {
+    expect(await svc.measureViaTunnel(proxy.port, 2000, HTTP_TARGET)).toEqual({
+      latency: null,
+      reason: 'http-403',
+    });
+  } finally {
+    await proxy.close();
+  }
+});
+
+it.each([
+  [
+    'chunked body and trailers',
+    'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3;test=yes\r\nabc\r\n0\r\nX-Test: yes\r\n\r\n',
+  ],
+  [
+    'informational response',
+    'HTTP/1.1 103 Early Hints\r\nLink: </test>\r\n\r\nHTTP/1.1 204 OK\r\n\r\n',
+  ],
+])('%s preserves a real warm measurement', async (_name, firstResponse) => {
+  const proxy = await startMockProxy({ firstResponse, secondDelay: 50 });
+  try {
+    const result = await svc.measureViaTunnel(proxy.port, 2000, HTTP_TARGET);
+    expect(result.latency).toBeGreaterThanOrEqual(30);
+  } finally {
+    await proxy.close();
+  }
+});
+it.each([
+  ['conflicting lengths', 'HTTP/1.1 200 OK\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nx'],
+  [
+    'TE/CL ambiguity',
+    'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n0\r\n\r\n',
+  ],
+  ['oversized body', 'HTTP/1.1 200 OK\r\nContent-Length: 2000000\r\n\r\n'],
+  ['invalid chunk', 'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nZ\r\n'],
+  ['close-delimited body', 'HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n'],
+])('%s never produces a usable proxy', async (_name, firstResponse) => {
+  const proxy = await startMockProxy({ firstResponse });
+  try {
+    expect(await svc.measureViaTunnel(proxy.port, 1000, HTTP_TARGET)).toEqual({
+      latency: null,
+      reason: 'http-framing-invalid',
+    });
+  } finally {
+    await proxy.close();
+  }
 });

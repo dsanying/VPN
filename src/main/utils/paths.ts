@@ -221,13 +221,6 @@ export function getCachePath(): string {
 }
 
 /**
- * 规则资源目录（已下载的 .srs + catalog.json 缓存）。与内置 geo 的 <userData>/rules 分目录。
- */
-export function getRuleResourcesPath(): string {
-  return path.join(getUserDataPath(), 'rule-resources');
-}
-
-/**
  * 自定义规则外化目录（每条可外化 customRule 一个 source headless rule_set 文件，fswatch 热重载）。
  * 与内置 geo 的 <userData>/rules、用户 .srs 的 rule-resources 隔离，便于孤儿全量对账清扫。
  */

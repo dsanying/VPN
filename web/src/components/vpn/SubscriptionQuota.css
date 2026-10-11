@@ -1,0 +1,25 @@
+.ds-subscription-quota {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.ds-subscription-quota__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4) var(--ds-space-8);
+  justify-content: space-between;
+}
+.ds-subscription-quota__meter {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-8);
+}
+.ds-subscription-quota__meter > span {
+  white-space: nowrap;
+}
+.ds-subscription-quota__bar {
+  flex: 1;
+  min-width: calc(var(--ds-space-32) * 3);
+}
+.ds-subscription-quota__values > span {
+  white-space: nowrap;
+}

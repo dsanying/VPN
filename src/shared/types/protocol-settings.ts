@@ -46,6 +46,14 @@ export interface HttpSettings {
   headers?: Record<string, string[]>;
 }
 
+export interface XHttpSettings {
+  host?: string;
+  path?: string;
+  mode?: 'auto' | 'packet-up' | 'stream-up' | 'stream-one';
+  // Official Xray fields are preserved, including xmux and separate download settings.
+  [key: string]: unknown;
+}
+
 // Hysteria2 混淆类型（sing-box 1.14 新增 gecko，与 salamander 并列）。gecko 经 min/max_packet_size 调随机填充长度。
 export type Hysteria2ObfsType = 'salamander' | 'gecko';
 

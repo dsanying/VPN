@@ -11,14 +11,16 @@ import { parseDnsServerSpec, type ParsedDnsServer } from '../../shared/dns';
 import { dedupe } from '../../shared/collections';
 import { ruleConditions } from '../../shared/rules';
 import { normalizeNeighborDomain, isSourceDeviceMatchSupported } from '../../shared/neighbor';
-import { effectiveRegionRouting, REGION_LOCAL_GEO } from '../../shared/region-routing';
+import { effectiveRegionRouting, localRegionGeo } from '../../shared/region-routing';
 import {
+  condMatcherFields,
   planCustomRule,
   customRuleFileBase,
   usesFakeIp,
   resolvesDestinationAhead,
 } from './custom-rule-files';
 import { getAppPreset } from '../../shared/app-rules-preset';
+import { applicationProcessMatchers } from '../../shared/application-matching';
 import { getCustomRulesDir } from '../utils/paths';
 import {
   findBuiltin,
@@ -104,7 +106,6 @@ export function buildDnsConfig(
   const userDnsConfig = config.dnsConfig || {
     domesticDns: 'https://doh.pub/dns-query',
     foreignDns: 'https://dns.google/dns-query',
-    enableFakeIp: false,
   };
 
   // TUN 模式强制开启 FakeIP：不少机场对纯 IP（非域名）连接会拒绝或返回无效证书/拦截页；FakeIP 让 sing-box 用内部
@@ -294,7 +295,7 @@ export function buildDnsConfig(
   // .local 走 mDNS/LLMNR 组播(不发 unicast)，留 dns-local。
   // winLoopRisk 解耦（T2）：死环源于 Win strict_route(WFP) + type:local 本身，与 takeoverSystemDns 开关无关（Win
   // setDns 本就收敛 no-op）→ 改为「Win + TUN」恒判，不再以 takeoverSystemDns 为代理键。修原 takeoverSystemDns=false
-  // 时死环防护被误关、该边界仍撞 svchost ∞ 环的潜在 bug（默认 takeoverSystemDns!==false 不受影响、行为字节不变）。
+  // 时死环防护被误关、该边界仍撞 svchost ∞ 环的潜在 bug（与系统 DNS 接管开关的默认值无关）。
   // ⚠️ 真机待验（推理可判但 DNS 运行期须实证）：Win + takeoverSystemDns=false
   //    + TUN 下 nslookup 内网/银行域名走 dns-domestic 不成环、内网 NXDOMAIN 不挂（见 docs/design/dns-ipv6-takeover.md §A）。
   const winLoopRisk = process.platform === 'win32' && config.proxyModeType === 'tun';
@@ -402,7 +403,7 @@ export function buildDnsConfig(
   // fail-closed：引用 region geo rule_set 前须本地 .srs 存在（悬空 rule_set 会令 sing-box FATAL）。
   // 仅 FakeIP 路径需要，关 FakeIP 时不做 stat（保持「这条路根本不跑」的零副作用）。
   const fakeipLocalGeo = enableFakeIp
-    ? REGION_LOCAL_GEO[fakeipRegion.region].geosite.filter((tag) => {
+    ? localRegionGeo(fakeipRegion).geosite.filter((tag) => {
         const fileName = findBuiltin(tag)?.fileName ?? `${tag}.srs`;
         return isValidSrsFile(path.join(getRuntimeRulesDir(), fileName));
       })
@@ -413,6 +414,22 @@ export function buildDnsConfig(
   // split 不生效时出口恒是代理 → fallthrough 恒隧道。原实现无模式门控，global+reverse 下会错误地给 dns-domestic。
   const fakeipFallthroughResolver =
     fakeipSplitActive && fakeipRegion.reverse ? 'dns-domestic' : 'dns-remote';
+  // Query local DNS first, accept the evaluated answer only when its IP belongs to the detected country.
+  // Otherwise obtain the answer through the proxy resolver. No hostname brand or TLD guesses.
+  const pushAutomaticCountryDns = (): void => {
+    if (!fakeipSplitActive || !fakeipRegion.automatic) return;
+    const tag = localRegionGeo(fakeipRegion).geoip[0];
+    if (!tag || !isValidSrsFile(path.join(getRuntimeRulesDir(), `${tag}.srs`))) return;
+    dnsRules.push(
+      {
+        query_type: ['A', 'AAAA'],
+        action: 'evaluate',
+        server: getDomesticResolverTag(config, 'dns-domestic'),
+        timeout: '2s',
+      },
+      { match_response: true, rule_set: tag, action: 'respond' }
+    );
+  };
 
   // fake-ip-filter 默认清单（仅 FakeIP 开启时有意义；config.fakeIpFilter === false 可关）：NTP/STUN/Captive 等
   // 在 FakeIP 下会坏的域名 → 在 fakeip catch-all 之前命中、改走真实解析器，绕过 FakeIP。内联硬编码、无下载依赖。
@@ -591,39 +608,69 @@ export function buildDnsConfig(
       if (directKeywords.length) shadow.domain_keyword = directKeywords;
       dnsRules.push(shadow as unknown as SingBoxDnsRule);
     }
-    // 应用分流同理。两条腿分别镜像 route 侧的 process_name 腿与 rule_set 腿；geosite tag 须先过
-    // .srs 存在性过滤（DNS 侧无末尾悬空剪枝，悬空 rule_set 会令内核 FATAL）。geoip 腿不镜像：
-    // 那是 IP 判据，解析阶段还没有 IP。
-    const directAppProcesses: string[] = [];
-    const directAppGeosites: string[] = [];
-    for (const appRule of effectiveAppRules(config)) {
-      if (appRule.enabled === false || appRule.action !== 'direct') continue;
-      const preset = getAppPreset(appRule.appId, config.customAppPresets);
-      if (!preset) continue;
-      if (preset.processNames?.length) directAppProcesses.push(...preset.processNames);
-      for (const tag of preset.geositeTags || []) {
-        const geoTag = `geosite-${tag.toLowerCase()}`;
-        const fileName = findBuiltin(geoTag)?.fileName ?? `${geoTag}.srs`;
-        if (!isValidSrsFile(path.join(getRuntimeRulesDir(), fileName))) continue;
-        if (!directAppGeosites.includes(geoTag)) directAppGeosites.push(geoTag);
-      }
-    }
-    const domesticForApps = getDomesticResolverTag(config, 'dns-domestic');
-    if (directAppProcesses.length) {
-      dnsRules.push({
-        query_type: ['A', 'AAAA'],
-        process_name: dedupe(directAppProcesses),
-        server: domesticForApps,
-      } as unknown as SingBoxDnsRule);
-    }
-    if (directAppGeosites.length) {
-      dnsRules.push({
-        query_type: ['A', 'AAAA'],
-        rule_set: directAppGeosites.length === 1 ? directAppGeosites[0] : directAppGeosites,
-        server: domesticForApps,
-      } as unknown as SingBoxDnsRule);
-    }
   };
+
+  // Unified domain/application rules share their displayed order for DNS as well as routing.
+  // Keep infrastructure DNS rules above; process identity never becomes a domain-only match.
+  if (dnsCustomRules.some((rule) => rule.application || rule.type === 'processPathRegex')) {
+    const queryTypes = new Set([
+      'domain',
+      'domainSuffix',
+      'domainKeyword',
+      'domainRegex',
+      'processName',
+      'processPath',
+      'processPathRegex',
+    ]);
+    for (const rule of dnsCustomRules) {
+      if (!rule.enabled) continue;
+      const conditions = ruleConditions(rule);
+      if (conditions.some((condition) => !queryTypes.has(condition.type))) continue;
+      const matchers = conditions.map(condMatcherFields);
+      if (!matchers.length || matchers.some((matcher) => !matcher)) continue;
+      const matcher =
+        matchers.length === 1
+          ? matchers[0]!
+          : { type: 'logical', mode: rule.combineMode ?? 'or', rules: matchers };
+      const server =
+        rule.action === 'direct'
+          ? getDomesticResolverTag(config, 'dns-domestic')
+          : `dns-rule-${rule.id}`;
+      if (rule.action === 'proxy' && !dnsServers.some((item) => item.tag === server)) {
+        dnsServers.push(buildUserDns(server, foreign, `rule-sel-${rule.id}`));
+      }
+      dnsRules.push({
+        ...matcher,
+        ...(rule.action === 'block' ? { action: 'reject' } : { server }),
+      } as unknown as SingBoxDnsRule);
+    }
+  }
+
+  // DNS follows the same installed-application policy, even when resolve-ahead is disabled.
+  // A fixed app node also resolves through its own selector, never through the unrelated global exit.
+  for (const rule of effectiveAppRules(config)) {
+    if (!rule.enabled) continue;
+    const preset = getAppPreset(rule.appId, config.customAppPresets);
+    if (!preset) continue;
+    const matchers = applicationProcessMatchers({
+      processPaths: preset.processPaths,
+      processPathRegex: preset.processPathRegex,
+    });
+    if (!matchers.length) continue;
+    const server =
+      rule.action === 'direct'
+        ? getDomesticResolverTag(config, 'dns-domestic')
+        : `dns-app-${rule.appId}`;
+    if (rule.action === 'proxy' && !dnsServers.some((s) => s.tag === server)) {
+      dnsServers.push(buildUserDns(server, foreign, `rule-sel-app-${rule.appId}`));
+    }
+    for (const matcher of matchers) {
+      dnsRules.push({
+        ...matcher,
+        ...(rule.action === 'block' ? { action: 'reject' } : { server }),
+      });
+    }
+  }
 
   // 智能分流/全局代理模式下的 DNS 规则
   if (proxyMode === 'smart' || proxyMode === 'global') {
@@ -650,6 +697,7 @@ export function buildDnsConfig(
       } as SingBoxDnsRule);
       // 位置：fakeip catch-all 之后（app 侧查询命中 fakeip 即停、走不到这里）、S0/S1 之前（用户去向优先于 geo 二分）。
       if (resolveAhead) pushDirectExitShadowRules();
+      pushAutomaticCountryDns();
       // R1（§14.4，P6/P7 ROOT）：FakeIP 分支补回境内/境外分类的「影子规则」。上游语义：app 侧查询 Exchange 命中
       // fakeip 即停（到不了下面这些规则 → 字节不变）；endpoint（WARP/WG/TS，必须本机解析目的域名 IP 才能灌进隧道）
       // dial 的 Lookup 跳过 fakeip 继续走这些规则 → **天然只作用于 dial-time 目的解析**。修根因：endpoint 目的域名原
@@ -693,7 +741,7 @@ export function buildDnsConfig(
         //   （resources/data），缺失（损坏/未 seed）时跳过该 region-local 规则：所有域名 fallthrough 到 final，
         //   次优但不崩（route 侧同款 fail-closed，重下资源后自动恢复）。
         const runtimeDir = getRuntimeRulesDir();
-        const localGeo = REGION_LOCAL_GEO[region.region].geosite.filter((tag) => {
+        const localGeo = localRegionGeo(region).geosite.filter((tag) => {
           const fileName = findBuiltin(tag)?.fileName ?? `${tag}.srs`;
           return isValidSrsFile(path.join(runtimeDir, fileName));
         });
@@ -709,6 +757,7 @@ export function buildDnsConfig(
         // 本分支无 fakeip catch-all，故这批规则同时作用于客户端自身查询：对「被强制直连」的域名而言，
         // 用本机视角解析正是正确语义（与 route 侧去向一致），不是副作用。
         if (resolveAhead) pushDirectExitShadowRules();
+        pushAutomaticCountryDns();
         if (localGeo.length > 0) {
           dnsRules.push({
             // 单 tag 与历史一致序列化为标量字符串（保 cn 逐字节）；多 tag 走数组。

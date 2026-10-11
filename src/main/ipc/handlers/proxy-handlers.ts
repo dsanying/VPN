@@ -1,3 +1,4 @@
+import { prepareAutomaticTakeover } from '../../../shared/automatic-takeover';
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/ipc-channels';
 import type {
@@ -69,7 +70,7 @@ export function registerProxyHandlers(
       // 启动 sing-box 进程。helper 引导统一收敛到 ProxyManager.start() 的 native gate（无窗口依赖、单点）。
       // 系统代理拆双轨：enable/clear 已收口于 ProxyManager.start()（按新模式 reconcile），此处不再重复设置，
       // 避免双写者污染 originalSettings（曾致 disable 把死端口代理设回 → 断网）。
-      await proxyManager.start(config);
+      await proxyManager.start(prepareAutomaticTakeover(config));
 
       if (trayStateCallback) {
         trayStateCallback(true);
@@ -100,7 +101,7 @@ export function registerProxyHandlers(
   registerIpcHandler<UserConfig, void>(
     IPC_CHANNELS.PROXY_RESTART,
     async (_event: IpcMainInvokeEvent, config: UserConfig) => {
-      await proxyManager.restart(config);
+      await proxyManager.restart(prepareAutomaticTakeover(config));
     }
   );
 

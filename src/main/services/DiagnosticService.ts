@@ -1,3 +1,10 @@
+import { RUNTIME_POLICY } from '../../shared/runtime-policy';
+import compatibilityManifest from '../../shared/compatibility-core-manifest.json';
+import { diagnosticText } from '../../shared/diagnostic-text';
+import { presentLog, logLevelLabel } from '../../shared/log-presentation';
+import { redactLogText } from '../../shared/log-redact';
+import { formatDeviceDateTime } from '../../shared/device-time';
+import { getMainLanguage } from '../i18n';
 /**
  * 把「运行态系统里已有的诊断事实」汇成单个脱敏 Markdown：环境快照 + 运行态 + 脱敏 UserConfig +
  * 脱敏「实际下发给内核的 sing-box 配置」（#57 类一眼可见 DNS/route 根因）+ app.log / singbox.log /
@@ -89,7 +96,9 @@ export class DiagnosticService {
       // 给公开 issue 当附件用的，redactIdentifiers 只打码节点标识符、不碰路径。singbox_startup.log 在
       // Windows helper 路径下由 SYSTEM 创建、fixFilePermissions 又只修 darwin，是三个 tail 里最可能踩到
       // 非 ENOENT 失败的那个。
-      return e?.code === 'ENOENT' ? '(无日志文件)' : `(读取失败: ${e?.code ?? '未知错误'})`;
+      return e?.code === 'ENOENT'
+        ? diagnosticText(53, [], getMainLanguage())
+        : diagnosticText(54, [e?.code ?? '未知错误'], getMainLanguage());
     }
   }
 
@@ -106,16 +115,16 @@ export class DiagnosticService {
     // isStartedViaHelper 反映最近一次启动走的路径（代理已停时即上一次），是此处能拿到的最准信息。
     const viaHelper = this.proxyManager.isStartedViaHelper();
     const writer = viaHelper
-      ? '写侧 helper 服务：核 stdout+stderr，只追加不截断'
+      ? diagnosticText(55, [], getMainLanguage())
       : process.platform === 'darwin'
-        ? '写侧 osascript wrapper：核 stdout+stderr，每次启动截断'
+        ? diagnosticText(56, [], getMainLanguage())
         : process.platform === 'win32'
-          ? '写侧 UAC 看护脚本：核 stderr（-RedirectStandardError），每次起核截断；看护脚本自述行见下一段'
-          : '非 helper 路径（直起）：核输出走 app.log 管道，本文件不被写入';
+          ? diagnosticText(57, [], getMainLanguage())
+          : diagnosticText(58, [], getMainLanguage());
     try {
       const st = await fs.stat(getSingBoxStartupLogPath());
       const mb = (st.size / (1024 * 1024)).toFixed(2);
-      return `${writer} · ${mb} MB · 最后写入 ${st.mtime.toISOString()}`;
+      return diagnosticText(59, [writer, mb, st.mtime.toISOString()], getMainLanguage());
     } catch {
       return writer; // 文件缺失/不可读：tail 那边已给占位，此处不重复报错
     }
@@ -125,7 +134,25 @@ export class DiagnosticService {
     const config: UserConfig = await this.configManager.loadConfig();
 
     // 落盘待写日志先 flush，确保 tail 含最新行
-    await this.logManager.flush().catch(() => {});
+    let flushComplete: boolean;
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      flushComplete = await Promise.race([
+        this.logManager.flush().then(
+          () => true,
+          () => false
+        ),
+        new Promise<boolean>((resolve) => {
+          flushTimer = setTimeout(() => resolve(false), 2000);
+        }),
+      ]);
+    } finally {
+      if (flushTimer) clearTimeout(flushTimer);
+    }
+    const previousAppLogTail = await this.readTail(
+      path.join(getLogsPath(), 'app.1.log'),
+      LOG_TAIL_BYTES
+    );
 
     // startupLogTail = 提权/看护路径下的核启动日志。核在 logger 建起前挂掉或 panic 时，singbox.log 里什么
     // 都没有、失败原因只走 stderr（issue #324：两轮诊断报告都因缺这段而定不了位）。恒纳入报告——文件不存在
@@ -163,7 +190,7 @@ export class DiagnosticService {
         customSecretKeys
       );
     } catch (e: any) {
-      redactedSingbox = { error: `生成失败: ${e?.message ?? e}` };
+      redactedSingbox = { error: diagnosticText(60, [e?.message ?? e], getMainLanguage()) };
     }
 
     // 纵深防御：脱敏 UserConfig 也兜底（理论上 config 为 JSON 可序列化、redactDeep 无环不会抛，
@@ -172,7 +199,7 @@ export class DiagnosticService {
     try {
       redactedUserConfig = redactDeep(config);
     } catch (e: any) {
-      redactedUserConfig = { error: `脱敏失败: ${e?.message ?? e}` };
+      redactedUserConfig = { error: diagnosticText(61, [e?.message ?? e], getMainLanguage()) };
     }
 
     let speedTestDiagnostics: DiagnosticReportInput['speedTestDiagnostics'];
@@ -183,7 +210,7 @@ export class DiagnosticService {
         try {
           redactedTempConfig = redactDeep(rawSpeedTestDiagnostics.tempConfig, customSecretKeys);
         } catch (e: any) {
-          redactedTempConfig = { error: `脱敏失败: ${e?.message ?? e}` };
+          redactedTempConfig = { error: diagnosticText(62, [e?.message ?? e], getMainLanguage()) };
         }
       }
       speedTestDiagnostics = {
@@ -217,10 +244,10 @@ export class DiagnosticService {
       const s = await sampleCoreProcess(status.pid).catch(() => null);
       coreProcess = s
         ? { pid: s.pid, rssMb: s.rssMb, cpuPercent: s.cpuPercent }
-        : { unavailable: 'unavailable（核进程采样失败/平台不支持，如 Windows 本批未采）' };
+        : { unavailable: diagnosticText(63, [], getMainLanguage()) };
     } else {
       coreProcess = {
-        unavailable: 'unavailable（代理未运行，或核 PID 不可得，如 Linux helper 托管路径）',
+        unavailable: diagnosticText(64, [], getMainLanguage()),
       };
     }
 
@@ -240,7 +267,7 @@ export class DiagnosticService {
       rendererWatchdog = undefined;
     }
 
-    const effLevel = effectiveLogLevel(config.logLevel || 'info', this.privacyProvider());
+    const effLevel = effectiveLogLevel(RUNTIME_POLICY.logLevel, this.privacyProvider());
     // #347：effLevel 是「按导出时的 config 重算」的值，而核加载的是**启动那一刻**写到磁盘的那份配置，两者可能
     // 不同（报告者首份诊断包头部显示 info、日志实为 debug，首轮判断因此被误导，差点把可用的 debug 证据当成
     // 「级别不够、证据缺失」丢掉）。真值在磁盘上核实际加载的那份 config：优先读它的 log.level，读不到（核未运行 /
@@ -256,20 +283,33 @@ export class DiagnosticService {
     const levelForHint = runningLevel ?? effLevel;
     const logLevelField =
       runningLevel !== undefined
-        ? `${runningLevel}（运行中核实例）`
-        : `${effLevel}（配置值，核未运行或配置文件不可读）`;
-    const captureActive = !!config.diagnosticCapture;
+        ? diagnosticText(65, [runningLevel], getMainLanguage())
+        : diagnosticText(66, [effLevel], getMainLanguage());
     const wantDeeper =
-      levelForHint !== 'debug' &&
-      !captureActive &&
-      TROUBLE_RE.test(appLogTail) &&
-      !config.disableLogFile;
+      levelForHint !== 'debug' && TROUBLE_RE.test(appLogTail) && !config.disableLogFile;
 
     const input: DiagnosticReportInput = {
+      language: getMainLanguage(),
+      logging: {
+        ...this.logManager.getDiagnostics(),
+        flushComplete,
+        tailBytesPerFile: LOG_TAIL_BYTES,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        uptimeSeconds: Math.floor(process.uptime()),
+        node: process.versions.node,
+      },
+      previousAppLogTail: redactLogText(previousAppLogTail),
+      recentEvents: this.logManager
+        .getLogs(1000)
+        .map((entry) => {
+          const value = presentLog(entry, getMainLanguage());
+          return `[${entry.id ?? ''}] ${formatDeviceDateTime(entry.timestamp, getMainLanguage())} [${logLevelLabel(entry.level, getMainLanguage())}] [${value.source}] ${value.message}${entry.stack ? '\n' + entry.stack : ''}`;
+        })
+        .join('\n'),
       generatedAt: new Date().toISOString(),
       app: {
         flowzVersion: app.getVersion(),
-        coreVersion,
+        coreVersion: `${coreVersion}; Xray ${compatibilityManifest.xray.version}; mihomo ${compatibilityManifest.mihomo.version}`,
         os: `${process.platform} ${process.arch} ${os.release()}`,
         electron: process.versions.electron,
       },
@@ -279,11 +319,14 @@ export class DiagnosticService {
         proxyRunning: status.running,
         startedViaHelper: this.proxyManager.isStartedViaHelper(),
         systemProxy: sysProxy?.enabled
-          ? sysProxy.httpProxy || sysProxy.httpsProxy || sysProxy.socksProxy || '(已启用)'
-          : '(未启用)',
+          ? sysProxy.httpProxy ||
+            sysProxy.httpsProxy ||
+            sysProxy.socksProxy ||
+            diagnosticText(67, [], getMainLanguage())
+          : diagnosticText(68, [], getMainLanguage()),
         nodeDomainResolver: config.dnsConfig?.nodeDomainResolver || 'auto',
         logLevel: logLevelField,
-        captureActive,
+        captureActive: false,
         // libcronet 现状 + 本会话自愈计数：naive 缺/坏库根因 + 「库被反复删（疑杀软）」可观测（取数 best-effort，绝不阻断报告）。
         cronetLibStatus: (() => {
           try {
@@ -324,16 +367,14 @@ export class DiagnosticService {
       coreProcess,
       memoryTimelineCsv,
       rendererWatchdog,
-      appLogTail,
-      singboxLogTail,
-      startupLogTail,
+      appLogTail: redactLogText(appLogTail),
+      singboxLogTail: redactLogText(singboxLogTail),
+      startupLogTail: redactLogText(startupLogTail),
       startupLogSource,
-      watchdogLogTail,
+      watchdogLogTail: watchdogLogTail === undefined ? undefined : redactLogText(watchdogLogTail),
       // issue #147：节点 outbound.server 已恒为域名（不再烧 IP），无额外预解析 IP 需补脱敏 → 仅扫 config.servers。
       nodeIdentifiers: collectNodeIdentifiers(config),
-      hint: wantDeeper
-        ? `当前日志级别为 ${levelForHint}，未含 DNS 解析等连接详情，但日志中已出现连接/DNS 类错误。建议到 主页 → 日志 → 诊断 开启「诊断采集」，复现问题后再次导出可获得更完整的根因数据。`
-        : undefined,
+      hint: wantDeeper ? diagnosticText(69, [levelForHint], getMainLanguage()) : undefined,
     };
 
     return buildDiagnosticReport(input);

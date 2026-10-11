@@ -1,0 +1,244 @@
+.client-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+.client-page-header,
+.client-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.client-page-header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.client-page-header h1,
+.client-section-header h2 {
+  margin: 0;
+  font-weight: 600;
+}
+.client-page-header h1 {
+  font-size: 24px;
+}
+.client-section-header h2 {
+  font-size: 18px;
+}
+.client-page.client-page-contained {
+  padding-block: 16px;
+  height: 100%;
+  min-height: 0;
+}
+.client-page-contained .client-page-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.client-page-contained .client-page-stack {
+  flex: 1;
+  min-height: 0;
+}
+.client-form-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(
+      min(
+        100%,
+        max(220px, calc((100% - (var(--client-columns) - 1) * 24px) / var(--client-columns)))
+      ),
+      1fr
+    )
+  );
+  gap: 0 24px;
+}
+.client-form-grid > * {
+  min-width: 0;
+}
+.client-help {
+  background: none;
+  border: 0;
+  padding: 2px;
+  margin-inline-start: 6px;
+  color: var(--ds-color-text-secondary);
+  cursor: help;
+  line-height: 1;
+}
+.client-help:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+.client-atomic {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.client-atomic:has(> *) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.client-inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.client-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+}
+.client-information-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 0;
+}
+.client-information-grid > div {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.client-information-grid dt {
+  color: var(--ds-color-text-secondary);
+}
+.client-information-grid dd {
+  margin: 0;
+}
+.client-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px 32px;
+  flex-wrap: wrap;
+}
+.client-summary > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.client-summary > div > span:first-child {
+  color: var(--ds-color-text-secondary);
+}
+.client-table-panel {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--ds-color-surface);
+}
+.client-table-panel > .client-section-header {
+  margin-bottom: 16px;
+}
+@media (max-width: 640px) {
+  .client-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .client-page-header {
+    gap: 12px;
+  }
+}
+.client-page {
+  padding: 24px;
+}
+.client-page-content {
+  min-width: 0;
+}
+.client-page .ant-table-wrapper {
+  min-width: 0;
+}
+.ds-tooltip .ant-tooltip-container {
+  max-width: calc(100vw - 32px);
+  width: max-content;
+  overflow-wrap: anywhere;
+}
+.ant-select-item-option-content,
+.ant-select-selection-item-content {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.ant-select-multiple .ant-select-selection-item {
+  height: auto;
+  min-height: 24px;
+}
+@media (max-width: 640px) {
+  .client-page {
+    padding: 16px;
+  }
+}
+
+.client-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.client-help-popup {
+  max-width: calc(100vw - 32px);
+}
+.client-help-popup,
+.ds-tooltip,
+.client-action-hint {
+  /* Plain text hints must not intercept a neighboring trigger or confirmation. */
+  pointer-events: none;
+}
+.client-help-popup .ant-tooltip-container {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  overflow-wrap: anywhere;
+}
+
+.client-page-contained .client-content-stack {
+  flex: 1;
+  min-height: 0;
+}
+.client-page-contained > .client-page-header {
+  flex-shrink: 0;
+}
+.client-summary > div {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.client-summary .ds-summary-strip__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Ant defaults truncate labels; client names and selections remain fully readable. */
+.ds-sidebar-menu .ant-menu-item,
+.ds-sidebar-menu .ant-menu-title-content,
+.ds-select-content,
+.ant-select-placeholder,
+.ant-segmented-item-label {
+  text-overflow: clip;
+}
+.ds-sidebar-menu .ant-menu-title-content,
+.ds-select-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.client-page .ant-select .ant-select-content.ds-select-content,
+.ant-select .ant-select-placeholder,
+.ant-card .ant-card-head-title,
+.ant-segmented .ant-segmented-item-label {
+  text-overflow: clip;
+}
+.ant-card .ant-card-head-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ds-basic-layout .ds-sidebar-menu.ant-menu .ant-menu-item,
+.ds-basic-layout .ds-sidebar-menu.ant-menu .ant-menu-item .ant-menu-title-content {
+  text-overflow: clip;
+}
+.client-page .ant-table-thead > tr > th {
+  white-space: nowrap;
+}

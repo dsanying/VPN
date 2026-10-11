@@ -38,6 +38,12 @@ const vless = (id: string): Usable => ({
 });
 
 describe('测速临时 config:端点目标解析穿隧道 223.5.5.5（单形态）', () => {
+  it('节点地址使用当前网络 DNS，测速不依赖本机到公网 UDP 53', () => {
+    const cfg = gen([vless('fixture01')], [21001]);
+    expect(cfg.dns.servers).toEqual([{ tag: 'dns-direct', type: 'local' }]);
+    expect(cfg.route.default_domain_resolver).toBe('dns-direct');
+    expect(cfg.inbounds.every((inbound: any) => inbound.type === 'http')).toBe(true);
+  });
   it('WG 端点:单入站 + 穿隧道 223.5.5.5 dns server(detour) + inbound 键控 dns.rule(AAAA 抑制 + 禁缓存)', () => {
     const cfg = gen([wg('wgnode01', ['172.16.0.2/32'])], [21001]);
     expect(cfg.inbounds.map((i: any) => i.tag)).toEqual(['http-in-wgnode01']); // 单入站(无 local 兜底)

@@ -1,7 +1,8 @@
 /** SWC 编译测试；TypeScript 7 类型检查由 test:types 单独执行。 */
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/src'],
+  roots: ['<rootDir>/src', '<rootDir>/web/src/store', '<rootDir>/web/src/hooks/__tests__',
+    '<rootDir>/web/src/mobile/__tests__', '<rootDir>/web/src/pages/NodesPage/__tests__'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   // `sing-box check` 门需要**随包内核**（resources/<平台>/sing-box，66–74MB、已 gitignore），默认 `npm test` 与 CI
   // 测试 job 都没有它。故把该门移出默认测试集，改由 `npm run test:core-gate` 单独跑——该 script 已接进
@@ -10,10 +11,11 @@ module.exports = {
   // 任何环境变量豁免开关——豁免只会变成关门的后门。
   testPathIgnorePatterns: [
     '/node_modules/',
+    '<rootDir>/src/main/services/__tests__/compatibility-core-gate\\.test\\.ts$',
     '<rootDir>/src/main/services/__tests__/singbox-check-gate\\.test\\.ts$',
   ],
-  moduleNameMapper: { '^plist$': '<rootDir>/node_modules/plist/dist/index.js' },
-  transformIgnorePatterns: ['/node_modules/(?!plist/)'],
+  moduleNameMapper: { '^@shared/(.*)$':'<rootDir>/src/shared/$1', '^@/(.*)$':'<rootDir>/web/src/$1', '^plist$': '<rootDir>/node_modules/plist/dist/index.js' },
+  transformIgnorePatterns: ['/node_modules/(?![.]pnpm/(?:plist|https-proxy-agent|agent-base|proxy-agent-negotiate)@|(?:plist|https-proxy-agent|agent-base|proxy-agent-negotiate)/)'],
   transform: {
     '^.+\\.[jt]s$': [
       '@swc/jest',

@@ -1,3 +1,4 @@
+import { routingDataNeeds } from '../../shared/routing-data-needs';
 /**
  * config-gen 共享纯 helper —— 从 ProxyManager 抽出（SingBoxConfigBuilder 抽取 Phase 2）。
  * 全部纯函数、零实例状态：只读 config / host 字符串。ProxyManager 与各 generator 模块
@@ -5,17 +6,8 @@
  */
 
 import { isIpv4 } from '../../shared/ip';
-import type {
-  UserConfig,
-  ServerConfig,
-  Rule,
-  AppRule,
-  CustomAppPreset,
-  DnsConfig,
-} from '../../shared/types';
+import type { UserConfig, ServerConfig, Rule, AppRule, DnsConfig } from '../../shared/types';
 import { parseDnsServerSpec, isIpv6Literal } from '../../shared/dns';
-import { ruleConditions } from '../../shared/rules';
-import { getAppPreset } from '../../shared/app-rules-preset';
 import { BUILTIN_GEO_RULESETS } from './builtin-geo-rulesets';
 import type {
   SingBoxConfig,
@@ -258,69 +250,19 @@ export function getCustomDomesticDnsEndpoint(
 
 /**
  * 内置 geo 规则集的单一真值表：tag、运行时文件名、内置源路径。
- * copyRuleSetsToUserData（写入）、generateRouteConfig（引用 path）、RuleResourceManager（页面展示/更新）
+ * copyRuleSetsToUserData（写入）、generateRouteConfig（引用 path）、RoutingDataService（后台按需更新）
  * 共用 builtin-geo-rulesets 模块的 BUILTIN_GEO_RULESETS，避免多处硬编码目录+文件名导致漂移——
  * 改一处而另一处仍指旧路径会让 sing-box 加载本地 rule_set 失败。
  */
-export function getLocalGeoRuleSets(): { tag: string; fileName: string; srcPath: string }[] {
-  return BUILTIN_GEO_RULESETS.map((b) => ({
+export function getLocalGeoRuleSets(
+  config: UserConfig
+): { tag: string; fileName: string; srcPath: string }[] {
+  const { tags } = routingDataNeeds(config);
+  return BUILTIN_GEO_RULESETS.filter((b) => tags.has(b.tag)).map((b) => ({
     tag: b.tag,
     fileName: b.fileName,
     srcPath: b.bundledPath(),
   }));
-}
-
-/**
- * 收集自定义规则中使用的 Geosite 和 GeoIP 类别（同时扫描 customRules 和 appRules）
- */
-export function getRequiredGeoCategories(
-  customRules: Rule[],
-  appRules: AppRule[] = [],
-  customAppPresets: CustomAppPreset[] = []
-): { geosite: Set<string>; geoip: Set<string> } {
-  const geositeCategories = new Set<string>();
-  const geoipCategories = new Set<string>();
-
-  // 扫描 geosite / geoip 类型的自定义规则（values 即裸标签，如 'youtube'/'cn'）
-  for (const rule of customRules) {
-    if (!rule.enabled) continue;
-    // 扫所有条件（多条件规则的 logical 内可含 geosite/geoip → 否则其 remote rule_set 不被注入致引用缺失）
-    for (const cond of ruleConditions(rule)) {
-      if (cond.type === 'geosite') {
-        for (const t of cond.values) {
-          const tag = t.trim().toLowerCase();
-          if (tag) geositeCategories.add(tag);
-        }
-      } else if (cond.type === 'geoip') {
-        for (const t of cond.values) {
-          const tag = t.trim().toLowerCase();
-          if (tag) geoipCategories.add(tag);
-        }
-      }
-    }
-  }
-
-  // 扫描应用分流规则
-  for (const appRule of appRules) {
-    if (!appRule.enabled) continue;
-    const preset = getAppPreset(appRule.appId, customAppPresets);
-    if (preset) {
-      // 与 customRules 分支同口径：trim + 小写。必须与发射端（singbox-route-builder app 规则
-      // `geosite-/geoip-`）+ 本地 .srs 文件名/资源 id（均小写）一致，否则 customAppPresets 含大写 tag 时
-      // 所需类别集（决定注入哪些 rule_set）与实际引用的 rule_set tag 错位 → fail-closed 剪枝静默丢规则。
-      preset.geositeTags.forEach((tag) => {
-        const t = tag.trim().toLowerCase();
-        if (t) geositeCategories.add(t);
-      });
-      if (preset.geoipTags) {
-        preset.geoipTags.forEach((tag) => {
-          const t = tag.trim().toLowerCase();
-          if (t) geoipCategories.add(t);
-        });
-      }
-    }
-  }
-  return { geosite: geositeCategories, geoip: geoipCategories };
 }
 
 /**

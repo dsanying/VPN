@@ -31,14 +31,24 @@ if (langArg) {
   else applyLang();
 }
 
+// 主进程在 did-finish-load 重放状态；React effect 可能尚未订阅。缓存最后一帧，避免空白更新窗口。
+let latestState: UpdatePopupState | undefined;
+const subscribers = new Set<(state: UpdatePopupState) => void>();
+ipcRenderer.on(
+  IPC_CHANNELS.UPDATE_POPUP_STATE,
+  (_event: IpcRendererEvent, state: UpdatePopupState) => {
+    latestState = state;
+    for (const callback of subscribers) callback(state);
+  }
+);
 contextBridge.exposeInMainWorld('flowzUpdatePopup', {
-  /** 订阅主进程推送的状态载荷；返回退订函数。 */
-  onState(cb: (state: UpdatePopupState) => void): () => void {
-    const listener = (_e: IpcRendererEvent, state: UpdatePopupState) => cb(state);
-    ipcRenderer.on(IPC_CHANNELS.UPDATE_POPUP_STATE, listener);
-    return () => ipcRenderer.removeListener(IPC_CHANNELS.UPDATE_POPUP_STATE, listener);
+  onState(callback: (state: UpdatePopupState) => void): () => void {
+    subscribers.add(callback);
+    if (latestState) callback(latestState);
+    return () => {
+      subscribers.delete(callback);
+    };
   },
-  /** 回传按钮/关闭动作到主进程。 */
   sendAction(action: UpdatePopupAction): void {
     ipcRenderer.send(IPC_CHANNELS.UPDATE_POPUP_ACTION, action);
   },

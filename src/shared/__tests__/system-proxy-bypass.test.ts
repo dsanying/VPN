@@ -10,8 +10,8 @@ import {
   formatBypassForLinux,
 } from '../system-proxy-bypass';
 
-describe('默认清单（业内聚合，对齐 Stash）', () => {
-  it('含私网/保留段 + Apple 连通性 + 国内会被代理打断的 App/网银', () => {
+describe('默认清单只负责本地网络', () => {
+  it('含私网/保留段和本地域名，不在系统层绕过普通网站', () => {
     for (const e of [
       '10.0.0.0/8',
       '100.64.0.0/10',
@@ -23,12 +23,11 @@ describe('默认清单（业内聚合，对齐 Stash）', () => {
       'fe80::/10',
       'localhost',
       '*.local',
-      'captive.apple.com',
-      'mobile-bank.psbc.com',
-      'www.abchina.com.cn',
     ]) {
       expect(DEFAULT_BYPASS_LAN).toContain(e);
     }
+    for (const host of ['captive.apple.com', 'www.baidu.com', 'mobile-bank.psbc.com'])
+      expect(DEFAULT_BYPASS_LAN).not.toContain(host);
   });
   it('无重复项', () => {
     expect(new Set(DEFAULT_BYPASS_LAN).size).toBe(DEFAULT_BYPASS_LAN.length);

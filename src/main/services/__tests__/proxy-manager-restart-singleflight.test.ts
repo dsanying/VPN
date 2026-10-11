@@ -255,7 +255,7 @@ describe('H-1 — applyConfigForcingRestart 空窗不丢 + pendingForceRestartCo
     expect(sched).not.toHaveBeenCalled();
   });
 
-  it("stop 终态清 pendingForceRestartConfig（停止优先）", () => {
+  it('stop 终态清 pendingForceRestartConfig（停止优先）', () => {
     const svc = makeSvc();
     svc.beginLifecycleOp();
     svc.pendingForceRestartConfig = cfgB;

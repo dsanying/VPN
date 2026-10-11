@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"shadowvpn/helperrpc"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -60,6 +61,49 @@ func TestConstrainedFiles(t *testing.T) {
 	confDir = ""
 	if cfgAllowed(cfg) {
 		t.Fatal("empty confinement accepted")
+	}
+}
+func TestRootLogOwnership(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires sudo to exercise root-created log ownership")
+	}
+	uid, err := strconv.Atoi(os.Getenv("SUDO_UID"))
+	if err != nil || uid == 0 {
+		t.Fatal("requires a non-root SUDO_UID")
+	}
+	gid, err := strconv.Atoi(os.Getenv("SUDO_GID"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := confDir
+	defer func() { confDir = old }()
+	confDir = t.TempDir()
+	if err := os.Chown(confDir, uid, gid); err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(confDir, "startup.log")
+	if err := os.WriteFile(name, []byte("earlier\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	file, err := openLog(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if _, err := file.WriteString("current\n"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat := info.Sys().(*syscall.Stat_t)
+	if int(stat.Uid) != uid || int(stat.Gid) != gid || info.Mode().Perm() != 0600 {
+		t.Fatalf("log ownership or private permissions incorrect: %+v", stat)
+	}
+	content, err := os.ReadFile(name)
+	if err != nil || string(content) != "earlier\ncurrent\n" {
+		t.Fatalf("append history lost: %s, %v", content, err)
 	}
 }
 func TestSlowChild(t *testing.T) {

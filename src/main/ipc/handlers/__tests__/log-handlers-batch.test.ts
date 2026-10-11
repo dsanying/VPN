@@ -29,7 +29,9 @@ function entry(message: string): LogEntry {
 
 /** 最小 LogManager 桩：仅需 on('log')（EventEmitter）。getLogs/clearLogs 不触达（registerIpcHandler 已 mock）。 */
 function makeLogManager() {
-  return new EventEmitter() as unknown as Parameters<typeof registerLogHandlers>[0];
+  return Object.assign(new EventEmitter(), { recordUiDrop: jest.fn() }) as unknown as Parameters<
+    typeof registerLogHandlers
+  >[0];
 }
 
 describe('registerLogHandlers 日志批处理 (T1)', () => {

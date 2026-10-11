@@ -1,3 +1,4 @@
+import { prepareAutomaticTakeover } from '../../../shared/automatic-takeover';
 import { IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '../../../shared/ipc-channels';
 import type { UserConfig, ProxyMode } from '../../../shared/types';
@@ -11,7 +12,7 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
   registerIpcHandler<void, UserConfig>(
     IPC_CHANNELS.CONFIG_GET,
     async (_event: IpcMainInvokeEvent) => {
-      const cfg = await configManager.loadConfig();
+      const cfg = prepareAutomaticTakeover(await configManager.loadConfig());
       // F29：绝不向渲染端下发隐私密码（迁移前的残留明文也一并剥除；哈希本就不在 config 内）
       return { ...cfg, privacyPassword: undefined };
     }
@@ -20,6 +21,7 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
   registerIpcHandler<UserConfig, void>(
     IPC_CHANNELS.CONFIG_SAVE,
     async (_event: IpcMainInvokeEvent, config: UserConfig) => {
+      config = prepareAutomaticTakeover(config);
       // 检测面板 download_url 覆盖变更：改了 → 删本地缓存目录，使核下次启动（CONFIG_CHANGED→switchMode 重启）
       // 因目录为空从新 URL 重拉资源。空白归一为 undefined 再比，避免 ''↔undefined 误判变更。在 saveConfig 前取旧值。
       const priorDashUrl = configManager.get<string>('singboxDashboardUrl')?.trim() || undefined;
@@ -53,8 +55,11 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
   registerIpcHandler<{ mode: ProxyMode }, void>(
     IPC_CHANNELS.CONFIG_UPDATE_MODE,
     async (_event: IpcMainInvokeEvent, args: { mode: ProxyMode }) => {
-      await configManager.set('proxyMode', args.mode);
-      const config = await configManager.loadConfig();
+      const config = prepareAutomaticTakeover({
+        ...(await configManager.loadConfig()),
+        proxyMode: args.mode,
+      });
+      await configManager.saveConfig(config);
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);
     }
@@ -71,7 +76,8 @@ export function registerConfigHandlers(configManager: ConfigManager): void {
     IPC_CHANNELS.CONFIG_SET_VALUE,
     async (_event: IpcMainInvokeEvent, args: { key: keyof UserConfig; value: any }) => {
       await configManager.set(args.key, args.value);
-      const config = await configManager.loadConfig();
+      const config = prepareAutomaticTakeover(await configManager.loadConfig());
+      await configManager.saveConfig(config);
 
       if (args.key === 'uiTheme') {
         const { nativeTheme, BrowserWindow } = require('electron');

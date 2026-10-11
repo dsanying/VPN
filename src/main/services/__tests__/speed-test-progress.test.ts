@@ -67,3 +67,18 @@ describe('SpeedTestService 进度与流式回调', () => {
     expect(progressCalled).toBe(false);
   });
 });
+
+it('one outbound builder exception does not prevent reporting the remaining nodes', async () => {
+  const svc = new SpeedTestService({ addLog: jest.fn() } as never, (node) => {
+    if (node.id === 'bad') throw new Error('private credentials');
+    return null;
+  });
+  const result = await svc.testAllServers(
+    ['bad', 'other'].map(
+      (id) => ({ id, name: id, protocol: 'vless', address: 'example.com', port: 443 }) as never
+    )
+  );
+  expect([...result.results.keys()]).toEqual(['bad', 'other']);
+  expect(svc.getNodeMeasurement('bad')?.reason).toBe('outbound-invalid');
+  expect(svc.getNodeMeasurement('other')?.reason).toBe('unusable');
+});

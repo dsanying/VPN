@@ -1,0 +1,26 @@
+diff --git a/es/Drawer.js b/es/Drawer.js
+index 96fdb0de3b6640e5f1899fd0f299c766ceeb6a94..edc660809e61e747e15cc01cbf0b195a84695762 100644
+--- a/es/Drawer.js
++++ b/es/Drawer.js
+@@ -53,6 +53,8 @@ const Drawer = props => {
+   const lastActiveRef = React.useRef(null);
+   useLayoutEffect(() => {
+     if (mergedOpen) {
++      // Keep an entering drawer mounted if it closes before the enter motion completes.
++      setAnimatedVisible(true);
+       lastActiveRef.current = document.activeElement;
+     }
+   }, [mergedOpen]);
+diff --git a/lib/Drawer.js b/lib/Drawer.js
+index 227a4a0a519958dc126ed561c8fc929d2e1dbe61..f4c236c38feeff982a7e3e4ccce091669930feb3 100644
+--- a/lib/Drawer.js
++++ b/lib/Drawer.js
+@@ -62,6 +62,8 @@ const Drawer = props => {
+   const lastActiveRef = React.useRef(null);
+   (0, _useLayoutEffect.default)(() => {
+     if (mergedOpen) {
++      // Keep an entering drawer mounted if it closes before the enter motion completes.
++      setAnimatedVisible(true);
+       lastActiveRef.current = document.activeElement;
+     }
+   }, [mergedOpen]);

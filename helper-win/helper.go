@@ -264,7 +264,13 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 			}
 		}
 		fmt.Fprintf(conn, "OK stopping %d\n", beginStopLocked())
-	case "start":
+	case "install-mihomo":
+		if err := helperrpc.InstallMihomo(singboxBin, args.Next(), args.Next()); err != nil {
+			fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+			return
+		}
+		fmt.Fprintln(conn, "OK installed")
+	case "start", "start-mihomo":
 		cfg := args.Next()
 		logPath := args.Next()
 		fwd := args.Next()
@@ -300,7 +306,7 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 				return
 			}
 		}
-		c, logFile, configFile, err := startSingbox(singboxBin, cfg, logPath)
+		c, logFile, configFile, err := startManagedCore(singboxBin, cfg, logPath, cmd == "start-mihomo")
 		if err != nil {
 			if err := restoreForward(); err != nil {
 				fmt.Fprintln(os.Stderr, "restore forwarding:", err)

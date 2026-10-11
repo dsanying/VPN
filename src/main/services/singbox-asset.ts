@@ -36,6 +36,8 @@ export function findSuitableSingboxAsset(
     archKeyword = 'arm64';
   }
 
+  if (!keyword || !archKeyword) return undefined;
+
   // 优先查找包含特定架构的
   const filteredAssets = assets.filter(
     (a: any) =>
