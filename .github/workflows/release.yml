@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  # Build and install the same candidate artifacts before creating an immutable tag.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -72,7 +74,7 @@ jobs:
         run: node --test scripts/release-pipeline.test.mjs && npm run check:platforms
 
       - name: Validate release version
-        run: node scripts/check-release-version.mjs
+        run: node scripts/check-release-version.mjs ${{ github.event_name == 'workflow_dispatch' && '--candidate' || '' }}
 
       # Native runtime tests require the same pinned binaries as packaging, even on the Android builder.
       - name: Prepare official core test fixtures
@@ -116,7 +118,7 @@ jobs:
           # （v4.1.0 实测：x64 落 dist-package/mac、arm64 落 dist-package/mac-arm64），各自含对应架构的提权 helper。
           # 故此处按 arch 后缀目录优先、回退无后缀目录，并用 lipo 校验确属目标架构；缺则【报错失败】（不再静默跳过，
           # 避免 v4.1.0 那样绿灯却漏发 mac-x64 包）。
-          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=$(node -p 'require("./package.json").version')
           for ARCH in arm64 x64; do
             DMG_PATH="dist-package/暗影VPN-${VERSION}-mac-${ARCH}.dmg"
             case "$ARCH" in arm64) WANT=arm64 ;; x64) WANT=x86_64 ;; esac
@@ -213,6 +215,7 @@ jobs:
 
   create-release:
     needs: [release, native-mac]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
     steps:
