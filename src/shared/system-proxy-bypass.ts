@@ -7,8 +7,8 @@
 import { dedupe, dedupeTrim } from './collections';
 
 /**
- * 默认 bypass 清单（业内聚合清单，含私网/保留段 + Apple 连通性 + 国内会被代理打断的 App/网银）。
- * 用户可在设置里编辑（逗号分隔）；缺省取此。注：非 ClashX 出厂 9 条原版，是社区聚合的「业内」广覆盖清单。
+ * 默认 bypass 仅含本地网络、保留网段及本地域名。
+ * 普通网站统一由路由规则管理；旧配置的显式网站例外在加载时迁入 customRules。
  */
 export const DEFAULT_BYPASS_LAN: readonly string[] = [
   // 私网 / 保留 / 特殊用途网段
@@ -28,20 +28,6 @@ export const DEFAULT_BYPASS_LAN: readonly string[] = [
   // 本地 / mDNS
   'localhost',
   '*.local',
-  // Apple 连通性 / captive / 端上服务（代理会打断）
-  'sequoia.apple.com',
-  'seed-sequoia.siri.apple.com',
-  'captive.apple.com',
-  'e.crashlytics.com',
-  // 国内会被代理打断的连通性探测 / App / 网银（二进制协议 / cert-pin / 地域校验）
-  'www.baidu.com',
-  'passenger.t3go.cn',
-  'yunbusiness.ccb.com',
-  'wxh.wo.cn',
-  'gate.lagou.com',
-  'www.abchina.com.cn',
-  'login-service.mobile-bank.psbc.com',
-  'mobile-bank.psbc.com',
 ];
 
 /**

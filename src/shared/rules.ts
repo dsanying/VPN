@@ -19,6 +19,7 @@ export const RULE_TYPE_IDS: RuleType[] = [
   'sourceHostname',
   'processName',
   'processPath',
+  'processPathRegex',
   'geosite',
   'geoip',
   'ruleSet',
@@ -40,6 +41,7 @@ export const RULE_TYPE_CATEGORY: Record<RuleType, RuleCategory> = {
   sourceHostname: 'device',
   processName: 'process',
   processPath: 'process',
+  processPathRegex: 'process',
   geosite: 'ruleset',
   geoip: 'ruleset',
   ruleSet: 'ruleset',
@@ -152,6 +154,7 @@ export function validateRuleValue(type: RuleType, value: string): boolean {
       // keyword 允许任意非空子串；domain/suffix 走域名形状
       return type === 'domainKeyword' ? v.length > 0 : DOMAIN_RE.test(v);
     case 'domainRegex':
+    case 'processPathRegex':
       // sing-box 用 Golang RE2：拒绝 RE2 不支持的 lookahead/lookbehind/反向引用（过 JS 校验却启动 FATAL）
       if (/\(\?[=!<]|\\[1-9]/.test(v)) return false;
       try {

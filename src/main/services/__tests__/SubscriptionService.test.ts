@@ -15,6 +15,9 @@
 // ── electron mock（必须在 import SubscriptionService 之前）──────────────────────
 const mockFetch = jest.fn();
 const mockSetProxy = jest.fn().mockResolvedValue(undefined);
+jest.mock('../subscription-physical-network', () => ({
+  physicalSubscriptionFetch: (...args: unknown[]) => mockFetch(...args),
+}));
 jest.mock('electron', () => ({
   app: { getVersion: () => '9.9.9' },
   net: { fetch: (...a: unknown[]) => mockFetch(...a) },
@@ -468,6 +471,39 @@ describe('LOW-1 provider 复用主解析 — 嵌套 proxy-providers 不递归 + 
 });
 
 describe('parseLocalContent — 本地导入（不联网）', () => {
+  it.each([
+    { protocol: 'tailscale', name: 'mesh', tailscaleSettings: { acceptRoutes: true } },
+    {
+      protocol: 'wireguard',
+      name: 'wg',
+      address: 'example.com',
+      port: 443,
+      wireguardSettings: {
+        privateKey: 'fictional-private',
+        peerPublicKey: 'fictional-public',
+        localAddress: ['10.0.0.2/32'],
+      },
+    },
+  ])('原生节点配置自动解析 $protocol，保留协议字段且不联网', async (source) => {
+    const svc = newService(new FakeLog());
+    const result = await svc.parseLocalContent(
+      JSON.stringify({ ...source, id: 'old', subscriptionId: 'old-group' })
+    );
+    expect(result.format).toBe('native');
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]).toMatchObject(source);
+    expect(result.nodes[0].id).not.toBe('old');
+    expect(result.nodes[0].subscriptionId).toBeUndefined();
+    expect(result.stats.failed).toBe(0);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+  it('原生配置未知协议不能通过完整性校验', async () => {
+    const result = await newService(new FakeLog()).parseLocalContent(
+      JSON.stringify({ protocol: 'unknown', name: 'invalid', address: 'example.com', port: 443 })
+    );
+    expect(result.nodes).toEqual([]);
+    expect(result.stats.failed).toBe(1);
+  });
   it('sing-box JSON：映射受支持节点 + 不支持 type 透传 custom + 内部 type 忽略；节点剥 subscriptionId', async () => {
     const svc = newService(new FakeLog());
     const text = JSON.stringify({
@@ -608,7 +644,7 @@ describe('issue #263 — 聚合可见性 / 指纹传输维度 / ssh 映射', () 
       .map((e) => e.message)
       .join('\n');
     expect(warns).toMatch(/跳过不支持的协议链接/);
-    expect(warns).toMatch(/ssr\(2\)/);
+    expect(warns.match(/Invalid SSR fields/g)).toHaveLength(2);
     expect(warns).toMatch(/juicity\(1\)/);
     const infos = log.entries
       .filter((e) => e.level === 'info')
@@ -617,26 +653,17 @@ describe('issue #263 — 聚合可见性 / 指纹传输维度 / ssh 映射', () 
     expect(infos).toMatch(/另有 3 条被跳过\/失败/);
   });
 
-  it('URL-list：xhttp 节点 fail 计入结果 info（issue #263 主症状可见化）', async () => {
+  it('URL-list imports XHTTP and other protocols together', async () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const content = [
-      'anytls://pw@a.com:443#any',
-      'vless://uuid-1@a.com:443?type=xhttp#dead',
-    ].join('\n');
-    const r = await (svc as any).parseSubscriptionContent(content, 'sub-x', CTX);
-    expect(r.servers).toHaveLength(1);
-    expect(r.servers[0].protocol).toBe('anytls');
-    const warns = log.entries
-      .filter((e) => e.level === 'warn')
-      .map((e) => e.message)
-      .join('\n');
-    expect(warns).toMatch(/不支持的传输层类型: xhttp/);
-    const infos = log.entries
-      .filter((e) => e.level === 'info')
-      .map((e) => e.message)
-      .join('\n');
-    expect(infos).toMatch(/另有 1 条被跳过\/失败/);
+    const r = await (svc as any).parseSubscriptionContent(
+      'anytls://pw@example.com:443#any\nvless://uuid-1@example.com:443?type=xhttp#xhttp',
+      'sub-x',
+      CTX
+    );
+    expect(r.servers).toHaveLength(2);
+    expect(r.servers[1].network).toBe('xhttp');
+    expect(log.entries.filter((e) => e.level === 'warn')).toEqual([]);
   });
 
   it('sing-box outbounds：type/transport/缺字段三类跳过聚合 warn；internal 类型不计噪声', () => {
@@ -646,11 +673,20 @@ describe('issue #263 — 聚合可见性 / 指纹传输维度 / ssh 映射', () 
       { type: 'vless', tag: 'ok', server: 'a.com', server_port: 443, uuid: 'u' },
       { type: 'wireguard', tag: 'wg', server: 'a.com', server_port: 51820 },
       { type: 'vless', tag: 'noport', server: 'a.com', uuid: 'u' },
-      { type: 'vless', tag: 'quic', server: 'a.com', server_port: 443, uuid: 'u', transport: { type: 'quic' } },
+      {
+        type: 'vless',
+        tag: 'quic',
+        server: 'a.com',
+        server_port: 443,
+        uuid: 'u',
+        transport: { type: 'quic' },
+      },
       { type: 'direct', tag: 'direct' },
       { type: 'selector', tag: 'sel', outbounds: [] },
     ];
-    const servers = (svc as any).parseSingboxOutbounds(obs, 'sub-x');
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(obs, 'sub-x');
     expect(servers).toHaveLength(1);
     expect(servers[0].name).toBe('ok');
     const warns = log.entries
@@ -666,24 +702,26 @@ describe('issue #263 — 聚合可见性 / 指纹传输维度 / ssh 映射', () 
   it('sing-box ssh outbound → 一等映射（与 Clash 路径同落点；private_key_path 刻意不收）', () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const servers = (svc as any).parseSingboxOutbounds(
-      [
-        {
-          type: 'ssh',
-          tag: 's1',
-          server: 'a.com',
-          server_port: 22,
-          user: 'root',
-          password: 'pw',
-          private_key: 'PEM',
-          private_key_passphrase: 'pp',
-          host_key: ['ssh-ed25519 AAAA'],
-          host_key_algorithms: ['ssh-ed25519'],
-          client_version: 'SSH-2.0-x',
-        },
-      ],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [
+          {
+            type: 'ssh',
+            tag: 's1',
+            server: 'a.com',
+            server_port: 22,
+            user: 'root',
+            password: 'pw',
+            private_key: 'PEM',
+            private_key_passphrase: 'pp',
+            host_key: ['ssh-ed25519 AAAA'],
+            host_key_algorithms: ['ssh-ed25519'],
+            client_version: 'SSH-2.0-x',
+          },
+        ],
+        'sub-x'
+      );
     expect(servers).toHaveLength(1);
     expect(servers[0].protocol).toBe('ssh');
     expect(servers[0].sshSettings).toEqual({
@@ -719,22 +757,24 @@ describe('issue #263 review 补测 — ssh 算法字段 / 行首空白', () => {
   it('ssh outbound cipher/mac/kex_algorithm → sshSettings 对应落点（不静默丢协商配置）', () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const servers = (svc as any).parseSingboxOutbounds(
-      [
-        {
-          type: 'ssh',
-          tag: 's',
-          server: 'a.com',
-          server_port: 22,
-          user: 'root',
-          password: 'pw',
-          cipher: ['aes128-gcm@openssh.com'],
-          mac: ['hmac-sha2-256'],
-          kex_algorithm: ['curve25519-sha256'],
-        },
-      ],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [
+          {
+            type: 'ssh',
+            tag: 's',
+            server: 'a.com',
+            server_port: 22,
+            user: 'root',
+            password: 'pw',
+            cipher: ['aes128-gcm@openssh.com'],
+            mac: ['hmac-sha2-256'],
+            kex_algorithm: ['curve25519-sha256'],
+          },
+        ],
+        'sub-x'
+      );
     expect(servers[0].sshSettings).toMatchObject({
       cipher: ['aes128-gcm@openssh.com'],
       mac: ['hmac-sha2-256'],
@@ -769,19 +809,21 @@ describe('parseSingboxOutbounds — hysteria2 disable_chrome_parrot', () => {
    */
   it('订阅带 disable_chrome_parrot:true → 收进 hysteria2Settings（Ed25519 证书节点的连通性前提）', () => {
     const svc = newService(new FakeLog());
-    const servers = (svc as any).parseSingboxOutbounds(
-      [
-        {
-          type: 'hysteria2',
-          tag: 'ed25519-node',
-          server: 'a.com',
-          server_port: 443,
-          password: 'pw',
-          disable_chrome_parrot: true,
-        },
-      ],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [
+          {
+            type: 'hysteria2',
+            tag: 'ed25519-node',
+            server: 'a.com',
+            server_port: 443,
+            password: 'pw',
+            disable_chrome_parrot: true,
+          },
+        ],
+        'sub-x'
+      );
     expect(servers).toHaveLength(1);
     expect(servers[0].hysteria2Settings?.disableChromeParrot).toBe(true);
   });
@@ -790,19 +832,21 @@ describe('parseSingboxOutbounds — hysteria2 disable_chrome_parrot', () => {
   it('订阅未带该键 / 带 false → 不落 disableChromeParrot（不把上游默认固化进存储）', () => {
     const svc = newService(new FakeLog());
     for (const extra of [{}, { disable_chrome_parrot: false }]) {
-      const servers = (svc as any).parseSingboxOutbounds(
-        [
-          {
-            type: 'hysteria2',
-            tag: 'plain',
-            server: 'a.com',
-            server_port: 443,
-            password: 'pw',
-            ...extra,
-          },
-        ],
-        'sub-x'
-      );
+      const servers = (svc as any)
+        .contentParser({ viaProxy: false, userAgent: 'fixture' })
+        .parseSingboxOutbounds(
+          [
+            {
+              type: 'hysteria2',
+              tag: 'plain',
+              server: 'a.com',
+              server_port: 443,
+              password: 'pw',
+              ...extra,
+            },
+          ],
+          'sub-x'
+        );
       expect(servers[0].hysteria2Settings?.disableChromeParrot).toBeUndefined();
     }
   });
@@ -812,37 +856,43 @@ describe('parseSingboxOutbounds — snell', () => {
   it('v4 obfs http + v6 mode/userkey/reuse/network → 一等映射', () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const servers = (svc as any).parseSingboxOutbounds(
-      [
-        {
-          type: 'snell',
-          tag: 'sn4',
-          server: 's.com',
-          server_port: 443,
-          version: 4,
-          psk: 'psk-secret',
-          obfs_mode: 'http',
-          obfs_host: 'bing.com',
-        },
-        {
-          type: 'snell',
-          tag: 'sn6',
-          server: 's.com',
-          server_port: 444,
-          version: 6,
-          psk: 'p6',
-          mode: 'unsafe-raw',
-          reuse: true,
-          network: 'tcp',
-          userkey: 'uk',
-        },
-      ],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [
+          {
+            type: 'snell',
+            tag: 'sn4',
+            server: 's.com',
+            server_port: 443,
+            version: 4,
+            psk: 'psk-secret',
+            obfs_mode: 'http',
+            obfs_host: 'bing.com',
+          },
+          {
+            type: 'snell',
+            tag: 'sn6',
+            server: 's.com',
+            server_port: 444,
+            version: 6,
+            psk: 'p6',
+            mode: 'unsafe-raw',
+            reuse: true,
+            network: 'tcp',
+            userkey: 'uk',
+          },
+        ],
+        'sub-x'
+      );
     expect(servers).toHaveLength(2);
     expect(servers[0].protocol).toBe('snell');
     expect(servers[0].password).toBe('psk-secret');
-    expect(servers[0].snellSettings).toEqual({ version: 4, obfsMode: 'http', obfsHost: 'bing.com' });
+    expect(servers[0].snellSettings).toEqual({
+      version: 4,
+      obfsMode: 'http',
+      obfsHost: 'bing.com',
+    });
     expect(servers[1].snellSettings).toEqual({
       version: 6,
       mode: 'unsafe-raw',
@@ -855,13 +905,15 @@ describe('parseSingboxOutbounds — snell', () => {
   it('版本非 4|6 / 缺 psk → warn 跳过（防坏节点连累整份订阅保存）', () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const servers = (svc as any).parseSingboxOutbounds(
-      [
-        { type: 'snell', tag: 'v3', server: 's.com', server_port: 443, version: 3, psk: 'p' },
-        { type: 'snell', tag: 'nopsk', server: 's.com', server_port: 443, version: 4 },
-      ],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [
+          { type: 'snell', tag: 'v3', server: 's.com', server_port: 443, version: 3, psk: 'p' },
+          { type: 'snell', tag: 'nopsk', server: 's.com', server_port: 443, version: 4 },
+        ],
+        'sub-x'
+      );
     expect(servers).toHaveLength(0);
     const warns = log.entries
       .filter((e) => e.level === 'warn')
@@ -876,21 +928,23 @@ describe('parseSingboxOutbounds — snell review 边界补测', () => {
   it('v6 + obfs_mode http（脏 JSON）→ obfsMode 不落库（不变量：obfs 仅 v4）', () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const servers = (svc as any).parseSingboxOutbounds(
-      [
-        {
-          type: 'snell',
-          tag: 'dirty',
-          server: 's.com',
-          server_port: 443,
-          version: 6,
-          psk: 'p',
-          obfs_mode: 'http',
-          obfs_host: 'x.com',
-        },
-      ],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [
+          {
+            type: 'snell',
+            tag: 'dirty',
+            server: 's.com',
+            server_port: 443,
+            version: 6,
+            psk: 'p',
+            obfs_mode: 'http',
+            obfs_host: 'x.com',
+          },
+        ],
+        'sub-x'
+      );
     expect(servers).toHaveLength(1);
     expect(servers[0].snellSettings).toEqual({ version: 6 });
   });
@@ -898,13 +952,18 @@ describe('parseSingboxOutbounds — snell review 边界补测', () => {
   it('空白 psk → warn 跳过（trim 语义对齐 completeness）', () => {
     const log = new FakeLog();
     const svc = newService(log);
-    const servers = (svc as any).parseSingboxOutbounds(
-      [{ type: 'snell', tag: 'blank', server: 's.com', server_port: 443, version: 4, psk: '  ' }],
-      'sub-x'
-    );
+    const servers = (svc as any)
+      .contentParser({ viaProxy: false, userAgent: 'fixture' })
+      .parseSingboxOutbounds(
+        [{ type: 'snell', tag: 'blank', server: 's.com', server_port: 443, version: 4, psk: '  ' }],
+        'sub-x'
+      );
     expect(servers).toHaveLength(0);
     expect(
-      log.entries.filter((e) => e.level === 'warn').map((e) => e.message).join('\n')
+      log.entries
+        .filter((e) => e.level === 'warn')
+        .map((e) => e.message)
+        .join('\n')
     ).toMatch(/缺 psk/);
   });
 });
@@ -1011,5 +1070,143 @@ describe('§16.3.4 条件 GET / 304 短路', () => {
     mockFetch.mockResolvedValue(makeResponse({ status: 304 }));
     // 未传 conditional（如 provider 拉取路径）→ 304 不认 notModified，维持「304 非 ok → throw」→ transient。
     await expect(svc.fetchSubscription('https://sub.example.com/x', SUB_ID)).rejects.toThrow(/304/);
+  });
+});
+
+import { parseClashProxies } from '../ClashSubscriptionParser';
+it('native subscription tuning and renamed nodes preserve their stable identity', () => {
+  const native = {
+    type: 'ssr',
+    name: 'old',
+    server: 'example.com',
+    port: 443,
+    password: 'fixture-secret',
+    protocol: 'auth_sha1_v4',
+    cipher: 'aes-128-cfb',
+    obfs: 'plain',
+  };
+  const before = parseClashProxies([native], 'fixture-sub', '2026-10-08T00:00:00Z').servers[0];
+  const after = parseClashProxies(
+    [{ ...native, name: 'new', 'obfs-param': 'cdn.example.com' }],
+    'fixture-sub',
+    '2026-10-08T00:00:01Z'
+  ).servers[0];
+  const merged = SubscriptionService.reconcileServers([before], [after], '2026-10-08T00:00:01Z');
+  expect(merged.servers[0].id).toBe(before.id);
+  expect(merged.servers[0].compatibilitySettings?.outbound['obfs-param']).toBe('cdn.example.com');
+});
+
+describe('subscription account metadata is collected with the node response', () => {
+  it.each(['usage', 'USER_INFO', 'Traffic', 'user-info'])(
+    'parses explicit YAML %s without altering nodes',
+    async (container) => {
+      const svc = newService(new FakeLog());
+      mockFetch.mockResolvedValue(
+        makeResponse({
+          body: `${container}:\n  REMAINING: 2 KiB\n  balance: 0\n  currency: cny\nproxies:\n  - name: Example node\n    type: vless\n    server: example.com\n    port: 443\n    uuid: 00000000-0000-4000-8000-000000000001\n`,
+        })
+      );
+      const result = await svc.fetchSubscription('https://example.com/subscription', SUB_ID);
+      expect(result.userInfo).toEqual({ remaining: 2048, balance: 0, currency: 'CNY' });
+      expect(result.servers).toHaveLength(1);
+      expect(result.servers[0].name).toBe('Example node');
+    }
+  );
+  it('standard headers override conflicting provider notices and body quota', async () => {
+    const svc = newService(new FakeLog());
+    mockFetch.mockResolvedValue(
+      makeResponse({
+        headers: { 'subscription-userinfo': 'upload=0;download=1024;total=4096' },
+        body: JSON.stringify({
+          usage: { total: 2048 },
+          proxies: [
+            {
+              name: 'Example node',
+              type: 'vless',
+              server: 'example.com',
+              port: 443,
+              uuid: '00000000-0000-4000-8000-000000000001',
+            },
+            {
+              name: '剩余流量: 10 GiB',
+              type: 'vless',
+              server: 'example.com',
+              port: 443,
+              uuid: '00000000-0000-4000-8000-000000000002',
+            },
+          ],
+        }),
+      })
+    );
+    const result = await svc.fetchSubscription('https://example.com/subscription', SUB_ID);
+    expect(result.userInfo).toMatchObject({ total: 4096, used: 1024, remaining: 3072 });
+  });
+});
+
+describe('统一订阅请求路径', () => {
+  const validBody = JSON.stringify({
+    proxies: [
+      {
+        name: 'node',
+        type: 'vless',
+        server: 'example.com',
+        port: 443,
+        uuid: '00000000-0000-4000-8000-000000000001',
+      },
+    ],
+  });
+  it('预览和同步都先固定直连，网络失败后固定代理；条件更新不丢失', async () => {
+    mockSetProxy.mockClear();
+    const svc = newService(new FakeLog());
+    svc.setRequestPortsProvider(() => ({ direct: 19001, proxy: 19002 }));
+    mockFetch
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_RESET'))
+      .mockResolvedValueOnce(makeResponse({ body: validBody }));
+    const result = await svc.fetchSubscription(
+      'https://example.com/sub',
+      SUB_ID,
+      'auto',
+      'custom-agent',
+      { etag: 'saved' }
+    );
+    expect(result.servers).toHaveLength(1);
+    expect(mockSetProxy.mock.calls).toEqual([
+      [{ proxyRules: 'http://127.0.0.1:19001', proxyBypassRules: '<-loopback>' }],
+      [{ proxyRules: 'http://127.0.0.1:19002', proxyBypassRules: '<-loopback>' }],
+    ]);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    for (const call of mockFetch.mock.calls)
+      expect(call[1].headers).toEqual(
+        expect.objectContaining({ 'User-Agent': 'custom-agent', 'If-None-Match': 'saved' })
+      );
+    mockFetch.mockReset();
+    mockFetch
+      .mockRejectedValueOnce(new Error('net::ERR_CONNECTION_RESET'))
+      .mockResolvedValueOnce(makeResponse({ body: validBody }));
+    expect((await svc.previewSubscription('https://example.com/sub')).ok).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+  it('返回无效订阅不换路径重复解析；没有代理时保留原始失败', async () => {
+    const svc = newService(new FakeLog());
+    svc.setRequestPortsProvider(() => ({ direct: 19001, proxy: 19002 }));
+    mockFetch.mockResolvedValue(makeResponse({ body: 'invalid-content' }));
+    expect((await svc.previewSubscription('https://example.com/sub')).ok).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    mockFetch.mockReset();
+    mockFetch.mockRejectedValue(new Error('net::ERR_CONNECTION_RESET'));
+    svc.setRequestPortsProvider(() => null);
+    expect((await svc.previewSubscription('https://example.com/sub')).ok).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+  it('强制代理不可用明确失败，不用直连替代；SSRF 拒绝不换路径', async () => {
+    const svc = newService(new FakeLog());
+    await expect(svc.fetchSubscription('https://example.com/sub', SUB_ID, true)).rejects.toThrow(
+      'unavailable'
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+    svc.setRequestPortsProvider(() => ({ direct: 19001, proxy: 19002 }));
+    mockLookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+    expect((await svc.previewSubscription('https://example.com/sub')).errorKind).toBe('ssrf');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

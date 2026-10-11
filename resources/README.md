@@ -56,7 +56,7 @@ resources/
 
 1. **可执行权限**：macOS / Linux 的 `sing-box` 与 helper 需可执行权限（`chmod +x`）。
 2. **文件大小**：`sing-box` 可执行文件较大（约 65–77 MB/平台），会影响安装包大小；故不入库、由 `npm run fetch:core` 现拉现打（见文首说明与下「换核」）。
-3. **更新**：GeoIP/GeoSite 数据（`data/*.srs`）需定期更新以获得最新路由规则；运行期亦可经规则资源管理在线更新到 userData。
+3. **更新**：GeoIP/GeoSite 数据（`data/*.srs`）需定期更新以获得最新路由规则；运行期由内部后台服务按当前地区和局域网需求更新到 userData。
 4. **换核**：改 `src/shared/core-manifest.json` 的 `bundledCoreVersion` + `coreArchiveSha256`（4 平台压缩包 sha，
    值 = 官方 release REST API 的 asset digest，一行取：
    `gh api repos/SagerNet/sing-box/releases/tags/v<新版本> --jq '.assets[]|select(.name|test("(linux-amd64.tar.gz|windows-amd64.zip|darwin-amd64.tar.gz|darwin-arm64.tar.gz)$"))|{name,digest}'`，

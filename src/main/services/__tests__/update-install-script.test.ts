@@ -176,7 +176,7 @@ describe('buildMacUpdateScript', () => {
     expect(s).toContain("/bin/bash '$ELEV'");
     expect(s).toContain('printf %q');
     // M2：清历史中断遗留的暂存
-    expect(s).toContain('.flowz-update-*.app');
+    expect(s).toContain('.shadow-vpn-update-*.app');
     expect(s).toContain('xattr -dr com.apple.quarantine');
     expect(s).toContain('rm -f "$DMG"'); // 删 DMG 避免累积
     expect(s).toContain('open "$DEST"');
@@ -201,4 +201,23 @@ describe('macAppBundleFromExe', () => {
     expect(macAppBundleFromExe('/usr/local/bin/flowz')).toBeNull();
     expect(macAppBundleFromExe('C:\\Apps\\FlowZ.exe')).toBeNull();
   });
+});
+
+it('macOS updater waits for the old process and retains backup until the new version confirms startup', () => {
+  const s = buildMacUpdateScript({
+    dmgPath: '/tmp/example.dmg',
+    appBundlePath: '/Applications/Shadow VPN.app',
+    processId: 1234,
+    confirmation: {
+      token: '00000000-0000-0000-0000-000000000001',
+      directory: '/tmp/updates',
+      version: 'v0.2.0',
+    },
+  });
+  expect(s).toContain('kill -0 1234');
+  expect(s).toContain('for i in {1..90}');
+  expect(s).toContain('--shadow-vpn-update-token=');
+  expect(s).toContain('OLD_ID');
+  expect(s).toContain('mv "$BAK" "$DEST"');
+  expect(s.indexOf('open "$DEST" --args')).toBeLessThan(s.indexOf('rm -rf "$BAK"; rm -f "$DMG"'));
 });

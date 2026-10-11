@@ -37,7 +37,11 @@ jest.mock('electron', () => {
   };
 });
 
-import { StatsWorkerHost, type StatsApiEndpoint } from '../StatsWorkerHost';
+import {
+  StatsWorkerHost,
+  type StatsApiEndpoint,
+  type StatsWorkerHostOptions,
+} from '../StatsWorkerHost';
 import type { StatsTopic } from '../../../shared/ipc-channels';
 
 const electron = require('electron');
@@ -67,7 +71,7 @@ const SAMPLE_AGG: ConnectionsAggregate = {
   at: 123,
 };
 
-function makeHost() {
+function makeHost(resolveApplications?: StatsWorkerHostOptions['resolveApplications']) {
   const onStats = jest.fn();
   const onAggregate = jest.fn();
   const onDetail = jest.fn();
@@ -79,6 +83,7 @@ function makeHost() {
     onStats,
     onAggregate,
     onDetail,
+    resolveApplications,
     isUiActive: () => state.active,
     hasSubscribers: (topic) => subs[topic],
     getEndpoint: () => state.endpoint,
@@ -110,6 +115,51 @@ describe('StatsWorkerHost 控制面 (T4)', () => {
 });
 
 describe('StatsWorkerHost 数据面门控 (T4)', () => {
+  it('未启动时接收设备连接；切换内核后拒绝另一来源的在途帧', () => {
+    const { host, onDetail, onAggregate } = makeHost();
+    const device = { ...SAMPLE_CONNS, source: 'device' };
+    const aggregate = { ...SAMPLE_AGG, source: 'device' };
+    lastWorker().emit('message', { type: 'detail', payload: device });
+    lastWorker().emit('message', { type: 'aggregate', payload: aggregate });
+    expect(onDetail).toHaveBeenCalledWith(device);
+    expect(onAggregate).toHaveBeenCalledWith(aggregate);
+    host.resubscribe();
+    onDetail.mockClear();
+    onAggregate.mockClear();
+    lastWorker().emit('message', { type: 'detail', payload: device });
+    lastWorker().emit('message', { type: 'aggregate', payload: aggregate });
+    expect(onDetail).not.toHaveBeenCalled();
+    expect(onAggregate).not.toHaveBeenCalled();
+    host.stop();
+    onDetail.mockClear();
+    lastWorker().emit('message', { type: 'detail', payload: SAMPLE_CONNS });
+    expect(onDetail).not.toHaveBeenCalled();
+    lastWorker().emit('message', { type: 'detail', payload: device });
+    expect(onDetail).toHaveBeenCalledWith(device);
+  });
+  it('停止时接受设备采样，运行时丢弃旧设备帧；缓存读取保留采样时间', () => {
+    const { onStats, host } = makeHost();
+    const device = { ...SAMPLE_STATS, source: 'device', sampledAt: 1234 };
+    lastWorker().emit('message', { type: 'stats', payload: device });
+    expect(onStats).toHaveBeenCalledWith(expect.objectContaining(device));
+    expect(host.getSnapshot().sampledAt).toBe(1234);
+    host.resubscribe();
+    onStats.mockClear();
+    lastWorker().emit('message', { type: 'stats', payload: device });
+    expect(onStats).not.toHaveBeenCalled();
+    lastWorker().emit('message', {
+      type: 'stats',
+      payload: { ...device, source: 'proxy', sampledAt: 2000 },
+    });
+    expect(host.getSnapshot().sampledAt).toBe(2000);
+    host.stop();
+    onStats.mockClear();
+    lastWorker().emit('message', {
+      type: 'stats',
+      payload: { ...device, source: 'proxy', sampledAt: 3000 },
+    });
+    expect(onStats).not.toHaveBeenCalled();
+  });
   it('活跃时 stats 消息缓存 + 广播', () => {
     const { onStats, host } = makeHost();
     host.resubscribe(); // started=true（生产中帧只在 connect 后才来）
@@ -364,4 +414,29 @@ describe('StatsWorkerHost 生命周期 (T4)', () => {
     jest.advanceTimersByTime(10000);
     expect(electron.utilityProcess.fork.mock.calls.length).toBe(forkCountBefore);
   });
+});
+
+it('enriches only the current connection frame and does not resurrect details after stop', async () => {
+  let finish!: (value: ConnectionsSnapshot) => void;
+  const resolver = jest.fn(
+    () =>
+      new Promise<ConnectionsSnapshot>((done) => {
+        finish = done;
+      })
+  );
+  const { host, onDetail } = makeHost(resolver);
+  host.resubscribe();
+  lastWorker().emit('message', { type: 'detail', payload: SAMPLE_CONNS });
+  const enriched = { ...SAMPLE_CONNS, applications: [] };
+  finish(enriched);
+  await Promise.resolve();
+  expect(host.getConnectionsSnapshot().applications).toEqual([]);
+  expect(onDetail).toHaveBeenLastCalledWith(enriched);
+  lastWorker().emit('message', { type: 'detail', payload: SAMPLE_CONNS });
+  host.stop();
+  finish(enriched);
+  await Promise.resolve();
+  expect(host.getConnectionsSnapshot().connections).toEqual([]);
+  expect(onDetail).toHaveBeenLastCalledWith(expect.objectContaining({ connections: [] }));
+  host.dispose();
 });

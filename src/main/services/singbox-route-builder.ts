@@ -1,10 +1,11 @@
+import { protectProxyQuic } from '../../shared/runtime-policy';
 /**
  * sing-box 路由配置生成 —— 从 ProxyManager.generateRouteConfig 抽出（SingBoxConfigBuilder 抽取 Phase 2 step 7）。
  *
  * route 子系统集成 hub：纯函数，只读 config/idToTagMap + 注入实例态依赖（probe 端口 / lanResolverForDns /
  * pendingEndpoints 值 + log·onDegraded 回调）。装配 sniff/探针/DNS 直连·劫持/节点排除/
  * 网银 U盾/endpoint 强制路由/私网直连/自定义规则(buildCustomRules)/应用分流/QUIC 阻断/geo rule_set/悬空剪枝。
- * config 字节等价由 config-snapshot 网验证（systemProxy/tun/global/customRules/appRules/WG/probe/blockQuic/
+ * config 字节等价由 config-snapshot 网验证（systemProxy/tun/global/customRules/appRules/WG/probe/QUIC/
  * bypassLAN/win32 等矩阵）；启停/TUN 热切换真机另验。
  */
 
@@ -27,11 +28,12 @@ import { FAKEIP_INET4_RANGE, FAKEIP_INET6_RANGE } from '../../shared/fakeip-filt
 import {
   effectiveRegionRouting,
   REGION_LOCAL_GEO,
-  REGION_FOREIGN_GEO,
+  localRegionGeo,
+  foreignRegionGeo,
 } from '../../shared/region-routing';
 import { ruleIpCidrs } from '../../shared/rules';
 import { getAppPreset } from '../../shared/app-rules-preset';
-import { getRuleResourcesPath } from '../utils/paths';
+import { applicationProcessMatchers } from '../../shared/application-matching';
 import { usesFakeIp, resolvesDestinationAhead } from './custom-rule-files';
 import { getRuleSetRuntimeDir as getRuntimeRulesDir, isValidSrsFile } from './builtin-geo-rulesets';
 import type {
@@ -49,7 +51,6 @@ import {
   effectiveAppRules,
   getCustomDomesticDnsEndpoint,
   getLocalGeoRuleSets,
-  getRequiredGeoCategories,
   applyRuleSetPrune,
 } from './singbox-config-helpers';
 import { buildCustomRules } from './singbox-custom-rules';
@@ -60,7 +61,7 @@ import { bypassLanCidrs, effectiveBypassLan } from '../../shared/system-proxy-by
 // 本文件只消费：同一份数组同时喂给 TCP(443/853) 与 UDP(443) 两条 reject，杜绝两处漂移。
 
 /**
- * QUIC(UDP/443) reject 规则工厂：可选叠加域名/进程等匹配器。route 与各处 blockQuic 共用，
+ * QUIC(UDP/443) reject 规则工厂：可选叠加域名/进程等匹配器。route 与各处代理 QUIC 防护共用，
  * 保证 network/port/action 字面量始终一致（避免某处漏写 network 导致行为漂移）。
  */
 const udp443RejectRule = (matcher: Record<string, unknown> = {}): SingBoxRouteRule => ({
@@ -147,7 +148,7 @@ export function buildRouteConfig(
   // 浏览器 DoH 拦截清单（默认开、可编辑）：空数组 = 用户关了开关或把清单删空 → 两条 reject 都不发射。
   const browserDohKeywords = effectiveBrowserDohKeywords(config);
 
-  // blockQuic（节点无关）：开启时对"将走代理"的 QUIC(UDP443) 执行 reject，逼浏览器回退 TCP。
+  // 自动对将走代理的 QUIC(UDP443) 执行 reject，促使浏览器回退 TCP。
   // 「禁 QUIC」即禁 QUIC，与选中节点的协议/中继能力无关，对所有节点一视同仁。两点实测保证安全：
   //   · 节点自身的 UDP 拨号(naive-h3/hy2/tuic dial server)无害——拨号是 sing-box 进程自有 socket，
   //     受 fwmark/auto_detect_interface 保护、绕过 route 规则；netns TUN 抓包实测：带 reject udp443
@@ -155,10 +156,9 @@ export function buildRouteConfig(
   //   · 不下发"全 UDP reject"——只禁 QUIC(443)。非 QUIC 的代理向 UDP 若节点不能中继(naive/ssh/http)，
   //     由 sing-box 出站层自动拒绝（实测日志 "UDP is not supported by outbound"，不漏 direct、不黑洞），
   //     无需路由层按节点固化。这也使路由配置与选中节点解耦 → 支持 selector 跨协议无缝热切换。
-  // 节点无关：只要开了 blockQuic 且存在代理路径（非 direct 模式、有节点）就拦——不依赖 selectedServer
+  // 节点无关：只要存在代理路径（非 direct 模式、有节点）就拦——不依赖 selectedServer
   // 解析成功（避免 selectedServerId 失效但 selector default 仍出流量时 QUIC 漏过）。
-  const blockProxyQuic =
-    config.blockQuic === true && proxyMode !== 'direct' && config.servers.length > 0;
+  const blockProxyQuic = protectProxyQuic(config);
 
   // 给定域名匹配器，返回应配对的 udp443 reject 规则（smart 模式放在每条 →代理 规则之前），否则 null。
   const proxyUdpRejectFor = (matcher: Record<string, unknown>): SingBoxRouteRule | null =>
@@ -301,6 +301,9 @@ export function buildRouteConfig(
 
   const routeConfig: SingBoxRouteConfig = {
     rules,
+    // Process attribution is also needed by the live application overview,
+    // independently of whether the user configured process routing rules.
+    find_process: true,
     // 核心修复：default_domain_resolver 使用 IP-based DoH 引导解析器 (dns-bootstrap)，
     // 既避免解析 doh.pub 域名时的死循环，又免疫 UDP 53 限速/劫持（dns-bootstrap 同为 IP-based）。
     default_domain_resolver: 'dns-bootstrap',
@@ -445,16 +448,40 @@ export function buildRouteConfig(
     rules.push({ action: 'resolve', timeout: '5s' });
   }
 
+  // Precise installed-application identities precede ordinary user/domain rules. Infrastructure
+  // probes, DNS interception and loop protection above remain independent of user application policy.
+  for (const appRule of effectiveAppRules(config)) {
+    if (!appRule.enabled) continue;
+    const preset = getAppPreset(appRule.appId, config.customAppPresets);
+    if (!preset) continue;
+    for (const matcher of applicationProcessMatchers({
+      processPaths: preset.processPaths,
+      processPathRegex: preset.processPathRegex,
+    })) {
+      if (appRule.action === 'proxy') {
+        const reject = proxyUdpRejectFor(matcher);
+        if (reject) rules.push(reject);
+      }
+      rules.push({
+        ...matcher,
+        ...(appRule.action === 'block'
+          ? { action: 'reject' }
+          : {
+              action: 'route',
+              outbound: appRule.action === 'direct' ? 'direct' : `rule-sel-app-${appRule.appId}`,
+            }),
+      });
+    }
+  }
+
   // 3. 自定义规则 + 应用分流（用户路由）——**仅 smart 模式**：global=真·全局忽略用户分流（一律走选中节点，
   //    下方 smart geo 也不加、final=proxy），direct=全直连。功能性强制直连（防环/LAN/网银/节点排除）在本块之外、不受影响。
   if (proxyMode === 'smart') {
     const { rules: customRules, ruleSets: customRuleSets } = buildCustomRules(
       effectiveCustomRules(config),
-      config.customRuleSets || [],
       config.selectedServerId || undefined,
       idToTagMap,
       selectedServerTag,
-      config.ruleResources || [],
       usesFakeIp(config), // FakeIP 启用 → 注册外化 bypass 规则的 DNS rule_set 条目（供 generateDnsConfig 引用）
       {
         log: (level, message) => deps.log(level, message),
@@ -524,65 +551,6 @@ export function buildRouteConfig(
         action: 'route',
         outbound: 'direct',
       });
-    }
-
-    // 应用分流规则（真·应用分流，基于进程名）
-    // 优先级高于后续的智能分流/全局分流，确保特定应用的流量始终走用户指定的出口
-    for (const appRule of effectiveAppRules(config)) {
-      if (!appRule.enabled) continue;
-      const preset = getAppPreset(appRule.appId, config.customAppPresets);
-      if (!preset) continue;
-
-      // 确定动作：阻断走 sing-box 1.14 的 `reject` 路由动作（就地终止、不经出站），与自定义规则的阻断
-      // 及内置 QUIC/DoH/STUN reject 同形；其余走 `route` + 出站 tag。取代 legacy 的 `outbound: 'block'`。
-      const isBlock = appRule.action === 'block';
-      let outbound = 'direct';
-      if (appRule.action === 'proxy') {
-        // rule-sel-app 恒存在（generateRuleSelectors 为所有 proxy appRule 生成）：outbound 恒指
-        // rule-sel-app-<appId>，「默认/跟全局」= default=proxy-selector（嵌套），「指定节点」= default=节点 tag。
-        // 使「节点↔默认」= rule-sel-app default 变（PUT 热切换），非 outbound 结构变（重启）。
-        outbound = `rule-sel-app-${appRule.appId}`;
-      }
-      // 每条 app 规则的「动作部分」：两个发射点（process_name / rule_set）共用同一份，防一处漏改后
-      // 两种匹配形态的同一条规则动作不一致。
-      const appAction: Pick<SingBoxRouteRule, 'action' | 'outbound'> = isBlock
-        ? { action: 'reject' }
-        : { action: 'route', outbound };
-
-      // 走代理的 app 分流也要配对 udp443 reject（这些是终止规则、在末尾兜底之前命中，否则 blockQuic
-      // 对该应用的 QUIC 失效）。direct/阻断 不配对。
-      const appOutIsProxy = !isBlock && outbound !== 'direct';
-
-      // a. 基于进程名的规则（最精准，适用于 macOS/Windows TUN 模式）
-      if (preset.processNames && preset.processNames.length > 0) {
-        if (appOutIsProxy) {
-          const r = proxyUdpRejectFor({ process_name: preset.processNames });
-          if (r) rules.push(r);
-        }
-        rules.push({
-          process_name: preset.processNames,
-          ...appAction,
-        });
-      }
-
-      // b. 基于原有 rule_set 的规则（兜底，基于域名/IP 识别）
-      // tag 小写对齐 getRequiredGeoCategories（注入哪些 rule_set）+ 本地 .srs 文件名/资源 id，
-      // 否则 customAppPresets 大写 tag → 引用 geosite-<Cap> 但本地仅 geosite-<cap>.srs → fail-closed 剪掉。
-      const ruleSets = [
-        ...preset.geositeTags.map((tag) => `geosite-${tag.toLowerCase()}`),
-        ...(preset.geoipTags || []).map((tag) => `geoip-${tag.toLowerCase()}`),
-      ];
-
-      if (ruleSets.length > 0) {
-        if (appOutIsProxy) {
-          const r = proxyUdpRejectFor({ rule_set: ruleSets });
-          if (r) rules.push(r);
-        }
-        rules.push({
-          rule_set: ruleSets,
-          ...appAction,
-        });
-      }
     }
   }
 
@@ -760,13 +728,13 @@ export function buildRouteConfig(
   if (proxyMode === 'smart' && region.enabled) {
     // 已移除 ::/0 block：block 静默丢包会让 Chrome 等浏览器在 TCP SYN 时陷入 21 秒重传等待（Happy Eyeballs 假死），
     // 误以为海外网站全打不开；改依赖浏览器原生 fallback（或用户在 Mac 本机关闭 IPv6 分配）。
-    const localGeo = REGION_LOCAL_GEO[region.region];
-    const foreignGeo = REGION_FOREIGN_GEO[region.region];
+    const localGeo = localRegionGeo(region);
+    const foreignGeo = foreignRegionGeo(region);
     // 正向：本地直连·海外代理；反向（如回国）：本地代理·海外直连。
     const localOut = region.reverse ? userExitTag : 'direct';
     const foreignOut = region.reverse ? 'direct' : userExitTag;
     // 「→代理」的那一侧才在其前配对「代理向 UDP reject」（exitFallback 回退 direct 时不配对，否则误拒直连 UDP/QUIC）：
-    // 正向=海外侧走代理，反向=本地侧走代理。被 reject 的 UDP 在路由到代理前即拒（不能中继的节点拦全部 UDP，能中继+blockQuic 仅拦 QUIC）。
+    // 正向=海外侧走代理，反向=本地侧走代理。被 reject 的 UDP 在路由到代理前即拒（不能中继的节点拦全部 UDP，能中继时仅拦 QUIC）。
     const foreignToProxy = !region.reverse;
     const localToProxy = region.reverse;
 
@@ -781,7 +749,7 @@ export function buildRouteConfig(
       // D7：off-mesh 主节点时 userExitTag 已回退 direct，避免海外黑洞。
       rules.push({ ...matcher, action: 'route', outbound: foreignOut } as SingBoxRouteRule);
     };
-    pushForeign({ domain_keyword: googleKeywords });
+    if (!region.automatic) pushForeign({ domain_keyword: googleKeywords });
     for (const tag of foreignGeo.geosite) pushForeign({ rule_set: tag });
 
     // 本地（正向→直连、反向→代理；reverse=回国时国内内容走代理回国节点）。
@@ -813,7 +781,7 @@ export function buildRouteConfig(
         for (const t of [...g.geosite, ...g.geoip]) inactiveRegionGeoTags.add(t);
       }
     }
-    for (const rs of getLocalGeoRuleSets()) {
+    for (const rs of getLocalGeoRuleSets(config)) {
       if (inactiveRegionGeoTags.has(rs.tag)) continue;
       const filePath = path.join(runtimeDir, rs.fileName);
       // 缺失/损坏即跳过：不引用不存在的本地文件（否则 sing-box `initialize rule-set` FATAL）。
@@ -824,52 +792,25 @@ export function buildRouteConfig(
     }
   }
 
-  // 添加自定义规则和应用分流所需的 Geosite/GeoIP rule_set
-  const { geosite: customGeositeCategories, geoip: customGeoipCategories } =
-    getRequiredGeoCategories(
-      effectiveCustomRules(config),
-      effectiveAppRules(config),
-      config.customAppPresets || []
-    );
-
-  // fail-closed：自定义规则 / 应用分流引用的 geo（geosite-<cat>/geoip-<cat>）统一由「规则资源」管理——
-  // 随包内置（上方已注入本地定义）或用户在规则资源页下载的本地 .srs；运行期零远程下载、缺失绝不远程兜底。
-  // 缺失本地副本 → 不注入定义；末尾「悬空引用剪枝」剪掉引用该 tag 的规则（应用分流只掉 geo 半、进程名仍生效；
-  // 自定义规则按 AND/OR 合理坍缩）。重新在规则资源页下载后定义恢复 → 规则自动恢复（download 触发 core reload）。
-  if (
-    proxyMode !== 'direct' &&
-    (customGeositeCategories.size > 0 || customGeoipCategories.size > 0)
-  ) {
-    if (!routeConfig.rule_set) {
-      routeConfig.rule_set = [];
-    }
-    // 已下载进规则资源的本地副本（id 形如 geosite-<cat>/geoip-<cat>）→ 注入 type:'local'；缺失/损坏返回 null。
-    const localResPath = (tag: string): string | null => {
-      const r = (config.ruleResources || []).find((x) => x.id === tag);
-      if (!r) return null;
-      const p = path.join(getRuleResourcesPath(), r.fileName);
-      return isValidSrsFile(p) ? p : null;
-    };
-    // 已有本地定义（随包内置已在上方注入）→ 跳过；否则用规则资源页的本地副本；再否则缺失（不注入，末尾剪枝）。
-    const definedTags = new Set(routeConfig.rule_set.map((rs) => rs.tag));
-    const addLocalGeo = (tag: string): void => {
-      if (definedTags.has(tag)) return;
-      const local = localResPath(tag);
-      if (local) {
-        routeConfig.rule_set!.push({ tag, type: 'local', format: 'binary', path: local });
-        definedTags.add(tag);
+  if (proxyMode === 'smart' && region.automatic && region.enabled) {
+    for (const tag of localRegionGeo(region).geoip) {
+      const filePath = path.join(getRuntimeRulesDir(), `${tag}.srs`);
+      if (isValidSrsFile(filePath)) {
+        (routeConfig.rule_set ??= []).push({
+          tag,
+          type: 'local',
+          format: 'binary',
+          path: filePath,
+        });
       }
-      // 缺失：不注入、不远程兜底 → 交末尾悬空引用剪枝（fail-closed）。
-    };
-    for (const category of Array.from(customGeositeCategories)) addLocalGeo(`geosite-${category}`);
-    for (const category of Array.from(customGeoipCategories)) addLocalGeo(`geoip-${category}`);
+    }
   }
 
   // 【代理向 QUIC 兜底】：放在所有直连/分流规则之后，拦截"会落到 final(代理)"的剩余 QUIC(udp443)。
   // global 模式拦全部代理向 QUIC；smart 模式拦未被上方 →代理 配对 reject 命中的（CN 已直连豁免）。
   // 只拦 QUIC——非 QUIC 的代理向 UDP 若节点不能中继，由 sing-box 出站层自动拒绝（见上方 blockProxyQuic）。
   // D7 注：exitFallback 时 final/外网规则已回退 direct，此兜底仍 RST 漏网 QUIC → 浏览器 TCP 回退后走 direct，
-  // 即「强制 TCP」语义、不黑洞（blockProxyQuic 仅看 blockQuic/mode/节点数，与 exitFallback 正交，行为正确）。
+  // 即「强制 TCP」语义、不黑洞（blockProxyQuic 仅看模式和节点数，与 exitFallback 正交，行为正确）。
   if (blockProxyQuic) {
     rules.push(udp443RejectRule());
   }

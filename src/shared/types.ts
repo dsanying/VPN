@@ -16,10 +16,10 @@ import type {
   WebSocketSettings,
   GrpcSettings,
   HttpSettings,
+  XHttpSettings,
 } from './types/protocol-settings';
 
-import type { Rule, CustomRuleSet, RuleResource, AppRule, CustomAppPreset } from './types/rules';
-import type { SubscriptionProxyPolicy } from './subscription-proxy';
+import type { Rule, CustomRuleSet, AppRule, CustomAppPreset } from './types/rules';
 
 // ============================================================================
 // 协议设置子类型（re-export，保持所有现有 import 路径不变）
@@ -32,6 +32,7 @@ export type {
   WebSocketSettings,
   GrpcSettings,
   HttpSettings,
+  XHttpSettings,
   Hysteria2ObfsSettings,
   Hysteria2Settings,
   SnellVersion,
@@ -59,18 +60,8 @@ export type {
   RuleCondition,
   Rule,
   SystemProcessInfo,
+  InstalledApplication,
   CustomRuleSet,
-  RuleResourceFormat,
-  RuleResourceCategory,
-  RuleResource,
-  RuleResourceCatalogItem,
-  RuleResourceListItem,
-  RuleResourceRef,
-  RuleResourceDeleteResult,
-  RuleResourceDownloadItem,
-  RuleResourceDownloadResult,
-  RuleResourceProgress,
-  RuleResourceCatalogResult,
   AppRule,
   CustomAppPreset,
 } from './types/rules';
@@ -125,7 +116,7 @@ export type Protocol =
   | 'wireguard'
   | 'tailscale'
   | 'custom';
-export type Network = 'tcp' | 'ws' | 'grpc' | 'http' | 'httpupgrade';
+export type Network = 'tcp' | 'ws' | 'grpc' | 'http' | 'httpupgrade' | 'xhttp';
 export type Security = 'none' | 'tls' | 'reality';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 // 'auto' = 默认档：跟随平台映射（macOS·Windows→gvisor / Linux→system），经 shared/tun-defaults#resolveTunStack
@@ -146,16 +137,12 @@ export interface SubscriptionConfig {
   autoUpdate: boolean;
   lastUpdated?: string;
   createdAt: string;
-  // 拉取订阅时的 User-Agent 覆盖（per-sub）。优先级：subscription.userAgent ?? config.subscriptionUserAgent ?? 默认。
-  // 默认 `clash.meta`（标准格式协商）；仅兼容已保存的自定义请求标识，普通订阅入口不暴露此字段。
-  userAgent?: string;
-  // 缺省自动解析全部支持的协议；显式选择只保留该协议节点。
-  protocolPreference?: Protocol | 'auto';
-  // 该订阅是否经代理更新（per-sub；默认 false=直连）。仅全局 subscriptionProxyPolicy='follow' 时生效，
-  // 'proxy'/'direct' 时被全局覆盖（忽略本字段）。生效求值见 shared/subscription-proxy#resolveSubscriptionViaProxy。
-  updateViaProxy?: boolean;
   // 订阅流量/到期信息（从 Subscription-UserInfo header 解析）
   userInfo?: {
+    used?: number;
+    remaining?: number;
+    balance?: number;
+    currency?: string;
     upload?: number; // 已上传字节
     download?: number; // 已下载字节
     total?: number; // 总流量字节
@@ -240,6 +227,9 @@ export interface ServerConfig {
   wsSettings?: WebSocketSettings;
   grpcSettings?: GrpcSettings;
   httpSettings?: HttpSettings;
+  xhttpSettings?: XHttpSettings;
+  // Native node-only configuration; never contains listeners, global rules or helper settings.
+  compatibilitySettings?: { engine: 'xray' | 'mihomo'; outbound: Record<string, unknown> };
 
   createdAt?: string;
   updatedAt?: string;
@@ -250,7 +240,7 @@ export interface ServerConfig {
 // ============================================================================
 
 /** 本地导入识别到的来源格式。 */
-export type ImportFormat = 'singbox' | 'xray' | 'clash' | 'links' | 'unknown';
+export type ImportFormat = 'native' | 'singbox' | 'xray' | 'clash' | 'links' | 'unknown';
 
 /**
  * 本地导入解析结果（主进程 LOCAL_IMPORT_PARSE 返回，渲染端预览用）。
@@ -295,15 +285,6 @@ export interface TunModeConfig {
 export interface DnsConfig {
   domesticDns: string; // 国内 DNS，默认 https://doh.pub/dns-query
   foreignDns: string; // 海外 DNS，默认 https://dns.google/dns-query
-  enableFakeIp: boolean; // 是否启用 FakeIP（systemProxy / TUN 统一生效，纯看此开关，见 usesFakeIp）
-  // FakeIP 开关统一一次性迁移标记：存量旧默认 enableFakeIp:false 多非用户意图，
-  // migrateFakeIpToggle 按迁移时刻 proxyModeType 写 effective 值（TUN/manual→true、systemProxy→保留）后置 true。
-  // undefined=未迁移（旧配置）；迁移幂等，置 true 后永不再改写，避免覆盖用户后续手动改的值。
-  fakeIpToggleMigrated?: boolean;
-  // FakeIP-TUN 待纠正快照（三态，见 shared/fakeip-tun-entry.ts + ConfigManager.migrateFakeIpTunPending）：
-  // undefined=未评估（仅存量升级瞬间）；true=enableFakeIp:false 判定为 systemProxy 迁移冻结产物，首次进入 TUN
-  // 时自动回 true 并消费；false=已消费/已否决/用户已手动表达 FakeIP 意图，永不自动改。
-  fakeIpTunAutoEnable?: boolean;
   // ── 节点域名解析上游选择（issue #147 多源 race，取代 #57 单选档位 + 烧 IP）。设计 docs/design/issue147-node-dns-race-resolver.md ──
   // @deprecated 旧单选档位，仅供迁移读取（auto→pool[ali,dnspod] / dnspod→[dnspod] / system→[system]）；
   // 迁移后不再写入，新逻辑读 nodeResolverPool/nodeResolverSingle。旧配置无此字段 → 视为 'auto'。
@@ -319,13 +300,13 @@ export interface DnsConfig {
   nodeResolverSingle?: string;
   // 用户自定义上游（强制纯 IP：parseDnsServerSpec.isDomain 为 true 拒绝）。id 稳定供 pool/single 引用。
   nodeResolverCustom?: CustomDnsUpstream[];
-  // 旧 nodeDomainResolver → 新多源模型一次性迁移标记（参照 fakeIpToggleMigrated）。undefined=未迁移。
+  // 旧 nodeDomainResolver → 新多源模型一次性迁移标记。undefined=未迁移。
   nodeResolverMigrated?: boolean;
-  // TUN 模式强制接管系统 DNS（SystemDnsManager）：缺省/true=开（默认）。on-link 的 LAN/ISP DNS 不进 TUN →
+  // TUN 模式手动接管系统 DNS（SystemDnsManager）：仅 true 开启，缺省/false 关闭。on-link 的 LAN/ISP DNS 不进 TUN →
   // hijack-dns 看不到 → 需代理的域名走系统解析得到真实/错族 IP（双栈站 ERR_CONNECTION_CLOSED / 真 v6 泄漏）。
   // 开 → TUN 启动把系统 DNS 改为可路由的 8.8.8.8 使其经 TUN 被 hijack；停止/退出/崩溃还原。
   // 关 → 不接管（dns-local 恢复用原 LAN DNS、内网域名正常，但 TUN 下有上述泄漏风险），供有自定义/内网 DNS 的用户用。
-  // 仅 TUN 模式生效；旧配置无此字段 → 视为开。详见 docs/design/dns-ipv6-takeover.md。
+  // 仅 TUN 模式生效；新装及旧配置无此字段 → 关闭，保留明确保存的开关值。详见 docs/design/dns-ipv6-takeover.md。
   takeoverSystemDns?: boolean;
   // P2b 乐观 DNS 缓存（sing-box 1.14 `dns.optimistic`）：缺省/false=关。开 → 缓存过期后先返回旧值、后台异步刷新，
   // 降低尾延迟（牺牲首条过期响应的新鲜度）。映射到顶层 dns.optimistic:true（仅 true 时下发，关时省略保字节）。
@@ -346,13 +327,15 @@ export interface CustomDnsUpstream {
 // 地区分流（4.1.0）：智能分流的 geo 基线场景
 // ============================================================================
 
-/** 地区 ID：选用哪套地区 geo（cn/ir/ru）。 */
-export type RegionId = 'cn' | 'ir' | 'ru';
-/** 地区分流配置。undefined（存量/新装未改）= 默认中国大陆正向 = 今日智能分流行为（零迁移，见 shared/region-routing）。 */
+/** 地区 ID：自动策略使用现行 ISO 3166-1 alpha-2 小写码。 */
+export type RegionId = string;
+/** 应用注入自动地区策略；旧配置字段仅保留备份与纯生成器兼容。 */
 export interface RegionRoutingConfig {
-  enabled: boolean; // 总开关：true=按地区自动分流(本地直连·海外代理)；false=只用自定义规则
-  region: RegionId; // 选用哪套地区 geo
-  reverse: boolean; // 反向：本地走代理·海外直连（region=cn+reverse=回国）
+  /** Runtime-only automatic policy; persisted legacy settings remain readable for old backups. */
+  automatic?: boolean;
+  enabled: boolean; // 自动策略仅在地区与规则资源均就绪时开启
+  region: RegionId; // 当前直连网络出口地区；未知为空
+  reverse: boolean; // 旧配置兼容字段；自动策略恒 false
 }
 
 /**
@@ -376,6 +359,8 @@ export interface UserConfig {
   // 代理模式
   proxyMode: ProxyMode;
   proxyModeType: ProxyModeType;
+  /** Explicit user override: use TUN for every connection until cancelled. */
+  forceTun?: boolean;
 
   // TUN 模式配置
   tunConfig: TunModeConfig;
@@ -400,10 +385,9 @@ export interface UserConfig {
   // 主进程直接据此定托盘/通知语言（不再靠渲染端 IPC 反向告知）；渲染端 i18n 经 additionalArguments 注入同步读取。
   // 可选：存量配置缺该键 → 渲染端首次从旧 localStorage['app-language'] 回填（见 App.tsx 迁移）。
   language?: string;
-  autoCheckUpdate: boolean;
   autoLightweightMode: boolean;
   // 图形兼容逃生门（正向语义：**默认开**=true，关闭是 opt-in 用户自救；均需重启生效）。
-  // 消费一律用 `!== false`（undefined=未设/旧配置=默认开），对齐本仓 autoCheckUpdate 惯例。
+  // 消费一律用 `!== false`（undefined=未设/旧配置=默认开）。
   // hardwareAcceleration（全平台）：false → app ready 前调 app.disableHardwareAcceleration() 改用软件渲染，
   //   规避 GPU 进程反复崩溃/白屏/花屏。app ready 前 ConfigManager 未初始化 → 早期同步读 config.json 原文本，
   //   判定见 main/services/graphics-compat。Linux 已无条件禁用硬件加速 → 本开关在 Linux 是 no-op（设置页 Linux
@@ -414,13 +398,6 @@ export interface UserConfig {
   //   规避合成失效（electron #38743/#46753/#28255/#48031）的 hide/show 白屏。窗口 chrome（titleBarStyle 等）不受影响。
   windowEffects?: boolean;
   desktopNotifications?: boolean; // 桌面通知总开关（默认开）：当前仅严重错误事件发系统通知，关闭则一概不发
-  autoUpdateSubscriptionOnStart: boolean; // 订阅自动更新总开关（启动补更陈旧订阅 + 运行期周期更新）
-  subscriptionUpdateIntervalHours?: number; // 订阅自动更新周期/陈旧阈值（小时），默认 12
-  // 订阅经代理更新的【全局三态策略】（默认 'follow'）：'follow'=按各订阅 per-sub updateViaProxy 决定；
-  // 'proxy'=所有订阅强制经代理（忽略 per-sub）；'direct'=所有订阅强制直连（忽略 per-sub）。求值见 shared/subscription-proxy。
-  subscriptionProxyPolicy?: SubscriptionProxyPolicy;
-  // 全局订阅 UA（被 per-sub subscription.userAgent 覆盖；均缺省时用 `clash.meta`）。本期无 UI，手编生效。
-  subscriptionUserAgent?: string;
   // 更新链路（应用/资源/订阅/核心）是否经代理（默认 true=代理运行时经 update-in 借道，更新源多在 GitHub、
   // 墙内借道更可靠）；false=强制直连。经 shared/update-proxy#resolveMainSessionViaProxy 求值，Phase 1b 后
   // 仅控这四条更新链路；不再影响 default session（已回归 Electron 默认跟随系统代理）。
@@ -448,22 +425,12 @@ export interface UserConfig {
 
   customRuleSets?: CustomRuleSet[];
 
-  // 已下载的本地规则资源（.srs）
-  ruleResources?: RuleResource[];
-
-  // GitHub 加速前缀（规范化 'https://host[:port]/'；''/undefined=直连，默认）。仅规则资源下载用。
+  // GitHub update mirror, independent of routing data management.
   ghProxyPrefix?: string;
-
-  // 已下载规则资源自动更新总开关（默认 false）。本地 .srs sing-box 不会自更新，需 FlowZ 周期重下载。
-  ruleResourceAutoUpdate?: boolean;
-  // 自动更新间隔（小时）：6|12|24|72|168，默认 24
-  ruleResourceUpdateIntervalHours?: number;
-  // 内置 geo 规则集（geosite-cn 等）最近一次网络更新时间，按 tag 索引。无记录=出厂版（视为可补更）。
-  builtinGeoMeta?: Record<string, { updatedAt?: string }>;
 
   // 应用分流规则（实验性）
   appRules?: AppRule[];
-  // 应用分流总开关；undefined=true（兼容老配置，升级不静默失效）。false → appRules 完全不进 route 生成/TUN 排除/geo 收集。
+  // 旧应用规则总开关；仅 true + 智能分流生效，false/undefined 不进入 route/TUN 排除/geo 收集。统一规则页编辑单项时兼容保留原禁用状态。
   appRoutingEnabled?: boolean;
   // 应用分流默认预设一次性注入标记：首次为内置预设注入默认「代理·跟全局」规则后置 true。
   // 防每次启动回灌（用户删掉某预设规则后不会被重新补回）。新装由 createDefaultConfig 直接置 true。
@@ -489,7 +456,6 @@ export interface UserConfig {
   // mac/Linux 走 route 规则规避 NetworkExtension HANG）；② 系统代理模式整份（CIDR+域名）写入 OS 忽略列表。
   // 原 systemProxyBypass 已并入此字段（单一清单，杜绝两处重复）。
   bypassLANList?: string[];
-  blockQuic?: boolean; // 阻止 QUIC（对代理向 UDP 443 执行 reject，逼浏览器回退 TCP）；默认关；节点无关，对所有协议一视同仁
   // 拦截浏览器自带 DoH（对 DoH 域名的 TCP 443/853 与 UDP 443 执行 reject），逼其回退系统 UDP 53 重进
   // hijack-dns/FakeIP 体系。**默认开**（undefined ≠ false，保持历史行为——此前是恒开且无开关）。
   // 关掉 = 允许浏览器 DoH，代价是域名级分流退化成 IP 级。语义与清单见 shared/browser-doh。
@@ -502,9 +468,7 @@ export interface UserConfig {
   // block=reject STUN（断 P2P、零公网 IP 泄露）。默认 undefined=off（零行为变化）。系统代理模式拦不住（浏览器 WebRTC
   // 的 UDP 不经 sing-box 核），UI 在系统代理模式置灰。
   webrtcLeakProtection?: 'off' | 'proxy' | 'block';
-  // 节点测速端点 URL（经各节点代理 GET 量 TTFB）。默认 generate_204（见 shared/speed-test）；用户可自配，兼容 http/https。
-  // 非法值由 SpeedTestService 经 resolveSpeedTestTarget 回落默认，不阻断测速。
-  speedTestUrl?: string;
+
   // fake-ip-filter 默认清单（NTP/STUN/Captive 等在 FakeIP 下会坏的域名 → 真实解析）。默认开（undefined/true=开），仅 false=关。
   fakeIpFilter?: boolean;
   // FakeIP 例外域名清单（用户可编辑）：undefined=用内置默认（DEFAULT_FAKEIP_FILTER_DOMAINS，与历史字节一致）；
@@ -527,15 +491,8 @@ export interface UserConfig {
   /** @deprecated 已迁移至 customRules（processName+direct）；仅保留兼容旧配置，ConfigManager 启动时清空迁移。 */
   bypassProcesses?: string[];
 
-  // 日志设置
-  logLevel: LogLevel;
-  // 关闭日志写盘（sing-box log.disabled）；默认 false=写盘。关闭后应用内无法查看实时日志/基于日志的诊断
+  // Runtime logging uses the managed info policy (warn in privacy mode).
   disableLogFile?: boolean;
-
-  // 诊断采集（临时提级）：开启时把 logLevel 临时拉到 debug 复现问题，存档原级别供还原。
-  // 存在即「采集中」（UI 据此显示采集条）。结束采集 / 下次启动 app → 还原 logLevel=prevLogLevel 后清此字段。
-  // 还原到「采集前的快照级别」（可能是 error/warn），绝不硬编码 info。崩溃安全：持久在 config，loadConfig 启动还原。
-  diagnosticCapture?: { prevLogLevel: LogLevel };
 
   // clash_api(127.0.0.1:9090) 鉴权 secret：首次启动随机生成并持久化，统一管所有 clash_api 访问(含 external_ui)。
   // 内部调用(热切换/流量统计/拓扑)带 Authorization；防恶意网页跨域读连接历史。可在设置里查看/重置。
@@ -550,16 +507,6 @@ export interface UserConfig {
   // 下发前经 ghProxyPrefix 镜像加速包裹；改此值 → saveConfig 检测变更后删本地缓存目录，使核下次启动重拉新资源。
   // 暴露给用户作安全阀：默认 URL 失效时可手动改。空白字符串/非字符串一律 sanitize 删除（回落默认）。
   singboxDashboardUrl?: string;
-
-  // macOS 提权 helper：用户已忽略「安装提权 helper」启动提示（不再每次启动 TUN 时弹）。可在设置里重新安装。
-  // 注：socket 鉴权 token 刻意不放这里——它存独立文件，避免被渲染端整体回写 config 时清零。
-  helperPromptDismissed?: boolean;
-
-  // 提权 helper：用户已忽略「helper 可升级」启动弹窗（proto < 期望，如属主根治 v6）。不再每次启动提示；设置页可手动升级。
-  helperUpgradePromptDismissed?: boolean;
-
-  // macOS 提权 helper：用户已忽略「后台运行被系统禁用」引导弹窗（不再提示）。设置页 helper 卡保留常驻入口。
-  helperDisabledPromptDismissed?: boolean;
 
   uiTheme?: 'light' | 'dark' | 'system';
 }

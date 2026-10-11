@@ -12,9 +12,14 @@
  *   这些方法均私有，经公开 API（refresh / refreshProxy）触达。
  */
 import { EventEmitter } from 'events';
-import * as http from 'http';
+import * as http from 'https';
 
-jest.mock('http');
+jest.mock('https');
+jest.mock('https-proxy-agent', () => ({
+  HttpsProxyAgent: class {
+    constructor(public proxy: string) {}
+  },
+}));
 
 import { parseTrace, IpInfoService } from '../IpInfoService';
 import type { IpInfoSnapshot, ProxyExitBlock } from '../../../shared/types';
@@ -562,9 +567,11 @@ describe('IpInfoService 传输层', () => {
     await svc.refreshProxy();
     const c = calls[0];
     // absolute-form：发往 127.0.0.1:proxyPort，path 为完整 URL，带 Host 头
-    expect(c.options.hostname).toBe('127.0.0.1');
-    expect(c.options.port).toBe(18081);
-    expect(c.options.path).toBe('http://cloudflare.com/cdn-cgi/trace');
+    expect(c.options.hostname).toBe('cloudflare.com');
+    expect(c.options.agent).toEqual(expect.objectContaining({ proxy: 'http://127.0.0.1:18081' }));
+    expect(c.options.rejectUnauthorized).toBe(true);
+    expect(c.options.port).toBe(443);
+    expect(c.options.path).toBe('/cdn-cgi/trace');
     expect(c.options.headers).toMatchObject({ Host: 'cloudflare.com', Connection: 'close' });
     expect(c.options.timeout).toBe(6000); // 单请求超时（REQ_TIMEOUT_MS，用户定 6s）
   });
@@ -575,7 +582,7 @@ describe('IpInfoService 传输层', () => {
     await svc.refresh(true);
     const c = calls[0];
     expect(c.options.hostname).toBe('myip.ipip.net'); // 直连目标域名（非 127.0.0.1）
-    expect(c.options.port).toBe(80);
+    expect(c.options.port).toBe(443);
     expect(c.options.path).toBe('/json'); // origin-form（非 absolute-form）
     expect(c.options.headers).toMatchObject({ Host: 'myip.ipip.net', Connection: 'close' });
   });
@@ -766,7 +773,7 @@ describe('IpInfoService 传输层', () => {
   it('重试：代理首轮全失败、次轮成功 → 取到 IP 不报错，且过程出现「获取中」(loading)', async () => {
     // maxAttempts=2：第 1 轮 PROXY_CHAIN 3 端点全 503 失败 → 间隔后第 2 轮首跳 trace 成功。
     const { svc, snapshots } = makeService({ maxAttempts: 2, retryDelayMs: 0 });
-    responders = [respondStatus(503), respondStatus(503), respondStatus(503), respondOk(TRACE_OK)];
+    responders = [respondStatus(503), respondStatus(503), respondOk(TRACE_OK)];
     const snap = await svc.refreshProxy();
     expect(snap.proxy).toEqual({ ip: '104.28.210.15', countryCode: 'US' }); // 重试后取到
     expect(snap.error).toBeUndefined(); // 不报错（不闪「获取失败」）
@@ -800,7 +807,7 @@ describe('IpInfoService 传输层', () => {
       postConnectRetryDelayMs: 0,
     });
     // 前 3 轮（每轮 PROXY_CHAIN 3 端点全 503=隧道未就绪）= 9 个 503，第 4 轮首跳 trace 成功。
-    responders = [...Array.from({ length: 9 }, () => respondStatus(503)), respondOk(TRACE_OK)];
+    responders = [...Array.from({ length: 6 }, () => respondStatus(503)), respondOk(TRACE_OK)];
     const snap = await svc.refreshProxyPostConnect();
     expect(snap.proxy).toEqual({ ip: '104.28.210.15', countryCode: 'US' }); // 隧道就绪后取到
     expect(snap.error).toBeUndefined(); // 不落 error（界面不闪「暂不可用」）
@@ -828,11 +835,11 @@ describe('IpInfoService 传输层', () => {
     const snap = await svc.refreshProxy();
     expect(snap.proxy).toBeNull();
     expect(snap.error).toBe('fetch_failed');
-    expect(calls.length).toBe(3); // 只探了 1 轮（3 端点），未走宽预算的多轮重试
+    expect(calls.length).toBe(2); // 只探了 1 轮（3 端点），未走宽预算的多轮重试
   });
 
   // --- §9 可见「检测中」重探（visible 档：清当前出口→检测中→结果/超时/出口无效）------------------
-  const PROXY_HOSTS = ['cloudflare.com', 'ip-api.com', 'api.ipify.org'];
+  const PROXY_HOSTS = ['cloudflare.com', 'api.ipify.org'];
 
   it('V1：visible+running 成功 → 首广播清 proxy(检测中)+保留 direct+updatedAt 不推进；终广播探到新 proxy', async () => {
     const { svc, snapshots } = makeService(); // running + ports
@@ -947,7 +954,7 @@ describe('IpInfoService 传输层', () => {
     expect(snap.error).toBeUndefined(); // 非 error（区分「出口无效」与「探测失败」）
     expect(snap.proxy).toBeNull();
     const proxyCalls = calls.filter((c) => PROXY_HOSTS.includes(hostOf(c.options) ?? '')).length;
-    expect(proxyCalls).toBe(3); // 仅 attempt0 的 3 端点；attempt1 被 shouldAbort 中止（未发起）
+    expect(proxyCalls).toBe(2); // 仅 attempt0 的 3 端点；attempt1 被 shouldAbort 中止（未发起）
   });
 
   it('V7：非 visible refresh(true) 回归锚 → 首广播 direct/proxy 均保留旧值(被动不闪；防清值泛化到被动路径)', async () => {

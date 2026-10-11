@@ -17,6 +17,7 @@ const NON_DEVICE_TYPES: RuleType[] = [
   'sourcePort',
   'processName',
   'processPath',
+  'processPathRegex',
   'geosite',
   'geoip',
   'ruleSet',

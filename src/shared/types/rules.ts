@@ -36,6 +36,7 @@ export type RuleType =
   | 'sourceHostname'
   | 'processName'
   | 'processPath'
+  | 'processPathRegex'
   | 'geosite'
   | 'geoip'
   | 'ruleSet';
@@ -51,6 +52,8 @@ export interface RuleCondition {
  * 端口("443"或"1000-2000")/进程名/路径/geo 标签/规则集(URL 或 res:<resourceId>)，一项一条。
  */
 export interface Rule {
+  /** Local application identity for displaying/editing a process-path rule. */
+  application?: InstalledApplication;
   id: string;
   type: RuleType; // 首条件镜像（向后兼容旧消费点 + 回滚安全；恒与 conditions[0] 一致）
   values: string[]; // 首条件镜像
@@ -84,6 +87,20 @@ export interface SystemProcessInfo {
   count: number;
 }
 
+/** Installed application identity. Paths remain in the local user configuration. */
+export interface InstalledApplication {
+  id: string;
+  name: string;
+  path: string;
+  processPaths: string[];
+  processPathRegex: string[];
+  coverage: 'bundle' | 'executable' | 'package' | 'unsupported';
+  /** Android package identity; never inferred from the presentation label. */
+  packageName?: string;
+  /** Locally read PNG icon for presentation; never required for routing. */
+  iconDataUrl?: string;
+}
+
 // 自定义规则集（从 URL 导入）
 export interface CustomRuleSet {
   id: string;
@@ -92,98 +109,6 @@ export interface CustomRuleSet {
   action: 'proxy' | 'direct' | 'block';
   enabled: boolean;
   addedAt: string;
-}
-
-// ============================================================================
-// 规则资源（已下载到本地的 sing-box .srs 规则集）
-// ============================================================================
-
-export type RuleResourceFormat = 'binary' | 'source'; // .srs→binary（下载恒此），.json→source（仅保留扩展位）
-export type RuleResourceCategory = 'geosite' | 'geoip' | 'geosite-lite' | 'geoip-lite' | 'custom';
-
-/** 已下载到本地的规则资源（文件落 <userData>/rule-resources/，本清单存 config.json）。 */
-export interface RuleResource {
-  id: string; // 内置=catalog id（'geosite-youtube'）；手动='res_<ts>_<rand>'
-  name: string;
-  category: RuleResourceCategory;
-  sourceUrl: string; // 原始 URL（不含加速前缀，更新时现拼）
-  fileName: string; // 落盘名，含分类前缀防撞，如 'geosite-youtube.srs'
-  format: RuleResourceFormat;
-  size: number; // 字节
-  downloadedAt: string; // ISO
-}
-
-/** 内置/动态资源库条目（catalog）。 */
-export interface RuleResourceCatalogItem {
-  id: string;
-  category: RuleResourceCategory;
-  name: string;
-  path: string; // meta-rules-dat 仓库内路径，如 'geo/geosite/youtube.srs'
-}
-
-/** 列表项：本地资源 + 文件是否存在 + 被启用 ruleSet 规则引用计数。 */
-export interface RuleResourceListItem extends RuleResource {
-  fileExists: boolean;
-  referencedBy: number;
-  /** 内置 geo 规则集（智能分流固定依赖）：不可删除、更新写回 <userData>/rules 热重载、可重置为出厂。id 形如 'builtin:geosite-cn'。 */
-  builtin?: boolean;
-}
-
-/**
- * 规则资源引用记录（单一真值，见 shared/rule-resource-refs.ts）。
- * kind 区分来源：'route'=自定义路由规则 / 'app'=应用分流卡片。
- * label：route=已就绪文案（备注/首条件摘要）；app=内置 labelKey(i18n key) 或自定义 name（由 appBuiltin 决定渲染端是否 i18n）。
- */
-export interface RuleResourceRef {
-  // system = 智能分流 geo 基线层对内置默认(geosite-cn/geoip-cn/geolocation-!cn)的隐式引用（纳入 referencedBy 计数）
-  kind: 'route' | 'app' | 'system';
-  id: string;
-  label: string;
-  appBuiltin?: boolean;
-}
-
-/** 删除资源结果：被启用规则引用且未 force 时不删，回传 needConfirm + 引用规则明细（供前端分组展开确认列出）。 */
-export interface RuleResourceDeleteResult {
-  ok: boolean;
-  needConfirm?: boolean;
-  referencingRules?: RuleResourceRef[];
-}
-
-/** 下载入参：catalogId（内置/动态项）或 url（手动，name 可选自动生成）。id/category 仅 redownload 内部用于保留原 id。 */
-export interface RuleResourceDownloadItem {
-  catalogId?: string;
-  url?: string;
-  name?: string;
-  id?: string;
-  category?: RuleResourceCategory;
-}
-
-export interface RuleResourceDownloadResult {
-  ok: boolean;
-  resource?: RuleResource;
-  error?: string;
-  errorCode?: string;
-  id?: string;
-  name?: string;
-  /** 下载前目标文件是否已存在：用于收窄重启判定（已存在=内容更新，sing-box ≥1.10 热重载，无需重启）。 */
-  existedBefore?: boolean;
-}
-
-export interface RuleResourceProgress {
-  id: string;
-  name: string;
-  received: number;
-  total: number | null;
-  percent: number | null;
-  status: 'queued' | 'downloading' | 'done' | 'error';
-  error?: string;
-  errorCode?: string;
-}
-
-export interface RuleResourceCatalogResult {
-  items: RuleResourceCatalogItem[];
-  fetchedAt: number | null;
-  source: 'remote' | 'cache' | 'builtin';
 }
 
 // 应用分流规则（实验性）- 映射到内置 geosite 规则集
@@ -210,6 +135,10 @@ export interface CustomAppPreset {
    * 由 getAppPreset 透传给配置生成：命中即按进程名路由，比 geo 域名匹配更精准（macOS/Windows/Linux TUN 模式）。
    */
   processNames?: string[];
+  /** Exact executable paths and anchored application-directory patterns, including helpers. */
+  processPaths?: string[];
+  processPathRegex?: string[];
+  installedApplication?: InstalledApplication;
   /**
    * 分类归属（纯 UI：应用卡按分类分组展示，可为内置 5 类之一或用户自建分类名）。
    * 配置生成不消费 category（后端只读 geositeTags/geoipTags/processNames），故仅影响卡片分组呈现。

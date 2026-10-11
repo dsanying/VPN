@@ -16,12 +16,13 @@ import { MAX_BODY_BYTES, MAX_REDIRECTS, REQ_TIMEOUT_MS } from './unlock-endpoint
 
 export interface UnlockRequest {
   url: string;
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'HEAD' | 'POST';
   headers?: Record<string, string>;
   /** POST body（原样 write）。 */
   body?: string;
   /** 覆盖默认最大重定向跳数（默认 MAX_REDIRECTS）。 */
   maxRedirects?: number;
+  maxBodyBytes?: number;
   /** 覆盖默认单请求超时（默认 REQ_TIMEOUT_MS）。供整轮检测总预算（issue 1）按剩余时间收紧就绪门探测，防单探测冲破 wall-clock 上限。 */
   timeoutMs?: number;
 }
@@ -113,6 +114,7 @@ export function fetchUnlock(session: Session, req: UnlockRequest): Promise<Unloc
       return;
     }
 
+    request.setHeader('Cache-Control', 'no-cache');
     if (req.headers) {
       for (const [k, v] of Object.entries(req.headers)) request.setHeader(k, v);
     }
@@ -120,6 +122,13 @@ export function fetchUnlock(session: Session, req: UnlockRequest): Promise<Unloc
     // redirect:'manual' → 每个 3xx 都 emit，必须显式 followRedirect 才继续，否则请求悬停。
     request.on('redirect', (statusCode: number, _method: string, redirectUrl: string) => {
       if (settled) return;
+      try {
+        if (new URL(redirectUrl).protocol !== 'https:') throw new Error('insecure-redirect');
+      } catch {
+        done({ status: 0, error: 'insecure-redirect' });
+        request?.abort();
+        return;
+      }
       redirectChain.push({ status: statusCode, location: redirectUrl });
       if (redirectChain.length > maxRedirects) {
         try {
@@ -156,16 +165,16 @@ export function fetchUnlock(session: Session, req: UnlockRequest): Promise<Unloc
         bodyBytes += chunk.length;
         seenBytes = bodyBytes;
         body += chunk.toString('utf8');
-        if (bodyBytes > MAX_BODY_BYTES) {
+        if (bodyBytes > (req.maxBodyBytes ?? MAX_BODY_BYTES)) {
           truncated = true;
           // 截断仅供 marker 子串匹配，无需精确字节界，按 code unit 上限裁剪足够（不影响判定正确性）。
-          if (body.length > MAX_BODY_BYTES) body = body.slice(0, MAX_BODY_BYTES);
+          body = body.slice(0, req.maxBodyBytes ?? MAX_BODY_BYTES);
+          done({ status, headers, body, truncated: true });
           try {
             request?.abort();
           } catch {
-            /* ignore */
+            /* already settled */
           }
-          done({ status, headers, body, truncated: true });
         }
       });
       // 提前关闭/断连也兜底收口，防 promise 永挂。'end'=正常收尾；'error'=流式中断（electron net 文档：服务器

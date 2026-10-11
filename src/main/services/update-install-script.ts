@@ -1,3 +1,4 @@
+import * as path from 'path';
 /**
  * 更新安装脚本生成（纯字符串，便于 Linux 单测钉死 Windows/macOS/Linux 引号与回退分支；执行是真机项）。
  *
@@ -173,10 +174,8 @@ export function buildLinuxAppImageScript(opts: {
  * data 在 `~/.config/FlowZ` 独立于产物 → 升级零丢失。提权用 pkexec（PolicyKit GUI 授权框，Ubuntu 标准；app 已
  * 退出，框独立弹出）；用户取消/失败 → 回退 `xdg-open` 下载目录让用户手动处理（不回退 openPath→App Center 死路）。
  *
- * 信任边界：本脚本以 root 自动安装【下载的 deb】，信任源 = GitHub HTTPS release（与 core/AppImage
- * 更新同边界）。未对下载件做 sha256 比对——完整性靠 HTTPS 传输；旧 openPath 行为同样安装未校验 deb，仅多一步用户手动
- * 确认，信任源不变（仍是同一 release 资产）。sha256 校验作为后续统一增强（覆盖 deb/AppImage/core 三类下载件），不在本
- * PR 范围；调用方仅在「形态为 .deb」时才走本脚本（见 installUpdate 的 .deb 守卫）。
+ * 信任边界：调用方 UpdateService 在下载完成及调用安装前，均按官方 GitHub release API 的
+ * SHA-256 校验文件；缺失摘要或文件被替换时拒绝安装。此脚本仅执行通过校验的 .deb 安装。
  */
 export function buildLinuxDebScript(opts: { installerPath: string; exePath: string }): string {
   const deb = shq(opts.installerPath);
@@ -212,6 +211,8 @@ export function buildLinuxDebScript(opts: { installerPath: string; exePath: stri
 export function buildMacUpdateScript(opts: {
   dmgPath: string;
   appBundlePath?: string | null;
+  processId?: number;
+  confirmation?: { token: string; directory: string; version: string };
 }): string {
   const dmg = shq(opts.dmgPath);
   if (!opts.appBundlePath) {
@@ -221,45 +222,75 @@ export function buildMacUpdateScript(opts: {
   return [
     '#!/bin/bash',
     'sleep 2',
+    ...(opts.processId
+      ? [
+          `for i in {1..60}; do kill -0 ${Math.trunc(opts.processId)} 2>/dev/null || break; sleep 1; done`,
+          `kill -0 ${Math.trunc(opts.processId)} 2>/dev/null && exit 1`,
+        ]
+      : []),
     `DMG=${dmg}`,
     `DEST=${dest}`,
     'BAK="$DEST.bak-$$"',
-    'STAGE="$(dirname "$DEST")/.flowz-update-$$.app"',
-    // 清历史中断遗留的暂存（M2，防 /Applications 下 .flowz-update-*.app 垃圾堆积）
-    'rm -rf "$(dirname "$DEST")"/.flowz-update-*.app 2>/dev/null',
+    'STAGE="$(dirname "$DEST")/.shadow-vpn-update-$$.app"',
+    // 清历史中断遗留的暂存（M2，防 /Applications 下 .shadow-vpn-update-*.app 垃圾堆积）
+    'rm -rf "$(dirname "$DEST")"/.shadow-vpn-update-*.app 2>/dev/null',
     // 挂载 DMG（失败=极罕见→回退手动 open，唯一保留 DMG 的分支）
     'MNT=$(hdiutil attach "$DMG" -nobrowse -noautoopen -mountrandom /tmp 2>/dev/null | grep -o "/tmp/[^[:space:]]*" | tail -1)',
     '[ -z "$MNT" ] && { open "$DMG"; exit 0; }',
     'SRC=$(/usr/bin/find "$MNT" -maxdepth 1 -name "*.app" | head -1)',
-    '[ -z "$SRC" ] && { hdiutil detach "$MNT" >/dev/null 2>&1; rm -f "$DMG"; exit 0; }',
+    '[ -z "$SRC" ] && { hdiutil detach "$MNT" >/dev/null 2>&1; exit 1; }',
     // 整包暂存到目标同卷（mv 原子），失败即清理退出
     'rm -rf "$STAGE"',
-    'if ! ditto "$SRC" "$STAGE"; then hdiutil detach "$MNT" >/dev/null 2>&1; rm -rf "$STAGE"; rm -f "$DMG"; exit 0; fi',
+    'if ! ditto "$SRC" "$STAGE"; then hdiutil detach "$MNT" >/dev/null 2>&1; rm -rf "$STAGE"; exit 1; fi',
     'hdiutil detach "$MNT" >/dev/null 2>&1',
+    ...(opts.confirmation
+      ? [
+          'OLD_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$DEST/Contents/Info.plist")',
+          'NEW_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$STAGE/Contents/Info.plist")',
+          '[ -n "$OLD_ID" ] && [ "$OLD_ID" = "$NEW_ID" ] || exit 1',
+          `CONFIRM=${shq(path.join(opts.confirmation.directory, 'confirm-' + opts.confirmation.token))}`,
+          'rm -f "$CONFIRM"',
+        ]
+      : []),
     // 原子替换（mv-swap，绝不先毁后建；失败回滚旧版、保留 $BAK 可恢复）。先尝试无提权。
     'replace() {',
     '  mv "$DEST" "$BAK" 2>/dev/null || return 1',
-    '  if mv "$STAGE" "$DEST" 2>/dev/null; then rm -rf "$BAK"; return 0; fi',
+    opts.confirmation
+      ? '  if mv "$STAGE" "$DEST" 2>/dev/null; then return 0; fi'
+      : '  if mv "$STAGE" "$DEST" 2>/dev/null; then rm -rf "$BAK"; return 0; fi',
     '  mv "$BAK" "$DEST" 2>/dev/null; return 1',
     '}',
     'if ! replace; then',
     // 无提权失败 → 把同一 mv-swap 落盘成脚本（路径 printf %q 转义），osascript 一次性 root 跑 `bash '<脚本>'`（单层引号）
-    '  ELEV="$(dirname "$DEST")/.flowz-elev-$$.sh"',
+    '  ELEV="$(dirname "$DEST")/.shadow-vpn-elev-$$.sh"',
     '  cat > "$ELEV" <<EOF',
     '#!/bin/bash',
     'mv $(printf %q "$DEST") $(printf %q "$BAK") || exit 1',
     'mv $(printf %q "$STAGE") $(printf %q "$DEST") || { mv $(printf %q "$BAK") $(printf %q "$DEST"); exit 1; }',
-    'rm -rf $(printf %q "$BAK")',
+    ...(opts.confirmation ? [] : ['rm -rf $(printf %q "$BAK")']),
     'EOF',
     '  osascript -e "do shell script \\"/bin/bash \'$ELEV\'\\" with administrator privileges" 2>/dev/null',
     '  rm -f "$ELEV"',
     'fi',
     // 仅当新版确到位（$DEST 存在且无残留 $BAK=替换成功）才善后；失败则 $BAK/$STAGE 保留可人工恢复、不删 DMG 便于重试
-    'if [ -d "$DEST" ] && [ ! -d "$BAK" ]; then',
+    opts.confirmation
+      ? 'if [ -d "$DEST" ] && [ -d "$BAK" ]; then'
+      : 'if [ -d "$DEST" ] && [ ! -d "$BAK" ]; then',
     '  xattr -dr com.apple.quarantine "$DEST" 2>/dev/null',
     '  rm -rf "$STAGE" 2>/dev/null',
-    '  rm -f "$DMG"',
-    '  open "$DEST"',
+    ...(opts.confirmation
+      ? [
+          `  open "$DEST" --args ${shq('--shadow-vpn-update-token=' + opts.confirmation.token)}`,
+          `  for i in {1..90}; do [ -f "$CONFIRM" ] && [ "$(cat "$CONFIRM")" = ${shq(opts.confirmation.version.replace(/^v/, ''))} ] && break; sleep 1; done`,
+          `  if [ -f "$CONFIRM" ] && [ "$(cat "$CONFIRM")" = ${shq(opts.confirmation.version.replace(/^v/, ''))} ]; then`,
+          '    rm -rf "$BAK"; rm -f "$DMG" "$CONFIRM"',
+          '  else',
+          '    FAILED="$DEST.failed-$$"',
+          '    mv "$DEST" "$FAILED" && mv "$BAK" "$DEST" && rm -rf "$FAILED"',
+          '    open "$DEST"',
+          '  fi',
+        ]
+      : ['  rm -f "$DMG"', '  open "$DEST"']),
     'else',
     '  open "$DMG"',
     'fi',

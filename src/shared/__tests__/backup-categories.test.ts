@@ -148,19 +148,16 @@ describe('review 回归：依赖字段随类 + selectedServerId 兜底 + 敏感�
     expect(mergeCategories(curD, bak, ['manualNodes']).config.selectedServerId).toBe('__direct__');
   });
 
-  it('M2 ruleResources 随自定义规则类整类替换', () => {
-    const cur = cfg({
-      customRules: [{ cur: 1 } as never],
-      ruleResources: [{ id: 'r-cur' } as never],
-    });
-    const bak = cfg({
-      customRules: [{ bak: 1 } as never],
-      ruleResources: [{ id: 'r-bak' } as never],
-    });
-    const { config } = mergeCategories(cur, bak, ['customRules']);
-    expect(config.ruleResources).toEqual([{ id: 'r-bak' }]);
-    // pick 也带 ruleResources
-    expect(pickCategories(bak, ['customRules']).ruleResources).toEqual([{ id: 'r-bak' }]);
+  it('removed resource metadata is excluded from general backups', () => {
+    const config = cfg({
+      ruleResources: [{ id: 'retired' }],
+      ruleResourceAutoUpdate: true,
+      builtinGeoMeta: {},
+    } as never);
+    expect(pickCategories(config, ['generalSettings'])).not.toHaveProperty('ruleResources');
+    expect(pickCategories(config, ['generalSettings'])).not.toHaveProperty(
+      'ruleResourceAutoUpdate'
+    );
   });
 
   it('M3 customAppPresets 随应用分流类整类替换', () => {

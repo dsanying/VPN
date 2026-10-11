@@ -1360,7 +1360,9 @@ describe('B6：核日志清空前移到 spawn 之前', () => {
     });
 
     await withPlatformAsync('win32', async () => {
-      await expect(svc.startSingBoxProcess(svc.lifecycleGeneration)).rejects.toThrow('停在这里即可');
+      await expect(svc.startSingBoxProcess(svc.lifecycleGeneration)).rejects.toThrow(
+        '停在这里即可'
+      );
     });
 
     // 变异守卫：把 truncateCoreLogFile() 挪回就绪之后（或删掉）→ order 不再是 ['truncate','launch']

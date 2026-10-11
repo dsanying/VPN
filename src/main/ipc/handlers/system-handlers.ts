@@ -7,8 +7,12 @@ import { IPC_CHANNELS } from '../../../shared/ipc-channels';
 import type { SystemProcessInfo } from '../../../shared/types';
 import { registerIpcHandler } from '../ipc-handler';
 import { listSystemProcesses } from '../../services/ProcessEnumerator';
+import { listInstalledApplications } from '../../services/InstalledApplications';
 
 export function registerSystemHandlers(): void {
+  registerIpcHandler(IPC_CHANNELS.SYSTEM_LIST_APPLICATIONS, async () =>
+    listInstalledApplications()
+  );
   registerIpcHandler<void, SystemProcessInfo[]>(
     IPC_CHANNELS.SYSTEM_LIST_PROCESSES,
     async (_event: IpcMainInvokeEvent) => listSystemProcesses()

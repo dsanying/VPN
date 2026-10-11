@@ -9,7 +9,6 @@
  */
 import type { TrafficStats, ConnectionEntry, ConnectionsSnapshot } from '../../shared/types';
 import type {
-  SingBoxApiClient,
   SingBoxStatus,
   SingBoxConnection,
   SingBoxConnectionEvents,
@@ -104,10 +103,13 @@ export function trimConnection(c: SingBoxConnection): ConnectionEntry {
       sourcePort: src.port,
       destinationPort: dst.port,
       processPath: c?.processInfo?.processPath || undefined,
+      processId: c?.processInfo?.processId,
     },
     upload: num(c?.uplinkTotal),
     download: num(c?.downlinkTotal),
     start: createdAtToRfc3339(c?.createdAt),
+    outbound: c?.outbound || undefined,
+    outboundType: c?.outboundType || undefined,
   };
 }
 
@@ -126,9 +128,10 @@ export class StatsService {
   // 连接事件流维护的连接 map（key=id）。reset=true 清空重建；NEW 加 / UPDATE 改 / CLOSED 删。
   private connMap = new Map<string, SingBoxConnection>();
   private connections: ConnectionEntry[] = [];
+  private connectionsLimited = false;
   private started = false;
   // batch2 §3.6：Connections 上游流「需求开关」。worker 在窗口隐藏 / 无 aggregate+detail 消费者时下发 false →
-  // cancel SubscribeConnections（sing-box 少序列化一条每秒长流，顺带削核 CPU 面），Status 流不受影响（流量条恒需）。
+  // cancel SubscribeConnections（sing-box 少序列化一条每秒长流，顺带削核 CPU 面），Status 流不受影响（内部状态同步需要）。
   // 默认 true，保持既有「连接流订阅跟随 started」语义；本标志同时 gate start/resubscribe/30min 周期重建里的连接
   // 订阅，使停用态不被周期重建复活（#210 周期重建仅作用活跃流，设计 §3.4-3）。
   private connectionsEnabled = true;
@@ -145,7 +148,7 @@ export class StatsService {
    */
   constructor(
     private readonly onUpdate: (stats: TrafficStats) => void,
-    private readonly getApiClient: () => SingBoxApiClient | null,
+    private readonly getApiClient: () => import('./core-management').CoreManagementClient | null,
     private readonly onConnections?: (snap: ConnectionsSnapshot) => void,
     private readonly isWindowVisible?: () => boolean
   ) {}
@@ -251,12 +254,13 @@ export class StatsService {
     };
     this.onUpdate({ ...this.snapshot }); // 停止即清零广播
     this.connMap.clear();
+    this.connectionsLimited = false;
     this.connections = [];
     this.onConnections?.({ connections: [], at: Date.now() }); // 停止即广播空连接快照
   }
 
   /**
-   * batch2 §3.6：按需求开关「Connections 上游流」（Status 流不受影响，流量条恒需）。worker 在窗口隐藏 / 无
+   * batch2 §3.6：按需求开关「Connections 上游流」（Status 流不受影响，内部状态同步需要）。worker 在窗口隐藏 / 无
    * aggregate+detail 消费者时下发 false → cancel SubscribeConnections（sing-box 少序列化一条每秒长流、削核 CPU）；
    * true → 重订阅（connMap 重建）。复用既有 subscribe/unsubscribeConnectionsStream，不新增流原语。connectionsEnabled
    * 同时 gate 30min 周期重建里的连接订阅，故停用态不被复活（#210 周期仅作用活跃流）。started=false（未订阅）时仅存
@@ -275,7 +279,11 @@ export class StatsService {
   }
 
   getConnectionsSnapshot(): ConnectionsSnapshot {
-    return { connections: this.connections, at: Date.now() };
+    return {
+      connections: this.connections,
+      at: Date.now(),
+      ...(this.connectionsLimited ? { limited: true } : {}),
+    };
   }
 
   /** 流 stop 句柄安全调用（吞异常）并清空：两条流退订同构，单一真值复用。返回 null 供调用方回写句柄字段。 */
@@ -305,6 +313,8 @@ export class StatsService {
    * 窗口不可见 → 跳过 broadcast（无 UI 消费者；快照仍更新，可见后下一帧即广播最新）。
    */
   private onStatus(status: SingBoxStatus): void {
+    this.snapshot.sampledAt = Date.now();
+    this.snapshot.source = 'proxy';
     this.snapshot.uploadSpeed = num(status?.uplink) ?? 0;
     this.snapshot.downloadSpeed = num(status?.downlink) ?? 0;
     this.snapshot.totalUpload = num(status?.uplinkTotal) ?? 0;
@@ -322,6 +332,7 @@ export class StatsService {
     const client = this.getApiClient();
     if (!client) return;
     this.connMap.clear();
+    this.connectionsLimited = false;
     this.connections = [];
     this.connectionsStop = client.subscribeConnections(CONNECTIONS_INTERVAL_NS, (events) =>
       this.onConnectionEvents(events)
@@ -331,6 +342,7 @@ export class StatsService {
   private unsubscribeConnectionsStream(): void {
     this.connectionsStop = this.clearStop(this.connectionsStop);
     this.connMap.clear();
+    this.connectionsLimited = false;
     this.connections = [];
   }
 
@@ -339,14 +351,19 @@ export class StatsService {
    * 维护后映射成 ConnectionEntry 列表广播。窗口不可见跳过 broadcast（map 仍维护，可见后下帧即推）。
    */
   private onConnectionEvents(events: SingBoxConnectionEvents): void {
-    if (events?.reset) this.connMap.clear();
+    if (events?.reset) {
+      this.connMap.clear();
+      this.connectionsLimited = false;
+    }
     for (const ev of events?.events ?? []) {
       const id = ev?.id ?? ev?.connection?.id;
       if (!id) continue;
       switch (ev?.type) {
+        case 'CONNECTION_EVENT_CLOSED':
         case 'CLOSED':
           this.connMap.delete(id);
           break;
+        case 'CONNECTION_EVENT_UPDATE':
         case 'UPDATE': {
           // 实测：UPDATE 帧只带 uplinkDelta/downlinkDelta（connection 为 null）→ 把增量累加到既有条目 totals，
           // 维持连接页 per-connection 实时流量（否则恒显 NEW 时的 0，到 CLOSED 又被删，全程流量为 0=regression）。
@@ -372,8 +389,8 @@ export class StatsService {
           }
           break;
         }
+        case 'CONNECTION_EVENT_NEW':
         case 'NEW':
-        default:
           // sing-box 1.14 SubscribeConnections 的初始/重置帧会把「已关闭连接历史环」（最近 ≤1000 条死连接，含刚被
           // 切换杀掉的整批旧节点连接）作为 NEW 下发，仅 closedAt>0 可区分；这些死连接不进服务端 snapshots → 永不补发
           // CLOSED。若照收入 map 即成永久幽灵（连接页/首页拓扑显示已死的旧节点连线、上下行数值冻结，看着像"切换未断连"）。
@@ -382,11 +399,15 @@ export class StatsService {
             this.connMap.set(id, ev.connection);
           }
           break;
+        default:
+          // Unknown future event kinds must not resurrect closed connections as NEW.
+          break;
       }
     }
     // OOM 安全网（审计 #3）：超硬上限按插入顺序（JS Map 迭代序=最早插入、最可能是漏删的死连接）驱逐最旧，
     // 不依赖上游 CLOSED 事件完整性。正常 connMap.size << 上限，此循环不触发。
     while (this.connMap.size > MAX_CONN_MAP_SIZE) {
+      this.connectionsLimited = true;
       const oldest = this.connMap.keys().next().value;
       if (oldest === undefined) break;
       this.connMap.delete(oldest);
@@ -398,6 +419,10 @@ export class StatsService {
     // 结果本就被可见性门控丢弃）；可见后下一帧即物化推送。
     if (this.isWindowVisible && !this.isWindowVisible()) return;
     this.connections = Array.from(this.connMap.values()).map(trimConnection);
-    this.onConnections?.({ connections: this.connections, at: Date.now() });
+    this.onConnections?.({
+      connections: this.connections,
+      at: Date.now(),
+      ...(this.connectionsLimited ? { limited: true } : {}),
+    });
   }
 }

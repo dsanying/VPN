@@ -1,0 +1,20 @@
+# 直接依赖一律精确版本：新增/升级依赖不写 ^/~ 范围，锁文件与 package.json 同为唯一事实
+savePrefix: ""
+
+# core-js-pure 3.50.0 postinstall 只显示捐赠横幅并写临时横幅缓存；运行能力不依赖它。
+allowBuilds:
+  core-js-pure: false
+
+# 传递依赖安全下限：mermaid、monaco-editor 锁定的 dompurify 存在 XSS 公告；esbuild（vite 可选 peer）存在开发服务器文件读取公告；统一抬到已修复版本
+overrides:
+  '@rc-component/drawer': 1.4.2
+  '@rc-component/picker': 1.12.2
+  '@rc-component/util': 1.13.0
+  dompurify: 3.4.16
+  esbuild: 0.28.2
+
+patchedDependencies:
+  '@melloware/react-logviewer@6.6.0': patches/@melloware__react-logviewer@6.6.0.patch
+  '@rc-component/drawer@1.4.2': patches/@rc-component__drawer@1.4.2.patch
+  '@rc-component/picker@1.12.2': patches/@rc-component__picker@1.12.2.patch
+  '@rc-component/util@1.13.0': patches/@rc-component__util@1.13.0.patch

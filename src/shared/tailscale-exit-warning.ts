@@ -19,10 +19,7 @@ import type { ServerConfig } from './types';
 import type { TailscaleStatusPeer } from './tailscale-status';
 
 export type TsExitWarning =
-  | 'none'
-  | 'no-exit-device'
-  | 'exit-device-offline'
-  | 'exit-device-not-advertised';
+  'none' | 'no-exit-device' | 'exit-device-offline' | 'exit-device-not-advertised';
 
 export interface TsExitWarningInput {
   /** 当前选中的全局出口节点（config.selectedServerId 对应）。 */

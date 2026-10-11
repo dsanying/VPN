@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared client initial, drawn locally; no Capacitor template artwork. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M39,33H51C65,33 73,41 73,54C73,67 65,75 51,75H39Z M47,41V67H51C60,67 65,62 65,54C65,46 60,41 51,41Z"/>
+</vector>

@@ -1,3 +1,4 @@
+import { GH_PROXY_PRESETS } from '../../../shared/gh-proxy';
 /**
  * CoreDownloader.downloadFile 的**内容完整性**校验（node env，零网络）：mock electron `net.request`，
  * 用 EventEmitter 驱动 response/data/end 流（照 unlock-http.test.ts 的 electron mock 范式）。
@@ -129,7 +130,7 @@ describe('CoreDownloader.downloadFile — sha256 完整性校验', () => {
     await expect(
       newDownloader().downloadFile('https://github.com/x/core.tar.gz', false, 'c'.repeat(64))
     ).rejects.toThrow(/完整性校验失败/);
-    expect(call).toBe(2); // 确实重试了；且重试那次没有绕过校验
+    expect(call).toBe(1 + GH_PROXY_PRESETS.length); // 确实重试了；且重试那次没有绕过校验
   });
 
   /**
@@ -148,9 +149,58 @@ describe('CoreDownloader.downloadFile — sha256 完整性校验', () => {
     expect(fs.readFileSync(p2)).toEqual(BODY);
   });
 
-  /** 未传摘要时保持原行为（仅长度校验）——服务层已 fail-closed，此处只锁「不误伤既有调用形态」。 */
-  it('未传摘要 → 不做内容校验（向后兼容，服务层负责拒绝无摘要的更新）', async () => {
-    const p = await newDownloader().downloadFile('https://example.com/core.tar.gz');
-    expect(fs.readFileSync(p)).toEqual(BODY);
+  it('未传摘要直接拒绝，在请求和创建文件之前停止', async () => {
+    await expect(newDownloader().downloadFile('https://example.com/core.tar.gz')).rejects.toThrow(
+      '官方 SHA-256'
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it.each(['http://example.com/core.tar.gz', 'https://user:password@example.com/core.tar.gz'])(
+    '拒绝不安全初始地址 %s，不产生请求或文件',
+    async (source) => {
+      const before = fs.readdirSync(TMP);
+      await expect(newDownloader().downloadFile(source, false, BODY_SHA)).rejects.toThrow('HTTPS');
+      expect(mockRequest).not.toHaveBeenCalled();
+      expect(fs.readdirSync(TMP)).toEqual(before);
+    }
+  );
+});
+
+it('HTTP failure advances to a mirror with the same digest and cleans temporary files', async () => {
+  const before = fs.readdirSync(TMP);
+  serveBody();
+  mockRequest.mockImplementationOnce(() => {
+    const request = new FakeReq();
+    setImmediate(() => {
+      const response = new FakeRes();
+      response.statusCode = 503;
+      request.emit('response', response);
+    });
+    return request;
+  });
+  const file = await newDownloader().downloadFile(
+    'https://github.com/x/core.tar.gz',
+    false,
+    BODY_SHA
+  );
+  expect(mockRequest).toHaveBeenCalledTimes(2);
+  expect(fs.readFileSync(file)).toEqual(BODY);
+  expect(fs.readdirSync(TMP).filter((name) => !before.includes(name))).toEqual([
+    path.basename(file),
+  ]);
+  fs.unlinkSync(file);
+});
+
+it('never follows a redirect to HTTP, even when the proposed bytes would match', async () => {
+  const before = fs.readdirSync(TMP);
+  mockRequest.mockImplementation(() => {
+    const request = new FakeReq();
+    setImmediate(() => request.emit('redirect', 302, 'GET', 'http://example.com/core.tar.gz'));
+    return request;
+  });
+  await expect(
+    newDownloader().downloadFile('https://example.com/core.tar.gz', false, BODY_SHA)
+  ).rejects.toThrow('重定向不安全');
+  expect(fs.readdirSync(TMP)).toEqual(before);
 });

@@ -46,6 +46,17 @@ const KNOWN = new Set<string>(ALL_PROTOCOLS);
  * 注意：仅校验「协议特有必填字段」，不含 address/port（那是各调用方各自的通用校验）。
  */
 export function protocolRequirementError(server: ServerConfig): string | null {
+  if (server.compatibilitySettings) {
+    const { engine, outbound } = server.compatibilitySettings;
+    return (engine === 'xray' || engine === 'mihomo') &&
+      !!outbound &&
+      typeof outbound === 'object' &&
+      !Array.isArray(outbound) &&
+      typeof outbound[engine === 'xray' ? 'protocol' : 'type'] === 'string' &&
+      (outbound[engine === 'xray' ? 'protocol' : 'type'] as string).trim().length > 0
+      ? null
+      : 'Invalid native core node';
+  }
   const p = server.protocol?.toLowerCase();
   switch (p) {
     case 'vless':
@@ -110,7 +121,7 @@ export function isServerComplete(server: ServerConfig | undefined | null): boole
   // 账号制协议（Tailscale）连控制面、custom（raw-JSON 自带 server/port）→ 无 ServerConfig address/port；其余必须有。
   if (!isAccountBasedProtocol(p) && p !== 'custom') {
     if (!server.address || server.address.trim() === '') return false;
-    if (!server.port || server.port <= 0) return false;
+    if (!Number.isInteger(server.port) || server.port < 1 || server.port > 65535) return false;
   }
   // 组网节点关外网且无可路由网段：字段虽齐备，但生成期不发射（空 allowed_ips=FATAL）→ 实际不可用，连接闸门置灰。
   if (isMeshNodeUnroutable(server)) return false;

@@ -12,7 +12,6 @@ import {
   effectiveCustomRules,
   effectiveAppRules,
   getCustomDomesticDnsEndpoint,
-  getRequiredGeoCategories,
 } from '../singbox-config-helpers';
 import type { UserConfig, Rule, AppRule } from '../../../shared/types';
 import { parseDnsServerSpec } from '../../../shared/dns';
@@ -231,64 +230,6 @@ describe('getCustomDomesticDnsEndpoint — 国内 DNS 为 IP 字面量才返回�
 
 // 注：getLocalGeoRuleSets 是 BUILTIN_GEO_RULESETS 的平凡 map，但 bundledPath() 经 ResourceManager 依赖 electron
 // 路径解析；其 tag/path 已由 config-snapshot 网端到端覆盖（route 含本地 geo rule_set 定义），此处不再单测以免引入 electron mock。
-
-describe('getRequiredGeoCategories — 扫 customRules + appRules 收集 geo 类别', () => {
-  it('customRules 的 geosite/geoip 裸标签（去空、小写化）', () => {
-    const rules: Rule[] = [
-      {
-        id: 'r1',
-        type: 'geosite',
-        values: ['YouTube', ' netflix '],
-        action: 'proxy',
-        enabled: true,
-      },
-      { id: 'r2', type: 'geoip', values: ['CN'], action: 'direct', enabled: true },
-      { id: 'r3', type: 'geosite', values: ['disabled'], action: 'proxy', enabled: false }, // 禁用不计
-    ] as unknown as Rule[];
-    const { geosite, geoip } = getRequiredGeoCategories(rules, [], []);
-    expect([...geosite].sort()).toEqual(['netflix', 'youtube']);
-    expect([...geoip]).toEqual(['cn']);
-  });
-
-  it('appRules 经 preset.geositeTags/geoipTags 收集（禁用不计）', () => {
-    const appRules: AppRule[] = [
-      { appId: 'custom-a', action: 'proxy', enabled: true },
-      { appId: 'custom-b', action: 'proxy', enabled: false },
-    ] as unknown as AppRule[];
-    const presets = [
-      { id: 'custom-a', name: 'A', emoji: '🅰', geositeTags: ['google'], geoipTags: ['us'] },
-      { id: 'custom-b', name: 'B', emoji: '🅱', geositeTags: ['bbb'], geoipTags: [] },
-    ] as any;
-    const { geosite, geoip } = getRequiredGeoCategories([], appRules, presets);
-    expect([...geosite]).toEqual(['google']);
-    expect([...geoip]).toEqual(['us']);
-  });
-
-  it('appRules preset tag 大写/含空白 → trim + 小写归一（对齐 customRules + route 发射端 + 本地 .srs 口径）', () => {
-    const appRules: AppRule[] = [
-      { appId: 'cap', action: 'proxy', enabled: true },
-    ] as unknown as AppRule[];
-    const presets = [
-      {
-        id: 'cap',
-        name: 'Cap',
-        emoji: '🧢',
-        geositeTags: ['YouTube', ' Netflix '],
-        geoipTags: ['US'],
-      },
-    ] as any;
-    const { geosite, geoip } = getRequiredGeoCategories([], appRules, presets);
-    // 不小写 → 'YouTube' 与本地 geosite-youtube.srs 错位被 fail-closed 剪掉，应规整为小写裸标签。
-    expect([...geosite].sort()).toEqual(['netflix', 'youtube']);
-    expect([...geoip]).toEqual(['us']);
-  });
-
-  it('空输入 → 两空集', () => {
-    const { geosite, geoip } = getRequiredGeoCategories([], [], []);
-    expect(geosite.size).toBe(0);
-    expect(geoip.size).toBe(0);
-  });
-});
 
 describe('parseDnsServerSpec — 非法输入 → null', () => {
   it('单边左括号（畸形 IPv6）→ null', () => {

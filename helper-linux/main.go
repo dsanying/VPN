@@ -12,10 +12,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"shadowvpn/helperrpc"
+	"shadowvpn/helperrpc/entryprobe"
 	"syscall"
 )
 
 func main() {
+	if entryprobe.RunCommand() {
+		return
+	}
 	var console bool
 	flag.StringVar(&sockPath, "socket", "/run/shadowvpn/helper.sock", "unix socket path")
 	flag.StringVar(&authFile, "authfile", "/var/lib/shadowvpn/authorized-uids", "authorized uid list file (one decimal uid per line)")
@@ -59,7 +63,7 @@ func main() {
 	if console {
 		fmt.Printf("FlowZ linux helper (console) listening on %s, coredir=%s, proto v%s\n", sockPath, coreDir, helperVersion)
 	}
-	methods := []string{"ping", "version", "status", "start", "stop", "cleanup", "freeport", "install-core"}
+	methods := []string{"ping", "version", "status", "start", "start-mihomo", "install-mihomo", "stop", "cleanup", "freeport", "install-core"}
 	authorize := func(r *http.Request) bool {
 		cred, _ := r.Context().Value(peerKey{}).(*syscall.Ucred)
 		return cred != nil && isAuthorized(cred.Uid)

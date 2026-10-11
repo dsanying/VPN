@@ -11,14 +11,16 @@ async function startDev() {
   const viteServer = await createServer({
     configFile: path.join(__dirname, '../vite.config.mts'),
     mode: 'development',
+    server: { strictPort: false },
   });
   await viteServer.listen();
-  console.log('✅ Vite 开发服务器已启动\n');
+  const devUrl = viteServer.resolvedUrls.local[0];
+  console.log(`✅ Vite 开发服务器已启动：${devUrl}\n`);
 
   // 2. 等待 Vite 服务器就绪
   console.log('⏳ 等待 Vite 服务器就绪...');
   await waitOn({
-    resources: ['http://localhost:5173'],
+    resources: [devUrl],
     timeout: 30000,
   });
   console.log('✅ Vite 服务器就绪\n');
@@ -44,7 +46,7 @@ async function startDev() {
 
   // 4. 启动 Electron
   console.log('⚡ 启动 Electron...\n');
-  const env = { ...process.env, NODE_ENV: 'development' };
+  const env = { ...process.env, NODE_ENV: 'development', SHADOWVPN_DEV_URL: devUrl };
   delete env.ELECTRON_RUN_AS_NODE;
   const electron = spawn(require('electron'), ['.'], {
     stdio: 'inherit',

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "frontend": "react-antd",
+  "targets": [
+    { "platform": "macos", "arch": "arm64", "host": "electron", "buildCommand": "npm run package:mac" },
+    { "platform": "macos", "arch": "x64", "host": "electron", "buildCommand": "npm run package:mac" },
+    { "platform": "windows", "arch": "x64", "host": "electron", "buildCommand": "npm run package:win" },
+    { "platform": "android", "arch": "arm64", "host": "capacitor", "buildCommand": "npm run package:android" }
+  ],
+  "nativeChecks": ["launch", "layout", "operations", "network", "autostart", "updates"],
+  "evidenceFile": "artifacts/client-platform-evidence.json"
+}

@@ -16,6 +16,7 @@ export interface ResolveUpstream {
   kind: 'doh' | 'udp' | 'system'; // doh: DoH/DoT over IP（fetch/TLS）; udp: 明文 UDP; system: 系统 DNS
   ip?: string; // 纯 IP（doh/udp；system 无）
   port?: number;
+  serverName?: string; // Official TLS/HTTP name; ip is only a bootstrap dial address.
   path?: string; // 仅 DoH(https)
   dot?: boolean; // doh kind 下是否 DoT(tls)——实现侧区分 DoH(fetch) vs DoT(TLS)
   tier: 1 | 2; // Tier1 抢跑（加密）/ Tier2 兜底（明文 UDP / system）
@@ -30,7 +31,15 @@ export type BuiltinUpstreamId = 'ali' | 'dnspod' | 'system';
 /** 内置上游单一真值（id → ResolveUpstream），IP 派生 DOH_*_IP，杜绝硬编漂移。 */
 export const BUILTIN_UPSTREAMS: Record<BuiltinUpstreamId, ResolveUpstream> = {
   ali: { id: 'ali', kind: 'doh', ip: DOH_ALIDNS_IP, port: 443, path: '/dns-query', tier: 1 },
-  dnspod: { id: 'dnspod', kind: 'doh', ip: DOH_DNSPOD_IP, port: 443, path: '/dns-query', tier: 1 },
+  dnspod: {
+    id: 'dnspod',
+    kind: 'doh',
+    serverName: 'doh.pub',
+    ip: DOH_DNSPOD_IP,
+    port: 443,
+    path: '/dns-query',
+    tier: 1,
+  },
   system: { id: 'system', kind: 'system', tier: 2 },
 };
 
@@ -73,7 +82,7 @@ export function isValidCustomUpstreamSpec(spec: string): boolean {
 /** canonical 去重 key：system 唯一；其余按 (kind, IP, port, path)。udp 与 doh 即便同 IP 也不同（协议/端口不同）。 */
 export function upstreamCanonicalKey(u: ResolveUpstream): string {
   if (u.kind === 'system') return 'system';
-  return `${u.kind}:${u.ip}:${u.port}:${u.path ?? ''}`;
+  return `${u.kind}:${u.serverName ?? u.ip}:${u.port}:${u.path ?? ''}`;
 }
 
 export interface ResolvedUpstreams {

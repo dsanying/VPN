@@ -41,17 +41,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup frontend package manager
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Install frontend dependencies
+        run: pnpm --dir web install --frozen-lockfile
+
       - name: Lint code
         run: npm run lint
+
+      - name: Fetch official core test fixtures
+        run: npm run fetch:core
 
       - name: Run tests
         run: npm test
 
       - name: Check renderer types
         run: npx tsc --noEmit -p tsconfig.renderer.json
-
-      - name: Fetch official core
-        run: npm run fetch:core
 
       - name: Validate generated core configurations
         run: npm run test:core-gate

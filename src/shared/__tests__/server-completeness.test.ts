@@ -143,3 +143,12 @@ describe('server-completeness（主/渲染共用单一真值）', () => {
     expect(isServerComplete(withSubnet)).toBe(true);
   });
 });
+
+it.each([NaN, Infinity, 1.5, 65536, -1])(
+  'invalid endpoint port %s is rejected by the shared gate',
+  (port) => {
+    expect(
+      isServerComplete({ id: 'n', name: 'n', protocol: 'http', address: 'example.com', port })
+    ).toBe(false);
+  }
+);

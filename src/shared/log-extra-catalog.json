@@ -1,0 +1,492 @@
+[
+  {
+    "id": "extra.951143194f27",
+    "parts": ["IPC request failed: ", "; code=", "; ", ""],
+    "zh": "IPC 请求失败：{0}；错误码 {1}；{2}",
+    "en": "IPC request failed: {0}; code={1}; {2}"
+  },
+  {
+    "id": "extra.10850f2811b0",
+    "parts": ["测速完成：成功 ", "/", ""],
+    "zh": "测速完成：成功 {0}/{1}",
+    "en": "Latency tests completed: {0}/{1} succeeded"
+  },
+  {
+    "id": "extra.3f1120b910f6",
+    "parts": ["测速中断：已测 ", "/", ""],
+    "zh": "测速中断：已测 {0}/{1}",
+    "en": "Latency tests interrupted: tested {0}/{1}"
+  },
+  {
+    "id": "extra.a7258baf8104",
+    "parts": ["测速中断：已测 ", "/", "（核生命周期跃迁，未测节点保留原值）"],
+    "zh": "测速中断：已测 {0}/{1}（核生命周期跃迁，未测节点保留原值）",
+    "en": "Latency tests interrupted: tested {0}/{1}; core lifecycle changed, untested results preserved"
+  },
+  {
+    "id": "extra.d59f643812a5",
+    "parts": ["[", "] 订阅自动更新完成：成功 ", "，失败 ", "", ""],
+    "zh": "[{0}] 订阅自动更新完成：成功 {1}，失败 {2}{3}",
+    "en": "[{0}] Automatic subscription update: {1} succeeded, {2} failed{3}"
+  },
+  {
+    "id": "extra.026b6361ad42",
+    "parts": ["自动切换已熔断（连续 ", " 次切换未恢复连通），", "s 内暂停切换，请检查网络/订阅"],
+    "zh": "自动切换已熔断（连续 {0} 次切换未恢复连通），{1}s 内暂停切换，请检查网络/订阅",
+    "en": "Automatic switching paused after {0} switches without restored connectivity; cooldown {1}s, check network/subscription"
+  },
+  {
+    "id": "extra.86745fe7f5b1",
+    "parts": ["新内核已落位，正在重启代理..."],
+    "zh": "新内核已落位，正在重启代理...",
+    "en": "New core applied; restarting proxy"
+  },
+  {
+    "id": "extra.f4e80f3a7bb5",
+    "parts": ["落位未生效，以原内核重启代理..."],
+    "zh": "落位未生效，以原内核重启代理...",
+    "en": "Core not applied; restarting proxy with previous core"
+  },
+  {
+    "id": "extra.c00df25353e6",
+    "parts": ["随包核已 elevated 安装至受保护目录: ", ""],
+    "zh": "随包核已 elevated 安装至受保护目录: {0}",
+    "en": "Bundled core installed into protected directory with elevation: {0}"
+  },
+  {
+    "id": "extra.d55d0a0f7366",
+    "parts": ["随包核 elevated 安装后仍为 ", "（期望 ≥ ", "）"],
+    "zh": "随包核 elevated 安装后仍为 {0}（期望 ≥ {1}）",
+    "en": "After elevated installation, core still {0} (expected >= {1})"
+  },
+  {
+    "id": "extra.c2ffdbee8e74",
+    "parts": ["[BTM] 多记录 matched=", ": ", " → 取 disp=", ""],
+    "zh": "[BTM] 多记录 matched={0}: {1} → 取 disp={2}",
+    "en": "[BTM] Multiple records matched={0}: {1} → selecting disp={2}"
+  },
+  {
+    "id": "extra.a296597e402a",
+    "parts": ["[BTM] disposition=", "（0x1=enabled 0x2=allowed；&0x3===0x3 为开关开）"],
+    "zh": "[BTM] disposition={0}（0x1=enabled 0x2=allowed；&0x3===0x3 为开关开）",
+    "en": "[BTM] disposition={0} (0x1=enabled, 0x2=allowed; &0x3===0x3 means enabled)"
+  },
+  {
+    "id": "extra.1aa8f8ad65bb",
+    "parts": [
+      "规则资源：",
+      " 个远程规则集在源上不存在(404)，已停用相关规则以避免代理启动失败：",
+      "（应用分流仍按进程名等其余规则生效）"
+    ],
+    "zh": "规则资源：{0} 个远程规则集在源上不存在(404)，已停用相关规则以避免代理启动失败：{1}（应用分流仍按进程名等其余规则生效）",
+    "en": "Rule resources: {0} remote sets absent (404); associated rules disabled to preserve proxy startup: {1}. Remaining application/process rules still apply"
+  },
+  {
+    "id": "extra.2a517e4bda16",
+    "parts": ["系统 DNS 缓存刷新连续失败（", "），链路变化后不再尝试；下次成功刷新即自动恢复"],
+    "zh": "系统 DNS 缓存刷新连续失败（{0}），链路变化后不再尝试；下次成功刷新即自动恢复",
+    "en": "System DNS cache flush repeatedly failed ({0}); retries after network change paused until a successful flush"
+  },
+  {
+    "id": "extra.6cb20966bed8",
+    "parts": ["helper 服务经管道自卸载（零提权）"],
+    "zh": "helper 服务经管道自卸载（零提权）",
+    "en": "Helper service uninstalled through pipe, without elevation"
+  },
+  {
+    "id": "extra.4eba7e724bb4",
+    "parts": ["helper 服务已卸载（提权兜底）"],
+    "zh": "helper 服务已卸载（提权兜底）",
+    "en": "Helper service uninstalled through elevated fallback"
+  },
+  {
+    "id": "extra.4b9d4e188ba3",
+    "parts": ["Window destroyed to release memory (", ")"],
+    "zh": "已关闭窗口以释放内存（{0}）",
+    "en": "Window destroyed to release memory ({0})"
+  },
+  {
+    "id": "extra.357c55150fc5",
+    "parts": ["Window destroyed to release memory"],
+    "zh": "已关闭窗口以释放内存",
+    "en": "Window destroyed to release memory"
+  },
+  {
+    "id": "extra.3b8a7327b0b0",
+    "parts": [
+      "目标连接被拒绝：代理节点已连接，但目标服务器拒绝了连接（可能是节点限制或失效） [",
+      "]"
+    ],
+    "zh": "目标连接被拒绝：代理节点已连接，但目标服务器拒绝了连接（可能是节点限制或失效） [{0}]",
+    "en": "Destination refused connection; proxy connected but target rejected it, possibly a node restriction or failure [{0}]"
+  },
+  {
+    "id": "extra.ce1feddf5a56",
+    "parts": ["连接被拒绝：无法连接到代理服务器，请检查服务器地址和端口是否正确 [", "]"],
+    "zh": "连接被拒绝：无法连接到代理服务器，请检查服务器地址和端口是否正确 [{0}]",
+    "en": "Connection refused; cannot connect to proxy server, check address and port [{0}]"
+  },
+  {
+    "id": "extra.8a698afcdbff",
+    "parts": [
+      "节点域名解析失败：无法解析代理节点域名（可能是当前 DNS 对该域名返回 SERVFAIL）。可在 设置→网络 切换节点域名解析器为 DNSPod 或系统 DNS 后重试 [",
+      "]"
+    ],
+    "zh": "节点域名解析失败：无法解析代理节点域名（可能是当前 DNS 对该域名返回 SERVFAIL）。可在 设置→网络 切换节点域名解析器为 DNSPod 或系统 DNS 后重试 [{0}]",
+    "en": "Node domain lookup failed, possibly DNS SERVFAIL; try DNSPod or system DNS in Network Settings [{0}]"
+  },
+  {
+    "id": "extra.e1aebcc150c6",
+    "parts": ["DNS 解析失败：无法解析服务器域名，请检查 DNS 设置 [", "]"],
+    "zh": "DNS 解析失败：无法解析服务器域名，请检查 DNS 设置 [{0}]",
+    "en": "DNS lookup failed; cannot resolve server domain, check DNS settings [{0}]"
+  },
+  {
+    "id": "extra.b787fb92212b",
+    "parts": ["连接超时: ", ""],
+    "zh": "连接超时: {0}",
+    "en": "Connection timed out: {0}"
+  },
+  {
+    "id": "extra.e49983cee868",
+    "parts": ["连接超时：服务器响应超时"],
+    "zh": "连接超时：服务器响应超时",
+    "en": "Connection timed out: server response timeout"
+  },
+  {
+    "id": "extra.d79cd7d81c1d",
+    "parts": ["TLS 证书错误：服务器证书验证失败 [", "]"],
+    "zh": "TLS 证书错误：服务器证书验证失败 [{0}]",
+    "en": "TLS certificate error: server certificate verification failed [{0}]"
+  },
+  {
+    "id": "extra.e9932c9460cf",
+    "parts": ["认证失败：用户名或密码错误，请检查服务器配置 [", "]"],
+    "zh": "认证失败：用户名或密码错误，请检查服务器配置 [{0}]",
+    "en": "Authentication failed: invalid username or password, check server configuration [{0}]"
+  },
+  {
+    "id": "extra.a835e442104d",
+    "parts": ["权限不足：需要管理员权限才能启动 TUN 模式 [", "]"],
+    "zh": "权限不足：需要管理员权限才能启动 TUN 模式 [{0}]",
+    "en": "Insufficient permissions: TUN requires administrator access [{0}]"
+  },
+  {
+    "id": "extra.c10bb7d987fb",
+    "parts": ["端口已被占用：请更换其他端口或关闭占用端口的程序 [", "]"],
+    "zh": "端口已被占用：请更换其他端口或关闭占用端口的程序 [{0}]",
+    "en": "Port already in use: select another port or stop the conflicting program [{0}]"
+  },
+  {
+    "id": "extra.efc2ce1cdf2a",
+    "parts": ["配置错误：sing-box 配置文件格式不正确 [", "]"],
+    "zh": "配置错误：sing-box 配置文件格式不正确 [{0}]",
+    "en": "Configuration error: invalid sing-box configuration [{0}]"
+  },
+  {
+    "id": "extra.ddd822bb2346",
+    "parts": ["sing-box 启动失败，请检查配置文件和服务器设置"],
+    "zh": "sing-box 启动失败，请检查配置文件和服务器设置",
+    "en": "sing-box startup failed; check configuration and server settings"
+  },
+  {
+    "id": "extra.d677ed4769a3",
+    "parts": ["sing-box 配置文件格式错误，请检查服务器配置"],
+    "zh": "sing-box 配置文件格式错误，请检查服务器配置",
+    "en": "Invalid sing-box configuration; check server settings"
+  },
+  {
+    "id": "extra.2220442dc969",
+    "parts": ["sing-box 可执行文件没有执行权限"],
+    "zh": "sing-box 可执行文件没有执行权限",
+    "en": "sing-box executable lacks execute permission"
+  },
+  {
+    "id": "extra.e365053c2892",
+    "parts": ["找不到 sing-box 可执行文件"],
+    "zh": "找不到 sing-box 可执行文件",
+    "en": "sing-box executable not found"
+  },
+  {
+    "id": "extra.6bfaefc15c91",
+    "parts": ["sing-box 启动失败，退出码: ", ""],
+    "zh": "sing-box 启动失败，退出码: {0}",
+    "en": "sing-box startup failed, exit code: {0}"
+  },
+  {
+    "id": "extra.dc8365bf5044",
+    "parts": ["sing-box 启动失败，请检查配置文件"],
+    "zh": "sing-box 启动失败，请检查配置文件",
+    "en": "sing-box startup failed; check configuration"
+  },
+  {
+    "id": "extra.9c14b25e0ec7",
+    "parts": ["sing-box 配置文件格式错误"],
+    "zh": "sing-box 配置文件格式错误",
+    "en": "Invalid sing-box configuration"
+  },
+  {
+    "id": "extra.6b26203972c9",
+    "parts": ["sing-box 进程被强制终止"],
+    "zh": "sing-box 进程被强制终止",
+    "en": "sing-box process forcibly terminated"
+  },
+  {
+    "id": "extra.f274a380f5fc",
+    "parts": ["sing-box 进程被正常终止"],
+    "zh": "sing-box 进程被正常终止",
+    "en": "sing-box process terminated normally"
+  },
+  {
+    "id": "extra.5f71d916dfe8",
+    "parts": ["sing-box 异常退出，退出码: ", ""],
+    "zh": "sing-box 异常退出，退出码: {0}",
+    "en": "sing-box exited abnormally, exit code: {0}"
+  },
+  {
+    "id": "extra.2c588379dc96",
+    "parts": ["信号 ", ""],
+    "zh": "信号 {0}",
+    "en": "Signal {0}"
+  },
+  {
+    "id": "extra.613697ed4b38",
+    "parts": ["退出码 ", ""],
+    "zh": "退出码 {0}",
+    "en": "Exit code {0}"
+  },
+  {
+    "id": "extra.a1a9da9ee6ed",
+    "parts": ["未知原因"],
+    "zh": "未知原因",
+    "en": "Unknown reason"
+  },
+  {
+    "id": "extra.4d339179aea1",
+    "parts": ["不支持的协议: ", ""],
+    "zh": "不支持的协议: {0}",
+    "en": "Unsupported protocol: {0}"
+  },
+  {
+    "id": "extra.54397d3f264e",
+    "parts": ["不支持的传输层类型: ", ""],
+    "zh": "不支持的传输层类型: {0}",
+    "en": "Unsupported transport type: {0}"
+  },
+  {
+    "id": "extra.32babf6f7d23",
+    "parts": ["节点 \"", "\" 映射异常: ", ""],
+    "zh": "节点 \"{0}\" 映射异常: {1}",
+    "en": "Node \"{0}\" mapping failed: {1}"
+  },
+  {
+    "id": "extra.ebefe55a9e76",
+    "parts": ["", " 个节点解析失败: ", ""],
+    "zh": "{0} 个节点解析失败: {1}",
+    "en": "Failed to parse {0} nodes: {1}"
+  },
+  {
+    "id": "extra.46cb1fbe3796",
+    "parts": ["inbound/", "[", "]: tcp server started at ", ""],
+    "zh": "入口 {0}[{1}]：TCP 监听已启动，地址 {2}",
+    "en": "inbound/{0}[{1}]: tcp server started at {2}"
+  },
+  {
+    "id": "extra.c200b238be3d",
+    "parts": ["inbound/", "[", "]: udp server started at ", ""],
+    "zh": "入口 {0}[{1}]：UDP 监听已启动，地址 {2}",
+    "en": "inbound/{0}[{1}]: udp server started at {2}"
+  },
+  {
+    "id": "extra.01b53cad16eb",
+    "parts": ["sing-box started (", ")"],
+    "zh": "sing-box 已启动（{0}）",
+    "en": "sing-box started ({0})"
+  },
+  {
+    "id": "extra.e5f7bf36b7f4",
+    "parts": ["VLESS URL 缺少 UUID"],
+    "zh": "VLESS URL 缺少 UUID",
+    "en": "VLESS URL missing UUID"
+  },
+  {
+    "id": "extra.61eff374cd8c",
+    "parts": ["Reality 节点缺少 pbk（public key）参数"],
+    "zh": "Reality 节点缺少 pbk（public key）参数",
+    "en": "Reality node missing pbk (public key)"
+  },
+  {
+    "id": "extra.53b716fad8b4",
+    "parts": ["Hysteria2 URL 缺少密码"],
+    "zh": "Hysteria2 URL 缺少密码",
+    "en": "Hysteria2 URL missing password"
+  },
+  {
+    "id": "extra.e491fbc8ff8f",
+    "parts": ["Hysteria2 obfs=salamander 缺少 obfs-password"],
+    "zh": "Hysteria2 obfs=salamander 缺少 obfs-password",
+    "en": "Hysteria2 obfs=salamander missing obfs-password"
+  },
+  {
+    "id": "extra.19270fb47f57",
+    "parts": ["TUIC 协议缺少 uuid 或 password"],
+    "zh": "TUIC 协议缺少 uuid 或 password",
+    "en": "TUIC missing uuid or password"
+  },
+  {
+    "id": "extra.8c2398e84698",
+    "parts": ["AnyTLS URL 缺少密码"],
+    "zh": "AnyTLS URL 缺少密码",
+    "en": "AnyTLS URL missing password"
+  },
+  {
+    "id": "extra.5eba01eaa57d",
+    "parts": ["Snell URL 缺少 psk"],
+    "zh": "Snell URL 缺少 psk",
+    "en": "Snell URL missing psk"
+  },
+  {
+    "id": "extra.2fc7823bae20",
+    "parts": ["Snell 版本不受支持（sing-box 仅支持 4/6）: ", ""],
+    "zh": "Snell 版本不受支持（sing-box 仅支持 4/6）: {0}",
+    "en": "Unsupported Snell version (sing-box supports only 4/6): {0}"
+  },
+  {
+    "id": "extra.a85586a34b69",
+    "parts": ["Snell obfs 不受支持: ", ""],
+    "zh": "Snell obfs 不受支持: {0}",
+    "en": "Unsupported Snell obfs: {0}"
+  },
+  {
+    "id": "extra.ffc0bee179b4",
+    "parts": ["URL 解析失败: ", ""],
+    "zh": "URL 解析失败: {0}",
+    "en": "URL parsing failed: {0}"
+  },
+  {
+    "id": "extra.0956bf06625a",
+    "parts": ["Compatibility core ready: ", " ", ", nodes=", ""],
+    "zh": "兼容内核已就绪：{0} {1}，节点数 {2}",
+    "en": "Compatibility core ready: {0} {1}, nodes={2}"
+  },
+  {
+    "id": "extra.fb4ad514a1e9",
+    "parts": ["Compatibility node unavailable: ", ": ", ""],
+    "zh": "兼容节点不可用：{0}：{1}",
+    "en": "Compatibility node unavailable: {0}: {1}"
+  },
+  {
+    "id": "extra.3681a0148d9d",
+    "parts": ["Unsupported external core reference: ", ""],
+    "zh": "不支持外部内核引用：{0}",
+    "en": "Unsupported external core reference: {0}"
+  },
+  {
+    "id": "extra.7b7782e7e6d2",
+    "parts": ["Unsupported Xray transport mapping: ", ""],
+    "zh": "无法映射 Xray 传输：{0}",
+    "en": "Unsupported Xray transport mapping: {0}"
+  },
+  {
+    "id": "extra.4b44a94a1404",
+    "parts": ["Invalid XHTTP ", ""],
+    "zh": "XHTTP 参数无效：{0}",
+    "en": "Invalid XHTTP {0}"
+  },
+  {
+    "id": "extra.72b3b1be1f2d",
+    "parts": ["XHTTP settings must be an object"],
+    "zh": "XHTTP 设置必须为对象",
+    "en": "XHTTP settings must be an object"
+  },
+  {
+    "id": "extra.3105b7cbb3cb",
+    "parts": ["Invalid XHTTP mode"],
+    "zh": "XHTTP 模式无效",
+    "en": "Invalid XHTTP mode"
+  },
+  {
+    "id": "extra.c94bd1bb2731",
+    "parts": ["Invalid XHTTP extra"],
+    "zh": "XHTTP 扩展参数无效",
+    "en": "Invalid XHTTP extra"
+  },
+  {
+    "id": "extra.d8a98391f563",
+    "parts": ["Compatibility proxy chain cycle"],
+    "zh": "兼容节点代理链存在循环",
+    "en": "Compatibility proxy chain cycle"
+  },
+  {
+    "id": "extra.f42a88f523d2",
+    "parts": ["Compatibility proxy chain target missing"],
+    "zh": "兼容节点代理链缺少目标",
+    "en": "Compatibility proxy chain target missing"
+  },
+  {
+    "id": "extra.b7d331371a54",
+    "parts": ["Invalid SSR fields"],
+    "zh": "SSR 字段无效",
+    "en": "Invalid SSR fields"
+  },
+  {
+    "id": "extra.a4d8e6cffc92",
+    "parts": ["Invalid SSR Base64"],
+    "zh": "SSR Base64 编码无效",
+    "en": "Invalid SSR Base64"
+  },
+  {
+    "id": "extra.d39a7e0590b6",
+    "parts": ["Invalid SSR address, port or password"],
+    "zh": "SSR 地址、端口或密码无效",
+    "en": "Invalid SSR address, port or password"
+  },
+  {
+    "id": "extra.bypass-rules-migration-deferred",
+    "parts": ["直连例外迁移暂缓，原配置保留"],
+    "zh": "直连例外迁移暂缓，原配置保留",
+    "en": "Direct exception migration deferred; original configuration retained"
+  },
+  {
+    "id": "extra.application-presets-retired-save",
+    "parts": ["旧应用预设停用后保存失败"],
+    "zh": "旧应用预设停用后保存失败",
+    "en": "Failed to save deactivated legacy application presets"
+  },
+  {
+    "id": "routing-data.update-failed",
+    "parts": ["Routing data ", ": ", ""],
+    "zh": "分流数据 {0} 更新失败：{1}",
+    "en": "Routing data {0} update failed: {1}"
+  },
+  {
+    "id": "routing-data.maintenance-failed",
+    "parts": ["Routing data maintenance failed"],
+    "zh": "分流数据后台维护失败",
+    "en": "Routing data maintenance failed"
+  },
+  {
+    "id": "speed.auto-measurement-failed",
+    "parts": ["Automatic node measurement failed: ", ""],
+    "zh": "自动节点测速失败：{0}",
+    "en": "Automatic node measurement failed: {0}"
+  },
+  {
+    "id": "speed.cache-save-failed",
+    "parts": ["Node measurement cache could not be saved"],
+    "zh": "无法保存节点测速记录",
+    "en": "Node measurement cache could not be saved"
+  },
+  {
+    "id": "extra.connectionRefused",
+    "parts": ["连接被拒绝 [", "]"],
+    "zh": "连接被拒绝 [{0}]",
+    "en": "Connection refused [{0}]"
+  },
+  {
+    "id": "extra.destinationConnectionRefused",
+    "parts": ["目标连接被拒绝 [", "]"],
+    "zh": "目标连接被拒绝 [{0}]",
+    "en": "Destination connection refused [{0}]"
+  }
+]

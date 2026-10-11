@@ -1,0 +1,2 @@
+.ds-application-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--ds-space-24); height: var(--ds-space-24); color: var(--ds-color-text-secondary); }
+.ds-application-icon img { width: 100%; height: 100%; object-fit: contain; }

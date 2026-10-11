@@ -43,7 +43,10 @@ describe('LogManager 背压（issue #210 根因 #1）', () => {
     blockWrites = true;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    blockWrites = false;
+    flushPending();
+    await manager.flush();
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
@@ -136,5 +139,11 @@ describe('LogManager 背压（issue #210 根因 #1）', () => {
     manager.addLog('error', 'critical-error', 'test');
     expect(pending.size).toBe(MAX + 2);
     expect(manager.getDroppedDueToBackpressure()).toBe(droppedBefore + 1);
+  });
+  it('critical storms use a bounded reserve and expose critical losses', async () => {
+    for (let i = 0; i < 2000; i++) manager.addLog('fatal', `fatal-${i}`, 'test');
+    expect(manager.getDiagnostics().pendingWrites).toBe(400);
+    expect(manager.getDiagnostics().criticalDropped).toBe(1600);
+    expect(manager.getDiagnostics().memoryEvicted).toBe(1000);
   });
 });

@@ -69,7 +69,7 @@ const CONFIG = {
       emoji: '🚫',
       geositeTags: [],
       geoipTags: [],
-      processNames: ['blocked.exe'],
+      processPaths: ['/opt/blocked/blocked.exe'],
     },
   ],
   appRules: [{ appId: 'blocked-app', action: 'block', enabled: true }],
@@ -91,7 +91,8 @@ const rules: any[] = rc.rules || [];
 
 /** 该规则是否命中给定匹配值（域名后缀 / 进程名任一）。 */
 const matches = (r: any, needle: string): boolean =>
-  (r.domain_suffix ?? []).includes(needle) || (r.process_name ?? []).includes(needle);
+  (r.domain_suffix ?? []).includes(needle) ||
+  (r.process_path ?? []).some((p: string) => p.endsWith(needle));
 
 describe('阻断动作迁移：outbound:block → action:reject', () => {
   it('正向对照：两条阻断腿都真的生成了规则（否则下面的断言恒绿）', () => {
@@ -109,7 +110,7 @@ describe('阻断动作迁移：outbound:block → action:reject', () => {
   });
 
   it('正向对照：非阻断规则仍带 outbound（证明不是把所有规则都判成 reject）', () => {
-    const r = rules.find((x) => matches(x, 'proxied.example'));
+    const r = rules.find((x) => matches(x, 'proxied.example') && x.action === 'route');
     expect(r.action).toBe('route');
     expect(typeof r.outbound).toBe('string');
   });

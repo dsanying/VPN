@@ -14,6 +14,7 @@ on:
       - 'helper-win/**'
       - 'helper-linux/**'
       - 'helper-rpc/**'
+      - 'helper-network/**'
       - 'src/shared/core-manifest.json'
       - 'src/shared/dashboard-manifest.json'
       - '.github/workflows/**'
@@ -62,6 +63,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup frontend package manager
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Install frontend dependencies
+        run: pnpm --dir web install --frozen-lockfile
+
       # PR 冒烟：完整 prep（helper 编译 + 资产 fetch + build）+ `electron-builder --dir`——验证打包链能过，
       # 跳过 nsis/portable/压缩/签名/上传（省 PR 时长且语义诚实：冒烟就是冒烟，不假装出安装包）。
       #
@@ -89,12 +98,17 @@ jobs:
           npm run fetch:cronet &&
           npm run fetch:dashboard &&
           npm run build &&
+          npm run prepare:package &&
           npx electron-builder --${{ matrix.platform }} --dir
 
       # 手动：完整打包（与 release.yml 同源脚本，含正确 arch flag）。
       - name: Package full (manual)
         if: github.event_name != 'pull_request'
         run: npm run package:${{ matrix.platform }}
+
+      - name: Verify custom Windows installation and native business operations
+        if: github.event_name != 'pull_request' && matrix.platform == 'win'
+        run: ./scripts/verify-windows-install.ps1
 
       # 仅 Windows 完整打包上传 artifact（当日可取）；retention 3d 控存储。
       # macOS 不上传：electron-builder.json mac target=dir 不产 .exe/.dmg（DMG 只在 release.yml 用 hdiutil 手搓），
@@ -104,5 +118,9 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: build-win-${{ github.sha }}
-          path: dist-package/*.exe
+          path: |
+            dist-package/*.exe
+            artifacts/windows-x64/installed-business.json
+            artifacts/windows-x64/installed-business.log
+            artifacts/windows-x64/custom-install.json
           retention-days: 3

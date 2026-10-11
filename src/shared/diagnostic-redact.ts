@@ -1,3 +1,5 @@
+import { formatDeviceDateTime } from './device-time';
+import { diagnosticText } from './diagnostic-text';
 /**
  * 诊断报告脱敏 + Markdown 构建 —— 纯函数，主进程 DiagnosticService 与单测共用，不经网络/FS。
  *
@@ -96,7 +98,12 @@ export function redactDeep(value: unknown, extraSecretKeys?: ReadonlySet<string>
       } else if (URL_KEYS.has(nk) && typeof v === 'string') {
         out[k] = redactUrlValue(v);
       } else if (typeof v === 'object') {
-        out[k] = redactDeep(v, childExtra);
+        out[k] = redactDeep(
+          v,
+          k === 'users' || k === 'accounts'
+            ? new Set([...(childExtra ?? []), 'id', 'pass', 'encryption'])
+            : childExtra
+        );
       } else {
         out[k] = v;
       }
@@ -132,6 +139,8 @@ type ServerLike = {
   tailscaleSettings?: { hostname?: unknown; exitNode?: unknown } | null;
   httpSettings?: { host?: unknown; headers?: Record<string, unknown> | null } | null;
   customSettings?: { outbound?: Record<string, unknown> | null } | null;
+  compatibilitySettings?: { outbound?: Record<string, unknown> | null } | null;
+  xhttpSettings?: Record<string, unknown> | null;
 };
 
 /** 主机类键名（归一：小写去 _）：custom 透传 outbound 里这些键的字符串值是节点身份。 */
@@ -226,6 +235,8 @@ export function collectNodeIdentifiers(
     if (Array.isArray(httpHost)) for (const h of httpHost) add(h, 'addr');
     // custom 透传 outbound 原样下发 → 递归收主机类键（含嵌套 tls.server_name / transport.headers.Host）
     collectHostsDeep(s?.customSettings?.outbound, (v) => add(v, 'addr'));
+    collectHostsDeep(s?.compatibilitySettings?.outbound, (v) => add(v, 'addr'));
+    collectHostsDeep(s?.xhttpSettings, (v) => add(v, 'addr'));
     add(s?.name, 'name');
   }
   // resolve-ahead 预解析得到的节点 IP（在 config.servers 之外）：按 IP 身份打码，杜绝真实节点 IP 漏进报告。
@@ -276,6 +287,10 @@ export interface CoreProcessReport {
 
 /** 诊断报告输入（全部已脱敏 / 已 tail；构建器只拼装，不做任何 IO 或脱敏）。 */
 export interface DiagnosticReportInput {
+  language?: string;
+  logging?: unknown;
+  previousAppLogTail?: string;
+  recentEvents?: string;
   generatedAt: string; // ISO
   app: {
     flowzVersion: string;
@@ -419,49 +434,92 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
   const { app, runtime } = input;
   const lines: string[] = [];
 
-  lines.push('# FlowZ 诊断报告');
+  lines.push(diagnosticText(0, [], input.language ?? 'zh-CN'));
   lines.push('');
   lines.push(
-    '> 本报告用于排障，可附到 GitHub issue。**密钥与节点身份已脱敏**（uuid/密码/私钥/订阅 token 已打码；' +
-      '节点域名/IP/SNI/节点名已替换为 `<domain-N>`/`<ip-N>`/`<node-N>` 占位符）。日志明细可能仍含访问过的**其它**域名/IP——介意可自行删减后再上传。'
+    diagnosticText(1, [], input.language ?? 'zh-CN') +
+      diagnosticText(2, [], input.language ?? 'zh-CN')
   );
   lines.push('');
   if (input.hint) {
-    lines.push(`> 提示：${input.hint}`);
+    lines.push(diagnosticText(3, [input.hint], input.language ?? 'zh-CN'));
     lines.push('');
   }
 
-  lines.push('## 环境');
+  lines.push(diagnosticText(4, [], input.language ?? 'zh-CN'));
   lines.push('');
-  lines.push(`- 生成时间：${input.generatedAt}`);
-  lines.push(`- FlowZ 版本：${app.flowzVersion}`);
-  lines.push(`- 内核版本：${app.coreVersion}`);
-  lines.push(`- 系统：${app.os}`);
+  lines.push(
+    diagnosticText(
+      5,
+      [formatDeviceDateTime(input.generatedAt, input.language) + ` (${input.generatedAt})`],
+      input.language ?? 'zh-CN'
+    )
+  );
+  lines.push(diagnosticText(6, [app.flowzVersion], input.language ?? 'zh-CN'));
+  lines.push(diagnosticText(7, [app.coreVersion], input.language ?? 'zh-CN'));
+  lines.push(diagnosticText(8, [app.os], input.language ?? 'zh-CN'));
   if (app.electron) lines.push(`- Electron：${app.electron}`);
   lines.push('');
 
-  lines.push('## 运行态');
+  lines.push(diagnosticText(9, [], input.language ?? 'zh-CN'));
   lines.push('');
-  lines.push(`- 代理模式：${runtime.proxyMode} / ${runtime.proxyModeType}`);
-  lines.push(`- 代理运行中：${runtime.proxyRunning ? '是' : '否'}`);
+  lines.push(
+    diagnosticText(10, [runtime.proxyMode, runtime.proxyModeType], input.language ?? 'zh-CN')
+  );
+  lines.push(
+    diagnosticText(
+      11,
+      [
+        runtime.proxyRunning
+          ? input.language?.startsWith('en')
+            ? 'yes'
+            : '是'
+          : input.language?.startsWith('en')
+            ? 'no'
+            : '否',
+      ],
+      input.language ?? 'zh-CN'
+    )
+  );
   if (runtime.startedViaHelper !== undefined)
-    lines.push(`- 经提权 helper 启动：${runtime.startedViaHelper ? '是' : '否'}`);
-  if (runtime.helperStatus) lines.push(`- Helper 状态：${runtime.helperStatus}`);
-  if (runtime.systemProxy) lines.push(`- 系统代理实际值：${runtime.systemProxy}`);
-  if (runtime.effectiveDns) lines.push(`- 生效系统 DNS：${runtime.effectiveDns}`);
-  if (runtime.nodeDomainResolver) lines.push(`- 节点域名解析档位：${runtime.nodeDomainResolver}`);
-  lines.push(`- 日志级别：${runtime.logLevel}`);
-  lines.push(`- 诊断采集中：${runtime.captureActive ? '是' : '否'}`);
-  if (runtime.cronetLibStatus) lines.push(`- libcronet 状态：${runtime.cronetLibStatus}`);
+    lines.push(
+      diagnosticText(
+        12,
+        [
+          runtime.startedViaHelper
+            ? input.language?.startsWith('en')
+              ? 'yes'
+              : '是'
+            : input.language?.startsWith('en')
+              ? 'no'
+              : '否',
+        ],
+        input.language ?? 'zh-CN'
+      )
+    );
+  if (runtime.helperStatus)
+    lines.push(diagnosticText(13, [runtime.helperStatus], input.language ?? 'zh-CN'));
+  if (runtime.systemProxy)
+    lines.push(diagnosticText(14, [runtime.systemProxy], input.language ?? 'zh-CN'));
+  if (runtime.effectiveDns)
+    lines.push(diagnosticText(15, [runtime.effectiveDns], input.language ?? 'zh-CN'));
+  if (runtime.nodeDomainResolver)
+    lines.push(diagnosticText(16, [runtime.nodeDomainResolver], input.language ?? 'zh-CN'));
+  lines.push(diagnosticText(17, [runtime.logLevel], input.language ?? 'zh-CN'));
+  lines.push(diagnosticText(18, [runtime.captureActive ? '是' : '否'], input.language ?? 'zh-CN'));
+  if (runtime.cronetLibStatus)
+    lines.push(diagnosticText(19, [runtime.cronetLibStatus], input.language ?? 'zh-CN'));
   if (runtime.cronetHealTriggered || runtime.cronetHealFailed) {
     lines.push(
-      `- libcronet 自愈：触发 ${runtime.cronetHealTriggered ?? 0} 次 / 失败 ${runtime.cronetHealFailed ?? 0} 次`
+      diagnosticText(
+        20,
+        [runtime.cronetHealTriggered ?? 0, runtime.cronetHealFailed ?? 0],
+        input.language ?? 'zh-CN'
+      )
     );
   }
   if (runtime.lastStartReadyRetries) {
-    lines.push(
-      `- 最近一次起核经 ${runtime.lastStartReadyRetries} 次就绪重试才成功（起核慢，多因 Windows 重启争用下 wintun 适配器未及时释放；非核崩溃）`
-    );
+    lines.push(diagnosticText(21, [runtime.lastStartReadyRetries], input.language ?? 'zh-CN'));
   }
   // issue #367：刷新是否真的发生过必须在报告里可读——它守着「系统解析器缓存了错误记录」这类故障的唯一出口
   // （issue #363：内核侧全程正常，症状全部来自系统缓存的否定记录）。失败时连同可操作提示一并带出。
@@ -469,47 +527,61 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
     const f = runtime.lastDnsFlush;
     if (!f.ok) {
       lines.push(
-        `- 系统 DNS 缓存刷新：**失败**（${f.reason ?? 'unknown'}，${f.context}，${f.ageSec}s 前）：${f.detail}`
+        diagnosticText(
+          22,
+          [f.reason ?? 'unknown', f.context, f.ageSec, f.detail],
+          input.language ?? 'zh-CN'
+        )
       );
     } else if (f.skipped) {
-      lines.push(`- 系统 DNS 缓存刷新：本平台无对应机制，已跳过（${f.detail}）`);
+      lines.push(diagnosticText(23, [f.detail], input.language ?? 'zh-CN'));
     } else if (f.partial) {
       // macOS unicast DNS 缓存主体在 mDNSResponder：HUP 没打成意味着 issue #363 那类负缓存很可能**没被清掉**。
       // 与真成功共用「成功」headline 会让开发者扫报告时无法区分，正是本批要消灭的那类误读。
       lines.push(
-        `- 系统 DNS 缓存刷新：**部分成功**（${f.context}，${f.ageSec}s 前，${f.detail}）：${f.partial}`
+        diagnosticText(24, [f.context, f.ageSec, f.detail, f.partial], input.language ?? 'zh-CN')
       );
     } else {
-      lines.push(`- 系统 DNS 缓存刷新：成功（${f.context}，${f.ageSec}s 前，${f.detail}）`);
+      lines.push(diagnosticText(25, [f.context, f.ageSec, f.detail], input.language ?? 'zh-CN'));
     }
   } else {
-    lines.push('- 系统 DNS 缓存刷新：本会话从未触发');
+    lines.push(diagnosticText(26, [], input.language ?? 'zh-CN'));
   }
   if (runtime.lastStartTimeline) {
     lines.push(`- ${runtime.lastStartTimeline}`);
   }
   lines.push('');
 
-  lines.push('## 生成的 sing-box 配置（脱敏）');
+  lines.push(diagnosticText(27, [], input.language ?? 'zh-CN'));
   lines.push('');
   lines.push(fence('json', JSON.stringify(input.redactedSingboxConfig, null, 2)));
   lines.push('');
 
-  lines.push('## 用户配置（脱敏）');
+  lines.push(diagnosticText(28, [], input.language ?? 'zh-CN'));
   lines.push('');
   lines.push(fence('json', JSON.stringify(input.redactedUserConfig, null, 2)));
   lines.push('');
 
   if (input.speedTestDiagnostics) {
     const d = input.speedTestDiagnostics;
-    lines.push('## 最近一次测速诊断');
+    lines.push(diagnosticText(29, [], input.language ?? 'zh-CN'));
     lines.push('');
-    lines.push(`- 生成时间：${d.generatedAt}`);
-    lines.push(`- 测速目标：${formatSpeedTestTargetForReport(d.target)}`);
-    lines.push(`- 节点数：total=${d.total} / usable=${d.usable} / failed=${d.failures.length}`);
+    lines.push(
+      diagnosticText(
+        30,
+        [formatDeviceDateTime(d.generatedAt, input.language)],
+        input.language ?? 'zh-CN'
+      )
+    );
+    lines.push(
+      diagnosticText(31, [formatSpeedTestTargetForReport(d.target)], input.language ?? 'zh-CN')
+    );
+    lines.push(
+      diagnosticText(32, [d.total, d.usable, d.failures.length], input.language ?? 'zh-CN')
+    );
     lines.push('');
     if (d.failures.length > 0) {
-      lines.push('| 节点 ID | 节点名 | 出站 tag | reason |');
+      lines.push(diagnosticText(33, [], input.language ?? 'zh-CN'));
       lines.push('|---|---|---|---|');
       for (const f of d.failures) {
         lines.push(
@@ -519,11 +591,9 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
       lines.push('');
     }
     if (d.resolvedIpProbes && d.resolvedIpProbes.length > 0) {
-      lines.push('### 失败 endpoint 目标解析探测');
+      lines.push(diagnosticText(34, [], input.language ?? 'zh-CN'));
       lines.push('');
-      lines.push(
-        '| 节点 ID | 节点名 | 出站 tag | 目标域名 | resolver path | resolved IPs | error |'
-      );
+      lines.push(diagnosticText(35, [], input.language ?? 'zh-CN'));
       lines.push('|---|---|---|---|---|---|---|');
       for (const p of d.resolvedIpProbes) {
         lines.push(
@@ -533,19 +603,38 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
       lines.push('');
     }
     if (d.redactedTempConfig !== undefined) {
-      lines.push('### 临时测速 sing-box 配置（脱敏）');
+      lines.push(diagnosticText(36, [], input.language ?? 'zh-CN'));
       lines.push('');
       lines.push(fence('json', JSON.stringify(d.redactedTempConfig, null, 2)));
       lines.push('');
     }
   }
 
-  lines.push('## app.log（近期）');
+  if (input.logging)
+    lines.push(
+      input.language?.startsWith('en') ? '## Logging evidence' : '## 日志证据',
+      '',
+      fence('json', JSON.stringify(input.logging, null, 2)),
+      ''
+    );
+  if (input.recentEvents)
+    lines.push(
+      input.language?.startsWith('en')
+        ? '## Recent application events (localized)'
+        : '## 最近应用事件（本地化）',
+      '',
+      fence('text', input.recentEvents),
+      ''
+    );
+  if (input.previousAppLogTail)
+    lines.push('## app.1.log', '', fence('text', input.previousAppLogTail), '');
+
+  lines.push(diagnosticText(37, [], input.language ?? 'zh-CN'));
   lines.push('');
   lines.push(fence('text', input.appLogTail));
   lines.push('');
 
-  lines.push('## singbox.log（近期）');
+  lines.push(diagnosticText(38, [], input.language ?? 'zh-CN'));
   lines.push('');
   lines.push(fence('text', input.singboxLogTail));
   lines.push('');
@@ -555,7 +644,7 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
   // 会话（sing-box 的 FATAL[0000] 是启动相对秒、非墙钟时间），故必须让读报告的人看见文件多大、何时最后写入。
   if (input.startupLogTail !== undefined) {
     const src = input.startupLogSource ? ` · ${input.startupLogSource}` : '';
-    lines.push(`## singbox_startup.log（近期${src}）`);
+    lines.push(diagnosticText(39, [src], input.language ?? 'zh-CN'));
     lines.push('');
     lines.push(fence('text', input.startupLogTail));
     lines.push('');
@@ -563,7 +652,7 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
 
   // Windows UAC 看护脚本自述日志：回答「谁停的核」，与上面的 FATAL 文本互补（见 watchdogLogTail 注释）。
   if (input.watchdogLogTail !== undefined) {
-    lines.push('## flowz-win-watchdog.log（近期 · Windows UAC 看护脚本自述）');
+    lines.push(diagnosticText(40, [], input.language ?? 'zh-CN'));
     lines.push('');
     lines.push(fence('text', input.watchdogLogTail));
     lines.push('');
@@ -579,15 +668,17 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
 
   if (input.processMetrics) {
     const pm = input.processMetrics;
-    tail.push('', '## 进程内存', '');
-    tail.push(`- 合计：${pm.totalMemoryMb} MB（${pm.rows.length} 个进程，按内存降序）`, '');
+    tail.push('', diagnosticText(41, [], input.language ?? 'zh-CN'), '');
     tail.push(
-      '| 类型 | PID | 内存(MB) | 峰值(MB) | CPU(%) | 标识 | 创建时刻 |',
-      '|---|---|---|---|---|---|---|'
+      diagnosticText(42, [pm.totalMemoryMb, pm.rows.length], input.language ?? 'zh-CN'),
+      ''
     );
+    tail.push(diagnosticText(43, [], input.language ?? 'zh-CN'), '|---|---|---|---|---|---|---|');
     for (const r of pm.rows) {
       const created =
-        typeof r.creationTime === 'number' ? new Date(r.creationTime).toISOString() : '';
+        typeof r.creationTime === 'number'
+          ? formatDeviceDateTime(r.creationTime, input.language)
+          : '';
       tail.push(
         `| ${r.type} | ${r.pid} | ${r.memoryMb} | ${r.peakMemoryMb ?? ''} | ${r.cpuPercent} | ${r.label ?? ''} | ${created} |`
       );
@@ -596,37 +687,38 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
 
   if (input.rendererHeap) {
     const rh = input.rendererHeap;
-    tail.push('', '## 渲染进程堆分层', '');
+    tail.push('', diagnosticText(44, [], input.language ?? 'zh-CN'), '');
     if (rh.unavailable) {
       tail.push(`- ${rh.unavailable}`);
     } else {
       if (rh.usedHeapMb !== undefined) tail.push(`- V8 usedHeap：${rh.usedHeapMb} MB`);
       if (rh.totalHeapMb !== undefined) tail.push(`- V8 totalHeap：${rh.totalHeapMb} MB`);
       if (rh.heapLimitMb !== undefined) tail.push(`- V8 heapLimit：${rh.heapLimitMb} MB`);
-      if (rh.residentSetMb !== undefined) tail.push(`- 进程 residentSet：${rh.residentSetMb} MB`);
+      if (rh.residentSetMb !== undefined)
+        tail.push(diagnosticText(45, [rh.residentSetMb], input.language ?? 'zh-CN'));
       if (rh.blinkResourceMb !== undefined)
-        tail.push(`- Blink 资源缓存(live)：${rh.blinkResourceMb} MB`);
+        tail.push(diagnosticText(46, [rh.blinkResourceMb], input.language ?? 'zh-CN'));
     }
   }
 
   if (input.coreProcess) {
     const cp = input.coreProcess;
-    tail.push('', '## sing-box 核进程', '');
+    tail.push('', diagnosticText(47, [], input.language ?? 'zh-CN'), '');
     if (cp.unavailable) tail.push(`- ${cp.unavailable}`);
     else tail.push(`- PID ${cp.pid ?? ''}：RSS ${cp.rssMb ?? ''} MB，CPU ${cp.cpuPercent ?? ''}%`);
   }
 
   if (input.memoryTimelineCsv) {
-    tail.push('', '## 内存时间线（每 5min 一帧，最多 24h）', '');
+    tail.push('', diagnosticText(48, [], input.language ?? 'zh-CN'), '');
     tail.push(fence('csv', input.memoryTimelineCsv));
   }
 
   if (input.rendererWatchdog) {
     const rw = input.rendererWatchdog;
-    tail.push('', '## 渲染进程内存看护', '');
-    tail.push(`- 阈值：${rw.thresholdMb} MB`);
-    tail.push(`- 隐藏态回收（discard）：${rw.discardCount} 次`);
-    tail.push(`- 可见态告警（warn）：${rw.warnCount} 次`);
+    tail.push('', diagnosticText(49, [], input.language ?? 'zh-CN'), '');
+    tail.push(diagnosticText(50, [rw.thresholdMb], input.language ?? 'zh-CN'));
+    tail.push(diagnosticText(51, [rw.discardCount], input.language ?? 'zh-CN'));
+    tail.push(diagnosticText(52, [rw.warnCount], input.language ?? 'zh-CN'));
   }
 
   if (tail.length === 0) return redacted;

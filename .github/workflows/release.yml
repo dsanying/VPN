@@ -21,7 +21,7 @@ jobs:
           - os: macos-14
             platform: mac
           - os: ubuntu-latest
-            platform: linux
+            platform: android
 
     steps:
       - name: Checkout code
@@ -36,30 +36,77 @@ jobs:
       # 提权 helper 二进制不入库（.gitignore），由 build:helper 现编现打：mac(helper/) + win(helper-win/)。
       # 必须在 mac 与 win 两个 runner 都装 Go，否则该平台 package 缺 helper 二进制 → 安装提权助手「二进制缺失」(issue #57)。
       - name: Setup Go (提权 helper, mac + win)
-        if: matrix.platform == 'mac' || matrix.platform == 'win' || matrix.platform == 'linux'
+        if: matrix.platform == 'mac' || matrix.platform == 'win' || matrix.platform == 'android'
         uses: actions/setup-go@v7.0.0
         with:
           go-version-file: helper/go.mod
           cache: false
 
-      - name: Install dependencies (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby-full build-essential
-          sudo gem install --no-document fpm
+      - name: Setup Android JDK
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        if: matrix.platform == 'android'
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android native toolchain
+        if: matrix.platform == 'android'
+        run: sdkmanager "platforms;android-36" "build-tools;35.0.0" "ndk;28.2.13676358"
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build application
-        run: npm run build
+      - name: Setup frontend package manager
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Install frontend dependencies
+        run: pnpm --dir web install --frozen-lockfile
+
+      - name: Validate declared platform scope
+        run: node --test scripts/release-pipeline.test.mjs && npm run check:platforms
+
+      - name: Validate release version
+        run: node scripts/check-release-version.mjs
+
+      # Native runtime tests require the same pinned binaries as packaging, even on the Android builder.
+      - name: Prepare official core test fixtures
+        run: npm run fetch:core
+
+      - name: Validate application
+        run: |
+          npm test -- --runInBand &&
+          npm run lint &&
+          npm run typecheck:renderer &&
+          npm run build
+
+      - name: Prepare private Android signing key
+        if: matrix.platform == 'android'
+        run: node scripts/prepare-android-signing.mjs
+        env:
+          SHADOW_ANDROID_KEYSTORE_BASE64: ${{ secrets.SHADOW_ANDROID_KEYSTORE_BASE64 }}
 
       - name: Package application
         run: npm run package:${{ matrix.platform }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           REQUIRE_HELPER: "1"
+          SHADOW_ANDROID_KEY_ALIAS: ${{ secrets.SHADOW_ANDROID_KEY_ALIAS }}
+          SHADOW_ANDROID_STORE_PASSWORD: ${{ secrets.SHADOW_ANDROID_STORE_PASSWORD }}
+          SHADOW_ANDROID_KEY_PASSWORD: ${{ secrets.SHADOW_ANDROID_KEY_PASSWORD }}
+
+      - name: Remove temporary Android signing key
+        if: always() && matrix.platform == 'android'
+        run: node scripts/prepare-android-signing.mjs --cleanup
+
+      - name: Verify custom Windows installation and native business operations
+        if: matrix.platform == 'win'
+        run: ./scripts/verify-windows-install.ps1
 
       - name: Create DMG (macOS, arm64 + x64)
         if: matrix.platform == 'mac'
@@ -93,10 +140,7 @@ jobs:
             TEMP_DIR=$(mktemp -d)
             cp -R "$APP_PATH" "$TEMP_DIR/"
             ln -s /Applications "$TEMP_DIR/Applications"
-            # ad-hoc 签名（无付费 Developer ID/公证）→ 从下载的 DMG 拖出的 app 带 quarantine，
-            # macOS 首次打开报「已损坏，应移到废纸篓」，且右键→打开无效、须 xattr -cr。
-            # DMG 内附首次打开引导（中英），教用户清除隔离属性。文件名带序号让它排在 app 前、更显眼。
-            cp "build/macos-dmg-open-guide.txt" "$TEMP_DIR/0 首次打开必读 READ ME FIRST.txt"
+            # 此构建无 Developer ID/公证；发布说明必须如实注明，不能引导关闭系统保护。
             hdiutil create -volname "暗影VPN ${VERSION} (${ARCH})" \
               -srcfolder "$TEMP_DIR" \
               -ov -format UDZO \
@@ -112,12 +156,63 @@ jobs:
           path: |
             dist-package/*.exe
             dist-package/*.dmg
-            dist-package/*.AppImage
-            dist-package/*.deb
+            android/app/build/outputs/apk/release/*.apk
+            android/app/libs/sing-box-android-source-*.tar.gz
+            android/app/libs/libbox-build.json
+            artifacts/client-platform-evidence.json
+            artifacts/mac-arm64/**
+            artifacts/mac-x64/**
+            artifacts/windows-x64/**
+            artifacts/android-arm64/**
+          retention-days: 5
+
+  native-mac:
+    needs: release
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '26'
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: release-mac
+          path: downloaded
+      - name: Install exact architecture DMG and test its native business APIs
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          DMG=$(find downloaded -name "暗影VPN-${VERSION}-mac-${TARGET_ARCH}.dmg")
+          test -f "$DMG"
+          MOUNT="$RUNNER_TEMP/shadow-dmg"
+          INSTALLED="$RUNNER_TEMP/shadow-installed"
+          mkdir -p "$MOUNT" "$INSTALLED"
+          hdiutil attach "$DMG" -readonly -nobrowse -mountpoint "$MOUNT"
+          trap 'hdiutil detach "$MOUNT" || true' EXIT
+          ditto "$MOUNT/暗影VPN.app" "$INSTALLED/暗影VPN.app"
+          node scripts/verify-desktop-installed.mjs --exe "$INSTALLED/暗影VPN.app/Contents/MacOS/暗影VPN"
+      - name: Upload actual native acceptance results
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: native-mac-${{ matrix.arch }}
+          path: artifacts/mac-${{ matrix.arch }}/
+          if-no-files-found: error
           retention-days: 5
 
   create-release:
-    needs: release
+    needs: [release, native-mac]
     runs-on: ubuntu-latest
 
     steps:
@@ -136,6 +231,17 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Setup release validation runtime
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '26'
+
+      - name: Verify native release evidence
+        run: |
+          node scripts/check-release-version.mjs
+          node scripts/collect-client-evidence.mjs artifacts
+          node scripts/check-client-platforms.mjs --release --evidence artifacts/client-platform-evidence.json
+
       - name: Create GitHub Release
         # Release notes 单一来源：generate_release_notes 由 GitHub 自动从 PR 列表生成「## What's Changed」+
         # Full Changelog。不再额外注入 body（曾与 generate_release_notes 叠加导致两个 ## What's Changed 且
@@ -149,7 +255,8 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.dmg
-            artifacts/**/*.AppImage
-            artifacts/**/*.deb
+            artifacts/**/*.apk
+            artifacts/**/sing-box-android-source-*.tar.gz
+            artifacts/**/libbox-build.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

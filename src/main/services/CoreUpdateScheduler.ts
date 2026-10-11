@@ -20,6 +20,7 @@ export class CoreUpdateScheduler {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private stoppedApplyTimer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
+  private managed = false;
   private isRunning = false; // cycleIfDue 防重入
 
   // 启动延迟 30s：避开 2s autoConnect / 5s App 更新检查 / 8s 订阅补更高峰
@@ -35,9 +36,11 @@ export class CoreUpdateScheduler {
     private readonly getProxyRunning: () => boolean
   ) {}
 
-  start(): void {
+  start(managed = false): void {
     if (this.started) return;
     this.started = true;
+    this.managed = managed;
+    if (managed) return;
 
     this.startupTimer = setTimeout(() => {
       this.startupTimer = null;
@@ -67,7 +70,7 @@ export class CoreUpdateScheduler {
 
   /** config 变更时调（开关刚开即时体感，无需等 6h tick）。幂等：未开/未 due 时自然跳过。 */
   kick(): void {
-    void this.cycleIfDue();
+    if (!this.managed) void this.cycleIfDue();
   }
 
   /**
@@ -75,7 +78,7 @@ export class CoreUpdateScheduler {
    * 延迟+双查规避 attemptAutoRestart/switchMode 的瞬时 stop→start 窗口（误判停止而在重启间隙落位）。
    */
   onProxyStopped(): void {
-    if (!this.started) return;
+    if (!this.started || this.managed) return;
     if (this.stoppedApplyTimer) clearTimeout(this.stoppedApplyTimer);
     this.stoppedApplyTimer = setTimeout(() => {
       this.stoppedApplyTimer = null;

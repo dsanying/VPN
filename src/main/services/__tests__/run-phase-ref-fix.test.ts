@@ -169,7 +169,8 @@ describe('A7 run-phase 备用腿：retry 的 shouldRetry / onRetry 对 dependenc
     expect(origin).toBe('detour');
     expect(seedTags).toBeInstanceOf(Set);
     expect((seedTags as Set<string>).has('ghost-tag')).toBe(true);
-    expect(passedConfig).toBe(config);
+    expect(passedConfig).toMatchObject({ proxyModeType: 'tun', tunConfig: { autoRoute: true } });
+    expect((passedConfig as UserConfig).servers).toBe(config.servers);
 
     // refFixAttempted 闸最终为 true（已用过一次修正腿）。
     expect(pm.refFixAttempted).toBe(true);

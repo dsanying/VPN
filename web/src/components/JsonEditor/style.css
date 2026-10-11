@@ -1,0 +1,5 @@
+.client-json-editor { min-inline-size: 0; overflow: hidden; border: 1px solid var(--ds-color-border-strong); border-radius: var(--ds-radius-md); background: var(--ds-color-surface); }
+.client-json-editor[data-invalid] { border-color: var(--ds-color-error); }
+.client-json-loading { display: grid; place-items: center; }
+.client-json-error { padding: 8px 12px; color: var(--ds-color-error); overflow-wrap: anywhere; }
+.client-json-editor .monaco-editor .lines-content { max-inline-size: 100%; }

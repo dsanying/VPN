@@ -29,6 +29,17 @@ build() {
 build arm64 arm64
 build x64 amd64
 
+# Unprivileged observer, using the public macOS SystemConfiguration API.
+if [ "$(uname -s)" = "Darwin" ]; then
+  for pair in arm64:arm64 x64:x86_64; do
+    folder=${pair%%:*}
+    native_arch=${pair#*:}
+    xcrun clang -arch "$native_arch" -Wall -Wextra -Werror -Os \
+      "$ROOT/helper-network/network-darwin.c" -framework SystemConfiguration \
+      -framework CoreFoundation -o "$ROOT/resources/mac-$folder/shadowvpn-network-events"
+  done
+fi
+
 # Windows 提权服务 helper（独立 module helper-win/，含 vendor/ → -mod=vendor 离线构建）。
 # 输出到 resources/win/（与 sing-box.exe / libcronet.dll 同目录，对齐 ResourceManager.getWinHelperPath 与
 # getPlatformResourceDir 的 win 分支）。GOOS=windows 从任意宿主交叉编译（纯 Go + winio/x-sys，CGO 关）。

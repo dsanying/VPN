@@ -60,6 +60,13 @@ export class IpcHandlerRegistry {
         const errorMessage = error instanceof Error ? error.message : String(error);
         const errorCode = (error as any)?.code;
         const errorStack = error instanceof Error ? error.stack : undefined;
+        // Arguments are intentionally excluded: they may contain subscription credentials.
+        ipcLogger?.addLog(
+          'error',
+          `IPC request failed: ${channel}; code=${errorCode ?? 'unknown'}; ${errorMessage}`,
+          'IpcHandlerRegistry',
+          errorStack
+        );
 
         // 记录详细错误堆栈：仅开发环境输出，生产环境不暴露堆栈
         if (isDevelopment && errorStack) {

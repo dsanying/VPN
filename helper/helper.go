@@ -201,7 +201,7 @@ func chownRuntimeDirs() {
 	if uid == 0 {
 		return // confDir 本身属 root（异常）→ 不动，避免把运行时目录误归到 root
 	}
-	for _, name := range []string{"tailscale", "singbox-dashboard", "ui"} {
+	for _, name := range []string{"tailscale", "singbox-dashboard", "ui", "mihomo-state"} {
 		chownTree(filepath.Join(confDir, name), uid, gid)
 	}
 }
@@ -277,6 +277,28 @@ func openLog(name string) (*os.File, error) {
 	if !ok || stat.Nlink != 1 {
 		file.Close()
 		return nil, fmt.Errorf("log-hardlink-denied")
+	}
+	// 运行日志归还配置目录的用户；只操作已验证的 fd，不放宽 0600，
+	// 不跟随路径再次打开，避免 root 写出的日志无法被客户端诊断读取。
+	if os.Geteuid() == 0 {
+		ownerInfo, ownerErr := os.Stat(confDir)
+		if ownerErr != nil {
+			file.Close()
+			return nil, ownerErr
+		}
+		owner, valid := ownerInfo.Sys().(*syscall.Stat_t)
+		if !valid || owner.Uid == 0 {
+			file.Close()
+			return nil, fmt.Errorf("log-owner-invalid")
+		}
+		if err := file.Chown(int(owner.Uid), int(owner.Gid)); err != nil {
+			file.Close()
+			return nil, err
+		}
+	}
+	if err := file.Chmod(0o600); err != nil {
+		file.Close()
+		return nil, err
 	}
 	return file, nil
 }
@@ -529,7 +551,19 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 			break
 		}
 		fmt.Fprintln(conn, "OK flushed")
-	case "start":
+	case "install-mihomo":
+		if err := helperrpc.InstallMihomo(singboxBin, args.Next(), args.Next()); err != nil {
+			fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+			return
+		}
+		binary := helperrpc.MihomoPath(singboxBin)
+		_ = execRun(execTimeout, "/usr/bin/xattr", "-c", binary)
+		if err := execRun(codesignTimeout, "/usr/bin/codesign", "--force", "-s", "-", binary); err != nil {
+			fmt.Fprintln(conn, "ERR core-signing-failed")
+			return
+		}
+		fmt.Fprintln(conn, "OK installed")
+	case "start", "start-mihomo":
 		cfg := args.Next()
 		logPath := args.Next()
 		fwd := args.Next()
@@ -560,7 +594,11 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 			return
 		}
 
-		c := exec.Command(singboxBin, "run", "-c", cfg)
+		binary, launchArgs := singboxBin, []string{"run", "-c", cfg}
+		if cmd == "start-mihomo" {
+			binary, launchArgs = helperrpc.MihomoPath(singboxBin), helperrpc.MihomoArguments(cfg)
+		}
+		c := exec.Command(binary, launchArgs...)
 		// sing-box 早期 stdout/stderr 重定向到 app 日志文件（与 osascript 看护脚本一致），便于诊断启动问题。
 		var logFile *os.File
 		if logPath != "" {
@@ -633,6 +671,9 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 }
 
 func main() {
+	if runEntryProbeCommand() {
+		return
+	}
 	flag.StringVar(&singboxBin, "singbox", "", "path to sing-box binary (locked at install time)")
 	flag.StringVar(&confDir, "confdir", "", "allowed config directory")
 	flag.StringVar(&supportDir, "support", "/Library/Application Support/ShadowVPN", "dir holding helper.sock + helper.token")
@@ -670,7 +711,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	methods := []string{"ping", "version", "status", "start", "stop", "cleanup", "freeport", "install-core", "route-add", "route-del", "default-restore", "flush-dns"}
+	methods := []string{"ping", "version", "status", "start", "start-mihomo", "install-mihomo", "stop", "cleanup", "freeport", "install-core", "route-add", "route-del", "default-restore", "flush-dns"}
 	if err := helperrpc.Serve(l, helperrpc.NewHandler(methods, helperrpc.Bearer(tokenValue), executeCommand), nil); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}

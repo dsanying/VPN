@@ -1,4 +1,4 @@
-import type { LogLevel, ServerConfig } from '../types';
+import type { InstalledApplication, LogLevel, ServerConfig } from '../types';
 
 export interface ProxyStatus {
   running: boolean;
@@ -97,16 +97,24 @@ export interface ConnectionEntry {
     sourcePort?: string;
     destinationPort?: string;
     processPath?: string; // 发起连接的进程路径（隐私字段）
+    processId?: number;
+    processName?: string; // 操作系统报告的名称；路径不可读取时仍保留身份
   };
   upload?: number; // 累计上行字节
   download?: number; // 累计下行字节
   start?: string; // 连接建立时刻（RFC3339）
+  outbound?: string; // 内核报告的实际出口，不从当前选用节点推断
+  outboundType?: string;
 }
 
 /** 连接快照：连接信息页订阅 'detail' topic（batch3 §3.7）——订阅即回初始帧 + worker 每帧 push，仅页面打开且可见时传（无订阅者 → worker 逐级停机），非旧「每秒全量广播给所有窗口」。 */
 export interface ConnectionsSnapshot {
+  source?: 'proxy' | 'device';
+  applications?: InstalledApplication[]; // 当前连接路径的本机身份与缓存图标
+  unavailable?: boolean;
   connections: ConnectionEntry[];
   at: number; // 采样时刻 epoch ms
+  limited?: boolean; // 触发异常连接数量保护后，该次流重置前不能声称快照完整
 }
 
 /** 拓扑「其它」分组的 sentinel host 名（聚合 Top-N 截断后剩余的合并条目）。渲染端 topology-layout 见此值 →
@@ -138,6 +146,8 @@ export interface ConnectionAggOutbound {
  * 序列化 + 每秒 O(N) 重算拖死（issue #227）。hosts 已按 count 降序、截断 Top-N（剩余并入 TOPOLOGY_OTHERS_KEY）。
  */
 export interface ConnectionsAggregate {
+  source?: 'proxy' | 'device';
+  applications?: InstalledApplication[]; // 当前连接路径的本机身份与缓存图标
   total: number; // 活跃连接总数
   hosts: ConnectionAggHost[];
   outbounds: ConnectionAggOutbound[];
@@ -157,8 +167,6 @@ export interface HelperStatus {
   installed: boolean;
   /** 标准 RPC ping 确认 root 身份和启动能力（可零提权驱动 TUN） */
   ready: boolean;
-  /** 可用但有新版助手应用 */
-  upgradeable: boolean;
   /** 助手应用版本，未就绪为 null */
   version: string | null;
   /** daemon 是否被 launchd 加载（launchctl print 退出码）；非 macOS / 未安装为 null */
@@ -184,6 +192,11 @@ export interface SystemProxyStatus {
 }
 
 export interface LogEntry {
+  id?: string;
+  sessionId?: string;
+  sequence?: number;
+  eventId?: string;
+  eventArgs?: string[];
   timestamp: string;
   level: LogLevel;
   message: string;
@@ -192,6 +205,8 @@ export interface LogEntry {
 }
 
 export interface TrafficStats {
+  sampledAt?: number;
+  source?: 'device' | 'proxy';
   uploadSpeed: number;
   downloadSpeed: number;
   totalUpload: number;
@@ -214,6 +229,10 @@ export type ProxyExitBlock =
   'ts-no-exit-device' | 'ts-exit-device-offline' | 'ts-exit-not-advertised';
 
 export interface IpInfoSnapshot {
+  smartRouting?: {
+    countryCode?: string;
+    status: 'detecting' | 'preparing' | 'ready' | 'unavailable';
+  };
   /** 本地直连出口（auto_detect_interface 物理网卡），代理未连时也可测。 */
   direct: IpInfo | null;
   /** 代理出口（当前选中节点），代理未连时为 null。 */

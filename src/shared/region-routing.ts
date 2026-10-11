@@ -3,6 +3,7 @@
  * undefined（存量/新装未改）= 默认中国大陆正向 = 今日智能分流行为 → 零迁移、config-snapshot 默认零变。
  */
 import type { RegionId, RegionRoutingConfig } from './types';
+import { normalizeCountryCode } from './country';
 
 export const DEFAULT_REGION_ROUTING: RegionRoutingConfig = {
   enabled: true,
@@ -36,6 +37,21 @@ export const REGION_FOREIGN_GEO: Record<RegionId, { geosite: string[] }> = {
   ru: { geosite: [] },
 };
 
+export function localRegionGeo(region: RegionRoutingConfig): {
+  geosite: string[];
+  geoip: string[];
+} {
+  if (!region.automatic) return REGION_LOCAL_GEO[region.region] ?? { geosite: [], geoip: [] };
+  const country = normalizeCountryCode(region.region);
+  return { geosite: [], geoip: country ? [`geoip-${country}`] : [] };
+}
+
+export function foreignRegionGeo(region: RegionRoutingConfig): { geosite: string[] } {
+  return region.automatic
+    ? { geosite: [] }
+    : (REGION_FOREIGN_GEO[region.region] ?? { geosite: [] });
+}
+
 /**
  * 智能分流「geo 基线层」用到的内置 geo tag 集合（本地 + 海外，随地区）。仅 proxyMode=smart 且地区分流启用时非空；
  * global/direct 或关地区分流 → 空（基线不生效）。供规则资源 referencedBy 计数纳入「系统/智能分流对内置默认
@@ -48,8 +64,8 @@ export function smartBaselineGeoTags(config: {
   if ((config.proxyMode || 'smart').toLowerCase() !== 'smart') return new Set();
   const rr = effectiveRegionRouting(config);
   if (!rr.enabled) return new Set();
-  const local = REGION_LOCAL_GEO[rr.region];
-  const foreign = REGION_FOREIGN_GEO[rr.region];
+  const local = localRegionGeo(rr);
+  const foreign = foreignRegionGeo(rr);
   // 磁盘 JSON 未受 RegionId 编译期约束——手改/旧配置的越界 region（如 'us'）→ 表查空。本函数现也在 renderer
   // (refsByItemId) 每次渲染跑，越界解引用会崩规则资源页，故 fail-safe 返回空集（无基线引用）。
   if (!local || !foreign) return new Set();

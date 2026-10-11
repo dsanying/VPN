@@ -19,10 +19,12 @@ import type { StatsTopic } from '../../shared/ipc-channels';
 
 /** worker 重建 SingBoxApiClient 所需的运行期管理 API 端点（本地恒无 tls）。 */
 export interface StatsApiEndpoint {
+  engine?: 'sing-box' | 'mihomo';
   host: string;
   port: number;
   secret: string;
   tls?: { ca?: string; skipVerify?: boolean };
+  localProxyPorts?: number[];
 }
 
 /** proxy-handlers 只需「读快照」这一最小面；StatsWorkerHost 与（测试用的）StatsService 均满足。 */
@@ -92,6 +94,7 @@ export interface StatsWorkerHostOptions {
   onAggregate: (agg: ConnectionsAggregate) => void;
   /** 连接明细 relay（batch3 §3.7：detail 由 pull 改 push topic；经 registry 只发给 'detail' 订阅者；门控后调用）。 */
   onDetail: (conns: ConnectionsSnapshot) => void;
+  resolveApplications?: (conns: ConnectionsSnapshot) => Promise<ConnectionsSnapshot>;
   /**
    * relay 安全门（belt-and-suspenders）：false（窗口不可见 / Windows 拖动中）时只缓存不 relay。batch3 里订阅本身
    * 已由渲染端 visibility 暂停，此为兜底（订阅在但窗口不可见——如拖动期——仍不发）。**非** demand 源（见 hasSubscribers）。
@@ -175,7 +178,9 @@ export class StatsWorkerHost implements StatsHost {
     this.lastDemandSent = null;
     const endpoint = this.opts.getEndpoint();
     if (!endpoint) {
+      this.started = false;
       this.post({ type: 'stop' });
+      this.syncDemand();
       return;
     }
     this.post({ type: 'connect', endpoint });
@@ -207,28 +212,50 @@ export class StatsWorkerHost implements StatsHost {
         //（修 boot-即崩 worker 把退避永远卡在 500ms 的紧循环：退避只该被「健康过」的 worker 重置）。
         this.respawnDelayMs = 500;
         if (this.started) this.postConnect();
+        else {
+          this.lastDemandSent = null;
+          this.syncDemand();
+        }
         break;
       case 'stats':
         // started 门控：stop() 后 worker 在途旧帧（stop 消息送达前 worker 可能刚 post 一帧非零）必须丢弃，
         // 否则缓存被旧值覆盖 + 广播残留非零速率/总量，直到下次 connect → 违反 stop「停止即清零」不变量。
-        if (!this.started) return;
+        if (msg.payload.source === 'device' ? this.started : !this.started) return;
         this.syncDemand(); // 借常流 status 帧惰性重发 demand（reconnect 自愈路径；订阅变化的即时路径在 registry）
-        this.snapshot = msg.payload;
+        this.snapshot = { ...msg.payload };
         if (this.opts.isUiActive()) this.opts.onStats(this.snapshot);
         break;
       case 'aggregate':
-        if (!this.started) return; // 停后在途旧帧丢弃，避免残留旧拓扑。
+        if (msg.payload.source === 'device' ? this.started : !this.started) return;
         // 聚合已下沉 worker（change-driven + rate-cap，杀 B2 每秒全量克隆 + 零信息增量重渲染）：host 只缓存 + 按
         // 可见性门控 relay，不再自算 O(N)。隐藏期 worker 经 connectionsStream 需求本就不 post aggregate。
         this.aggregate = msg.payload;
         if (this.opts.isUiActive()) this.opts.onAggregate(this.aggregate);
         break;
       case 'detail':
-        if (!this.started) return; // 停后在途旧帧丢弃，避免残留旧连接列表。
+        if (msg.payload.source === 'device' ? this.started : !this.started) return;
         // batch3 §3.7：detail 由 pull 改 push topic——缓存 + 按可见性门控 relay 给 'detail' 订阅者（连接页）。worker
         // 仅 detail 有订阅（detailDemand）时才 post，故此缓存只在连接页订阅期新鲜；也作后来订阅者的初始帧。
-        this.connections = msg.payload;
+        this.connections = { ...msg.payload, applications: this.connections.applications };
         if (this.opts.isUiActive()) this.opts.onDetail(this.connections);
+        if (this.opts.resolveApplications) {
+          const current = this.connections;
+          void this.opts
+            .resolveApplications(current)
+            .then((resolved) => {
+              if (
+                this.disposed ||
+                this.connections !== current ||
+                resolved.applications === current.applications
+              )
+                return;
+              this.connections = resolved;
+              if (this.opts.isUiActive()) this.opts.onDetail(resolved);
+            })
+            .catch(() => {
+              /* Native metadata failure must not discard live connections. */
+            });
+        }
         break;
     }
   }
@@ -258,7 +285,7 @@ export class StatsWorkerHost implements StatsHost {
    *  由渲染端重订自然拿初始帧（见 registry），无需在此另补。relay 均经 registry 落到对应 topic 订阅者（无订阅者即 no-op）。 */
   resume(): void {
     if (!this.opts.isUiActive()) return;
-    this.opts.onStats({ ...this.snapshot });
+    this.opts.onStats(this.getSnapshot());
     this.opts.onAggregate(this.aggregate);
     this.opts.onDetail(this.connections);
   }
@@ -271,7 +298,7 @@ export class StatsWorkerHost implements StatsHost {
     // batch3：detail 订阅的初始帧来源（registry.getInitialFrame('detail')）。at 用 worker 真实采样时刻
     // （this.connections.at），非读取时刻：连接页速率差分以采样间隔为分母，避免同一缓存被读两次 → Δbytes=0 报
     // 速率 0、下次翻倍的抖动。detail 需求已改由订阅驱动（hasSubscribers），不再记 lastPullAt。
-    return { connections: this.connections.connections, at: this.connections.at };
+    return { ...this.connections };
   }
 
   /** aggregate 订阅的初始帧来源（registry.getInitialFrame('aggregate')）：缓存的最近聚合（增量走同一通道 push）。 */

@@ -7,7 +7,7 @@
  *
  * 本函数只负责「原文本 → 该不该禁用硬件加速」的解析判定（IO 分离，便于单测）；文件读取由调用方（index.ts）完成。
  *
- * 字段语义为**正向**（对齐本仓 autoCheckUpdate 惯例）：hardwareAcceleration 默认开（true），消费一律 `!== false`。
+ * 字段语义为**正向**：hardwareAcceleration 默认开（true），消费一律 `!== false`。
  * 故此处仅当严格 === false 才判「禁用」；字段缺失/undefined = 默认开 = 不禁（也防 "false"/0 等脏值误禁用户硬件加速）。
  *
  * 容错第一（早期崩 = 整个启动失败）：文件缺失/损坏/空文件/字段缺失/类型非法一律返回 false（=不禁），**绝不抛**。

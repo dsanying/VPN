@@ -11,12 +11,18 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const target = path.join(__dirname, '..', 'src', 'shared', 'build-info.ts');
 const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD（UTC，构建服务器时区无关）
+const root = path.join(__dirname, '..');
+const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const dirty = !!execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
 
 const content = `// 自动生成，勿手改（scripts/gen-build-info.js）。不入库（.gitignore）。
 export const BUILD_DATE = '${today}';
+export const BUILD_COMMIT = '${commit}';
+export const BUILD_DIRTY = ${dirty};
 `;
 
 fs.writeFileSync(target, content, 'utf-8');

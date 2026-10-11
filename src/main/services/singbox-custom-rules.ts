@@ -2,13 +2,11 @@
  * 自定义路由规则生成 —— 从 ProxyManager.generateCustomRules + applyRuleAction 抽出
  * （SingBoxConfigBuilder 抽取 Phase 2 step 6）。
  *
- * 纯函数：只读 customRules/资源 + 注入实例态依赖（log 回调 / onDegraded 副作用回调）。
- * 用户自定义分流规则 → sing-box route 规则 + rule_set 定义（含 L3 外化 headless、geosite/geoip、
- * res:<id> 本地资源、logical AND/OR、fail-closed 缺失跳过）。config 字节等价由 config-snapshot 网验证。
+ * 用户规则生成 route 与本地 headless 文件。资源管理与远程资源引用已移除。
  */
 
 import * as path from 'path';
-import type { Rule, CustomRuleSet, RuleResource, RuleCondition } from '../../shared/types';
+import type { Rule, RuleCondition } from '../../shared/types';
 import { ruleConditions } from '../../shared/rules';
 import { validateTlsSpoof } from '../../shared/tls-spoof';
 import { isIpLiteral } from '../../shared/dns';
@@ -23,12 +21,7 @@ import {
   customRuleFileBase,
   condMatcherFields,
 } from './custom-rule-files';
-import { getCustomRulesDir, getRuleResourcesPath } from '../utils/paths';
-import {
-  getRuleSetRuntimeDir as getRuntimeRulesDir,
-  isValidSrsFile,
-  resolveBuiltinRuleSetRefMeta,
-} from './builtin-geo-rulesets';
+import { getCustomRulesDir } from '../utils/paths';
 import type { SingBoxRouteRule, SingBoxRuleSet } from './singbox-config-types';
 
 /** 注入依赖：log = ProxyManager.logToManager（source 默认 'ProxyManager'）；onDegraded = 标记外化文件未落盘降级。 */
@@ -39,11 +32,9 @@ export interface CustomRulesDeps {
 
 export function buildCustomRules(
   customRules: Rule[],
-  customRuleSets: CustomRuleSet[] = [],
   selectedServerId: string | undefined,
   idToTagMap: Map<string, string> | undefined,
   selectedServerTag: string = 'proxy',
-  ruleResources: RuleResource[] = [],
   registerDnsBypass: boolean = false, // FakeIP 启用时：为外化 bypassFakeIP 规则注册 <base>-dns rule_set 条目
   deps: CustomRulesDeps
 ): { rules: SingBoxRouteRule[]; ruleSets: SingBoxRuleSet[] } {
@@ -87,84 +78,6 @@ export function buildCustomRules(
         target.source_hostname = pushU(target.source_hostname, hosts);
         return true;
       }
-      case 'geosite':
-        // 裸标签 → geosite-<tag>（lowercase 对齐 getRequiredGeoCategories 与远程 .srs 文件名）
-        target.rule_set = pushU(
-          target.rule_set as string[] | undefined,
-          vals.map((t) => `geosite-${t.toLowerCase()}`)
-        );
-        return true;
-      case 'geoip':
-        target.rule_set = pushU(
-          target.rule_set as string[] | undefined,
-          vals.map((t) => `geoip-${t.toLowerCase()}`)
-        );
-        return true;
-      case 'ruleSet': {
-        // 远程 URL → custom-ruleset-N（format 按扩展名）；本地 res:<id> → 本地 rule_set。tag 去重（重复 tag 会 FATAL）。
-        const seen = new Set(
-          Array.isArray(target.rule_set)
-            ? target.rule_set
-            : target.rule_set != null
-              ? [target.rule_set]
-              : []
-        );
-        for (const v of vals) {
-          let tag: string;
-          if (v.startsWith('res:')) {
-            const resId = v.slice(4);
-            // 内置随包资源（res:builtin:<tag>）：复用 b.tag（geosite-netflix 等），runtime 路径取自单一真值表。
-            // proxy 模式下 getLocalGeoRuleSets 已注入同 tag 本地 rule_set；此处自注入 + route 装配末尾按 tag 去重
-            // （keep-first，两者同路径同 format，行为一致），故 direct 模式或本地缺失也能自洽。文件缺失/损坏 → 跳过（不 FATAL）。
-            const builtinMeta = resolveBuiltinRuleSetRefMeta(resId);
-            if (builtinMeta) {
-              const filePath = path.join(getRuntimeRulesDir(), builtinMeta.fileName);
-              if (!isValidSrsFile(filePath)) {
-                deps.log(
-                  'warn',
-                  `ruleSet 规则引用的内置资源文件缺失/损坏，已跳过: ${builtinMeta.fileName}`
-                );
-                continue;
-              }
-              tag = builtinMeta.tag;
-              if (!ruleSets.some((rs) => rs.tag === tag)) {
-                ruleSets.push({ tag, type: 'local', format: 'binary', path: filePath });
-              }
-            } else {
-              const res = ruleResources.find((rr) => rr.id === resId);
-              if (!res) {
-                deps.log('warn', `ruleSet 规则引用的资源不存在，已跳过: ${v}`);
-                continue;
-              }
-              const filePath = path.join(getRuleResourcesPath(), res.fileName);
-              // 与 builtin 分支对齐：用 isValidSrsFile（验 SRS 魔数）而非裸 existsSync——
-              // 损坏/半写文件存在但非法时注入 local rule_set 会让 sing-box 加载 FATAL，须 fail-closed 跳过。
-              if (!isValidSrsFile(filePath)) {
-                deps.log('warn', `ruleSet 规则引用的资源文件缺失/损坏，已跳过: ${res.fileName}`);
-                continue;
-              }
-              tag = `local-rs-${res.id}`;
-              if (!ruleSets.some((rs) => rs.tag === tag)) {
-                ruleSets.push({ tag, type: 'local', format: res.format, path: filePath });
-              }
-            }
-          } else {
-            // fail-closed：远程 URL rule_set 能力已移除——所有 srs 统一由「规则资源」页管理（res:<id> 引用本地副本）。
-            // 旧配置 / 旁路写入的裸 URL 值 → 跳过（不再生成运行期远程下载），日志告知改用规则资源。
-            deps.log(
-              'warn',
-              `ruleSet 规则的远程 URL 已不再支持，请改用「规则资源」下载后引用，已跳过: ${v}`
-            );
-            continue;
-          }
-          seen.add(tag);
-        }
-        if (seen.size > 0) {
-          target.rule_set = Array.from(seen);
-          return true;
-        }
-        return false;
-      }
     }
     return false;
   };
@@ -172,7 +85,11 @@ export function buildCustomRules(
   // 每条 Rule → 单 default rule（目的地 OR 组合并：单条件 或 combineMode!=='and' 且全为 OR 组类型）
   // 或 logical rule（跨维度/含 rule_set 的 OR、或 AND）。绝不把「应 OR」的条件塞进单 default rule 当 AND。
   for (const rule of customRules) {
-    if (!rule.enabled) continue;
+    if (
+      !rule.enabled ||
+      ruleConditions(rule).some((c) => ['geosite', 'geoip', 'ruleSet'].includes(c.type))
+    )
+      continue;
 
     // ── L3 外化分流：全条件可 headless 表达 → 写独立 rule_set 文件，route 仅引用 tag（改值热重载零重启）。
     const plan = planCustomRule(rule);
@@ -271,13 +188,6 @@ export function buildCustomRules(
       { spoof: rule.tlsSpoof, method: rule.tlsSpoofMethod }
     );
     rules.push(finalRule);
-  }
-
-  // fail-closed：legacy customRuleSets（迁移后通常为空，ConfigManager 已转成 customRules）原走运行期远程下载，
-  // 远程能力已移除 → 仅日志告知，不再生成 remote rule_set / 路由规则。
-  for (const ruleSet of customRuleSets) {
-    if (!ruleSet.enabled || !ruleSet.url) continue;
-    deps.log('warn', `legacy 远程规则集已不再支持（请用「规则资源」），已跳过: ${ruleSet.url}`);
   }
 
   return { rules, ruleSets };

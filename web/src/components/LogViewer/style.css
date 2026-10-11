@@ -1,0 +1,22 @@
+.ds-log-viewer {
+  height: var(--ds-layout-log-viewer-height);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+}
+.ds-log-viewer .log-line { padding-inline: var(--ds-space-8); }
+.ds-log-viewer .log-line:hover { background: var(--ds-color-surface-subtle); }
+.ds-log-viewer .log-highlight { background: var(--ds-color-info-surface); }
+.ds-log-viewer__level--debug { color: var(--ds-color-text-secondary); }
+.ds-log-viewer__level--info { color: var(--ds-color-info); }
+.ds-log-viewer__level--warn { color: var(--ds-color-warning); }
+.ds-log-viewer__level--error, .ds-log-viewer__level--fatal { color: var(--ds-color-error); }
+.ds-log-viewer__level--fatal { text-decoration: underline; }
+.ds-log-viewer mark { color: var(--ds-color-warning); background: var(--ds-color-warning-surface); }
+
+.ds-log-viewer .react-lazylog { background: var(--ds-color-surface); color: var(--ds-color-text); font-family: var(--ds-font-family-code); font-size: var(--ds-font-size-xs); font-style: normal; }
+.ds-log-viewer .log-line { font-size: var(--ds-font-size-xs); }
+
+.ds-log-viewer__stream { height: 100%; min-width: 0; }

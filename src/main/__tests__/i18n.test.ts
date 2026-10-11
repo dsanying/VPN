@@ -93,3 +93,10 @@ describe('headless 提示跟随系统 locale（H1 回归）', () => {
     expect(headlessFor('de-DE')).toContain('GUI application');
   });
 });
+
+it('产品名随中文和英文切换', () => {
+  setMainLanguage('zh-CN');
+  expect(mt('productName')).toBe('暗影VPN');
+  setMainLanguage('en-US');
+  expect(mt('productName')).toBe('DSVPN');
+});

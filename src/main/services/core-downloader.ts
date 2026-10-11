@@ -1,3 +1,6 @@
+import { fetchPublisherReleases } from './github-release-source';
+import { readPublisherResponse } from './github-release-network';
+import { desktopReleaseCatalogState } from './release-catalog-state';
 /**
  * sing-box 内核更新的「网络获取」职责（从 CoreUpdateService 抽出）：
  * 拉 release 列表 / 挑选平台资产 / 下载（含停滞看门狗 + 完整性校验 + 镜像回退）/ 解压定位可执行文件。
@@ -15,10 +18,9 @@ import * as path from 'path';
 import type { LogManager } from './LogManager';
 import type { UserConfig } from '../../shared/types';
 import { APP_USER_AGENT } from '../../shared/constants';
-import { ghMirrorUrl, normalizeGhProxyPrefix } from '../../shared/gh-proxy';
+import { githubDownloadCandidates, normalizeGhProxyPrefix } from '../../shared/gh-proxy';
 import { createIdleTimeout, parseExpectedBytes } from './download-hardening';
 import { powershellPath } from '../utils/win-system32';
-import { MAX_GITHUB_JSON_BYTES } from '../utils/http-limits';
 import { findSuitableSingboxAsset } from './singbox-asset';
 import { UpdateNetwork } from './UpdateNetwork';
 
@@ -62,75 +64,12 @@ export class CoreDownloader {
   }
 
   async fetchReleases(): Promise<any[]> {
-    const sess = await this.updateSession();
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      const request = net.request({
-        method: 'GET',
-        url: 'https://api.github.com/repos/SagerNet/sing-box/releases',
-        session: sess,
-      });
-      // 单点收口：防 request/response 双错误源重复 settle；clear timeout；之后任何回调都 no-op。
-      const finish = (err: Error | null, val?: any[]) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (err) reject(err);
-        else resolve(val as any[]);
-      };
-      // 兜底超时：net.request 在连接被中间设备静默吞掉时可能长时间不触发 error → 前端永久转圈。15s 后主动 abort+reject。
-      const timer = setTimeout(() => {
-        try {
-          request.abort();
-        } catch {
-          /* ignore */
-        }
-        finish(new Error('检查更新超时（GitHub 不可达或被网络拦截）'));
-      }, 15000);
-
-      request.setHeader('User-Agent', APP_USER_AGENT);
-      request.setHeader('Accept', 'application/vnd.github.v3+json');
-
-      request.on('response', (res) => {
-        let data = '';
-        res.on('data', (chunk) => {
-          // 已收口（超限/超时/错误）后忽略 drain 中的残帧：abort 不同步停止 res，
-          // 已 buffer 的帧仍会触发 data，若继续累加会徒增内存峰值。
-          if (settled) return;
-          data += chunk.toString();
-          // OOM 防护：GitHub api 被劫持/WAF 接管可回灌 GB 级响应撞 V8 堆/512MB string 上限。
-          // 超 16MiB 即 abort + 单点收口 finish（releases JSON 实际 < 数 MB；与超时同路径）。
-          if (data.length > MAX_GITHUB_JSON_BYTES) {
-            try {
-              request.abort();
-            } catch {
-              /* ignore */
-            }
-            finish(new Error('GitHub 响应过大（疑似被劫持/WAF 拦截）'));
-            return;
-          }
-        });
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            try {
-              finish(null, JSON.parse(data));
-            } catch {
-              finish(new Error('解析 GitHub 响应失败'));
-            }
-          } else if (res.statusCode === 403) {
-            finish(new Error('GitHub API 访问频率限制 (403)，请稍后再试或使用代理'));
-          } else {
-            finish(new Error(`GitHub API 错误: ${res.statusCode}`));
-          }
-        });
-        // 关键：response 阶段断连（ERR_CONNECTION_CLOSED 等）从 res emit 'error'，缺此 handler 会逃逸成
-        // 主进程 uncaughtException，且 Promise 永不 settle → checkUpdate await 永挂 → 前端检查更新永久转圈。
-        res.on('error', (err: Error) => finish(err));
-      });
-
-      request.on('error', (err: Error) => finish(err));
-      request.end();
-    });
+    const session = await this.updateSession();
+    return fetchPublisherReleases(
+      'SagerNet/sing-box',
+      (url, accept, signal) => readPublisherResponse(url, accept, session, signal),
+      desktopReleaseCatalogState()
+    );
   }
 
   /** 挑选适配当前平台/架构的资产；纯逻辑在 singbox-asset，此处仅注入 process 平台/架构。 */
@@ -144,9 +83,22 @@ export class CoreDownloader {
    * @param expectedSha256 期望的 sha256（小写裸 hex，来自 GitHub API 的 asset.digest）。**调用方必须传**：
    *   下载失败会回落 gh-proxy 第三方镜像，而 Content-Length 只能挡截断、挡不住「长度一样但内容被换」。
    *   摘要取自 api.github.com 直连响应、不经镜像，故拿它校验镜像给的字节是有意义的。
-   *   传 undefined 时不校验——仅为兼容尚未接线的调用方保留，新调用方不要这么用（服务层已 fail-closed）。
+   *   未提供可信摘要时直接拒绝，不保留未经校验的旧下载模式。
    */
-  async downloadFile(url: string, isRetry = false, expectedSha256?: string): Promise<string> {
+  async downloadFile(
+    url: string,
+    isRetry = false,
+    expectedSha256?: string,
+    sources?: string[],
+    sourceIndex = 0
+  ): Promise<string> {
+    if (!expectedSha256 || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+      throw new Error('无法取得内核官方 SHA-256，已中止下载');
+    }
+    const sourceUrl = new URL(url);
+    if (sourceUrl.protocol !== 'https:' || sourceUrl.username || sourceUrl.password) {
+      throw new Error('内核下载必须使用无凭据的 HTTPS 地址');
+    }
     let ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
     try {
       const urlObj = new URL(url);
@@ -176,7 +128,6 @@ export class CoreDownloader {
       app.getPath('temp'),
       `sing-box-core-update-${Date.now()}-${randomBytes(4).toString('hex')}${ext}`
     );
-    const file = fs.createWriteStream(tempPath);
     const sess = await this.updateSession();
     // 下载失败兜底镜像前缀：优先用户配置的 ghProxyPrefix，否则用内置 preset[0]（gh-proxy.org）。
     // 旧硬编码 mirror.ghproxy.com 已停服，复用 shared/gh-proxy 单一权威（同 RuleResourceManager 重试链）。
@@ -189,9 +140,11 @@ export class CoreDownloader {
       ghPrefix = undefined;
     }
 
+    const candidates = sources ?? (isRetry ? [url] : githubDownloadCandidates(url, ghPrefix));
     return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(tempPath);
       let settled = false;
-      // 停滞看门狗：连接/下载 30s 无进展即 abort + handleError（github 链接自动换镜像重试一次），防下载挂起致
+      // 停滞看门狗：连接/下载 30s 无进展即 abort + handleError（github 链接依次尝试候选镜像），防下载挂起致
       // updateCore 永不 resolve、前端「更新」按钮永久转圈。收口 download-hardening 单一真值。
       const idle = createIdleTimeout(() => {
         try {
@@ -214,38 +167,63 @@ export class CoreDownloader {
         //  ② reject 与 unlink 并发 → 调用方（含单测）在 promise 落定那一刻去看目录，可能仍看得见临时文件。
         //     「摘要不符 → 不留下临时文件」这条不变量因此只是**大概率**成立，CI 上间歇性判红。
         // 现在把清理串成 close → unlink → 继续，使「promise 落定时临时文件已不在」成为可断言的事实。
-        // unlink 自身的失败照旧忽略（文件本就可能没建起来；此处不该因清理失败改写原始错误）。
         // 副带收益：镜像重试现在只在 unlink 完成**之后**才发起，于是「首发的异步 unlink 删掉重试刚写好的
         // 文件」那一类事故（见 core-downloader-integrity.test.ts 里同一毫秒撞名那条的回归记录）在结构上
         // 也不再可能——临时文件名的随机段仍保留，两道防线不互斥。
         const afterCleanup = (): void => {
-          // 遇到网络错误，且是第一次尝试，并且是 github 链接，尝试使用加速镜像
-          if (!isRetry && url.includes('github.com')) {
-            const mirrorUrl = ghMirrorUrl(url, ghPrefix);
+          // 候选渠道按顺序重试，同一官方摘要始终生效
+          if (sourceIndex + 1 < candidates.length) {
+            const mirrorUrl = candidates[sourceIndex + 1];
             this.logManager.addLog(
               'warn',
               `下载出错，尝试使用加速镜像: ${err.message}`,
               'CoreDownloader'
             );
-            this.downloadFile(mirrorUrl, true, expectedSha256).then(resolve).catch(reject);
+            this.downloadFile(mirrorUrl, true, expectedSha256, candidates, sourceIndex + 1)
+              .then(resolve)
+              .catch(reject);
             return;
           }
           reject(err);
         };
-        file.close(() => fs.unlink(tempPath, () => afterCleanup()));
+        file.close(() =>
+          fs.unlink(tempPath, (cleanupError) => {
+            if (cleanupError && cleanupError.code !== 'ENOENT') {
+              reject(new Error(`内核下载失败且临时文件清理失败：${cleanupError.code}`));
+              return;
+            }
+            afterCleanup();
+          })
+        );
       };
 
-      const request = net.request({ url, session: sess });
-      request.setHeader('User-Agent', APP_USER_AGENT);
+      file.on('error', handleError);
+      let request: ReturnType<typeof net.request>;
+      try {
+        request = net.request({ url, session: sess });
+        request.setHeader('User-Agent', APP_USER_AGENT);
+      } catch (error) {
+        handleError(error);
+        return;
+      }
+
+      let redirects = 0;
+      request.on('redirect', (_status, _method, location) => {
+        try {
+          const next = new URL(location, url);
+          if (next.protocol !== 'https:' || next.username || next.password || ++redirects > 5) {
+            request.abort();
+            handleError(new Error('内核下载重定向不安全'));
+          }
+        } catch {
+          request.abort();
+          handleError(new Error('内核下载重定向无效'));
+        }
+      });
 
       request.on('response', (response) => {
-        if (response.statusCode >= 400) {
-          if (settled) return;
-          settled = true;
-          idle.clear();
-          file.close();
-          fs.unlink(tempPath, () => {});
-          reject(new Error(`Download failed: ${response.statusCode}`));
+        if (response.statusCode !== 200) {
+          handleError(new Error(`Download failed: ${response.statusCode}`));
           return;
         }
 
@@ -254,16 +232,18 @@ export class CoreDownloader {
         let receivedBytes = 0;
 
         response.on('data', (chunk) => {
+          if (settled) return;
           idle.arm(); // 每收到数据重置停滞计时
           receivedBytes += chunk.length;
           file.write(chunk);
         });
 
         response.on('end', () => {
+          if (settled) return;
           idle.clear();
           file.close(() => {
             if (!isNaN(expectedBytes) && receivedBytes !== expectedBytes) {
-              // 截断的 GitHub 下载会经 handleError 自动换镜像重试一次
+              // 截断的 GitHub 下载会经 handleError 依次尝试候选镜像
               handleError(
                 new Error(
                   `下载不完整：收到 ${receivedBytes} 字节，期望 ${expectedBytes}（可能被截断）`

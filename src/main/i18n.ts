@@ -20,6 +20,13 @@ import {
 
 /** key → 各受支持语言文案。satisfies 保证每键 5 语齐全；新增主进程用户可见串在此扩展。 */
 const MESSAGES = {
+  productName: {
+    'zh-CN': '暗影VPN',
+    'zh-TW': '暗影VPN',
+    'en-US': 'DSVPN',
+    ru: 'DSVPN',
+    fa: 'DSVPN',
+  },
   // —— CLI / 非 GUI 早退（cli-early-exit，main 进程顶层；headless 提示走系统 locale，禁硬编码） ——
   headlessNoDisplay: {
     'zh-CN':
@@ -244,14 +251,14 @@ const MESSAGES = {
   trayMesh: {
     'zh-CN': '组网',
     'zh-TW': '組網',
-    'en-US': 'Mesh',
+    'en-US': 'mesh networking',
     ru: 'Меш-сеть',
     fa: 'شبکه مش',
   },
   trayCustomNodes: {
     'zh-CN': '自建节点',
     'zh-TW': '自建節點',
-    'en-US': 'Custom Nodes',
+    'en-US': 'manual nodes',
     ru: 'Свои узлы',
     fa: 'گره‌های سفارشی',
   },
@@ -396,25 +403,25 @@ const MESSAGES = {
     fa: 'تست سرعت',
   },
   trayTooltipDisconnected: {
-    'zh-CN': 'FlowZ - 未连接',
-    'zh-TW': 'FlowZ - 未連線',
-    'en-US': 'FlowZ - Disconnected',
-    ru: 'FlowZ — Отключено',
-    fa: 'FlowZ — قطع شد',
+    'zh-CN': '暗影VPN - 未连接',
+    'zh-TW': '暗影VPN - 未連線',
+    'en-US': 'DSVPN - Disconnected',
+    ru: 'DSVPN — Отключено',
+    fa: 'DSVPN — قطع شد',
   },
   trayTooltipConnecting: {
-    'zh-CN': 'FlowZ - 连接中...',
-    'zh-TW': 'FlowZ - 連線中...',
-    'en-US': 'FlowZ - Connecting...',
-    ru: 'FlowZ — Подключение...',
-    fa: 'FlowZ — در حال اتصال...',
+    'zh-CN': '暗影VPN - 连接中...',
+    'zh-TW': '暗影VPN - 連線中...',
+    'en-US': 'DSVPN - Connecting...',
+    ru: 'DSVPN — Подключение...',
+    fa: 'DSVPN — در حال اتصال...',
   },
   trayTooltipConnected: {
-    'zh-CN': 'FlowZ - 已连接',
-    'zh-TW': 'FlowZ - 已連線',
-    'en-US': 'FlowZ - Connected',
-    ru: 'FlowZ — Подключено',
-    fa: 'FlowZ — متصل',
+    'zh-CN': '暗影VPN - 已连接',
+    'zh-TW': '暗影VPN - 已連線',
+    'en-US': 'DSVPN - Connected',
+    ru: 'DSVPN — Подключено',
+    fa: 'DSVPN — متصل',
   },
   trayNoUpdateBody: {
     'zh-CN': '当前已是最新版本',
@@ -658,6 +665,34 @@ const MESSAGES = {
     'en-US': 'Current',
     ru: 'Текущая',
     fa: 'فعلی',
+  },
+  updReadyTitle: {
+    'zh-CN': '更新已下载，可重启安装',
+    'zh-TW': '更新已下載，可重新啟動安裝',
+    ru: 'Обновление загружено, можно перезапустить',
+    fa: 'به‌روزرسانی دانلود شد؛ آماده راه‌اندازی مجدد',
+    'en-US': 'Update downloaded, ready to restart',
+  },
+  updRestart: {
+    'zh-CN': '重启更新',
+    'zh-TW': '重新啟動更新',
+    ru: 'Перезапустить и обновить',
+    fa: 'راه‌اندازی مجدد و به‌روزرسانی',
+    'en-US': 'Restart and update',
+  },
+  updInstallFailed: {
+    'zh-CN': '更新未安装，安装包已保留，请重试',
+    'zh-TW': '更新未安裝，安裝包已保留，請重試',
+    ru: 'Обновление не установлено. Пакет сохранён; повторите попытку.',
+    fa: 'به‌روزرسانی نصب نشد. بسته حفظ شده؛ دوباره تلاش کنید.',
+    'en-US': 'Update not installed. The package is retained; please retry.',
+  },
+  updDevelopment: {
+    'zh-CN': '开发版本不安装软件更新',
+    'zh-TW': '開發版本不安裝軟體更新',
+    ru: 'В сборках для разработки обновления отключены',
+    fa: 'به‌روزرسانی برنامه در نسخه توسعه غیرفعال است',
+    'en-US': 'Application updates are disabled in development builds',
   },
   updInstalling: {
     'zh-CN': '下载完成，正在安装…',

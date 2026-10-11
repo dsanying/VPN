@@ -1,0 +1,54 @@
+{
+  "xray": {
+    "version": "26.3.27",
+    "repository": "XTLS/Xray-core",
+    "assets": {
+      "mac-arm64": {
+        "name": "Xray-macos-arm64-v8a.zip",
+        "sha256": "2e93a67e8aa1936ecefb307e120830fcbd4c643ab9b1c46a2d0838d5f8409eaf",
+        "binarySha256": "5d9dd24c0aba4b6cfcc6a33a5d67f854816ee17f392bf932ec8176da46f7e404"
+      },
+      "mac-x64": {
+        "name": "Xray-macos-64.zip",
+        "sha256": "f5b0471d3459eff1b82e48af0aeac186abcc3298210070afbbbd8437a4e8b203",
+        "binarySha256": "afd0eaebb77994a18f29b00c5f50a4f7fbb77da06e24352d43035f3cad3c3786"
+      },
+      "linux": {
+        "name": "Xray-linux-64.zip",
+        "sha256": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae",
+        "binarySha256": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed"
+      },
+      "win": {
+        "name": "Xray-windows-64.zip",
+        "sha256": "d004c39288ce9ada487c6f398c7c545f7d749e44bdfdd59dbc9f865afba4e1ad",
+        "binarySha256": "15c2d007954ac53ba69b80ec91242786b3c0b71d52649165b4ca1d5cc96ef8f1"
+      }
+    }
+  },
+  "mihomo": {
+    "version": "1.19.32",
+    "repository": "MetaCubeX/mihomo",
+    "assets": {
+      "mac-arm64": {
+        "name": "mihomo-darwin-arm64-v1.19.32.gz",
+        "sha256": "3312a6780652c622890fd4357c6a853bbf865464fd047ac7b7f52dab8de18652",
+        "binarySha256": "94a386ec0149080deadd86b1f667363bde3c70f7489dba3258e52c56fc9a6d66"
+      },
+      "mac-x64": {
+        "name": "mihomo-darwin-amd64-v1-v1.19.32.gz",
+        "sha256": "f6eef841308b682e48f9c3e4740af42f5644a53d2f18c4d4bf1ee6f8a7af7c8b",
+        "binarySha256": "3bf624771462febe81e517d5ce1b53372350ce2510c530f8d0a512e3322e969b"
+      },
+      "linux": {
+        "name": "mihomo-linux-amd64-compatible-v1.19.32.gz",
+        "sha256": "ba3ce607747a07f948fc35780e108a4a7c7f552a38b9bd4d115f313ebcb89c20",
+        "binarySha256": "7a0d59da2e678d56c899a3db996a2ad8963286c4f3634b0451435db248f13fa1"
+      },
+      "win": {
+        "name": "mihomo-windows-amd64-compatible-v1.19.32.zip",
+        "sha256": "974a4d7ad69aed27aa2e8f91d61113573c14dadb14562c63e58effabf59816f0",
+        "binarySha256": "04f8d7fc2b314771e1ecbf15951d59f0e1cb7914503c88cfb6972ff6a824e314"
+      }
+    }
+  }
+}

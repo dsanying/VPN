@@ -401,7 +401,7 @@ describe('parseClashProxies — 协议映射', () => {
     expect(byName(servers, 'ssh').sshSettings?.clientVersion).toBe('SSH-2.0-OpenSSH_9.0');
   });
 
-  it('不支持类型聚合告警（ssr/wireguard），不整批失败', () => {
+  it('malformed SSR and unsupported wireguard do not erase valid nodes', () => {
     const r = parseClashProxies(
       [
         { name: 'a', type: 'vless', server: '1.1.1.1', port: 443, uuid: 'u' },
@@ -412,9 +412,10 @@ describe('parseClashProxies — 协议映射', () => {
       NOW
     );
     expect(r.servers).toHaveLength(1);
-    expect(r.skipped).toBe(2);
-    expect(r.warnings[0]).toMatch(/ssr\(1\)/);
-    expect(r.warnings[0]).toMatch(/wireguard\(1\)/);
+    expect(r.skipped).toBe(1);
+    expect(r.failed).toBe(1);
+    expect(r.warnings.join('\n')).toMatch(/SSR/);
+    expect(r.warnings.join('\n')).toMatch(/wireguard\(1\)/);
   });
 
   it('缺 server/port 的坏节点 → failed + 告警，不抛', () => {
@@ -1295,15 +1296,16 @@ describe('LOW-4 override skip-cert-verify:false 也覆盖（赋值语义）', ()
 describe('传输层白名单 + reality 完整性（issue #263 统一口径）', () => {
   const NOW = '2026-07-07T00:00:00.000Z';
 
-  it('vless network=xhttp → fail 计数 + 聚合告警，不入库', () => {
+  it('XHTTP imports without pretending to be TCP', () => {
     const r = parseClashProxies(
       [{ name: 'x', type: 'vless', server: 'a.com', port: 443, uuid: 'u', network: 'xhttp' }],
       'sub',
       NOW
     );
-    expect(r.servers).toHaveLength(0);
-    expect(r.failed).toBe(1);
-    expect(r.warnings.join('\n')).toMatch(/不支持的传输层类型: xhttp/);
+    expect(r.servers).toHaveLength(1);
+    expect(r.servers[0].network).toBe('xhttp');
+    expect(r.failed).toBe(0);
+    expect(r.warnings).toEqual([]);
   });
 
   it('network 缺省/tcp 正常入库（不受白名单影响）', () => {
@@ -1522,4 +1524,52 @@ proxies:
       wsSettings: { path: '/tunnel', headers: { Host: 'edge.example.com' } },
     });
   });
+});
+
+it.each(['vmess', 'vless'])(
+  'Clash %s HTTP camouflage preserves its native adapter and complete options',
+  (type) => {
+    const raw = {
+      name: 'Example',
+      type,
+      server: 'example.com',
+      port: 443,
+      uuid: '00000000-0000-4000-8000-000000000001',
+      network: 'http',
+      'http-opts': {
+        method: 'GET',
+        path: ['/first', '/second'],
+        headers: { Host: ['example.com', 'cdn.example.com'], 'X-Test': ['one', 'two'] },
+      },
+    };
+    const result = parseClashProxies([raw], SUB_ID, NOW);
+    expect(result.failed).toBe(0);
+    expect(result.servers[0].protocol).toBe(type);
+    expect(result.servers[0].compatibilitySettings).toEqual({ engine: 'mihomo', outbound: raw });
+    raw['http-opts'].path.push('/changed');
+    expect(result.servers[0].compatibilitySettings?.outbound).toMatchObject({
+      'http-opts': { path: ['/first', '/second'] },
+    });
+  }
+);
+it('Clash h2 remains a distinct stream transport without a camouflage adapter', () => {
+  const result = parseClashProxies(
+    [
+      {
+        name: 'Example',
+        type: 'vmess',
+        server: 'example.com',
+        port: 443,
+        uuid: '00000000-0000-4000-8000-000000000001',
+        network: 'h2',
+        tls: true,
+        'h2-opts': { path: '/stream', host: ['example.com'] },
+      },
+    ],
+    SUB_ID,
+    NOW
+  );
+  expect(result.servers[0].network).toBe('http');
+  expect(result.servers[0].compatibilitySettings).toBeUndefined();
+  expect(result.servers[0].httpSettings?.path).toBe('/stream');
 });

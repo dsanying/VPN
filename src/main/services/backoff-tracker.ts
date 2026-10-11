@@ -1,5 +1,5 @@
 /**
- * 指数退避状态机（按 id 维度）。收口 RuleResourceScheduler / SubscriptionScheduler 中逐字相同的
+ * 指数退避状态机（按 id 维度）。收口按对象执行的后台检测任务中的
  * `Map<id, { failures, nextEligibleAt }>` + `BASE * 2^(n-1)` capped MAX 退避逻辑。
  *
  * 纯逻辑、可单测；`now` 由调用方传入（不内部取时钟，便于测试与确定性）。

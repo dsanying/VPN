@@ -183,10 +183,11 @@ describe('set() 未加载守卫（不以默认配置覆盖磁盘真实配置）'
     fs.writeFileSync(p, JSON.stringify(onDiskBefore, null, 2));
 
     const cm = new ConfigManager(p); // 全新实例，currentConfig===null（从未 loadConfig）
-    await cm.set('logLevel', 'debug');
+    await cm.set('uiTheme', 'dark');
 
     const after = JSON.parse(fs.readFileSync(p, 'utf-8'));
-    expect(after.logLevel).toBe('debug'); // 单键已改
+    expect(after.uiTheme).toBe('dark');
+    expect(after).not.toHaveProperty('logLevel'); // 单键已改
     expect(after.servers).toHaveLength(1); // 真实节点未被默认配置覆盖清空
     expect(after.servers[0].id).toBe('keep-me');
     expect(after.selectedServerId).toBe('keep-me');

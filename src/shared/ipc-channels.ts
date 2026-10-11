@@ -34,6 +34,7 @@ export const IPC_CHANNELS = {
   SERVER_DELETE: 'server:delete',
   SERVER_DELETE_BATCH: 'server:deleteBatch',
   SERVER_GET_ALL: 'server:getAll',
+  SERVER_MEASUREMENTS: 'server:measurements',
   SERVER_SPEED_TEST: 'server:speedTest',
   WARP_REGISTER: 'warp:register', // Cloudflare WARP 设备注册 → 生成 WireGuard 草稿
   WARP_APPLY_LICENSE: 'warp:applyLicense', // 对已注册 WARP 节点原地应用 WARP+ license（升级免重建）
@@ -48,6 +49,9 @@ export const IPC_CHANNELS = {
   SUBSCRIPTION_UPDATE: 'subscription:update',
   SUBSCRIPTION_DELETE: 'subscription:delete',
   SUBSCRIPTION_UPDATE_SERVERS: 'subscription:updateServers',
+  SUBSCRIPTION_MEASUREMENTS: 'subscription:measurements',
+  EVENT_SUBSCRIPTION_MEASUREMENTS: 'event:subscriptionMeasurements',
+  SUBSCRIPTION_CONNECTIVITY: 'subscription:connectivity',
   SUBSCRIPTION_PREVIEW: 'subscription:preview', // 新增订阅前预检：拉取+解析 URL 但不写 config，返回节点数或分类错误
 
   // 路由规则管理
@@ -58,17 +62,6 @@ export const IPC_CHANNELS = {
   RULES_REORDER: 'rules:reorder',
 
   // 规则资源管理（.srs 下载/管理）
-  RULE_RESOURCES_LIST: 'ruleResources:list',
-  RULE_RESOURCES_DOWNLOAD: 'ruleResources:download',
-  RULE_RESOURCES_REDOWNLOAD: 'ruleResources:redownload',
-  RULE_RESOURCES_DELETE: 'ruleResources:delete',
-  RULE_RESOURCES_SET_GH_PROXY: 'ruleResources:setGhProxy',
-  RULE_RESOURCES_GET_CATALOG: 'ruleResources:getCatalog',
-  RULE_RESOURCES_REFRESH_CATALOG: 'ruleResources:refreshCatalog',
-  RULE_RESOURCES_SET_AUTO_UPDATE: 'ruleResources:setAutoUpdate',
-  RULE_RESOURCES_UPDATE_ALL: 'ruleResources:updateAll',
-  RULE_RESOURCES_RESET_BUILTIN: 'ruleResources:resetBuiltin',
-  RULE_RESOURCES_ICON_GALLERIES: 'ruleResources:iconGalleries', // 图标库拉取（经 update-in，Phase 1b）
 
   // 日志管理
   LOGS_GET: 'logs:get',
@@ -101,6 +94,7 @@ export const IPC_CHANNELS = {
 
   // 系统进程枚举（路由规则的进程快速选择器）
   SYSTEM_LIST_PROCESSES: 'system:listProcesses',
+  SYSTEM_LIST_APPLICATIONS: 'system:listApplications',
 
   // 版本信息
   VERSION_GET_INFO: 'version:getInfo',
@@ -128,6 +122,7 @@ export const IPC_CHANNELS = {
   APP_UNINSTALL_ALL: 'app:uninstall-all', // B6：完全卸载 FlowZ（提权 helper / 受保护目录内核 / 用户配置 / 应用本体）
 
   // Shell 操作
+  SYSTEM_VPN_SETTINGS: 'system:vpnSettings',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
   // 打开 sing-box 官方面板（dashboard #55）：main 开**应用内 BrowserWindow** 加载运行期 /dashboard/，并经面板专用 preload
   // 在 document-start 预写 localStorage `sing-box-dashboard.server`（一键直连，免手填后端）。渲染端构造不出动态端口故经此 IPC。
@@ -170,14 +165,13 @@ export const IPC_CHANNELS = {
   EVENT_CORE_VERSION_CHANGED: 'event:coreVersionChanged',
   EVENT_CORE_AUTO_UPDATE_STATUS: 'event:coreAutoUpdateStatus', // 内核自动更新状态变更（staged 待生效 / 跨带提示）
   EVENT_CORE_BASELINE_WARNING: 'event:coreBaselineWarning', // 非官方核 ≤ 随包基线：启动 reconcile 发兼容风险提醒
-  EVENT_HELPER_UPGRADEABLE: 'event:helperUpgradeable', // 提权 helper proto < 期望（如属主根治 v6）：启动后发，渲染端 toast 引导升级
   EVENT_AUTO_NODE_SWITCHED: 'event:autoNodeSwitched', // 自动换节点成功通知
   EVENT_PROXY_INVALID_NODES: 'proxy:invalid-nodes', // 启动 gate 剔除的非法节点（空数组=清陈旧标灰）
   EVENT_IP_INFO_UPDATED: 'event:ipInfoUpdated',
   EVENT_UNLOCK_PROGRESS: 'event:unlockProgress', // 解锁检测：单个服务 settle 逐个点亮
   EVENT_UNLOCK_INVALIDATED: 'event:unlockInvalidated', // 解锁检测：切节点/起停代理 → 缓存失效，渲染端复位重跑
   EVENT_UNLOCK_UPDATED: 'event:unlockUpdated', // 解锁检测：一轮完成的完整终态快照（issue 2：渲染端 store 跨组件卸载持有 checkedAt/egress）
-  EVENT_RULE_RESOURCE_PROGRESS: 'event:ruleResourceProgress',
+  EVENT_SPEED_TEST_DETAILS: 'event:speedTestDetails',
   EVENT_SPEED_TEST_RESULT: 'event:speedTestResult', // 测速单个节点完成（流式增量显示，payload={serverId,latency}）
   EVENT_SPEED_TEST_RESULT_LIST: 'speedTestResult', // 测速全部完成的结果列表（托盘→渲染端汇总 toast，payload=数组）——与逐节点 EVENT_SPEED_TEST_RESULT 为不同通道，勿合并
   EVENT_SPEED_TEST_PROGRESS: 'event:speedTestProgress', // 测速进度（已测/成功/总数）

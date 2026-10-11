@@ -155,3 +155,25 @@ describe('TrayManager 菜单状态映射 (#75)', () => {
     });
   });
 });
+
+it('托盘节点名称复用测量地区，刷新和失效不改写原始名称', () => {
+  const tm = makeTray();
+  const servers = [
+    { id: 'region-node', name: '日本名称', protocol: 'vmess' },
+  ] as TrayMenuData['servers'];
+  const labels = (): string[] => {
+    const collect = (items: any[]): string[] =>
+      items.flatMap((item) => [
+        String(item.label ?? ''),
+        ...collect(Array.isArray(item.submenu) ? item.submenu : []),
+      ]);
+    return collect(lastTemplate);
+  };
+  tm.updateFullTrayMenu({ ...baseData(true), servers, nodeRegions: { 'region-node': 'SG' } });
+  expect(labels().some((label) => label.startsWith('自建节点 / 🇸🇬 日本名称'))).toBe(true);
+  tm.updateSpeedTestResults(new Map(), servers, { nodeRegions: { 'region-node': 'JP' } });
+  expect(labels().some((label) => label.startsWith('自建节点 / 🇯🇵 日本名称'))).toBe(true);
+  tm.updateFullTrayMenu({ ...baseData(true), servers, nodeRegions: {} });
+  expect(labels().some((label) => label.startsWith('自建节点 / 🌐 日本名称'))).toBe(true);
+  expect(servers[0].name).toBe('日本名称');
+});

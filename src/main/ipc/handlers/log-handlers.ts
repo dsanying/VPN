@@ -20,6 +20,8 @@ export function registerLogHandlers(
   proxyManager?: ProxyManager,
   isUiActive?: () => boolean
 ): void {
+  let pending: LogEntry[] = [];
+  let droppedWhileInactive = 0;
   registerIpcHandler<{ limit?: number }, LogEntry[]>(
     IPC_CHANNELS.LOGS_GET,
     async (_event: IpcMainInvokeEvent, args?: { limit?: number }) => {
@@ -28,7 +30,8 @@ export function registerLogHandlers(
   );
 
   registerIpcHandler<void, void>(IPC_CHANNELS.LOGS_CLEAR, async (_event: IpcMainInvokeEvent) => {
-    logManager.clearLogs();
+    pending = [];
+    await logManager.clearLogs();
 
     if (proxyManager) {
       await proxyManager.clearSingBoxLogFile();
@@ -38,8 +41,6 @@ export function registerLogHandlers(
   // 日志广播批处理（T1，issue #225）：原「每条 'log' 即一次 IPC broadcast」在 sing-box 启动期日志洪流下
   // → N 行 = N 次 IPC 序列化+send，撞 Windows 拖动 move modal loop（跑主线程）致拖动冻顿。改为 ~150ms 窗口
   // coalesce 成单次 EVENT_LOG_RECEIVED_BATCH（渲染端单次 setState），并按 isUiActive(可见 && !拖动) 门控。
-  let pending: LogEntry[] = [];
-  let droppedWhileInactive = 0;
   const flushTimer = setInterval(() => {
     if (pending.length === 0) return;
     if (isUiActive && !isUiActive()) return; // 不活跃（拖动/隐藏）→ 保留 pending 等下次活跃 tick
@@ -48,7 +49,7 @@ export function registerLogHandlers(
     if (droppedWhileInactive > 0) {
       // 诚实记录暂存溢出丢弃（不进 logManager 避免再入 pending；落盘日志不受影响）。
       console.warn(
-        `[log-batch] UI 暂存溢出丢弃 ${droppedWhileInactive} 条日志（仅 UI live tail 截断，已落盘）`
+        `[log-batch] UI 暂存溢出丢弃 ${droppedWhileInactive} 条日志（仅 UI live tail 截断，磁盘写入状态见诊断计数）`
       );
       droppedWhileInactive = 0;
     }
@@ -62,6 +63,7 @@ export function registerLogHandlers(
     if (pending.length > MAX_PENDING_LOG_BATCH) {
       pending.shift(); // 丢最旧，保最新（live tail 语义）
       droppedWhileInactive++;
+      logManager.recordUiDrop(1);
     }
   });
 }

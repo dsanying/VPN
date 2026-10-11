@@ -10,15 +10,10 @@ export interface UpdateInfo {
 }
 
 export type UpdateStatus =
-  | 'idle'
-  | 'checking'
-  | 'no-update'
-  | 'update-available'
-  | 'downloading'
-  | 'downloaded'
-  | 'error';
+  'idle' | 'checking' | 'no-update' | 'update-available' | 'downloading' | 'downloaded' | 'error';
 
 export interface UpdateProgress {
+  globalUpdates?: import('../global-update').GlobalUpdateSnapshot;
   status: UpdateStatus;
   percentage: number;
   message: string;
@@ -26,6 +21,7 @@ export interface UpdateProgress {
 }
 
 export interface UpdateCheckResult {
+  globalUpdates?: import('../global-update').GlobalUpdateSnapshot;
   hasUpdate: boolean;
   updateInfo?: UpdateInfo;
   error?: string;
@@ -44,14 +40,7 @@ export type UpdatePopupPhase = 'remind' | 'progress' | 'done' | 'error';
  * cancel 中断在途下载（abort + 删临时件 + 关窗，不安装）。
  */
 export type UpdatePopupAction =
-  | 'update'
-  | 'later'
-  | 'skip'
-  | 'viewLog'
-  | 'cancel'
-  | 'retry'
-  | 'manualDownload'
-  | 'close';
+  'update' | 'later' | 'skip' | 'viewLog' | 'cancel' | 'retry' | 'manualDownload' | 'close';
 
 /**
  * 弹窗静态文案（主进程按当前语言经 mt() 渲染进载荷；弹窗页无 i18n runtime）。
@@ -88,6 +77,8 @@ export interface UpdatePopupState {
   version: string;
   /** remind：当前运行版本（如 v1.2.0）。 */
   currentVersion?: string;
+  /** 已校验安装包，主动作执行重启安装。 */
+  readyToInstall?: boolean;
   /** progress/done：百分比 0-100。 */
   percentage?: number;
   /** progress：字节计数文本（如 "28.6 MB / 45.3 MB"）。 */

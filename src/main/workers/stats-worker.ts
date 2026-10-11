@@ -17,8 +17,13 @@
  *   其 connections 帧恒物化喂本 worker 回调。
  */
 import { StatsService } from '../services/StatsService';
+import { DeviceConnectionsService } from '../services/DeviceConnectionsService';
 import { SingBoxApiClient } from '../services/singbox-api-client';
+import { MihomoApiClient } from '../services/MihomoApiClient';
+import type { CoreManagementClient } from '../services/core-management';
 import { aggregateConnections, aggregateSignature } from '../services/connections-aggregate';
+import { attributeLocalProxyConnections } from '../services/connection-process-attribution';
+import type { ConnectionsSnapshot } from '../../shared/types';
 import type { HostToWorkerMessage, WorkerToHostMessage } from '../services/StatsWorkerHost';
 
 // utilityProcess 子进程的父端口（Electron 在子进程 process 上注入）。
@@ -28,7 +33,15 @@ const parentPort = process.parentPort;
 // 签名变化且距上次 post ≥1s 才推——高 churn 最坏 1 Hz；拓扑是计数图、落后 ≤1s 可接受，故无需额外 timer（帧本身即驱动）。
 const AGG_MIN_INTERVAL_MS = 1000;
 
-let apiClient: SingBoxApiClient | null = null;
+let apiClient: CoreManagementClient | null = null;
+let proxyRunning = false;
+let observedSockets: ConnectionsSnapshot | undefined;
+let localProxyPorts: number[] = [];
+let missingProcesses = false;
+
+function syncDeviceCollection(): void {
+  deviceConnections.setEnabled(connectionsStreamOn && (!proxyRunning || missingProcesses));
+}
 
 // 需求驱动状态（取代 issue #225 的 connActive）：
 // detailDemand——host 据连接页 pull 活跃度下发（setDemand.detail）。true 时每帧 post 全量明细（跨进程克隆，仅连接页
@@ -36,7 +49,7 @@ let apiClient: SingBoxApiClient | null = null;
 let detailDemand = false;
 // connectionsStreamOn——映射「是否订阅上游 SubscribeConnections」。host 据窗口可见性下发（setDemand.connectionsStream）。
 //   false 时经 StatsService 取消 Connections 流（连 aggregate 都停，sing-box 少序列化一条每秒长流削核 CPU）；Status
-//   流不受影响（流量条恒需）。connect 默认 true（可见时即有 aggregate，host 首帧 setDemand 再收敛真实值）。
+//   流不受影响（内部状态同步需要）。connect 默认 true（可见时即有 aggregate，host 首帧 setDemand 再收敛真实值）。
 let connectionsStreamOn = true;
 // change-driven：上次 post 的 aggregate 内容签名与时刻。签名未变或未过 rate-cap 不 post。null=强制下帧必发（connect 复位）。
 let lastSentSig: string | null = null;
@@ -46,11 +59,27 @@ function post(msg: WorkerToHostMessage): void {
   parentPort.postMessage(msg);
 }
 
+const deviceConnections = new DeviceConnectionsService((snap) => {
+  observedSockets = snap;
+  if (proxyRunning) return;
+  if (connectionsStreamOn)
+    post({
+      type: 'aggregate',
+      payload: { ...aggregateConnections(snap.connections, snap.at), source: 'device' },
+    });
+  if (detailDemand) post({ type: 'detail', payload: snap });
+});
+
 // StatsService 实例常驻：'connect' 切 client + resubscribe，'stop' 停流。getApiClient 返回 worker 当前 client。
 const stats = new StatsService(
   (s) => post({ type: 'stats', payload: s }), // status 不门控：始终流动，驱动 host 惰性下发 setDemand
   () => apiClient,
   (snap) => {
+    missingProcesses = snap.connections.some(
+      (c) => !c.metadata?.processPath && c.metadata?.sourcePort
+    );
+    syncDeviceCollection();
+    snap = attributeLocalProxyConnections(snap, observedSockets, localProxyPorts);
     // 每收到内核 connections 帧：本地聚合（下沉 worker，杀 host 侧每秒全量跨进程克隆 B2）。
     const agg = aggregateConnections(snap.connections, snap.at);
     const sig = aggregateSignature(agg);
@@ -63,8 +92,7 @@ const stats = new StatsService(
     }
     // detail 需求驱动：仅 detailDemand（连接页 pull 期）才把全量明细跨进程传（不门控签名/cap——明细每帧微变、
     // 消费端要实时 per-connection 流量）。
-    if (detailDemand)
-      post({ type: 'detail', payload: { connections: snap.connections, at: snap.at } });
+    if (detailDemand) post({ type: 'detail', payload: snap });
   }
   // 第 4 参 isWindowVisible 故意不传 → StatsService 恒物化 connections 帧喂上方回调；可见性/需求门控在 host+worker 侧。
 );
@@ -73,6 +101,11 @@ parentPort.on('message', (e: Electron.MessageEvent) => {
   const msg = e.data as HostToWorkerMessage;
   switch (msg?.type) {
     case 'connect':
+      proxyRunning = true;
+      deviceConnections.setEnabled(false);
+      observedSockets = undefined;
+      localProxyPorts = msg.endpoint.localProxyPorts ?? [];
+      missingProcesses = false;
       // 切到最新端点（apiPort 每次启动可能重解析变化）：重建 client 后 resubscribe（停旧流句柄 → 按新 client 重订阅）。
       // 复位需求驱动态：connectionsStreamOn=true（新订阅默认活跃、可见时即有 aggregate，host 首个 status 帧按真实
       // 可见性校正）、detailDemand=false（待 host 下发）、lastSentSig=null + lastSentAt=0（强制首帧 aggregate 必发）。
@@ -81,10 +114,15 @@ parentPort.on('message', (e: Electron.MessageEvent) => {
       detailDemand = false;
       lastSentSig = null;
       lastSentAt = 0;
-      apiClient = new SingBoxApiClient(
-        { host: msg.endpoint.host, port: msg.endpoint.port, tls: msg.endpoint.tls },
-        msg.endpoint.secret
-      );
+      apiClient?.stop();
+      apiClient =
+        msg.endpoint.engine === 'mihomo'
+          ? new MihomoApiClient(msg.endpoint.port, msg.endpoint.secret)
+          : new SingBoxApiClient(
+              { host: msg.endpoint.host, port: msg.endpoint.port, tls: msg.endpoint.tls },
+              msg.endpoint.secret
+            );
+      apiClient.start();
       stats.setConnectionsStreamEnabled(true);
       stats.resubscribe();
       break;
@@ -96,13 +134,22 @@ parentPort.on('message', (e: Electron.MessageEvent) => {
         connectionsStreamOn = msg.connectionsStream;
         stats.setConnectionsStreamEnabled(connectionsStreamOn);
       }
+      syncDeviceCollection();
       break;
     case 'stop':
+      proxyRunning = false;
+      observedSockets = undefined;
+      localProxyPorts = [];
+      missingProcesses = false;
       stats.stop();
+      apiClient?.stop();
       apiClient = null;
+      deviceConnections.setEnabled(connectionsStreamOn);
       break;
     case 'dispose':
+      deviceConnections.setEnabled(false);
       stats.stop();
+      apiClient?.stop();
       apiClient = null;
       process.exit(0);
       break;

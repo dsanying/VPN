@@ -1,0 +1,43 @@
+name: frontend-check
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "src/shared/**"
+      - "docs/规范/**"
+      - "docs/维护手册.md"
+      - "AGENTS.md"
+      - ".github/workflows/frontend-check.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "src/shared/**"
+      - "docs/规范/**"
+      - "docs/维护手册.md"
+      - "AGENTS.md"
+      - ".github/workflows/frontend-check.yml"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "web"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: "web/package.json"
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: "web/pnpm-lock.yaml"
+      - name: Install desktop type dependencies
+        working-directory: .
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+        run: npm ci
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run check

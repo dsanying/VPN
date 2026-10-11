@@ -3,8 +3,11 @@
  * 加速默认关闭（''=直连，可选开关）。校验用户输入的加速域名合法性。
  */
 
+// Two operator families; the remaining gh-proxy.org hosts are additional routes, not independent publishers.
+// Every transport still requires the digest obtained from the official release.
 export const GH_PROXY_PRESETS = [
   'https://gh-proxy.org/',
+  'https://ghproxy.net/',
   'https://v4.gh-proxy.org/',
   'https://cdn.gh-proxy.org/',
 ] as const;
@@ -85,4 +88,22 @@ export function ghMirrorUrl(url: string, ghPrefix?: string): string {
     if (proxied !== url) return proxied;
   }
   return GH_PROXY_PRESETS[0] + url;
+}
+
+/** Ordered download transports; all bytes still require the publisher's digest. */
+export function githubDownloadCandidates(url: string, prefix?: string): string[] {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    throw new Error('Download requires an HTTPS URL without credentials');
+  }
+  if (!isGithubHost(url)) return [url];
+  const preferred = prefix ? normalizeGhProxyPrefix(prefix) : null;
+  return [
+    ...new Set([
+      url,
+      ...[preferred, ...GH_PROXY_PRESETS]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => value + url),
+    ]),
+  ];
 }

@@ -1,3 +1,8 @@
+import { DEFAULT_SPEED_TEST_URL } from '../../shared/speed-test';
+import { NodeMeasurementStore, measurementFingerprint } from './NodeMeasurementStore';
+import * as path from 'path';
+import { probeNodeEntry, probeBoundEntry, quicEntryObfs } from './entry-probe';
+import { SPEED_TEST_CONCURRENCY, type NodeProbeDetails } from '../../shared/speed-test';
 /**
  * 测速编排单一入口（根治：托盘 + 渲染 IPC 两入口都只调它）。
  *
@@ -13,6 +18,7 @@ import type { ConfigManager } from './ConfigManager';
 import type { SpeedTestService } from './SpeedTestService';
 import type { TrayManager } from './TrayManager';
 import type { LogManager } from './LogManager';
+import type { UserConfig } from '../../shared/types';
 
 export interface SpeedTestRunnerDeps {
   configManager: ConfigManager;
@@ -22,6 +28,23 @@ export interface SpeedTestRunnerDeps {
   /** call-time 取托盘管理器（回写测速结果与测速态；可能尚未创建/已销毁）。 */
   getTrayManager: () => TrayManager | null;
   logManager: LogManager;
+  entryProbe?: typeof probeNodeEntry;
+  entryHelperPath?: string;
+  /** Read runtime takeover, not a saved preference; stopped TUN must not disable direct probes. */
+  isTunActive?: () => boolean;
+}
+
+const measurementStores = new WeakMap<ConfigManager, NodeMeasurementStore>();
+export function getNodeMeasurementStore(manager: ConfigManager): NodeMeasurementStore | undefined {
+  if (typeof manager.getConfigPath !== 'function') return undefined;
+  let store = measurementStores.get(manager);
+  if (!store) {
+    store = new NodeMeasurementStore(
+      path.join(path.dirname(manager.getConfigPath()), 'node-measurements.json')
+    );
+    measurementStores.set(manager, store);
+  }
+  return store;
 }
 
 /**
@@ -29,12 +52,46 @@ export interface SpeedTestRunnerDeps {
  * @param opts.serverIds 限定测速子集（缺省=全部 servers）；不可测节点由 SpeedTestService 内部按 isSpeedTestable 剔除。
  * @returns SpeedTestRunResult（结果 Map + outcome completed/interrupted + 波前缺席集 §16.2）。
  */
+const runnerRuns = new WeakMap<
+  ConfigManager,
+  { key: string; promise: Promise<SpeedTestRunResult> }
+>();
 export async function runSpeedTest(
   deps: SpeedTestRunnerDeps,
   opts: { serverIds?: string[]; notifyTrayToast?: boolean } = {}
 ): Promise<SpeedTestRunResult> {
+  const config = await deps.configManager.loadConfig();
+  const requested = opts.serverIds
+    ? config.servers.filter((node) => opts.serverIds!.includes(node.id))
+    : config.servers;
+  const key = JSON.stringify({
+    nodes: requested
+      .map((node) => [node.id, measurementFingerprint(node, DEFAULT_SPEED_TEST_URL)])
+      .sort(),
+    toast: !!opts.notifyTrayToast,
+  });
+  const previous = runnerRuns.get(deps.configManager);
+  if (previous?.key === key) return previous.promise;
+  // Include entry probes, cache writes and tray propagation in the single-flight lifetime.
+  const promise = previous
+    ? previous.promise
+        .catch(() => {})
+        .then(async () => runSpeedTestInternal(deps, opts, await deps.configManager.loadConfig()))
+    : runSpeedTestInternal(deps, opts, config);
+  runnerRuns.set(deps.configManager, { key, promise });
+  const clear = () => {
+    if (runnerRuns.get(deps.configManager)?.promise === promise)
+      runnerRuns.delete(deps.configManager);
+  };
+  void promise.then(clear, clear);
+  return promise;
+}
+async function runSpeedTestInternal(
+  deps: SpeedTestRunnerDeps,
+  opts: { serverIds?: string[]; notifyTrayToast?: boolean },
+  config: UserConfig
+): Promise<SpeedTestRunResult> {
   const { configManager, speedTestService, getMainWindow, getTrayManager, logManager } = deps;
-  const config = await configManager.loadConfig();
   const servers = opts.serverIds
     ? config.servers.filter((s) => opts.serverIds!.includes(s.id))
     : config.servers;
@@ -54,26 +111,131 @@ export async function runSpeedTest(
 
   // 任意入口触发都让托盘菜单进入「测速中」态（与 UI 一致；幂等，已是该态则 no-op）。
   getTrayManager()?.setSpeedTesting(true);
+  send(IPC_CHANNELS.EVENT_SPEED_TEST_PROGRESS, {
+    tested: 0,
+    ok: 0,
+    total: servers.length,
+    serverIds: servers.map((node) => node.id),
+    active: true,
+  });
   try {
+    const details: Record<string, NodeProbeDetails> = {};
+    const entryJobs: Promise<void>[] = [];
+    const entryQueue: (() => Promise<void>)[] = [];
+    let activeEntries = 0;
+    const drainEntries = () => {
+      while (activeEntries < SPEED_TEST_CONCURRENCY && entryQueue.length > 0) {
+        const task = entryQueue.shift()!;
+        activeEntries++;
+        void task().finally(() => {
+          activeEntries--;
+          drainEntries();
+        });
+      }
+    };
+    const enqueueEntry = (task: () => Promise<void>) =>
+      new Promise<void>((resolve, reject) => {
+        // 每个排队任务都有完成 Promise；不等一个固定 lane 的慢任务。
+        entryQueue.push(() => Promise.resolve().then(task).then(resolve, reject));
+        drainEntries();
+      });
     const runResult = await speedTestService.testAllServers(
       servers,
-      (serverId, latency) =>
+      (serverId, latency) => {
         send(IPC_CHANNELS.EVENT_SPEED_TEST_RESULT, {
           serverId,
           latency: latency === null ? -1 : latency,
-        }),
+        });
+        const server = servers.find((server) => server.id === serverId);
+        if (!server) return;
+        const measured = speedTestService.getNodeMeasurement(serverId);
+        const job = enqueueEntry(async () => {
+          let entry;
+          try {
+            entry = await (deps.entryProbe ?? probeNodeEntry)(server, !deps.isTunActive?.(), {
+              ...(deps.entryHelperPath
+                ? {
+                    boundProbe: (address: string, port: number, signal?: AbortSignal) =>
+                      probeBoundEntry(address, port, deps.entryHelperPath!, signal),
+                    boundQUICProbe: (address: string, port: number, signal?: AbortSignal) =>
+                      probeBoundEntry(
+                        address,
+                        port,
+                        deps.entryHelperPath!,
+                        signal,
+                        'quic',
+                        quicEntryObfs(server)
+                      ),
+                  }
+                : {}),
+            });
+          } catch {
+            entry = { status: 'unavailable' as const, reason: 'ENTRY_PROBE_FAILED' };
+          }
+          const detail = {
+            entry,
+            proxyTarget: measured?.target,
+            proxyReason: measured?.reason,
+            ...(measured?.exit ? { exit: measured.exit } : {}),
+          };
+          details[serverId] = detail;
+          send(IPC_CHANNELS.EVENT_SPEED_TEST_DETAILS, { serverId, detail });
+        });
+        // 主测速仍进行时可能已有入口任务失败；最终 Promise.all 负责传播错误。
+        void job.catch(() => {});
+        entryJobs.push(job);
+      },
       (tested, ok, total) => send(IPC_CHANNELS.EVENT_SPEED_TEST_PROGRESS, { tested, ok, total }),
-      config.speedTestUrl
+      DEFAULT_SPEED_TEST_URL
     );
+    await Promise.all(entryJobs);
+    let nodeRegions: Record<string, string | undefined> | undefined;
+    const store = getNodeMeasurementStore(configManager);
+    if (store) {
+      try {
+        const measuredAt = Date.now();
+        const latest = await configManager.loadConfig();
+        await store.save(
+          latest.servers,
+          DEFAULT_SPEED_TEST_URL,
+          Object.fromEntries(
+            [...runResult.results]
+              .filter(([id]) => servers.some((node) => node.id === id))
+              .map(([id, latency]) => [
+                id,
+                {
+                  fingerprint: measurementFingerprint(
+                    servers.find((node) => node.id === id)!,
+                    DEFAULT_SPEED_TEST_URL
+                  ),
+                  latency: latency ?? -1,
+                  testedAt: measuredAt,
+                  detail: details[id],
+                },
+              ])
+          )
+        );
+        const saved = await store.get(latest.servers, DEFAULT_SPEED_TEST_URL);
+        nodeRegions = Object.fromEntries(
+          Object.entries(saved).map(([id, record]) => [id, record.detail?.exit?.countryCode])
+        );
+        for (const id of Object.keys(details))
+          if (saved[id]?.detail) details[id] = saved[id].detail!;
+      } catch {
+        logManager.addLog('warn', 'Node measurement cache could not be saved', 'SpeedTest');
+      }
+    }
+    const result = { ...runResult, details: { ...runResult.details, ...details } };
     // 唯一回写托盘点：合并入托盘延迟显示（不替换 → 子集/单节点测速不塌缩）+ isSpeedTesting=false + 菜单重建。
     // toast 仅托盘入口（notifyTrayToast=true）触发——渲染入口（服务器页/首页）测速由 use-speed-test 自弹，避免双 toast。
     // §16.2：outcome + 波前缺席数透传给托盘 toast（interrupted → 「测速中断」；skipped → 副行「N 未纳入」，见 App.tsx）。
     getTrayManager()?.updateSpeedTestResults(runResult.results, config.servers, {
+      ...(nodeRegions ? { nodeRegions } : {}),
       toast: opts.notifyTrayToast,
       outcome: runResult.outcome,
       skipped: runResult.skipped.notInPool.length + runResult.skipped.tsNotReady.length,
     });
-    return runResult;
+    return result;
   } catch (error) {
     logManager.addLog(
       'error',
@@ -82,5 +244,7 @@ export async function runSpeedTest(
     );
     getTrayManager()?.setSpeedTesting(false); // 仅复位测速态、保留已有托盘延迟（不清空）
     throw error;
+  } finally {
+    send(IPC_CHANNELS.EVENT_SPEED_TEST_PROGRESS, { active: false });
   }
 }

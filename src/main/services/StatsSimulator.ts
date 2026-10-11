@@ -215,6 +215,8 @@ export class StatsSimulator implements StatsHost {
     const uploadSpeed = walk(this.snapshot.uploadSpeed || 200 * 1024);
     const downloadSpeed = walk(this.snapshot.downloadSpeed || 200 * 1024);
     this.snapshot = {
+      sampledAt: now,
+      source: 'proxy',
       uploadSpeed: Math.round(uploadSpeed),
       downloadSpeed: Math.round(downloadSpeed),
       totalUpload: this.snapshot.totalUpload + Math.round(uploadSpeed),

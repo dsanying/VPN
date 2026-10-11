@@ -46,11 +46,7 @@ export function extractLastFatal(text: string): string | null {
  * `other` = 认得是 FATAL 但不在已知表内（照原文透传，永远好过编造）。
  */
 export type SingBoxFatalKind =
-  | 'tun-address-conflict'
-  | 'tun-adapter-create'
-  | 'tun-dns'
-  | 'tun-other'
-  | 'other';
+  'tun-address-conflict' | 'tun-adapter-create' | 'tun-dns' | 'tun-other' | 'other';
 
 export interface SingBoxFatalInfo {
   kind: SingBoxFatalKind;

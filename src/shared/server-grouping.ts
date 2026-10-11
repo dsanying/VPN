@@ -19,11 +19,13 @@ export interface ServerGroup {
 /**
  * 把节点按归属分组：自建（无 subscriptionId，或 subscriptionId 指向已删订阅的孤儿）→ 再拆出**组网**
  * （endpoint 协议 WireGuard/WARP/Tailscale）独立成组，置于自建之后；其后每个订阅一组。空组省略，
+ * 管理与来源筛选可通过 includeEmptySubscriptions 保留已登记但暂无节点的订阅；自建/组网仍仅在有节点时出现。
  * 顺序：自建 → 组网 → 各订阅（与订阅入参一致），与节点列表页 tab 顺序一致。
  */
 export function groupServersBySubscription(
   servers: ServerConfig[],
-  subscriptions: SubscriptionConfig[] = []
+  subscriptions: SubscriptionConfig[] = [],
+  options: { includeEmptySubscriptions?: boolean } = {}
 ): ServerGroup[] {
   const knownIds = new Set(subscriptions.map((s) => s.id));
   const groups: ServerGroup[] = [];
@@ -41,7 +43,7 @@ export function groupServersBySubscription(
 
   for (const sub of subscriptions) {
     const subServers = servers.filter((s) => s.subscriptionId === sub.id);
-    if (subServers.length > 0) {
+    if (subServers.length > 0 || options.includeEmptySubscriptions) {
       groups.push({ id: sub.id, name: sub.name, isManual: false, servers: subServers });
     }
   }

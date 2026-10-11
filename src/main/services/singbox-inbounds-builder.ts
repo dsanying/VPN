@@ -117,7 +117,7 @@ export function buildInbounds(
   if (deps.probeDirectPort && deps.probeProxyPort) {
     inbounds.push(
       {
-        type: 'http',
+        type: 'mixed',
         tag: 'probe-direct-in',
         listen: '127.0.0.1',
         listen_port: deps.probeDirectPort,

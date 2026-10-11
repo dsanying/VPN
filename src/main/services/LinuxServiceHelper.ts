@@ -92,7 +92,6 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
         supported: false,
         installed: false,
         ready: false,
-        upgradeable: false,
         version: null,
         loaded: null,
         needsRepair: false,
@@ -104,7 +103,6 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     const installed = this.filesPresent();
     let version: string | null = null;
     let ready = false;
-    let upgradeable = false;
     if (installed) {
       try {
         const resp = await this.sendCommand(['ping'], 1500);
@@ -112,7 +110,6 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
         if (m) {
           version = m[1];
           ready = this.capabilities.includes('start');
-          upgradeable = false;
         }
       } catch {
         /* 未就绪：装了 unit 但 daemon 没起来（如刚 reboot 未起、被 mask）→ needsRepair 引导重装 */
@@ -122,7 +119,6 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
       supported: true,
       installed,
       ready,
-      upgradeable,
       version,
       capabilities: this.capabilities,
       loaded: installed ? true : null,

@@ -110,3 +110,9 @@ describe('normalizeAssetDigest — 运行期换核的完整性锚', () => {
     for (const a of bad) expect(normalizeAssetDigest(a)).toBeNull();
   });
 });
+
+it('unsupported platform or architecture never selects an arbitrary core', () => {
+  const assets = [{ name: 'sing-box-1.14.3-darwin-arm64.tar.gz' }];
+  expect(findSuitableSingboxAsset(assets, 'android', 'arm64')).toBeUndefined();
+  expect(findSuitableSingboxAsset(assets, 'darwin', 'riscv64')).toBeUndefined();
+});

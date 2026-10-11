@@ -22,6 +22,7 @@ import { resourceManager } from './ResourceManager';
 import { getUserDataPath } from '../utils/paths';
 import { shq } from '../utils/shell-quote';
 import { sha256File } from '../../shared/file-hash';
+import { stageHelperInstallation } from './helper-install-staging';
 
 // plist 5 使用标准 ESM；仅在读取 macOS 后台记录时加载。
 
@@ -157,7 +158,6 @@ export class HelperManager implements IPrivilegedHelper {
         supported: false,
         installed: false,
         ready: false,
-        upgradeable: false,
         version: null,
         loaded: null,
         needsRepair: false,
@@ -169,7 +169,6 @@ export class HelperManager implements IPrivilegedHelper {
     const installed = this.filesPresent();
     let version: string | null = null;
     let ready = false;
-    let upgradeable = false; // 应用版本与能力由标准 RPC 发现
     if (installed && this.token()) {
       try {
         const resp = await this.sendCommand(['ping'], 1500);
@@ -177,7 +176,6 @@ export class HelperManager implements IPrivilegedHelper {
         if (m) {
           version = m[1];
           ready = this.capabilities.includes('start');
-          upgradeable = false;
         }
       } catch {
         /* 未就绪 */
@@ -267,7 +265,6 @@ export class HelperManager implements IPrivilegedHelper {
       supported: true,
       installed,
       ready,
-      upgradeable,
       version,
       capabilities: this.capabilities,
       loaded,
@@ -295,15 +292,24 @@ export class HelperManager implements IPrivilegedHelper {
   async startCore(
     configPath: string,
     logPath: string,
-    forward: boolean
+    forward: boolean,
+    engine: 'sing-box' | 'mihomo' = 'sing-box'
   ): Promise<HelperStartResult> {
     try {
+      if (engine === 'mihomo' && !this.capabilities.includes('start-mihomo'))
+        return { ok: false, error: '提权助手需要更新才能启动 Mihomo' };
       // 起前先停掉可能残留的旧 child（app 上次崩溃 → daemon 仍托管着旧 sing-box），幂等。
       if (!(await this.stopCore())) return { ok: false, error: '旧内核尚未停止' };
       const resp = await this.sendCommand(
         // 行6=父 app PID（helper v2 父死看护：本进程消失 → helper 自行 TERM→KILL 收割 sing-box）。
         // HelperManager 跑在 Electron 主进程内，process.pid 即 GUI 父 PID → ProxyManager 零改动。
-        ['start', configPath, logPath || '', forward ? '1' : '0', String(process.pid)],
+        [
+          engine === 'mihomo' ? 'start-mihomo' : 'start',
+          configPath,
+          logPath || '',
+          forward ? '1' : '0',
+          String(process.pid),
+        ],
         8000
       );
       const m = resp.match(/^OK (?:started|already) (\d+)/);
@@ -408,7 +414,7 @@ export class HelperManager implements IPrivilegedHelper {
 
   /** 经 helper（root, v5）把源目录 srcDir（含 sing-box + libcronet 等配套）整体写入锁定的受保护目录（install-core，
    *  B 块持久化更新）：校验主二进制 sing-box 的 sha256，配套随目录复制。proto<5 的 helper 不认（返回 ERR unknown）
-   *  → 调用方据 status.upgradeable/ready 走 fallback。 */
+   *  → 调用方据 status.ready 走 fallback。 */
   async installCore(srcDir: string): Promise<{ ok: boolean; error?: string }> {
     try {
       const path = require('path') as typeof import('path');
@@ -418,6 +424,18 @@ export class HelperManager implements IPrivilegedHelper {
       return { ok: false, error: resp };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Installs only the protected Mihomo executable, independently of legacy core updates. */
+  async installMihomo(source: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      if (!this.capabilities.includes('install-mihomo'))
+        return { ok: false, error: '提权助手需要更新才能安装 Mihomo' };
+      const resp = await this.sendCommand(['install-mihomo', source, sha256File(source)], 30_000);
+      return resp.startsWith('OK') ? { ok: true } : { ok: false, error: resp };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -474,15 +492,22 @@ export class HelperManager implements IPrivilegedHelper {
       }
 
       const confDir = getUserDataPath();
-      const script = this.buildInstallScript(
-        srcBinary,
-        resourceManager.getBundledSingBoxPath(),
-        confDir,
-        token,
-        resourceManager.getProtectedCoreDir()
-      );
-
-      const result = await this.runRootScript('shadowvpn-helper-install.sh', script);
+      const staged = stageHelperInstallation(srcBinary, resourceManager.getBundledSingBoxPath());
+      let result: { success: boolean; error?: string };
+      try {
+        const script = this.buildInstallScript(
+          staged.helper,
+          staged.core,
+          confDir,
+          token,
+          resourceManager.getProtectedCoreDir(),
+          staged.helperSha256,
+          staged.coreSha256
+        );
+        result = await this.runRootScript('shadowvpn-helper-install.sh', script);
+      } finally {
+        staged.dispose();
+      }
       if (!result.success) {
         return { success: false, error: result.error, status: await this.computeStatus() };
       }
@@ -507,6 +532,12 @@ export class HelperManager implements IPrivilegedHelper {
       return status.ready
         ? { success: true, status }
         : { success: false, error: '助手已安装，但未就绪；请检查系统后台权限', status };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        status: await this.computeStatus(),
+      };
     } finally {
       this.mutationInFlight = false;
       this.mutationEpoch++;
@@ -756,7 +787,9 @@ export class HelperManager implements IPrivilegedHelper {
     bundledSingbox: string,
     confDir: string,
     token: string,
-    coreDir: string
+    coreDir: string,
+    helperSha256: string,
+    coreSha256: string
   ): string {
     // plist 在 JS 侧完整成形（含转义），脚本用「带引号 heredoc」原样写出，避免 shell 二次展开。
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -784,12 +817,17 @@ SRC=${shq(srcBinary)}
 DEST=${shq(HELPER_DEST)}
 SUPPORT=${shq(SYSTEM_SUPPORT)}
 PLIST=${shq(PLIST_PATH)}
+# 在修改已安装服务前校验临时资源，避免用户目录权限或文件变化留下半安装状态。
+test "$(/usr/bin/shasum -a 256 "$SRC" | /usr/bin/awk '{print $1}')" = ${shq(helperSha256)}
+test "$(/usr/bin/shasum -a 256 ${shq(bundledSingbox)} | /usr/bin/awk '{print $1}')" = ${shq(coreSha256)}
 mkdir -p /Library/PrivilegedHelperTools "$SUPPORT"
 # 关键：umask 077 会把新建目录设成 700 → 普通用户 app 无法穿越该目录连接 socket(EACCES)。
 # 目录必须 755 可穿越（socket 内部仍靠 token 鉴权 + token 文件 600 保护）。
 chmod 755 /Library/PrivilegedHelperTools "$SUPPORT"
-cp "$SRC" "$DEST"
-chown root:wheel "$DEST"; chmod 755 "$DEST"
+cp "$SRC" "$DEST.new"
+chown root:wheel "$DEST.new"; chmod 755 "$DEST.new"
+launchctl bootout system "$PLIST" 2>/dev/null || true
+mv -f "$DEST.new" "$DEST"
 printf '%s' ${shq(token)} > "$SUPPORT/helper.token"
 chown root:wheel "$SUPPORT/helper.token"; chmod 600 "$SUPPORT/helper.token"
 # B 块 seed：把内置内核播种进受保护目录，作为 macOS 现役核「单一稳定真相」（root owner、755 → all 读/exec，
@@ -811,7 +849,6 @@ cat > "$PLIST" <<'FLOWZ_PLIST_EOF'
 ${plist}
 FLOWZ_PLIST_EOF
 chown root:wheel "$PLIST"; chmod 644 "$PLIST"
-launchctl bootout system "$PLIST" 2>/dev/null || true
 # launchctl enable 清的是 launchd override 层（/var/db/com.apple.xpc.launchd/disabled.*.plist），
 # **不是** BTM 层（「登录项与扩展」开关，存 /var/db/com.apple.backgroundtaskmanagement/）。
 # 作用：与随后的 bootstrap 配合，即便 BTM disposition 为 disallowed 也能让本会话 spawn 成功、daemon 正常跑。
@@ -888,6 +925,11 @@ echo uninstalled-ok
         else resolve({ success: false, error: stderr.trim() || `osascript 退出码 ${code}` });
       });
       proc.on('error', (err) => {
+        try {
+          fs.unlinkSync(scriptPath);
+        } catch {
+          /* 退出清理已完成 */
+        }
         resolve({ success: false, error: err.message });
       });
     });

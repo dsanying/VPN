@@ -444,7 +444,7 @@ describe('generateSingBoxConfig — characterization 快照（抽取前锁基线
     ).toMatchSnapshot();
   });
 
-  it('FakeIP 关闭（dnsConfig.enableFakeIp=false）→ 锁 reverse_mapping + 无 fakeip 体系', () => {
+  it('旧 FakeIP 关闭字段被忽略 → 锁统一 fakeip 体系', () => {
     expect(
       snap(
         cfg({
@@ -691,7 +691,7 @@ describe('generateSingBoxConfig — characterization 快照（抽取前锁基线
     ).toMatchSnapshot();
   });
 
-  it('blockQuic=true（smart）→ 锁代理向 udp443 reject 配对 + 末尾兜底 udp443RejectRule()', () => {
+  it('自动 QUIC 保护（smart）→ 锁代理向 udp443 reject 配对 + 末尾兜底 udp443RejectRule()', () => {
     const customRules: Rule[] = [
       {
         id: 'q1',
@@ -701,7 +701,7 @@ describe('generateSingBoxConfig — characterization 快照（抽取前锁基线
         enabled: true,
       },
     ] as unknown as Rule[];
-    expect(snap(cfg({ servers: [server({})], blockQuic: true, customRules }))).toMatchSnapshot();
+    expect(snap(cfg({ servers: [server({})], customRules }))).toMatchSnapshot();
   });
 
   it('webrtcLeakProtection=proxy（TUN + smart）→ 锁显式 stun sniffer + protocol:stun route 到 proxy-selector', () => {

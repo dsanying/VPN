@@ -47,7 +47,7 @@ func listen() (net.Listener, error) {
 // serve：accept 循环，每连接一个 handle goroutine（镜像 macOS main 的 for{Accept;go handle}）。
 // 阻塞运行，直到 listener 被 Close（服务停止时 runService 关闭它解阻塞）。
 func serve(l net.Listener) {
-	methods := []string{"ping", "version", "status", "start", "stop", "cleanup", "freeport", "route-add", "route-del", "iface-metric", "uninstall"}
+	methods := []string{"ping", "version", "status", "start", "start-mihomo", "install-mihomo", "stop", "cleanup", "freeport", "route-add", "route-del", "iface-metric", "uninstall"}
 	_ = helperrpc.Serve(l, helperrpc.NewHandler(methods, helperrpc.Bearer(tokenValue), executeCommand), nil)
 
 }

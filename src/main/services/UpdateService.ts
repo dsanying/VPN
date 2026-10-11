@@ -1,3 +1,8 @@
+import { fetchPublisherReleases } from './github-release-source';
+import { readPublisherResponse } from './github-release-network';
+import { desktopReleaseCatalogState } from './release-catalog-state';
+import { createHash, randomUUID } from 'crypto';
+import { normalizeAssetDigest } from './singbox-asset';
 /**
  * 更新检查服务
  * 通过 GitHub API 检查新版本并支持下载
@@ -17,11 +22,10 @@ import type {
 } from '../../shared/types/update';
 import { UPDATE_POPUP_WIDTH, popupHeightFor, popupPosition } from './update-popup-layout';
 import { APP_USER_AGENT } from '../../shared/constants';
-import { MAX_GITHUB_JSON_BYTES } from '../utils/http-limits';
 import { getUserDataPath } from '../utils/paths';
 import { system32 } from '../utils/win-system32';
 import { compareSemver } from '../../shared/version';
-import { ghMirrorUrl, normalizeGhProxyPrefix } from '../../shared/gh-proxy';
+import { githubDownloadCandidates, normalizeGhProxyPrefix } from '../../shared/gh-proxy';
 import type { UserConfig } from '../../shared/types';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { createIdleTimeout, parseExpectedBytes } from './download-hardening';
@@ -36,7 +40,7 @@ import {
 } from './update-install-script';
 import { mt, getMainLanguage } from '../i18n';
 
-// 下载停滞超时：连接/下载 30s 无数据即视为卡死 → abort + 失败兜底（github 链接自动换镜像重试一次）。
+// 下载停滞超时：连接/下载 30s 无数据即视为卡死 → abort + 失败兜底（github 链接依次尝试候选镜像）。
 // 防永久挂起致更新永不 resolve（进度窗/对话框永久转圈）。正常下载持续有 data、不断重置、不会误触发。
 const DOWNLOAD_IDLE_TIMEOUT_MS = 30_000;
 
@@ -54,6 +58,179 @@ interface DownloadControl {
 }
 
 export class UpdateService {
+  private preparation: Promise<UpdateCheckResult> | null = null;
+  private installation: Promise<boolean> | null = null;
+  private readyUpdate: { info: UpdateInfo; filePath: string; attempted: boolean } | null = null;
+
+  /** Scheduling belongs to GlobalUpdateService. Kept for legacy startup callers. */
+  startAutomaticUpdates(): void {}
+
+  async installPreparedUpdate(): Promise<void> {
+    if (!this.readyUpdate) throw new Error('No prepared software update');
+    if (!(await this.installUpdate(this.readyUpdate.filePath)))
+      throw new Error('Software update installation failed');
+  }
+
+  confirmUpdateStartup(): void {
+    if (!app.isPackaged) return;
+    const token = process.argv
+      .find((arg) => arg.startsWith('--shadow-vpn-update-token='))
+      ?.split('=')[1];
+    if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return;
+    const directory = path.dirname(this.pendingPath());
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, `confirm-${token}`), app.getVersion(), { mode: 0o600 });
+  }
+
+  private pendingPath(): string {
+    return path.join(getUserDataPath(), 'updates', 'pending.json');
+  }
+
+  private savePending(): void {
+    if (!this.readyUpdate) return;
+    const target = this.pendingPath();
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    const record = {
+      schema: 1,
+      platform: process.platform,
+      arch: process.arch,
+      info: this.readyUpdate.info,
+      attempted: this.readyUpdate.attempted,
+    };
+    fs.writeFileSync(`${target}.tmp`, JSON.stringify(record), { mode: 0o600 });
+    fs.renameSync(`${target}.tmp`, target);
+  }
+
+  private async restorePending(): Promise<boolean> {
+    const target = this.pendingPath();
+    if (!fs.existsSync(target)) return false;
+    let record;
+    try {
+      record = JSON.parse(fs.readFileSync(target, 'utf8'));
+    } catch {
+      fs.unlinkSync(target);
+      return false;
+    }
+    if (
+      !record ||
+      typeof record.info?.version !== 'string' ||
+      record.schema !== 1 ||
+      record.platform !== process.platform ||
+      record.arch !== process.arch ||
+      !this.isNewerVersion(record.info?.version?.replace(/^v/, '') ?? '', app.getVersion())
+    ) {
+      fs.unlinkSync(target);
+      return false;
+    }
+    const info = record.info as UpdateInfo;
+    let filePath: string;
+    try {
+      filePath = this.installerPath(info);
+    } catch {
+      fs.unlinkSync(target);
+      return false;
+    }
+    // 恢复时重新取得官方摘要，不能信任可编辑的本地状态文件提供的摘要。
+    const digest = await this.officialAssetDigest(info.downloadUrl);
+    const hash = createHash('sha256');
+    if (!fs.existsSync(filePath)) {
+      fs.unlinkSync(target);
+      return false;
+    }
+    for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk);
+    if (hash.digest('hex') !== digest) {
+      fs.unlinkSync(target);
+      fs.unlinkSync(filePath);
+      return false;
+    }
+    this.verifiedDownloads.set(filePath, digest);
+    this.readyUpdate = { info, filePath, attempted: record.attempted === true };
+    this.updateProgress({ status: 'downloaded', percentage: 100, message: mt('updReadyTitle') });
+    return true;
+  }
+
+  private installerPath(info: UpdateInfo): string {
+    if (
+      !info.fileName ||
+      path.basename(info.fileName) !== info.fileName ||
+      info.fileName === '.' ||
+      info.fileName === '..' ||
+      decodeURIComponent(new URL(info.downloadUrl).pathname.split('/').pop() ?? '') !==
+        info.fileName ||
+      !/^https:\/\/github\.com\/dsanying\/VPN\/releases\/download\//.test(info.downloadUrl)
+    )
+      throw new Error('Invalid official update asset');
+    const dir = path.join(getUserDataPath(), 'updates');
+    fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, info.fileName);
+  }
+
+  /** 手动与自动入口都先静默下载，完成后才允许安装。 */
+  prepareUpdate(includePrerelease = false): Promise<UpdateCheckResult> {
+    if (this.preparation) return this.preparation;
+    this.preparation = (async () => {
+      if (!app.isPackaged) return { hasUpdate: false, error: mt('updDevelopment') };
+      if (!this.readyUpdate) await this.restorePending();
+      if (this.readyUpdate) return { hasUpdate: true, updateInfo: this.readyUpdate.info };
+      const result = await this.checkForUpdate(includePrerelease);
+      if (result.hasUpdate && result.updateInfo) {
+        const filePath = await this.downloadUpdate(result.updateInfo);
+        if (!filePath) return { hasUpdate: false, error: this.downloadProgress.error };
+      }
+      return result;
+    })()
+      .catch((error: unknown) => ({ hasUpdate: false, error: String(error) }))
+      .finally(() => {
+        this.preparation = null;
+      });
+    return this.preparation;
+  }
+
+  async promptReadyUpdate(): Promise<void> {
+    const ready = this.readyUpdate;
+    if (!ready) return;
+    const action = await this.showUpdateDialog(ready.info, true);
+    if (action === 'update') {
+      this.sendPopupState({
+        phase: 'done',
+        theme: this.resolvedTheme(),
+        version: ready.info.version,
+        percentage: 100,
+        labels: this.popupLabels(),
+      });
+      const installed = await this.installUpdate(ready.filePath);
+      if (!installed) {
+        this.createUpdatePopup({
+          phase: 'error',
+          theme: this.resolvedTheme(),
+          version: ready.info.version,
+          errorText: mt('updInstallFailed'),
+          labels: this.popupLabels(),
+        });
+        const retry = await this.awaitPopupAction(['retry', 'close', 'manualDownload']);
+        this.closeUpdatePopup();
+        if (retry === 'retry') void this.promptReadyUpdate();
+      }
+    }
+  }
+
+  private verifiedDownloads = new Map<string, string>();
+  private assetDigests = new Map<string, string>();
+  private async officialAssetDigest(url: string): Promise<string> {
+    if (!this.assetDigests.has(url)) {
+      const releases = await this.fetchReleases();
+      for (const release of releases)
+        for (const asset of release.assets ?? []) {
+          const digest = normalizeAssetDigest(asset);
+          if (digest && typeof asset.browser_download_url === 'string')
+            this.assetDigests.set(asset.browser_download_url, digest);
+        }
+    }
+    const digest = this.assetDigests.get(url);
+    if (!digest) throw new Error('无法取得应用安装包的官方 SHA-256，已中止下载');
+    return digest;
+  }
+
   private logManager: LogManager;
   private mainWindow: BrowserWindow | null = null;
   // 独立 Conduit mini 更新窗（remind/progress/done/error 四态），取代旧的白底进度窗 + 原生 messagebox。
@@ -185,6 +362,8 @@ export class UpdateService {
         return { hasUpdate: false };
       }
 
+      const digest = normalizeAssetDigest(asset);
+      if (digest) this.assetDigests.set(asset.browser_download_url, digest);
       const updateInfo: UpdateInfo = {
         version: latestRelease.tag_name,
         title: latestRelease.name || latestRelease.tag_name,
@@ -245,8 +424,7 @@ export class UpdateService {
       this.logManager.addLog('info', `开始下载更新: ${updateInfo.version}`, 'UpdateService');
       this.updateProgress({ status: 'downloading', percentage: 0, message: '正在下载更新...' });
 
-      const downloadDir = app.getPath('temp');
-      const filePath = path.join(downloadDir, updateInfo.fileName);
+      const filePath = this.installerPath(updateInfo);
 
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
@@ -254,6 +432,8 @@ export class UpdateService {
 
       await this.downloadFile(updateInfo.downloadUrl, filePath, updateInfo.fileSize);
 
+      this.readyUpdate = { info: updateInfo, filePath, attempted: false };
+      this.savePending();
       this.logManager.addLog('info', `更新下载完成: ${filePath}`, 'UpdateService');
       this.updateProgress({ status: 'downloaded', percentage: 100, message: '下载完成' });
 
@@ -294,7 +474,15 @@ export class UpdateService {
     return response === 0;
   }
 
-  async installUpdate(installerPath: string): Promise<boolean> {
+  installUpdate(installerPath: string): Promise<boolean> {
+    if (this.installation) return this.installation;
+    this.installation = this.installVerifiedUpdate(installerPath).finally(() => {
+      this.installation = null;
+    });
+    return this.installation;
+  }
+
+  private async installVerifiedUpdate(installerPath: string): Promise<boolean> {
     try {
       this.logManager.addLog('info', `准备安装更新: ${installerPath}`, 'UpdateService');
 
@@ -302,6 +490,12 @@ export class UpdateService {
         this.logManager.addLog('error', `安装包不存在: ${installerPath}`, 'UpdateService');
         return false;
       }
+
+      const expected = this.verifiedDownloads.get(installerPath);
+      if (!expected) throw new Error('安装包未经官方 SHA-256 校验，拒绝安装');
+      const hash = createHash('sha256');
+      for await (const chunk of fs.createReadStream(installerPath)) hash.update(chunk);
+      if (hash.digest('hex') !== expected) throw new Error('安装包已变化，SHA-256 校验失败');
 
       // Linux deb 安装态：后续 pkexec apt 会弹 polkit 通用授权框（文案不可改）——先在 app 内弹一个说清缘由的确认框。
       // 仅 deb 形态（AppImage/portable/mac/win 全跳过）；取消=不更新。**必须在下方 cleanupCallback 停代理之前** →
@@ -314,6 +508,12 @@ export class UpdateService {
         }
       }
 
+      if (!app.isPackaged) throw new Error(mt('updDevelopment'));
+      if (this.readyUpdate?.filePath === installerPath) {
+        this.readyUpdate.attempted = true;
+        this.savePending();
+      }
+
       // 在安装更新前，先清理资源（停止代理进程等）
       // 这是关键步骤，否则 Windows 上会因为文件被占用而安装失败
       if (this.cleanupCallback) {
@@ -323,7 +523,7 @@ export class UpdateService {
           this.logManager.addLog('info', '代理进程已停止', 'UpdateService');
         } catch (error: any) {
           this.logManager.addLog('warn', `停止代理进程时出错: ${error?.message}`, 'UpdateService');
-          // 继续安装，不要因为清理失败而中断
+          throw error; // 未停止内核时保留安装包，不冒险退出。
         }
       }
 
@@ -331,7 +531,7 @@ export class UpdateService {
         // Windows: 用 VBScript 隐藏窗口运行。便携态(PORTABLE_EXECUTABLE_FILE)=覆盖回原 exe 原位更新；
         // 否则=跑 NSIS setup（注册表记住目录原位升级）。两者都只动产物、不碰 data。
         const { spawn } = require('child_process');
-        const vbsPath = path.join(app.getPath('temp'), 'flowz_update.vbs');
+        const vbsPath = path.join(app.getPath('temp'), 'shadow-vpn-update.vbs');
 
         const portableTarget = process.env.PORTABLE_EXECUTABLE_FILE || null;
         // 移入新版本名 + 删旧版本名：新版本名文件放回原目录（原目录 + 下载件文件名），保留 GitHub release
@@ -361,6 +561,10 @@ export class UpdateService {
           stdio: 'ignore',
           shell: false,
         });
+        await new Promise<void>((resolve, reject) => {
+          vbs.once('spawn', resolve);
+          vbs.once('error', reject);
+        });
         vbs.unref();
 
         this.logManager.addLog('info', '更新脚本已启动，正在退出应用...', 'UpdateService');
@@ -373,7 +577,7 @@ export class UpdateService {
       } else if (process.platform === 'darwin') {
         // macOS: 自动挂载 DMG → 原子替换 .app（定位到则自动；定位不到回退手动 open DMG）。只换 .app、不碰 data。
         const { spawn } = require('child_process');
-        const scriptPath = path.join(app.getPath('temp'), 'flowz_update.sh');
+        const scriptPath = path.join(app.getPath('temp'), 'shadow-vpn-update.sh');
 
         const appBundlePath = macAppBundleFromExe(app.getPath('exe'));
         this.logManager.addLog(
@@ -381,7 +585,18 @@ export class UpdateService {
           appBundlePath ? `自动替换 .app: ${appBundlePath}` : '定位 .app 失败，回退手动拖拽',
           'UpdateService'
         );
-        const scriptContent = buildMacUpdateScript({ dmgPath: installerPath, appBundlePath });
+        const scriptContent = buildMacUpdateScript({
+          dmgPath: installerPath,
+          appBundlePath,
+          processId: process.pid,
+          confirmation: this.readyUpdate
+            ? {
+                token: randomUUID(),
+                directory: path.dirname(this.pendingPath()),
+                version: this.readyUpdate.info.version,
+              }
+            : undefined,
+        });
 
         fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
 
@@ -389,6 +604,10 @@ export class UpdateService {
         const child = spawn('/bin/bash', [scriptPath], {
           detached: true,
           stdio: 'ignore',
+        });
+        await new Promise<void>((resolve, reject) => {
+          child.once('spawn', resolve);
+          child.once('error', reject);
         });
         child.unref();
 
@@ -410,12 +629,16 @@ export class UpdateService {
         const isDeb = this.isDebUpdateForm(installerPath); // 与顶部确认框谓词同源（双守卫单一真值）
         if (isAppImage || isDeb) {
           const { spawn } = require('child_process');
-          const scriptPath = path.join(app.getPath('temp'), 'flowz_update.sh');
+          const scriptPath = path.join(app.getPath('temp'), 'shadow-vpn-update.sh');
           const scriptContent = isAppImage
             ? buildLinuxAppImageScript({ installerPath, appImageTarget: appImageTarget as string })
             : buildLinuxDebScript({ installerPath, exePath: app.getPath('exe') });
           fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
           const child = spawn('/bin/bash', [scriptPath], { detached: true, stdio: 'ignore' });
+          await new Promise<void>((resolve, reject) => {
+            child.once('spawn', resolve);
+            child.once('error', reject);
+          });
           child.unref();
           this.logManager.addLog(
             'info',
@@ -485,7 +708,10 @@ export class UpdateService {
    * 不再依赖 mainWindow（弹窗独立）→ 修「主窗销毁/托盘轻量态时提醒不弹」缺陷。签名与返回语义不变 → call site 零改。
    * action==='update' 时保留弹窗，交由 downloadUpdateWithProgress 续进 progress 态（一窗四态无缝）。
    */
-  async showUpdateDialog(updateInfo: UpdateInfo): Promise<'update' | 'later' | 'skip'> {
+  async showUpdateDialog(
+    updateInfo: UpdateInfo,
+    ready = false
+  ): Promise<'update' | 'later' | 'skip'> {
     // 已有活跃更新流（弹窗在：remind 等待 / 下载中 / error）→ 不打断、不覆盖 resolver，本次检查按「稍后」处理。
     // 防 startup 自动检查与托盘手动检查并发时第二个 showUpdateDialog 覆盖 resolver 致首个 awaiter 泄漏 + 双下载。
     if (this.updatePopupWindow && !this.updatePopupWindow.isDestroyed()) {
@@ -497,7 +723,15 @@ export class UpdateService {
       theme: this.resolvedTheme(),
       version: updateInfo.version,
       currentVersion: `v${app.getVersion()}`,
-      labels: this.popupLabels(),
+      readyToInstall: ready,
+      labels: ready
+        ? {
+            ...this.popupLabels(),
+            remindTitle: mt('updReadyTitle'),
+            update: mt('updRestart'),
+            skip: mt('updBtnLater'),
+          }
+        : this.popupLabels(),
     });
 
     const action = await this.awaitPopupAction(['update', 'later', 'skip']);
@@ -841,76 +1075,12 @@ export class UpdateService {
   // ========== 私有方法 ==========
 
   private async fetchReleases(): Promise<any[]> {
-    const sess = await this.updateSession();
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      const request = net.request({
-        method: 'GET',
-        url: `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`,
-        session: sess,
-      });
-      // 单点收口：防 request/response 双错误源重复 settle；clear timeout；之后任何回调都 no-op。
-      const finish = (err: Error | null, val?: any[]) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (err) reject(err);
-        else resolve(val as any[]);
-      };
-      // 兜底超时：net.request 在连接被中间设备静默吞掉时可能长时间不触发 error → 检查更新 Promise 永不 settle
-      // → 前端永久转圈（与 CoreUpdateService.fetchReleases 对齐）。15s 后主动 abort+reject。
-      const timer = setTimeout(() => {
-        try {
-          request.abort();
-        } catch {
-          /* ignore */
-        }
-        finish(new Error('检查更新超时（GitHub 不可达或被网络拦截）'));
-      }, 15000);
-
-      request.setHeader('User-Agent', APP_USER_AGENT);
-      request.setHeader('Accept', 'application/vnd.github.v3+json');
-
-      request.on('response', (res) => {
-        let data = '';
-        res.on('data', (chunk) => {
-          // 已收口（超限/超时/错误）后忽略 drain 中的残帧：abort 不同步停止 res，
-          // 已 buffer 的帧仍会触发 data，若继续累加会徒增内存峰值。
-          if (settled) return;
-          data += chunk.toString();
-          // OOM 防护：GitHub api 被劫持/WAF 接管可回灌 GB 级响应撞 V8 堆/512MB string 上限。
-          // 启动后 5s 自动检查更新即可被诱发。超 16MiB 即 abort + 单点收口 finish（releases JSON 实际 < 数 MB）。
-          if (data.length > MAX_GITHUB_JSON_BYTES) {
-            try {
-              request.abort();
-            } catch {
-              /* ignore */
-            }
-            finish(new Error('GitHub 响应过大（疑似被劫持/WAF 拦截）'));
-            return;
-          }
-        });
-        res.on('end', () => {
-          if (res.statusCode === 200) {
-            try {
-              finish(null, JSON.parse(data));
-            } catch {
-              finish(new Error('解析 GitHub API 响应失败'));
-            }
-          } else if (res.statusCode === 403) {
-            finish(new Error('GitHub API 访问频率限制 (403)，请稍后再试或使用代理'));
-          } else {
-            finish(new Error(`GitHub API 返回错误: ${res.statusCode}`));
-          }
-        });
-        // response 阶段断连（ERR_CONNECTION_CLOSED 等）从 res emit 'error'，缺此 handler 会逃逸成主进程
-        // uncaughtException 且 Promise 永不 settle → checkForUpdate await 永挂 → 前端检查更新永久转圈。
-        res.on('error', (err: Error) => finish(err));
-      });
-
-      request.on('error', (err: Error) => finish(err));
-      request.end();
-    });
+    const session = await this.updateSession();
+    return fetchPublisherReleases(
+      'dsanying/VPN',
+      (url, accept, signal) => readPublisherResponse(url, accept, session, signal),
+      desktopReleaseCatalogState()
+    );
   }
 
   private findSuitableAsset(assets: any[]): any | null {
@@ -1019,14 +1189,29 @@ export class UpdateService {
       onMirror: () => void;
       onProgress: (downloadedBytes: number, totalSize: number) => void;
     },
-    ctl?: DownloadControl
+    ctl?: DownloadControl,
+    expectedSha256?: string,
+    redirects = 0,
+    sources?: string[],
+    sourceIndex = 0
   ): Promise<void> {
-    // #60：先解析用户 ghProxyPrefix（async），供 handleError 兜底镜像拼接用——与 CoreDownloader.downloadFile 同口径
-    // （在 Promise executor 外 await 配置，闭包内用解析后的同步值）。未配置 → undefined（ghMirrorUrl 回落内置 preset[0]）。
+    const sourceUrl = new URL(url);
+    if (
+      sourceUrl.protocol !== 'https:' ||
+      sourceUrl.username ||
+      sourceUrl.password ||
+      redirects > 5
+    )
+      throw new Error('更新下载地址或重定向不安全');
+    const digest = expectedSha256 ?? (await this.officialAssetDigest(url));
+    if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('应用安装包缺少有效的官方 SHA-256');
+    this.verifiedDownloads.delete(destPath);
     const ghPrefix = await this.resolveGhPrefix();
+    const candidates = sources ?? (isRetry ? [url] : githubDownloadCandidates(url, ghPrefix));
     const sess = await this.updateSession();
     return new Promise((resolve, reject) => {
       const file = fs.createWriteStream(destPath);
+      const hash = createHash('sha256');
       let downloadedBytes = 0;
       let settled = false;
       // 完整性校验用：优先响应头 content-length，缺失回落调用方传入的 totalSize（GitHub asset size）。
@@ -1046,38 +1231,81 @@ export class UpdateService {
         if (settled) return;
         settled = true;
         idle.clear();
-        file.close();
-        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+        const cleanup = async () => {
+          await new Promise<void>((done) => {
+            if (file.closed) done();
+            else {
+              file.once('close', done);
+              file.destroy();
+            }
+          });
+          await fs.promises.rm(destPath, { force: true });
+        };
+        void cleanup()
+          .then(() => {
+            // 用户取消（abort 触发）：不走镜像重试，直接 reject → downloadUpdateWithProgress 按取消收尾。
+            if (ctl?.cancelled) {
+              reject(err);
+              return;
+            }
 
-        // 用户取消（abort 触发）：不走镜像重试，直接 reject → downloadUpdateWithProgress 按取消收尾。
-        if (ctl?.cancelled) {
-          reject(err);
-          return;
-        }
-
-        if (!isRetry && url.includes('github.com')) {
-          this.logManager.addLog(
-            'warn',
-            `下载出错，尝试使用加速镜像: ${err.message}`,
-            'UpdateService'
-          );
-          cb.onMirror();
-          // #60：兜底镜像优先用用户配置的 ghProxyPrefix（应用内核/资源下载同一加速前缀），缺失才回落内置 preset[0]。
-          const mirrorUrl = ghMirrorUrl(url, ghPrefix);
-          this.downloadWithHardening(mirrorUrl, destPath, totalSize, true, cb, ctl)
-            .then(resolve)
-            .catch(reject);
-          return;
-        }
-        reject(err);
+            if (sourceIndex + 1 < candidates.length) {
+              this.logManager.addLog(
+                'warn',
+                `下载出错，尝试使用加速镜像: ${err.message}`,
+                'UpdateService'
+              );
+              cb.onMirror();
+              // 各渠道沿用同一官方摘要，关闭并清理旧文件后才开始下一次请求。
+              const mirrorUrl = candidates[sourceIndex + 1];
+              this.downloadWithHardening(
+                mirrorUrl,
+                destPath,
+                totalSize,
+                true,
+                cb,
+                ctl,
+                digest,
+                redirects,
+                candidates,
+                sourceIndex + 1
+              )
+                .then(resolve)
+                .catch(reject);
+              return;
+            }
+            reject(err);
+          })
+          .catch(reject);
       };
 
-      const request = net.request({
-        url: url,
-        method: 'GET',
-        session: sess,
+      file.on('error', handleError);
+      let request: ReturnType<typeof net.request>;
+      try {
+        request = net.request({ url, method: 'GET', session: sess });
+        request.setHeader('User-Agent', APP_USER_AGENT);
+      } catch (error) {
+        handleError(error);
+        return;
+      }
+      let followedRedirects = redirects;
+      request.on('redirect', (_status, _method, location) => {
+        try {
+          const next = new URL(location, url);
+          if (
+            next.protocol !== 'https:' ||
+            next.username ||
+            next.password ||
+            ++followedRedirects > 5
+          ) {
+            request.abort();
+            handleError(new Error('应用下载重定向不安全'));
+          }
+        } catch {
+          request.abort();
+          handleError(new Error('应用下载重定向无效'));
+        }
       });
-      request.setHeader('User-Agent', APP_USER_AGENT);
       // 暴露中断钩子给「取消」动作（progress 态 × / OS 关窗）；递归镜像/重定向时更新为最新在途请求（同时仅一个活跃）。
       // 与 idle 看门狗同款：abort 后**显式** handleError 驱动 settle，不依赖 abort 是否 emit 'error'
       // （守 download-hardening「abort 之后必须自己 reject」约定；ctl.cancelled 已置位 → handleError 走 reject、跳镜像）。
@@ -1105,17 +1333,29 @@ export class UpdateService {
             if (settled) return;
             settled = true;
             idle.clear();
-            file.close();
-            if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-            // 重定向沿用 isRetry（不消耗镜像名额），但重置 settled 由新一轮 Promise 接管
-            this.downloadWithHardening(
-              Array.isArray(redirectUrl) ? redirectUrl[0] : redirectUrl,
-              destPath,
-              totalSize,
-              isRetry,
-              cb,
-              ctl
-            )
+            const closed = new Promise<void>((done) => {
+              if (file.closed) done();
+              else {
+                file.once('close', done);
+                file.destroy();
+              }
+            });
+            void closed
+              .then(() => fs.promises.rm(destPath, { force: true }))
+              .then(() =>
+                this.downloadWithHardening(
+                  Array.isArray(redirectUrl) ? redirectUrl[0] : redirectUrl,
+                  destPath,
+                  totalSize,
+                  isRetry,
+                  cb,
+                  ctl,
+                  digest,
+                  redirects + 1,
+                  candidates,
+                  sourceIndex
+                )
+              )
               .then(resolve)
               .catch(reject);
             return;
@@ -1123,12 +1363,7 @@ export class UpdateService {
         }
 
         if (response.statusCode !== 200) {
-          if (settled) return;
-          settled = true;
-          idle.clear();
-          file.close();
-          if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
-          reject(new Error(`下载失败: HTTP ${response.statusCode}`));
+          handleError(new Error(`下载失败: HTTP ${response.statusCode}`));
           return;
         }
 
@@ -1136,8 +1371,10 @@ export class UpdateService {
         expectedBytes = parseExpectedBytes(response.headers['content-length'], totalSize);
 
         response.on('data', (chunk) => {
+          if (settled) return;
           idle.arm(); // 每收到数据重置停滞计时
           downloadedBytes += chunk.length;
+          hash.update(chunk);
           cb.onProgress(downloadedBytes, totalSize);
           // ③ 背压：写盘返回 false（缓冲已满）时暂停接收，drain 后恢复，防大文件下内存堆积。
           // Electron 的 IncomingMessage TS 类型未暴露 pause/resume（运行时是可读流，确有这两方法）→ 窄化断言。
@@ -1152,10 +1389,11 @@ export class UpdateService {
         });
 
         response.on('end', () => {
+          if (settled) return;
           idle.clear();
           file.end(() => {
             if (settled) return;
-            // ② 截断校验：实收字节与期望不符 → reject（github 链接经 handleError 自动换镜像重试一次）。
+            // ② 截断校验：实收字节与期望不符 → reject（github 链接经 handleError 依次尝试候选镜像）。
             if (!isNaN(expectedBytes) && downloadedBytes !== expectedBytes) {
               handleError(
                 new Error(
@@ -1164,6 +1402,11 @@ export class UpdateService {
               );
               return;
             }
+            if (hash.digest('hex') !== digest) {
+              handleError(new Error('应用安装包 SHA-256 校验失败，拒绝安装'));
+              return;
+            }
+            this.verifiedDownloads.set(destPath, digest);
             settled = true;
             resolve();
           });

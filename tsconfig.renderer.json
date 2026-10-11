@@ -1,23 +1,13 @@
 {
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowImportingTsExtensions": true
-  },
-  "include": ["src/renderer/**/*", "src/shared/**/*"],
-  "exclude": ["node_modules", "dist", "src/main", "src/**/__tests__/**"]
+  "extends": "./web/tsconfig.app.json",
+  "include": [
+    "web/src/**/*",
+    "src/shared/**/*",
+    "web/update-popup/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "web/src/**/__tests__/**"
+  ]
 }

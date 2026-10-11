@@ -1,0 +1,23 @@
+/* Application document boundary; component geometry belongs to the shared client layer. */
+html {
+  font: var(--ds-font-size-body)/1.5 var(--ds-font-family-body);
+  text-rendering: optimizeLegibility;
+  background: var(--ds-color-canvas);
+  color: var(--ds-color-text);
+}
+body { margin: 0; -webkit-font-smoothing: antialiased; }
+html, body, #root { min-inline-size: 320px; min-block-size: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+a { color: var(--ds-color-link); }
+img, video, canvas, svg:not(.anticon svg) { max-inline-size: 100%; }
+canvas { display: block; }
+:focus-visible { outline: 2px solid var(--ds-color-focus); outline-offset: 2px; }
+.ds-page-root { inline-size: 100%; min-inline-size: 0; max-inline-size: var(--ds-layout-content-max); margin-inline: auto; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0s;
+    scroll-behavior: auto;
+  }
+}

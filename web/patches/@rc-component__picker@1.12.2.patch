@@ -1,0 +1,108 @@
+diff --git a/es/PickerTrigger/index.js b/es/PickerTrigger/index.js
+--- a/es/PickerTrigger/index.js
++++ b/es/PickerTrigger/index.js
+@@ -6,34 +6,42 @@
+ const BUILT_IN_PLACEMENTS = {
+   bottomLeft: {
+     points: ['tl', 'bl'],
+-    offset: [0, 4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 1,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   },
+   bottomRight: {
+     points: ['tr', 'br'],
+-    offset: [0, 4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 1,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   },
+   topLeft: {
+     points: ['bl', 'tl'],
+-    offset: [0, -4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 0,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   },
+   topRight: {
+     points: ['br', 'tr'],
+-    offset: [0, -4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 0,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   }
+ };
+diff --git a/lib/PickerTrigger/index.js b/lib/PickerTrigger/index.js
+--- a/lib/PickerTrigger/index.js
++++ b/lib/PickerTrigger/index.js
+@@ -15,34 +15,42 @@
+ const BUILT_IN_PLACEMENTS = {
+   bottomLeft: {
+     points: ['tl', 'bl'],
+-    offset: [0, 4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 1,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   },
+   bottomRight: {
+     points: ['tr', 'br'],
+-    offset: [0, 4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 1,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   },
+   topLeft: {
+     points: ['bl', 'tl'],
+-    offset: [0, -4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 0,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   },
+   topRight: {
+     points: ['br', 'tr'],
+-    offset: [0, -4],
++    offset: [0, 0],
+     overflow: {
+       adjustX: 0,
+-      adjustY: 1
++      adjustY: 1,
++      shiftX: true,
++      shiftY: true
+     }
+   }
+ };

@@ -37,6 +37,10 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
+import { spawn } from 'child_process';
+import { createServer, request } from 'http';
+import { createServer as createTcpServer } from 'net';
+import { once } from 'events';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-sbcheck-'));
 jest.mock('electron', () => ({
@@ -187,6 +191,210 @@ function dnsTags(c: SingBoxConfig): string[] {
 // ── 门 ──────────────────────────────────────────────────────────────────────────
 jest.setTimeout(60_000);
 
+it('automatic policy actually sends same-country domain/IP direct and other-country domain/IP to proxy', async () => {
+  const direct = createServer((_req, res) => res.end('direct'));
+  const proxy = createServer();
+  proxy.on('connect', (_req, socket) => {
+    socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    socket.once('data', () =>
+      socket.end('HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\nproxy')
+    );
+  });
+  const freePort = createTcpServer();
+  await Promise.all([
+    new Promise<void>((resolve) => direct.listen(0, '127.0.0.1', resolve)),
+    new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve)),
+    new Promise<void>((resolve) => freePort.listen(0, '127.0.0.1', resolve)),
+  ]);
+  const portOf = (server: ReturnType<typeof createServer> | ReturnType<typeof createTcpServer>) =>
+    (server.address() as { port: number }).port;
+  const targetPort = portOf(direct),
+    proxyPort = portOf(proxy),
+    mixedPort = portOf(freePort);
+  await new Promise<void>((resolve) => freePort.close(() => resolve()));
+  const countrySource = path.join(TMP, 'test-country.json'),
+    countryRules = path.join(TMP, 'rules', 'geoip-us.srs');
+  fs.mkdirSync(path.dirname(countryRules), { recursive: true });
+  fs.writeFileSync(
+    countrySource,
+    JSON.stringify({ version: 3, rules: [{ ip_cidr: ['127.0.0.1/32'] }] })
+  );
+  execFileSync(CORE, ['rule-set', 'compile', '--output', countryRules, countrySource]);
+  const generated = svcFor().gen(
+    cfg({
+      mixedPort,
+      localProxyPort: mixedPort,
+      bypassLAN: false,
+      enableIPv6: true,
+      servers: [
+        { ...domainNode(), protocol: 'http', address: 'proxy.example.com', port: proxyPort },
+      ],
+      regionRouting: { automatic: true, enabled: true, region: 'us', reverse: false },
+      dnsConfig: {
+        enableFakeIp: true,
+        domesticDns: 'https://doh.pub/dns-query',
+        foreignDns: 'https://dns.google/dns-query',
+      },
+    } as Partial<UserConfig>)
+  );
+  // All networking is loopback-only. The real route/DNS rules are untouched; DNS answers are deterministic.
+  generated.route!.auto_detect_interface = false;
+  generated.dns!.servers = generated.dns!.servers.map((server) =>
+    server.type === 'fakeip'
+      ? server
+      : {
+          type: 'hosts',
+          tag: server.tag,
+          predefined: {
+            'local.example.com': '127.0.0.1',
+            'foreign.example.com': '::1',
+            'proxy.example.com': '127.0.0.1',
+          },
+        }
+  );
+  expect(generated.dns?.rules).toContainEqual({
+    match_response: true,
+    rule_set: 'geoip-us',
+    action: 'respond',
+  });
+  expectCheckOk(generated, 'automatic-country-runtime');
+  const file = path.join(TMP, 'automatic-country-runtime.json');
+  const child = spawn(CORE, ['run', '-c', file], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let diagnostic = '';
+  child.stderr.on('data', (chunk) => {
+    diagnostic += chunk.toString();
+  });
+  child.stdout.on('data', (chunk) => {
+    diagnostic += chunk.toString();
+  });
+  const exited = once(child, 'exit');
+  const fetch = (host: string) =>
+    new Promise<string>((resolve, reject) => {
+      const req = request(
+        {
+          hostname: '127.0.0.1',
+          port: mixedPort,
+          path: `http://${host}:${targetPort}/`,
+          headers: { Host: `${host}:${targetPort}` },
+          timeout: 500,
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => resolve(body));
+        }
+      );
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('request timed out')));
+      req.end();
+    });
+  try {
+    let ready = false;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        if ((await fetch('127.0.0.1')) === 'direct') {
+          ready = true;
+          break;
+        }
+      } catch {
+        /* Wait for listener, not a substituted route result. */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!ready) throw new Error(`Core listener/direct request failed: ${diagnostic}`);
+    expect(await fetch('local.example.com')).toBe('direct');
+    expect(await fetch('foreign.example.com')).toBe('proxy');
+    expect(await fetch('[::1]')).toBe('proxy');
+  } finally {
+    child.kill('SIGTERM');
+    await exited;
+    direct.closeAllConnections();
+    proxy.closeAllConnections();
+    await Promise.all([
+      new Promise<void>((resolve) => direct.close(() => resolve())),
+      new Promise<void>((resolve) => proxy.close(() => resolve())),
+    ]);
+    fs.unlinkSync(countryRules);
+  }
+});
+
+it.each([false, true])(
+  'automatic country DNS response matching and IP routing pass real core (FakeIP=%s)',
+  (enableFakeIp) => {
+    const rulesDir = path.join(TMP, 'rules');
+    fs.mkdirSync(rulesDir, { recursive: true });
+    fs.copyFileSync(
+      path.join(REPO_ROOT, 'resources/data/geoip-cn.srs'),
+      path.join(rulesDir, 'geoip-cn.srs')
+    );
+    const generated = svcFor().gen(
+      cfg({
+        servers: [domainNode()],
+        regionRouting: { automatic: true, enabled: true, region: 'cn', reverse: false },
+        dnsConfig: {
+          domesticDns: 'https://doh.pub/dns-query',
+          foreignDns: 'https://dns.google/dns-query',
+          enableFakeIp,
+        },
+      } as Partial<UserConfig>)
+    );
+    expect(generated.dns?.rules).toContainEqual(
+      expect.objectContaining({ action: 'evaluate', query_type: ['A', 'AAAA'] })
+    );
+    expect(generated.dns?.rules).toContainEqual({
+      match_response: true,
+      rule_set: 'geoip-cn',
+      action: 'respond',
+    });
+    expect(generated.route?.rules).toContainEqual({
+      rule_set: 'geoip-cn',
+      action: 'route',
+      outbound: 'direct',
+    });
+    expect(generated.route?.rules).toContainEqual({ action: 'resolve', timeout: '5s' });
+    expect(generated.route?.rules?.some((rule) => rule.domain_keyword?.includes('google'))).toBe(
+      false
+    );
+    expectCheckOk(generated, `automatic-country-${enableFakeIp}`);
+    fs.unlinkSync(path.join(rulesDir, 'geoip-cn.srs'));
+  }
+);
+
+it.each(['proxy', 'direct', 'block'] as const)(
+  'installed application path/regex %s passes the bundled core',
+  (action) => {
+    const pattern = '^/Applications/Example\\\\.app/';
+    const generated = svcFor().gen(
+      cfg({
+        servers: [domainNode()],
+        appRoutingEnabled: true,
+        appRules: [{ appId: 'custom-installed-example', action, enabled: true }],
+        customAppPresets: [
+          {
+            id: 'custom-installed-example',
+            name: 'Example',
+            emoji: '',
+            geositeTags: [],
+            processPaths: ['/opt/example/bin/example'],
+            processPathRegex: [pattern],
+          },
+        ],
+      })
+    );
+    expect(generated.route?.rules).toContainEqual(
+      expect.objectContaining({
+        process_path_regex: [pattern],
+        action: action === 'block' ? 'reject' : 'route',
+      })
+    );
+    if (action === 'direct')
+      expect(generated.dns?.rules).toContainEqual(
+        expect.objectContaining({ process_path_regex: [pattern] })
+      );
+    expectCheckOk(generated, `installed-app-${action}`);
+  }
+);
+
 afterAll(() => {
   try {
     fs.rmSync(TMP, { recursive: true, force: true });
@@ -230,7 +438,10 @@ describe('sing-box check 门 — 生成的全量 config', () => {
       cfg({
         proxyModeType: 'tun',
         servers: [domainNode(), wg],
-        dnsConfig: { enableFakeIp: true },
+        dnsConfig: {
+          domesticDns: 'https://doh.pub/dns-query',
+          foreignDns: 'https://dns.google/dns-query',
+        },
       } as unknown as Partial<UserConfig>)
     );
     // outbound 侧：结构化且引用 race server tag（M7 的悬空引用面由 check 兜底）
@@ -249,7 +460,10 @@ describe('sing-box check 门 — 生成的全量 config', () => {
     const c = svcFor().gen(
       cfg({
         servers: [domainNode()],
-        dnsConfig: { enableFakeIp: false },
+        dnsConfig: {
+          domesticDns: 'https://doh.pub/dns-query',
+          foreignDns: 'https://dns.google/dns-query',
+        },
         resolveDestination: true,
         customRules: [
           {
@@ -302,7 +516,7 @@ describe('sing-box check 门 — 生成的全量 config', () => {
             emoji: '🚫',
             geositeTags: [],
             geoipTags: [],
-            processNames: ['blocked.exe'],
+            processPaths: ['/opt/blocked/blocked.exe'],
           },
         ],
         appRules: [{ appId: 'blocked-app', action: 'block', enabled: true }],
@@ -310,9 +524,11 @@ describe('sing-box check 门 — 生成的全量 config', () => {
     );
     // ① 验的是不是声称的对象：两条阻断腿都在，且都是 reject（缺一则 check 绿也无意义）。
     const legs = (c.route?.rules ?? []).filter((r) => {
-      const x = r as { domain_suffix?: string[]; process_name?: string[] };
-      return (x.domain_suffix ?? []).includes('ads.example') ||
-        (x.process_name ?? []).includes('blocked.exe');
+      const x = r as { domain_suffix?: string[]; process_path?: string[] };
+      return (
+        (x.domain_suffix ?? []).includes('ads.example') ||
+        (x.process_path ?? []).includes('/opt/blocked/blocked.exe')
+      );
     }) as { action?: string; outbound?: string }[];
     expect(legs).toHaveLength(2);
     for (const leg of legs) {
@@ -409,4 +625,107 @@ describe('sing-box check 门 — 门自身的牙（变异自检）', () => {
     c.services![0].dashboard!.http_client!.detour = 'no-such-outbound';
     expect(runCheck(c, 'mut-dashboard-dangling-detour').code).toBe(0);
   });
+});
+
+it('temporary speed tests isolate a malformed node while a valid HTTP proxy completes real requests', async () => {
+  const { createServer } = await import('http');
+  const { SpeedTestService } = await import('../SpeedTestService');
+  const { resourceManager } = await import('../ResourceManager');
+  const sockets = new Set<import('net').Socket>();
+  const proxy = createServer();
+  let requests = 0;
+  proxy.on('connect', (_request, socket) => {
+    const stream = socket as import('net').Socket;
+    sockets.add(stream);
+    stream.on('close', () => sockets.delete(stream));
+    stream.on('error', () => {});
+    stream.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    let buffered = '';
+    stream.on('data', (chunk) => {
+      buffered += chunk.toString('latin1');
+      while (buffered.includes('\r\n\r\n')) {
+        buffered = buffered.slice(buffered.indexOf('\r\n\r\n') + 4);
+        requests++;
+        stream.write('HTTP/1.1 204 No Content\r\n\r\n');
+      }
+    });
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const port = (proxy.address() as import('net').AddressInfo).port;
+  const corePath = jest.spyOn(resourceManager, 'getSingBoxPath').mockReturnValue(CORE);
+  try {
+    const service = new SpeedTestService({ addLog: jest.fn() } as never, (node, tag) =>
+      node.id === 'bad'
+        ? {
+            type: 'vless',
+            tag,
+            server: '127.0.0.1',
+            server_port: port,
+            uuid: '00000000-0000-4000-8000-000000000001',
+            transport: { type: 'unsupported-test-transport' },
+          }
+        : { type: 'http', tag, server: '127.0.0.1', server_port: port }
+    );
+    const result = await service.testAllServers(
+      ['bad', 'good'].map((id) => ({ id, name: id, protocol: 'http', address: '127.0.0.1', port })),
+      undefined,
+      undefined,
+      'http://example.com/generate_204'
+    );
+    expect(result.results.get('bad')).toBeNull();
+    expect(result.results.get('good')).toBeGreaterThanOrEqual(0);
+    expect(service.getNodeMeasurement('bad')?.reason).toBe('outbound-invalid');
+    expect(requests).toBe(2);
+    expect(fs.readdirSync(TMP).some((file) => file.startsWith('speedtest_'))).toBe(false);
+  } finally {
+    corePath.mockRestore();
+    sockets.forEach((socket) => socket.destroy());
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  }
+});
+
+it('one ordered domain/application list passes the real core and preserves first-match order', () => {
+  const generated = svcFor().gen(
+    cfg({
+      servers: [domainNode()],
+      customRules: [
+        {
+          id: 'unified-domain-example',
+          type: 'domainSuffix',
+          values: ['example.com'],
+          action: 'proxy',
+          enabled: true,
+        },
+        {
+          id: 'unified-application-example',
+          type: 'processPathRegex',
+          values: ['^/Applications/Example\\.app/', '^/opt/example/main$'],
+          action: 'direct',
+          enabled: true,
+        },
+      ],
+    })
+  );
+  const rules = generated.route?.rules ?? [];
+  const domainIndex = rules.findIndex((rule) => rule.domain_suffix?.includes('example.com'));
+  const applicationIndex = rules.findIndex((rule) =>
+    rule.process_path_regex?.includes('^/Applications/Example\\.app/')
+  );
+  expect(domainIndex).toBeGreaterThanOrEqual(0);
+  expect(applicationIndex).toBeGreaterThan(domainIndex);
+  expect(rules[applicationIndex].outbound).toBe('direct');
+  const dnsRules = generated.dns?.rules ?? [];
+  const dnsDomain = dnsRules.findIndex((rule) => rule.domain_suffix?.includes('example.com'));
+  const dnsApp = dnsRules.findIndex((rule) =>
+    rule.process_path_regex?.includes('^/Applications/Example\\.app/')
+  );
+  expect(dnsDomain).toBeGreaterThanOrEqual(0);
+  expect(dnsApp).toBeGreaterThan(dnsDomain);
+  expect(generated.dns?.servers).toContainEqual(
+    expect.objectContaining({
+      tag: 'dns-rule-unified-domain-example',
+      detour: 'rule-sel-unified-domain-example',
+    })
+  );
+  expectCheckOk(generated, 'unified-domain-application');
 });

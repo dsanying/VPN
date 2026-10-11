@@ -49,4 +49,33 @@ describe('SpeedTestService.runWithLimit（并发上限工作池）', () => {
     });
     expect(called).toBe(0);
   });
+
+  it('一个 worker 失败时先收完其他在飞任务，不允许提前结束并重用槽', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const inFlight = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const visited: number[] = [];
+    let settled = false;
+    const run = svc.runWithLimit([1, 2, 3], 2, async (item) => {
+      visited.push(item);
+      if (item === 1) throw new Error('worker failed');
+      started();
+      await pending;
+    });
+    const observed = run.catch((error: Error) => {
+      settled = true;
+      return error.message;
+    });
+    await inFlight;
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    expect(await observed).toBe('worker failed');
+    expect(visited).toEqual([1, 2]);
+  });
 });

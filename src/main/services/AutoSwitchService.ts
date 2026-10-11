@@ -1,3 +1,4 @@
+import { DEFAULT_SPEED_TEST_URL } from '../../shared/speed-test';
 /**
  * 自动换节点服务
  *
@@ -15,8 +16,6 @@
  * 注意：同一时刻只允许一个换节点操作在进行，防止并发切换。
  */
 
-import * as net from 'net';
-import * as http from 'http';
 import { EventEmitter } from 'events';
 import type { BrowserWindow } from 'electron';
 import type { ConfigManager } from './ConfigManager';
@@ -24,20 +23,13 @@ import type { LogManager } from './LogManager';
 import type { ProxyManager } from './ProxyManager';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { ProxyErrorCode } from '../../shared/types';
-import { localProxyPort } from '../../shared/proxy-ports';
+import type { SpeedTestService } from './SpeedTestService';
 
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30 秒检测一次
 const MAX_CONSECUTIVE_FAILURES = 3; // 连续 3 次失败触发换节点
-const PING_TIMEOUT_MS = 4_000; // 单次 ping 超时 4 秒
 const SWITCH_COOLDOWN_MS = 60_000; // 换节点冷却 60 秒，防止频繁切换
-const CONNECTIVITY_TIMEOUT_MS = 5_000; // 应用层连通性检测超时
 const MAX_AUTO_SWITCHES = 3; // 熔断阈值：连续切换 3 次仍未恢复则暂停
 const BREAKER_COOLDOWN_MS = 10 * 60_000; // 熔断冷却 10 分钟后再放行一次重试
-// 经代理请求的连通性探测端点（返回 204）：海外可达即证明代理链通；多个互为兜底
-const CONNECTIVITY_URLS = [
-  'http://cp.cloudflare.com/generate_204',
-  'http://www.gstatic.com/generate_204',
-];
 
 export class AutoSwitchService extends EventEmitter {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -45,6 +37,8 @@ export class AutoSwitchService extends EventEmitter {
   private isSwitching = false;
   private lastSwitchTime = 0;
   private enabled = false;
+  private heartbeatBusy = false;
+  private generation = 0;
   // 熔断状态：连续自动切换次数 + 熔断触发时刻
   private consecutiveSwitches = 0;
   private breakerTrippedAt = 0;
@@ -53,7 +47,8 @@ export class AutoSwitchService extends EventEmitter {
     private readonly configManager: ConfigManager,
     private readonly proxyManager: ProxyManager,
     private readonly logManager: LogManager,
-    private readonly getMainWindow: () => BrowserWindow | null
+    private readonly getMainWindow: () => BrowserWindow | null,
+    private readonly speedTestService: SpeedTestService
   ) {
     super();
   }
@@ -73,6 +68,7 @@ export class AutoSwitchService extends EventEmitter {
   disable(): void {
     if (!this.enabled) return;
     this.enabled = false;
+    this.generation++;
     this.stopHeartbeat();
     this.logManager.addLog('info', '自动换节点已禁用', 'AutoSwitch');
   }
@@ -100,48 +96,64 @@ export class AutoSwitchService extends EventEmitter {
   }
 
   private async runHeartbeat(): Promise<void> {
-    if (!this.enabled || this.isSwitching) return;
+    if (!this.enabled || this.isSwitching || this.heartbeatBusy) return;
+    const generation = this.generation;
+    this.heartbeatBusy = true;
+    try {
+      // 代理没在运行时不需要检测
+      const status = this.proxyManager.getStatus();
+      if (!status?.running) {
+        this.consecutiveFailures = 0;
+        return;
+      }
 
-    // 代理没在运行时不需要检测
-    const status = this.proxyManager.getStatus();
-    if (!status?.running) {
-      this.consecutiveFailures = 0;
-      return;
-    }
+      const config = await this.configManager.loadConfig().catch(() => null);
+      if (
+        !config?.selectedServerId ||
+        config.proxyMode === 'direct' ||
+        this.proxyManager.isLoginFallbackEngaged()
+      )
+        return;
 
-    const config = await this.configManager.loadConfig().catch(() => null);
-    if (!config?.selectedServerId) return;
+      const server = config.servers.find((s) => s.id === config.selectedServerId);
+      if (!server) return;
 
-    const server = config.servers.find((s) => s.id === config.selectedServerId);
-    if (!server) return;
+      // 应用层连通性检测：经本地 mixed 代理端口请求 generate_204，验证整条代理链而非裸 TCP 端口
+      const port = this.proxyManager.getProbePorts()?.proxy;
+      if (!port) return;
+      const selectedId = config.selectedServerId;
+      const alive = await this.speedTestService.checkProxyHealth(port);
+      if (!this.enabled || generation !== this.generation || !this.proxyManager.getStatus().running)
+        return;
+      const latest = await this.configManager.loadConfig();
+      if (latest.selectedServerId !== selectedId || latest.proxyMode === 'direct') return;
 
-    // 应用层连通性检测：经本地 mixed 代理端口请求 generate_204，验证整条代理链而非裸 TCP 端口
-    const httpPort = localProxyPort(config);
-    const alive = await this.checkProxyConnectivity(httpPort);
-
-    if (alive) {
-      if (this.consecutiveFailures > 0) {
+      if (alive) {
+        if (this.consecutiveFailures > 0) {
+          this.logManager.addLog(
+            'info',
+            `连通性恢复正常（此前连续失败 ${this.consecutiveFailures} 次）`,
+            'AutoSwitch'
+          );
+        }
+        this.consecutiveFailures = 0;
+        // 恢复联通即视为已稳定，复位熔断计数
+        this.consecutiveSwitches = 0;
+      } else {
+        this.consecutiveFailures++;
         this.logManager.addLog(
-          'info',
-          `连通性恢复正常（此前连续失败 ${this.consecutiveFailures} 次）`,
+          'warn',
+          `连通性检测失败 [${this.consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}]: 当前节点 ${server.name}`,
           'AutoSwitch'
         );
-      }
-      this.consecutiveFailures = 0;
-      // 恢复联通即视为已稳定，复位熔断计数
-      this.consecutiveSwitches = 0;
-    } else {
-      this.consecutiveFailures++;
-      this.logManager.addLog(
-        'warn',
-        `连通性检测失败 [${this.consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}]: 当前节点 ${server.name}`,
-        'AutoSwitch'
-      );
 
-      if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        this.consecutiveFailures = 0;
-        await this.triggerSwitch('连通性检测');
+        if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          this.consecutiveFailures = 0;
+          await this.triggerSwitch('连通性检测');
+        }
       }
+    } finally {
+      this.heartbeatBusy = false;
     }
   }
 
@@ -177,6 +189,7 @@ export class AutoSwitchService extends EventEmitter {
       return;
     }
 
+    const generation = this.generation;
     this.isSwitching = true;
     this.lastSwitchTime = now;
 
@@ -197,18 +210,28 @@ export class AutoSwitchService extends EventEmitter {
         'AutoSwitch'
       );
 
-      // 并行对所有候选节点做 TCP Ping + 延迟测量
-      const results = await Promise.all(
-        candidates.map(async (server) => {
-          const latency = await this.measureLatency(server.address, server.port);
-          return { server, latency };
-        })
+      const measured = await this.speedTestService.testAllServers(
+        candidates,
+        undefined,
+        undefined,
+        DEFAULT_SPEED_TEST_URL
       );
-
-      // 过滤掉不可达的节点，按延迟排序
-      const available = results
-        .filter((r) => r.latency !== null)
-        .sort((a, b) => (a.latency as number) - (b.latency as number));
+      if (
+        !this.enabled ||
+        generation !== this.generation ||
+        measured.outcome !== 'completed' ||
+        !this.proxyManager.getStatus().running
+      )
+        return;
+      const latest = await this.configManager.loadConfig();
+      if (latest.selectedServerId !== currentId || latest.proxyMode === 'direct') return;
+      const available = candidates
+        .map((server) => ({ server, latency: measured.results.get(server.id) }))
+        .filter(
+          (r): r is { server: (typeof candidates)[number]; latency: number } =>
+            typeof r.latency === 'number' && r.latency >= 0
+        )
+        .sort((a, b) => a.latency - b.latency);
 
       if (available.length === 0) {
         this.logManager.addLog('warn', '所有候选节点均不可达，无法自动切换', 'AutoSwitch');
@@ -223,11 +246,19 @@ export class AutoSwitchService extends EventEmitter {
       );
 
       // 切换配置（先落盘，保证 UI/重启都用新选中节点）
-      const newConfig = { ...config, selectedServerId: best.server.id };
+      const newConfig = { ...latest, selectedServerId: best.server.id };
       await this.configManager.saveConfig(newConfig);
 
       // 优先经 clash_api 热切换（switchMode 内部 canHotSwitch，失败/不适用自动退回重启）
-      await this.proxyManager.switchMode(newConfig);
+      try {
+        await this.proxyManager.switchMode(newConfig);
+      } catch (error) {
+        const afterFailure = await this.configManager.loadConfig();
+        if (afterFailure.selectedServerId === best.server.id) {
+          await this.configManager.saveConfig({ ...afterFailure, selectedServerId: currentId });
+        }
+        throw error;
+      }
 
       // 计入熔断窗口：连续切换达上限则触发熔断（由后续心跳恢复来复位）
       this.consecutiveSwitches++;
@@ -257,84 +288,6 @@ export class AutoSwitchService extends EventEmitter {
     } finally {
       this.isSwitching = false;
     }
-  }
-
-  // ─── 工具方法 ────────────────────────────────────────────────────────────
-
-  /**
-   * 应用层连通性检测：经本地代理 HTTP 端口请求 generate_204 端点，任一端点返回 2xx/3xx 即判通。
-   * 比裸 TCP Ping 节点地址更可靠——端口可达不代表代理握手/转发正常（鉴权失效、节点限流、TUN 回流等）。
-   */
-  private async checkProxyConnectivity(httpPort: number): Promise<boolean> {
-    for (const url of CONNECTIVITY_URLS) {
-      if (await this.probeThroughProxy(httpPort, url)) return true;
-    }
-    return false;
-  }
-
-  /**
-   * 经 HTTP 代理（127.0.0.1:httpPort）以绝对 URI 形式请求目标，判断是否拿到响应。
-   */
-  private probeThroughProxy(httpPort: number, targetUrl: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      let settled = false;
-      const done = (v: boolean) => {
-        if (!settled) {
-          settled = true;
-          resolve(v);
-        }
-      };
-      try {
-        const u = new URL(targetUrl);
-        const req = http.request(
-          {
-            host: '127.0.0.1',
-            port: httpPort,
-            method: 'GET',
-            path: targetUrl, // 绝对 URI = HTTP 代理请求格式
-            headers: { Host: u.host, 'Proxy-Connection': 'close' },
-            timeout: CONNECTIVITY_TIMEOUT_MS,
-          },
-          (res) => {
-            const code = res.statusCode ?? 0;
-            res.resume(); // 丢弃响应体，释放 socket
-            done(code >= 200 && code < 400);
-          }
-        );
-        req.on('timeout', () => {
-          req.destroy();
-          done(false);
-        });
-        req.on('error', () => done(false));
-        req.end();
-      } catch {
-        done(false);
-      }
-    });
-  }
-
-  /**
-   * 测量延迟（毫秒）
-   */
-  private measureLatency(host: string, port: number): Promise<number | null> {
-    return new Promise((resolve) => {
-      const start = Date.now();
-      const socket = new net.Socket();
-      socket.setTimeout(PING_TIMEOUT_MS);
-      socket.on('connect', () => {
-        socket.destroy();
-        resolve(Date.now() - start);
-      });
-      socket.on('error', () => {
-        socket.destroy();
-        resolve(null);
-      });
-      socket.on('timeout', () => {
-        socket.destroy();
-        resolve(null);
-      });
-      socket.connect(port, host);
-    });
   }
 
   destroy(): void {

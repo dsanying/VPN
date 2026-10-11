@@ -84,7 +84,7 @@ export interface DnsInterfaceWatcherDeps {
 
 /**
  * 纯门控判定：是否应执行 DNS reconcile（镜像 setDns 的接管条件）。
- * 仅 TUN 模式 + 未关闭接管开关 + 当前确有 marker（接管已激活）才放行 —— 系统代理/手动模式或未接管时，watcher
+ * 仅 TUN 模式 + 明确开启接管开关 + 当前确有 marker（接管已激活）才放行 —— 系统代理/手动模式或未接管时，watcher
  * 绝不擅自改系统 DNS。抽成纯函数便于单测，也供 ProxyManager 接线层与本判定共用同一真值。
  *
  * @param config 当前生效配置（ProxyManager.currentConfig）；null/非 TUN/关掉开关 → false。
@@ -96,7 +96,7 @@ export function shouldReconcileDns(
 ): boolean {
   if (!config) return false;
   if (config.proxyModeType !== 'tun') return false;
-  if (config.dnsConfig?.takeoverSystemDns === false) return false;
+  if (config.dnsConfig?.takeoverSystemDns !== true) return false;
   return hasMarker;
 }
 

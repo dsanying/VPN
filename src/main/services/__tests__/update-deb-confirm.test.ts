@@ -8,6 +8,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fsSync from 'fs';
+import { createHash } from 'crypto';
 
 const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-deb-confirm-'));
 
@@ -91,6 +92,11 @@ describe('UpdateService deb 更新一次授权说明框', () => {
       const svc = new UpdateService(log);
       const cleanup = jest.fn(async () => {});
       svc.setCleanupCallback(cleanup);
+      // 模拟下载阶段已通过官方 SHA-256；取消流程仍必须先验证文件未被替换。
+      (svc as unknown as { verifiedDownloads: Map<string, string> }).verifiedDownloads.set(
+        deb,
+        createHash('sha256').update('dummy').digest('hex')
+      );
 
       const ret = await svc.installUpdate(deb);
 

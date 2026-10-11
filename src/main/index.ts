@@ -1,11 +1,19 @@
+import { resolveUserDataPath } from './validation-profile';
+import { RUNTIME_POLICY } from '../shared/runtime-policy';
+import { DEFAULT_SPEED_TEST_URL } from '../shared/speed-test';
+import { createConnectionApplicationResolver } from './services/ConnectionApplications';
+import { getSubscriptionSynchronizer } from './ipc/handlers/subscription-handlers';
+import { WebsiteMeasurementStore, websiteFingerprint } from './services/WebsiteMeasurementStore';
+import { getNodeMeasurementStore } from './services/speed-test-runner';
 import { app, BrowserWindow, dialog, Menu, powerMonitor, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
 app.setName('暗影VPN');
-app.setPath('userData', path.join(app.getPath('appData'), 'ShadowVPN-FlowZ'));
+app.setPath('userData', resolveUserDataPath(app.getPath('appData'), process.argv));
 
 import { ConfigManager } from './services/ConfigManager';
+import { NetworkChangeMonitor } from './services/NetworkChangeMonitor';
 import { ProtocolParser } from './services/ProtocolParser';
 import { LogManager } from './services/LogManager';
 import { TrayManager } from './services/TrayManager';
@@ -34,7 +42,6 @@ import { mt, setMainLanguage } from './i18n';
 import { runCliEarlyExit } from './cli-early-exit';
 import { selectPortableStaleOld } from './services/update-install-script';
 import { SubscriptionService } from './services/SubscriptionService';
-import { registerPrivacyHandlers } from './ipc/handlers/privacy-handlers';
 import {
   registerConfigHandlers,
   registerServerHandlers,
@@ -56,17 +63,18 @@ import {
   registerIpInfoHandlers,
   registerUnlockHandlers,
   registerSystemHandlers,
-  registerRuleResourceHandlers,
   registerStatsSubscriptionHandlers,
 } from './ipc/handlers';
 import { setIpcLogger, registerIpcHandler } from './ipc/ipc-handler';
 import { createAutoStartManager } from './services/AutoStartManager';
+import { privateDocumentStore } from './services/private-document-store';
+import { GlobalUpdateService } from './services/GlobalUpdateService';
+import { setGlobalUpdateService } from './ipc/handlers/update-handlers';
 import { UpdateService } from './services/UpdateService';
 import { CoreUpdateService } from './services/CoreUpdateService';
 import { CoreUpdateScheduler } from './services/CoreUpdateScheduler';
 import { SpeedTestService } from './services/SpeedTestService';
 import { AutoSwitchService } from './services/AutoSwitchService';
-import { SubscriptionScheduler } from './services/SubscriptionScheduler';
 import {
   StatsWorkerHost,
   type StatsWorkerHostOptions,
@@ -76,13 +84,13 @@ import { StatsSimulator } from './services/StatsSimulator';
 import { StatsSubscriptionRegistry } from './services/StatsSubscriptionRegistry';
 import { PlatformPrivilegeService } from './services/PlatformPrivilegeService';
 import { IpInfoService } from './services/IpInfoService';
+import { SmartRoutingService } from './services/SmartRoutingService';
+import { networkInterfaces } from 'os';
+import { computeNetworkFingerprint } from './services/network-fingerprint';
 import { createExitProbeLatencyRunner } from './services/exit-probe-latency';
 import { UnlockDetectionService } from './services/unlock/UnlockDetectionService';
-import { localProxyPort } from '../shared/proxy-ports';
-import { RuleResourceManager } from './services/RuleResourceManager';
+import { RoutingDataService } from './services/RoutingDataService';
 import { UpdateNetwork } from './services/UpdateNetwork';
-import { seedBuiltinRuleSets } from './services/builtin-geo-rulesets';
-import { RuleResourceScheduler } from './services/RuleResourceScheduler';
 import { HelperManager } from './services/HelperManager';
 import { WindowsServiceHelper } from './services/WindowsServiceHelper';
 import { LinuxServiceHelper } from './services/LinuxServiceHelper';
@@ -214,28 +222,12 @@ function isUiBroadcastActive(): boolean {
   return !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !isDragging;
 }
 
-let isPrivacyMode = false;
-
+/** Compatibility for legacy configuration IPC; the application no longer provides a privacy lock. */
 export function getPrivacyMode(): boolean {
-  return isPrivacyMode;
+  return false;
 }
-
 export function setPrivacyMode(value: boolean): void {
-  if (isPrivacyMode === value) return;
-  isPrivacyMode = value;
-  // 隐私联动：app.log/UI 即时按隐私态收敛（≥warn 不记连接明细）；sing-box 连接日志级别在下次核心重启时按新隐私
-  // 态重新生成（不主动断流）。logManager/configManager 为模块级，早期调用可能尚未初始化 → 守空。
-  if (logManager) {
-    configManager
-      ?.loadConfig()
-      .then((cfg) => logManager.setLogLevel(effectiveLogLevel(cfg.logLevel || 'info', value)))
-      .catch(() => {});
-  }
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(
-      value ? IPC_CHANNELS.EVENT_ENTER_PRIVACY_MODE : IPC_CHANNELS.EVENT_EXIT_PRIVACY_MODE
-    );
-  }
+  void value;
 }
 
 // 自动空闲模式：用 powerMonitor 真实系统输入空闲判定（替代窗口 blur/hide 边沿武装；
@@ -244,15 +236,15 @@ const IDLE_THRESHOLD_SEC = 600; // 10 分钟（getSystemIdleTime 返回秒）
 const IDLE_POLL_MS = 60 * 1000; // 轮询粒度 60s（实际触发约 10–11 分钟）
 
 /**
- * 每 60s 检查系统输入空闲，达阈值则按开关进入轻量 / 隐私模式。
- * 轻量：聚焦时豁免（用户可能在盯拓扑/流量面板，不销毁眼前窗口）；隐私：锁屏语义，不豁免聚焦。
- * 进入后不会重复触发：轻量销毁窗口后 mainWindow 失效自动跳过；隐私置 isPrivacyMode 后跳过。
+ * 每 60s 检查系统输入空闲，达阈值则按开关进入轻量模式。
+ * 轻量：聚焦时豁免（用户可能在盯拓扑/流量面板，不销毁眼前窗口）。
+ * 进入后不会重复触发：轻量销毁窗口后 mainWindow 失效自动跳过。
  */
 async function checkIdleAutoModes(): Promise<void> {
   try {
     const cfg = await configManager.loadConfig().catch(() => null);
     if (!cfg) return;
-    if (!cfg.autoLightweightMode && !cfg.autoPrivacyMode) return;
+    if (!cfg.autoLightweightMode) return;
     if (powerMonitor.getSystemIdleTime() < IDLE_THRESHOLD_SEC) return;
     // 窗口创建在途时跳过本轮：轻量分支会 destroy 窗口，避免销毁 ensureWindow 半成品（防御，当前不可达）
     if (creatingWindow) return;
@@ -266,11 +258,6 @@ async function checkIdleAutoModes(): Promise<void> {
     ) {
       logManager.addLog('info', 'System idle reached, entering lightweight mode', 'Main');
       trayManager.enterLightweightMode();
-    }
-
-    if (cfg.autoPrivacyMode && !isPrivacyMode) {
-      logManager.addLog('info', 'System idle reached, entering privacy mode', 'Main');
-      setPrivacyMode(true);
     }
   } catch {
     // ignore
@@ -355,13 +342,17 @@ let coreUpdateService: CoreUpdateService;
 let subscriptionService: SubscriptionService;
 let speedTestService: SpeedTestService;
 let autoSwitchService: AutoSwitchService;
-let subscriptionScheduler: SubscriptionScheduler;
 let coreUpdateScheduler: CoreUpdateScheduler | null = null;
+let globalUpdateService: GlobalUpdateService | null = null;
+let refreshMeasurements: ((missingOnly?: boolean) => Promise<void>) | undefined;
+let pendingUpdateConfig = false;
+let pendingUpdateRevision = 0;
 let statsService: StatsHost | null = null;
 let ipInfoService: IpInfoService | null = null;
+let smartRoutingService: SmartRoutingService | null = null;
+let networkChangeMonitor: NetworkChangeMonitor | null = null;
 let unlockService: UnlockDetectionService | null = null;
-let ruleResourceManager: RuleResourceManager | null = null;
-let ruleResourceScheduler: RuleResourceScheduler | null = null;
+let routingDataService: RoutingDataService | null = null;
 let helperManager: IPrivilegedHelper | null = null;
 // 界面语言不再由渲染端经 IPC 反向告知——主进程直接读 config.language 单一真值源（启动 + config-change）。
 // 渲染端 APP_SET_NODE_SORT_BY_LATENCY 同步的「按延迟排序」开关最近值；持有于此以便 trayManager 在渲染端 mount 推送
@@ -395,7 +386,7 @@ async function promptHelperGate(
         detail: mt('dlgWinRepairDetail'),
       });
       if (response === 2) return 'abort';
-      if (response === 0) await helperManager.install().catch(() => {});
+      if (response === 0) await helperManager.install();
       return 'proceed';
     }
     const { response } = await dialog.showMessageBox({
@@ -407,7 +398,7 @@ async function promptHelperGate(
       detail: mt('dlgWinInstallDetail'),
     });
     if (response === 2) return 'abort';
-    if (response === 0) await helperManager.install().catch(() => {});
+    if (response === 0) await helperManager.install();
     return 'proceed';
   }
   if (process.platform === 'linux') {
@@ -423,7 +414,7 @@ async function promptHelperGate(
         detail: mt('dlgLinuxRepairDetail'),
       });
       if (response === 2) return 'abort';
-      if (response === 0) await helperManager.install().catch(() => {});
+      if (response === 0) await helperManager.install();
       return 'proceed';
     }
     const { response } = await dialog.showMessageBox({
@@ -435,7 +426,7 @@ async function promptHelperGate(
       detail: mt('dlgLinuxInstallDetail'),
     });
     if (response === 2) return 'abort';
-    if (response === 0) await helperManager.install().catch(() => {});
+    if (response === 0) await helperManager.install();
     return 'proceed';
   }
   if (hs.backgroundDisabled) {
@@ -482,7 +473,7 @@ async function promptHelperGate(
       detail,
     });
     if (response === 2) return 'abort'; // 取消：不启动
-    if (response === 0) await helperManager.install().catch(() => {}); // 重烧路径后 start 走 helper 零提权
+    if (response === 0) await helperManager.install(); // 重烧路径后 start 走 helper 零提权
     return 'proceed';
   }
   // 未安装 → 安装并启动
@@ -495,7 +486,7 @@ async function promptHelperGate(
     detail: mt('dlgMacInstallDetail'),
   });
   if (response === 2) return 'abort'; // 取消：不启动
-  if (response === 0) await helperManager.install().catch(() => {}); // 装好后 start 走 helper 零提权
+  if (response === 0) await helperManager.install(); // 装好后 start 走 helper 零提权
   return 'proceed';
 }
 
@@ -662,7 +653,7 @@ async function createWindow(forceShow = false) {
   if (process.platform === 'darwin') {
     const template: Electron.MenuItemConstructorOptions[] = [
       {
-        label: app.name,
+        label: mt('productName'),
         submenu: [
           { role: 'about' },
           { type: 'separator' },
@@ -745,7 +736,7 @@ async function createWindow(forceShow = false) {
     height: windowHeight,
     minWidth: 800,
     minHeight: 720,
-    title: '暗影VPN',
+    title: mt('productName'),
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成
     backgroundColor: useMacTransparent ? '#00000000' : solidBackground,
@@ -933,7 +924,7 @@ async function createWindow(forceShow = false) {
   // 开不了。（原注释自述「devTools 仍 enable、可用快捷键打开」与代码矛盾，已更正。）
   const loadAppContent = (win: BrowserWindow) => {
     if (isDevelopment) {
-      win.loadURL('http://localhost:5173').catch((err) => {
+      win.loadURL(process.env.SHADOWVPN_DEV_URL || 'http://localhost:5173').catch((err) => {
         logManager.addLog('error', `Failed to load dev server: ${err.message}`, 'Main');
       });
     } else {
@@ -1263,14 +1254,14 @@ async function cleanupResources(): Promise<void> {
 
 async function runCleanup(): Promise<void> {
   try {
+    smartRoutingService?.dispose();
     // 0. 停止后台定时器（订阅调度 / 自动换节点 / 自动空闲轮询）
     if (idleCheckInterval) {
       clearInterval(idleCheckInterval);
       idleCheckInterval = null;
     }
-    subscriptionScheduler?.stop();
     coreUpdateScheduler?.stop();
-    ruleResourceScheduler?.stop();
+    globalUpdateService?.stop();
     autoSwitchService?.destroy();
     // T4：终止 stats utilityProcess（停 respawn + kill worker），避免退出后遗留子进程。
     statsService?.dispose();
@@ -1331,7 +1322,17 @@ async function updateTrayMenuState(isProxyRunning: boolean, hasError?: boolean):
 
   try {
     const config = await configManager.loadConfig();
+    const measurements = await getNodeMeasurementStore(configManager)?.get(
+      config.servers,
+      DEFAULT_SPEED_TEST_URL
+    );
     trayManager.updateFullTrayMenu({
+      nodeRegions: Object.fromEntries(
+        Object.entries(measurements ?? {}).map(([id, record]) => [
+          id,
+          record.detail?.exit?.countryCode,
+        ])
+      ),
       isProxyRunning,
       hasError,
       servers: config.servers,
@@ -1403,6 +1404,7 @@ if (gotTheLock) {
     if (process.platform === 'win32') app.setAppUserModelId('com.dsanying.shadowvpn.app');
     // 主进程 i18n 初值先按系统偏好兜底（config 加载完成前的极短窗口，覆盖任何早于配置读取的 mt() 调用）。
     setMainLanguage(resolveAutoLanguage(getPreferredSystemLanguagesSafe()));
+    syncProductName();
     // 桌面通知总开关初始同步（运行期变更由 config-change-handler 同步）。await 确保 enabled 在后续启动步骤
     // （含 proxy 自动连接，error 通知的唯一来源）前就绪——此刻 proxy 未启动，error 不会触发，无竞态；读配置毫秒级。
     // 同一次 loadConfig 顺带据 config.language 单一真值源精化界面语言（auto→系统解析；存量缺键退回系统，
@@ -1411,6 +1413,7 @@ if (gotTheLock) {
       .loadConfig()
       .then((c) => {
         setMainLanguage(resolveEffectiveLanguage(c.language, getPreferredSystemLanguagesSafe()));
+        syncProductName();
         setDesktopNotificationsEnabled(c.desktopNotifications);
       })
       .catch(() => {});
@@ -1478,10 +1481,10 @@ if (gotTheLock) {
     try {
       const config = await configManager.loadConfig();
       startupMark('configLoaded');
-      // 让 config.logLevel 对 LogManager 生效：原本 LogManager 恒留默认 'info'，config 设的 FATAL 形同虚设
+      // 日志采集阈值由统一运行策略管理，并应用隐私保护规则。
       // （设置页改 logLevel 走 CONFIG_SAVE，从不经 IPC 调 setLogLevel；原 LOGS_SET_LEVEL IPC 链路已作为死代码移除）→ 设 FATAL 仍刷屏非 FATAL。
       // 经 effectiveLogLevel：隐私模式开时抬到 ≥warn，app.log 与 sing-box 一同收敛连接明细。
-      logManager.setLogLevel(effectiveLogLevel(config.logLevel || 'info', getPrivacyMode()));
+      logManager.setLogLevel(effectiveLogLevel(RUNTIME_POLICY.logLevel, getPrivacyMode()));
       logManager.addLog('info', 'Configuration loaded successfully', 'Main');
 
       if (config.servers.length === 0 && config.selectedServerId === null) {
@@ -1526,15 +1529,19 @@ if (gotTheLock) {
     // ×proxyRunning 选经代理(socks 入站)/直连，取代裸 net.request 走 default session。proxyManager 已就绪。
     const updateNetwork = new UpdateNetwork();
     // 主更新链路 viaProxy/port 决策 providers 一次注入 UpdateNetwork（共享 configManager/proxyManager）；
-    // UpdateService/RuleResourceManager/CoreDownloader 三处只调 resolveSessionForMainUpdate，不再各自重复决策（防漂移）。
+    // UpdateService/RoutingDataService/CoreDownloader 三处只调 resolveSessionForMainUpdate，不再各自重复决策（防漂移）。
     updateNetwork.setMainUpdateProviders({
       configProvider: () => configManager.loadConfig(),
       proxyRunningProvider: () => proxyManager?.getStatus().running ?? false,
       updateInPortProvider: () => proxyManager?.getUpdateInPort() ?? null,
     });
     updateService.setUpdateNetwork(updateNetwork);
-    // §8 四链路收口：订阅经代理也 pin 到 update-in（socks），与应用更新/资源链路统一经核 route 按 proxyMode 决策。
-    subscriptionService.setUpdateInPortProvider(() => proxyManager?.getUpdateInPort() ?? null);
+    // 订阅先走固定直连入口，网络失败才走固定代理入口；两条路径不受分流规则影响。
+    subscriptionService.setRequestPortsProvider(() => {
+      const status = proxyManager?.getStatus();
+      const ports = status?.running ? proxyManager?.getProbePorts() : null;
+      return ports ? { ...ports, proxy: status?.currentServer ? ports.proxy : 0 } : null;
+    });
     // §8 四链路收口：核更新链路（CoreDownloader）也接入 update-in；viaProxy 时经 update-in，否则 direct 兜底（自举）。
     coreUpdateService.setUpdateNetwork(updateNetwork);
     // Phase 1b §8：图标代理协议 flowz-icon:// 也经 update-in（renderer 外部图标 <img> 不再走 default session）。
@@ -1569,50 +1576,6 @@ if (gotTheLock) {
     proxyManager.setHelperManager(helperManager);
     coreUpdateService.setHelperManager(linuxHelper ?? macHelper);
     proxyManager.setHelperGate(promptHelperGate);
-    // 启动后检测 helper 是否可升级（已装 proto < 期望，如属主根治 v6）→ 发事件让渲染端 toast 主动引导升级
-    // （否则用户不去设置页就不知道要升级、根治不生效）。**跟随渲染端首屏加载完成**再发；但单次定时发射有竞态：
-    // 若首屏 React 挂载 + useNativeEventListeners 注册监听慢于固定延迟，事件先于 listener 订阅 → toast 静默丢失无重试。
-    // 改为**有限次重复发射**（递增间隔跨越慢首屏窗口）：即便某次发射时 listener 尚未订阅而丢失，后续几次会补上；
-    // 渲染端 handleHelperUpgradeable 自带 helperUpgradeWarnedThisSession 幂等守卫，重复收到只 toast 一次（重发安全）。
-    // dismiss 已置 / 明确不可升级 → 'skip' 立即终止重发。返回 'emitted'（已发，仍续发覆盖窗口）| 'skip'（终止）| 'retry'。
-    const tryEmitHelperUpgradeable = async (): Promise<'emitted' | 'skip' | 'retry'> => {
-      try {
-        if (!helperManager) return 'skip';
-        const cfg = await configManager.loadConfig().catch(() => null);
-        if (cfg?.helperUpgradePromptDismissed === true) return 'skip';
-        const st = await helperManager.getStatus();
-        if (st.upgradeable) {
-          ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_HELPER_UPGRADEABLE, {
-            version: st.version ?? '',
-          });
-          return 'emitted';
-        }
-        return 'skip'; // 明确不可升级 → 不再重试
-      } catch {
-        return 'retry'; // 瞬时失败（status 未就绪等）→ 退避重试
-      }
-    };
-    // did-finish-load（HTML/JS 加载完）后启动重试序列。首发 ~1.2s 给 React 挂载 + 事件 hook 注册的常见窗口；
-    // 之后每 ~1.5s 再发一次，至多 5 次（≈1.2s/2.7s/4.2s/5.7s/7.2s），覆盖首屏慢于 1.2s 的尾部场景而不无限重发。
-    const UPGRADE_EMIT_MAX_ATTEMPTS = 5;
-    const fireUpgradeCheck = (): void => {
-      let attempt = 0;
-      const schedule = (delay: number): void => {
-        setTimeout(() => {
-          void tryEmitHelperUpgradeable().then((r) => {
-            attempt += 1;
-            // 'skip'（dismiss / 明确不可升级）立即终止；'emitted'（已发）与 'retry'（瞬时失败）都在配额内续发，
-            // 跨越首屏 listener 注册窗口 → 即便首发丢失后续补上（渲染端幂等守卫吸收重复，只 toast 一次）。
-            if (r !== 'skip' && attempt < UPGRADE_EMIT_MAX_ATTEMPTS) schedule(1500);
-          });
-        }, delay);
-      };
-      schedule(1200);
-    };
-    const wcForUpgrade = mainWindow?.webContents;
-    if (wcForUpgrade && !wcForUpgrade.isLoading()) fireUpgradeCheck();
-    else if (wcForUpgrade) wcForUpgrade.once('did-finish-load', fireUpgradeCheck);
-    else setTimeout(fireUpgradeCheck, 1500); // mainWindow 尚未创建时的兜底
     // 系统代理单一写者：注入同一 singleton（上方 756 创建），enable/clear 统一收口 ProxyManager.start()/终态。
     proxyManager.setSystemProxyManager(systemProxyManager);
     // 系统 DNS 接管单一写者：注入同一 singleton，set（仅 TUN）/restore 统一收口 ProxyManager.start()/终态。
@@ -1692,6 +1655,7 @@ if (gotTheLock) {
       onStats: (stats) => statsSubscriptionRegistry.broadcast('stats', stats),
       onAggregate: (agg) => statsSubscriptionRegistry.broadcast('aggregate', agg),
       onDetail: (conns) => statsSubscriptionRegistry.broadcast('detail', conns),
+      resolveApplications: createConnectionApplicationResolver(),
       // relay 安全门（兜底，非 demand 源）：窗口不可见 / Windows 拖动中 → host 只缓存不 relay。
       isUiActive: isUiBroadcastActive,
       // demand 源（取代 isUiActive）：某 topic 是否有渲染端订阅者。
@@ -1728,10 +1692,7 @@ if (gotTheLock) {
         return { serverId: status.currentServer.id, probeProxyPort: ports.proxy };
       },
       measureWarmRtt: (port) =>
-        speedTestService.measureWarmRttViaHttpProxy(
-          port,
-          configManager.get<string>('speedTestUrl')
-        ),
+        speedTestService.measureWarmRttViaHttpProxy(port, DEFAULT_SPEED_TEST_URL),
       publish: (serverId, latency) => {
         // 复用测速结果既有传播管道：逐节点广播 EVENT_SPEED_TEST_RESULT → applyLatencyResults(latencyMap + 时间戳)；
         // 托盘合并入延迟表（keepTestingState：不复位在飞全量测速的「测速中」态）。渲染端零改动。
@@ -1772,14 +1733,9 @@ if (gotTheLock) {
     // 启动后拉一次本地直连出口 IP 初值
     setTimeout(() => void ipInfoService?.refresh(true), 2000);
 
-    // 解锁检测（AI/流媒体）：经 mixed inbound（走用户真实分流出口）跑 checker。端口取 localProxyPort 单一真值；
-    // gating/单飞/缓存/节流在 service 内。progress 逐个点亮、invalidate（切节点/起停代理）广播给渲染端。
-    // GAP-1（方案A）：解锁检测的**发起**唯一入口本是 renderer home 页 hook 的 IPC——「启动代理→<1.5s 内切页」时 renderer
-    // 防抖定时器随组件卸载被取消 → invalidate 后的重跑 IPC 从未发出 → 检测从未开始（伴测/出口 IP 主进程自驱不受影响，唯
-    // unlock 触发链 renderer-gated）。故在主进程装配层对 invalidate 追加**同款防抖 self-run**：合并启动风暴多条 invalidate
-    // （started+unlock-invalidate+tailscale-selected-running）为一次 run；所有 gate（isRunning/exitBlock/S-gate/TTL/单飞
-    // join）已在 service 内单点收口，run(false) 幂等（stopped 触发撞 isRunning 短路=零网络 no-op；home 挂载时 renderer 的
-    // auto-run 撞主进程在飞轮=单飞 join，不双跑）。触发策略属装配层，不改 service 本体。
+    // 网站连通性经当前已应用配置的普通路由入口检测；关闭代理则使用独立直连 session。
+    // 主进程仅在启动、路由变化时自动检测一次，与连接页是否挂载无关。
+    // 防抖合并启动/切换事件，service 统一处理单飞、缓存与 epoch 作废，旧路由结果不能回写。
     const UNLOCK_SELF_RUN_DEBOUNCE_MS = 1500;
     let unlockSelfRunTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleUnlockSelfRun = (): void => {
@@ -1798,12 +1754,21 @@ if (gotTheLock) {
           .catch(() => {});
       }, UNLOCK_SELF_RUN_DEBOUNCE_MS);
     };
+    const websiteMeasurements = new WebsiteMeasurementStore(
+      path.join(path.dirname(configManager.getConfigPath()), 'measurements.sqlite')
+    );
+    let websiteEpoch = 0;
+    const initialWebsiteConfig = await configManager.loadConfig();
     unlockService = new UnlockDetectionService({
-      getMixedPort: () =>
-        localProxyPort({
-          mixedPort: configManager.get<number>('mixedPort'),
-          httpPort: configManager.get<number>('httpPort'),
-        }),
+      initialSnapshot: websiteMeasurements.read(
+        websiteFingerprint(initialWebsiteConfig, proxyManager?.getStatus().running ?? false)
+      ),
+      getDirectPort: () => proxyManager?.getProbePorts()?.direct ?? 0,
+      getRoutingPort: () => proxyManager?.getRoutingProbePort() ?? 0,
+      getMixedPort: () => proxyManager?.getProbePorts()?.proxy ?? 0,
+      isProxySelected: async () =>
+        (await configManager.loadConfig()).proxyMode !== 'direct' &&
+        !proxyManager?.isLoginFallbackEngaged(),
       isRunning: () => proxyManager?.getStatus().running ?? false,
       // 选中 TS 出口 API 直判无效 → 短路检测（不空转死出口就绪门）。call-time 取值，规避构造顺序。
       getExitBlock: () => proxyManager?.selectedTsExitBlock() ?? null,
@@ -1811,6 +1776,8 @@ if (gotTheLock) {
       whenExitSettled: () => proxyManager?.whenSelectorSettled(4000) ?? Promise.resolve(),
       onProgress: (p) => ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_UNLOCK_PROGRESS, p),
       onInvalidated: () => {
+        websiteEpoch++;
+        websiteMeasurements.clear();
         // 带主进程核真态（渲染端 connectionStatus/proxyBlocked 常陈旧——invalidate 先于
         // EVENT_PROXY_STARTED / IP_INFO_UPDATED 抵达）→ 渲染端据此正确判「显示检测中 vs idle」，不再用陈旧本地视图。
         const running = proxyManager?.getStatus().running ?? false;
@@ -1821,36 +1788,97 @@ if (gotTheLock) {
       },
       // issue 2：一轮 fresh commit 的完整终态广播给渲染端 store（跨组件卸载持有 checkedAt/egress）。使切导航
       // 期间后台自跑（GAP-1 self-run）的终态照样落 store，切回首页直接展示、不重跑（渲染端纯展示、不再自触发）。
-      onComplete: (snap) => ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_UNLOCK_UPDATED, snap),
+      onComplete: (snap) => {
+        ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_UNLOCK_UPDATED, snap);
+        const epoch = websiteEpoch;
+        void configManager
+          .loadConfig()
+          .then((cfg) => {
+            if (epoch === websiteEpoch)
+              websiteMeasurements.save(
+                websiteFingerprint(cfg, proxyManager?.getStatus().running ?? false),
+                snap
+              );
+          })
+          .catch(() => {});
+      },
       // X2（§12.2）：per-leg 传输失败逐条 debug（host/err/phase/bytes/elapsed）→ 真机 V36 分诊 WARP 下 checker「超时」根因。
       log: (message) => logManager.addLog('debug', message, 'Unlock'),
     });
     // G-flip：TS 出口 none↔blocked 翻转即令解锁检测失效（翻 blocked 清陈旧绿点；翻 none 触发有效出口重检）。
     // 闭包 call-time 取 unlockService（模块级 let），规避此接线早于/晚于其构造的顺序问题。
+    scheduleUnlockSelfRun();
+    app.once('before-quit', () => {
+      if (unlockSelfRunTimer) clearTimeout(unlockSelfRunTimer);
+    });
     proxyManager.setOnTsExitBlockFlip(() => unlockService?.invalidate());
 
-    // 规则资源管理：下载 .srs / 动态 catalog / GitHub 加速；进度经事件推渲染端
-    ruleResourceManager = new RuleResourceManager(
+    routingDataService = new RoutingDataService({
       configManager,
-      (p) => ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_RULE_RESOURCE_PROGRESS, p),
-      (cfg) => ipcEventEmitter.sendToAll('event:configChanged', { newValue: cfg }),
-      (cfg) => mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, cfg)
-    );
-    ruleResourceManager.setUpdateNetwork(updateNetwork);
-    // 启动即把内置 geo 规则集补种到运行时目录：缺失/损坏补种 + 出厂态下 app 升级带来的新出厂数据刷新
-    // （不回滚网络更新版）。使「规则资源」页在首次启动代理前也能反映真实文件、可更新/重置；幂等、不阻塞启动。
-    void configManager
-      .loadConfig()
-      .then((cfg) =>
-        seedBuiltinRuleSets({ builtinGeoMeta: cfg?.builtinGeoMeta, refreshOutOfBox: true })
-      )
-      .catch(() => {});
-
+      isProxyRunning: () => proxyManager?.getStatus().running ?? false,
+      updateNetwork,
+      region: () => {
+        const state = smartRoutingService?.getState();
+        return {
+          automatic: true,
+          enabled: state?.status === 'ready',
+          region: state?.countryCode ?? '',
+          reverse: false,
+        };
+      },
+      onMissingRestored: (cfg) => {
+        if (!proxyManager?.getStatus().running)
+          mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, cfg);
+      },
+      log: (level, message) => logManager.addLog(level, message, 'RoutingData'),
+    });
+    smartRoutingService = new SmartRoutingService({
+      watchNetwork: (changed) => {
+        const monitor = new NetworkChangeMonitor(
+          changed,
+          () =>
+            logManager.addLog(
+              'warn',
+              '网络变更监听不可用，将在恢复运行及定期维护时刷新',
+              'RoutingData'
+            ),
+          path.join(path.dirname(resourceManager.getMacHelperPath()), 'shadowvpn-network-events')
+        );
+        networkChangeMonitor = monitor;
+        monitor.start();
+        return () => {
+          monitor.dispose();
+          if (networkChangeMonitor === monitor) networkChangeMonitor = null;
+        };
+      },
+      detect: () => ipInfoService!.detectDirectNetwork(),
+      ensureRules: (country) => routingDataService!.ensureCountryRuleSet(country),
+      // Exclude our virtual adapters, so a core restart cannot cause another country-policy restart.
+      fingerprint: () =>
+        computeNetworkFingerprint(
+          Object.fromEntries(
+            Object.entries(networkInterfaces()).filter(
+              ([name]) => !/^(utun|tun|tap|tailscale|shadowvpn)/i.test(name)
+            )
+          )
+        ),
+      onPolicy: (policy) => proxyManager?.setAutomaticRegion(policy),
+      onState: () =>
+        ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_IP_INFO_UPDATED, ipInfoService!.getSnapshot()),
+    });
+    ipInfoService.setSmartRoutingProvider(() => smartRoutingService?.getState());
+    proxyManager.setAutomaticRegionPreparation(() => smartRoutingService!.refresh());
+    powerMonitor.on('resume', () => {
+      networkChangeMonitor?.start();
+      void smartRoutingService?.refresh(true);
+    });
+    smartRoutingService.start();
     autoSwitchService = new AutoSwitchService(
       configManager,
       proxyManager,
       logManager,
-      () => mainWindow
+      () => mainWindow,
+      speedTestService
     );
     {
       const cfg = await configManager.loadConfig().catch(() => null);
@@ -1859,36 +1887,14 @@ if (gotTheLock) {
       }
     }
 
-    // 订阅自动更新调度器：启动补更陈旧订阅 + 周期更新（不打断当前连接）
-    subscriptionScheduler = new SubscriptionScheduler(
-      configManager,
-      subscriptionService,
-      logManager,
-      () => proxyManager?.getStatus().running ?? false,
-      (cfg) => {
-        // #325 打点：silent-start 期（无窗口订阅者）该 configChanged 会被 sendToAll 静默丢弃 → 记 debug 使其可观测，
-        // 真机验证时与 RENDERER_READY 后的 replay 记录成对出现（钉窗口 + 验 replay 确实兜住丢失的事件）。
-        if (ipcEventEmitter.getWindowCount() === 0) {
-          logManager.addLog('debug', 'configChanged dropped: no window (silent-start?)', 'Main');
-        }
-        ipcEventEmitter.sendToAll('event:configChanged', { newValue: cfg });
-        // P2-2：后台订阅更新增删节点后刷新托盘「选择服务器」子菜单（updateTrayMenuState 重载最新 config）。
-        // 走 tray-only 刷新、不发 MAIN_EVENTS.CONFIG_CHANGED → 不触发 switchMode 重启，守住「不打断连接」不变量。
-        void updateTrayMenuState(proxyManager?.getStatus().running ?? false);
-      },
-      // §2 自动刷新 auto-apply / F14 逃死节点强制重启入口（内部 guard 代理未运行/换核窗口 + 单飞去抖）。
-      (cfg) => proxyManager?.applyConfigForcingRestart(cfg)
-    );
-    subscriptionScheduler.start();
-
-    // 内核自动更新调度器（仅兼容版本带内）：30s 启动检查 + 6h tick + 24h due；落位仅在代理停止态。
+    // Legacy lifecycle adapter is managed by the single global update clock.
     coreUpdateScheduler = new CoreUpdateScheduler(
       configManager,
       coreUpdateService,
       logManager,
       () => proxyManager?.getStatus().running ?? false
     );
-    coreUpdateScheduler.start();
+    coreUpdateScheduler.start(true);
 
     // 自动空闲模式：powerMonitor 真实系统输入空闲轮询（app ready 后才可用），替代窗口 blur/hide 边沿武装。
     // 同节拍搭车渲染进程内存 watchdog（issue #242 §4）：60s 采一次 renderer RSS，超阈值兜底回收/告警（不新增 interval）。
@@ -1897,13 +1903,117 @@ if (gotTheLock) {
       checkRendererMemory();
     }, IDLE_POLL_MS);
 
-    // 规则资源自动更新调度（sing-box 不自更新本地 .srs，由 FlowZ 周期重下载；静默、不打断连接）
-    ruleResourceScheduler = new RuleResourceScheduler(
-      configManager,
-      ruleResourceManager,
-      logManager
-    );
-    ruleResourceScheduler.start();
+    const updateRoutingData = routingDataService;
+    const updateProxy = proxyManager;
+    globalUpdateService = new GlobalUpdateService({
+      store: privateDocumentStore(),
+      maintenanceError: (error) => logManager.addLog('error', `后台维护失败: ${error}`, '更新'),
+      refreshMeasurements: async () => {
+        await refreshMeasurements?.(false);
+        const checkedAt = unlockService?.getSnapshot()?.checkedAt;
+        if (!checkedAt || Date.now() - checkedAt >= 60_000) await unlockService?.run(true);
+      },
+      publish: (snapshot) =>
+        ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_UPDATE_PROGRESS, {
+          status: snapshot.checking ? 'checking' : 'idle',
+          percentage: 0,
+          message: '',
+          globalUpdates: snapshot,
+        }),
+      prepare: {
+        software: async () => {
+          if (!app.isPackaged) return { kind: 'software', status: 'unsupported' };
+          const result = await updateService.prepareUpdate(false);
+          if (result.error) throw new Error(result.error);
+          return {
+            kind: 'software',
+            status: result.hasUpdate ? 'ready' : 'latest',
+            version: result.updateInfo?.version,
+            restart: result.hasUpdate ? 'software' : undefined,
+          };
+        },
+        core: async () => {
+          await coreUpdateService.runAutoUpdateCycle(true);
+          const status = await coreUpdateService.getAutoStatus();
+          return {
+            kind: 'core',
+            status: status.staged ? 'ready' : status.crossBandLatest ? 'incompatible' : 'latest',
+            version: status.staged?.version ?? status.crossBandLatest ?? undefined,
+            restart: status.staged ? 'proxy' : undefined,
+          };
+        },
+        data: async () => {
+          networkChangeMonitor?.start();
+          await smartRoutingService?.refresh(true);
+          let error: string | undefined;
+          try {
+            await updateRoutingData.refreshRequired(true);
+          } catch (failure) {
+            if (!updateRoutingData.hasPreparedUpdates()) throw failure;
+            error = failure instanceof Error ? failure.message : String(failure);
+          }
+          return {
+            kind: 'data',
+            revision: updateRoutingData.preparedRevision(),
+            error,
+            status: updateRoutingData.hasPreparedUpdates() ? 'ready' : 'latest',
+            restart: updateRoutingData.hasPreparedUpdates() ? 'proxy' : undefined,
+          };
+        },
+        subscriptions: async () => {
+          let error: string | undefined;
+          try {
+            const synchronize = getSubscriptionSynchronizer(configManager);
+            if (!synchronize) throw new Error('Subscription synchronizer is not ready');
+            const config = await configManager.loadConfig();
+            let failed = 0;
+            for (const sub of config.subscriptions ?? []) {
+              const result = await synchronize(sub.id, { prepareOnly: true });
+              if (!result.success) {
+                failed++;
+                continue;
+              }
+              if (result.addedServers || result.updatedServers || result.deletedServers) {
+                if (updateProxy.getStatus().running) {
+                  pendingUpdateConfig = true;
+                  pendingUpdateRevision++;
+                }
+              }
+            }
+            if (failed) throw new Error(`Subscription synchronization failed: ${failed}`);
+          } catch (failure) {
+            if (!pendingUpdateConfig) throw failure;
+            error = failure instanceof Error ? failure.message : String(failure);
+          }
+          return {
+            kind: 'subscriptions',
+            revision: String(pendingUpdateRevision),
+            error,
+            status: pendingUpdateConfig ? 'ready' : 'latest',
+            restart: pendingUpdateConfig ? 'proxy' : undefined,
+          };
+        },
+      },
+      apply: async (kind) => {
+        if (kind === 'software') return updateService.installPreparedUpdate();
+        // One explicit restart applies all prepared proxy-side changes together.
+        const wasRunning = updateProxy.getStatus().running;
+        if (wasRunning) await updateProxy.stop();
+        try {
+          await updateRoutingData.applyPrepared();
+          if ((await coreUpdateService.getAutoStatus()).staged) {
+            const result = await coreUpdateService.tryApplyStaged('manual-apply');
+            if (result !== 'applied') throw new Error(`Core update: ${result}`);
+          }
+        } finally {
+          if (wasRunning) await updateProxy.start(await configManager.loadConfig());
+        }
+        pendingUpdateConfig = false;
+        return ['core', 'data', 'subscriptions'];
+      },
+    });
+    setGlobalUpdateService(globalUpdateService);
+    globalUpdateService.start();
 
     // 监听代理管理器事件，更新托盘状态。
     // 说明：同节点「原地重启」由 ProxyManager 内部接管（handleProcessExit / 健康检查 → attemptAutoRestart，
@@ -1954,6 +2064,11 @@ if (gotTheLock) {
     // 自成一路、不经 default session）（Phase 1b 删 applyMainSessionProxy）。
 
     proxyManager.on('started', async () => {
+      // A fresh core start loads the saved subscription configuration.
+      if (pendingUpdateConfig) {
+        pendingUpdateConfig = false;
+        globalUpdateService?.markApplied(['subscriptions']);
+      }
       // 托盘刷新（与 on('stopped') 对称，#75）：所有 start 路径最终都汇入此事件——含 switchMode / 节点回退 /
       // 崩溃后 attemptAutoRestart 的内部 stop→start（stopped 腿已把托盘刷成断开态，此处不刷则卡在
       // 「已断开 / 启用代理」而进程实际在跑）。放在首行确保后续 await 抛错也不漏刷；IPC/托盘/startup 的
@@ -1967,7 +2082,6 @@ if (gotTheLock) {
       unlockService?.invalidate();
       // stats 订阅【不】在此发起：emit('started') 早于 ProxyManager 创建 api client（startInternal 末尾）约 0.5s，
       // 此刻 getApiClient()=null、subscribe* 早退（首页 stats 全 0 根因）。改挂 'api-client-ready'（见下）。
-      subscriptionScheduler?.onProxyStarted(); // 代理就绪 → 补跑因 viaProxy 跳过的启动订阅更新
       // bug#5 类级兜底：任何路径导致「核起于陈旧配置」（崩溃自动重启退避窗口内的编辑等，A 覆盖不到的格 8）→ start
       // 完成后取 ConfigManager 最新配置跑一次 switchMode 对账。配置未变 = norm-equal no-op（幂等零成本）；有差异按既有
       // 分流热切/重启。'started' 时 lifecycleDepth>0 → 经 switchMode 暂存、endLifecycleOp settle 后重放，时序安全。
@@ -2063,7 +2177,6 @@ if (gotTheLock) {
 
     // 注册 IPC 处理器（需要在 ProxyManager 创建后）
     registerConfigHandlers(configManager);
-    registerPrivacyHandlers();
     registerServerHandlers(protocolParser, configManager, logManager);
     registerLogHandlers(logManager, proxyManager, isUiBroadcastActive);
     registerProxyHandlers(proxyManager, configManager);
@@ -2072,7 +2185,6 @@ if (gotTheLock) {
     registerIpInfoHandlers(ipInfoService);
     registerUnlockHandlers(unlockService);
     registerSystemHandlers();
-    registerRuleResourceHandlers(ruleResourceManager);
     registerVersionHandlers(coreUpdateService);
 
     registerRulesHandlers(configManager);
@@ -2083,12 +2195,15 @@ if (gotTheLock) {
     registerAutoStartHandlers();
 
     // 注册订阅处理器。§16.3.4b：手动更新节点集变化 → force-restart 入池（call-time 取 proxyManager，防循环依赖）。
-    registerSubscriptionHandlers(subscriptionService, configManager, (cfg) =>
-      proxyManager?.applyConfigForcingRestart(cfg)
+    registerSubscriptionHandlers(
+      subscriptionService,
+      configManager,
+      (cfg) => proxyManager?.applyConfigForcingRestart(cfg),
+      () => proxyManager?.getProbePorts()?.direct ?? null
     );
 
-    // 注册备份与恢复处理器（注入 ruleResourceManager：恢复后补缺失的规则资源 .srs）
-    registerBackupHandlers(configManager, ruleResourceManager);
+    // 注册备份与恢复处理器（恢复后自动准备实际引用的分流数据）
+    registerBackupHandlers(configManager, () => routingDataService!.refreshRequired());
 
     // 注册诊断报告处理器（汇集环境/脱敏配置/日志 tail → 单 Markdown）。此处 proxyManager 已构造（非空）。
     if (proxyManager) {
@@ -2128,7 +2243,13 @@ if (gotTheLock) {
     const autoStartManager = createAutoStartManager();
     autoStartManager.setLogManager(logManager);
     const config = await configManager.loadConfig();
-    if (app.isPackaged) await autoStartManager.setAutoStart(config.autoStart ?? false);
+    // An isolated acceptance profile must not reconcile the installed application's OS login item.
+    if (
+      app.isPackaged &&
+      !process.argv.some((argument) => argument.startsWith('--validation-profile='))
+    ) {
+      await autoStartManager.setAutoStart(config.autoStart ?? false);
+    }
 
     // 注册更新处理器（窗口引用已由 createWindow() 内的刷新逻辑设置，此处无需重复）
     setUpdateService(updateService);
@@ -2139,7 +2260,9 @@ if (gotTheLock) {
     registerUpdateHandlers();
 
     // 注册测速处理器（注入唯一编排器依赖：含 getTrayManager 惰性访问器，使渲染入口测速也回写托盘列表）
-    registerSpeedTestHandlers({
+    refreshMeasurements = registerSpeedTestHandlers({
+      entryHelperPath: resourceManager.getEntryProbeHelperPath(),
+      isTunActive: () => !!proxyManager?.getStatus().running && proxyManager.isTunModeNow(),
       configManager,
       speedTestService,
       getMainWindow: () => mainWindow,
@@ -2218,6 +2341,7 @@ if (gotTheLock) {
     updateTrayMenuState(false);
 
     // 启动期延迟任务（自动连接 + 自动检查更新）已抽到 startup-tasks.scheduleStartupTasks。
+    updateService.confirmUpdateStartup();
     scheduleStartupTasks({
       allowAppUpdates: app.isPackaged,
       configManager,
@@ -2228,8 +2352,7 @@ if (gotTheLock) {
       updateTrayMenuState,
     });
 
-    // 订阅自动更新由 SubscriptionScheduler 接管（启动补更 + 周期巡检 + 退避 + 不打断连接），
-    // 取代旧的「启动后一次性 setTimeout 拉取」。详见 subscriptionScheduler.start() 调用处。
+    // 订阅自动更新由 GlobalUpdateService 的六小时维护时钟与共享同步入口接管。
 
     // CONFIG_CHANGED 监听器已抽到 config-change-handler.registerConfigChangeListener。
     registerConfigChangeListener({
@@ -2244,13 +2367,15 @@ if (gotTheLock) {
       // 读 configManager 缓存而非事件 payload：saveConfig 先更新 currentConfig 再 emit CONFIG_CHANGED（见
       // config-handlers），故缓存恒是最新值；且不受 payload 形状影响（未来某发射点漏带 language、或恢复缺该键的
       // 旧备份，都不会把主进程语言静默重置成系统语言）——与「config.language 单一真值源」主旨一致。
-      applyLanguageFromConfig: () =>
+      applyLanguageFromConfig: () => {
         setMainLanguage(
           resolveEffectiveLanguage(
             configManager.get<string>('language'),
             getPreferredSystemLanguagesSafe()
           )
-        ),
+        );
+        syncProductName();
+      },
     });
 
     // 关机/重启早期钩子：powerMonitor 'shutdown' **仅 macOS/Linux 触发**（Electron 文档），Windows 不发。
@@ -2383,3 +2508,17 @@ process.on('exit', () => {
   if (!gotTheLock) return;
   syncCleanupOnExit();
 });
+
+/** 产品展示名随语言变化；userData 使用上方独立固定路径。 */
+function syncProductName(): void {
+  const name = mt('productName');
+  app.setName(name);
+  for (const window of BrowserWindow.getAllWindows()) window.setTitle(name);
+  if (process.platform === 'darwin') {
+    const menu = Menu.getApplicationMenu();
+    if (menu?.items[0]) {
+      menu.items[0].label = name;
+      Menu.setApplicationMenu(menu);
+    }
+  }
+}

@@ -79,7 +79,11 @@ const dohLegs = (rc: any): { tcp: string[] | null; udp: string[] | null } => {
     (r: any) => r.network === undefined && Array.isArray(r.port) && r.port.includes(853)
   );
   const udp = rejects.find(
-    (r: any) => Array.isArray(r.network) && r.network.includes('udp') && !r.domain_suffix
+    (r: any) =>
+      Array.isArray(r.network) &&
+      r.network.includes('udp') &&
+      tcp?.domain_keyword &&
+      JSON.stringify(r.domain_keyword) === JSON.stringify(tcp.domain_keyword)
   );
   return { tcp: tcp?.domain_keyword ?? null, udp: udp?.domain_keyword ?? null };
 };

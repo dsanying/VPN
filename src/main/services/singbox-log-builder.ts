@@ -1,3 +1,4 @@
+import { RUNTIME_POLICY } from '../../shared/runtime-policy';
 /**
  * sing-box 日志配置生成 —— 从 ProxyManager.generateLogConfig 抽出（SingBoxConfigBuilder 抽取 Phase 2 step 8）。
  * 纯函数：只读 config + 注入 privacyMode（隐私模式经 effectiveLogLevel 抬到 ≥warn）。
@@ -10,10 +11,10 @@ import { getSingBoxLogPath } from '../utils/paths';
 import type { SingBoxLogConfig } from './singbox-config-types';
 
 export function buildLogConfig(config: UserConfig, privacyMode: boolean): SingBoxLogConfig {
-  // 日志级别由用户配置（默认 info）。level 影响是否记录访问域名/SNI（info/debug 会记，warn+ 不记）。
+  // 日志级别由统一运行策略管理。level 影响是否记录访问域名/SNI（info/debug 会记，warn+ 不记）。
   // 隐私模式经 effectiveLogLevel 抬到 ≥warn，从源头不让 sing-box 记录连接明细到 singbox.log。
   const logConfig: SingBoxLogConfig = {
-    level: effectiveLogLevel(config.logLevel || 'info', privacyMode),
+    level: effectiveLogLevel(RUNTIME_POLICY.logLevel, privacyMode),
     timestamp: true,
   };
 

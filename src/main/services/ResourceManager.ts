@@ -4,6 +4,7 @@ import fs = require('fs/promises');
 import type { LogLevel } from '../../shared/types';
 import type { LogManager } from './LogManager';
 import { sha256File } from '../../shared/file-hash';
+import { stageDashboard } from './dashboard-staging';
 
 /** libcronet 自愈动作：ok=已就位无需动 / restored=刚从内置 bundle 重拷 / failed=拷贝失败（已告警，调用方降级）。 */
 export type CronetHealAction = 'ok' | 'restored' | 'failed';
@@ -13,6 +14,7 @@ export class ResourceManager {
   private readonly platform: string;
   private readonly arch: string;
   private logManager?: LogManager;
+  private stagedDashboard?: Promise<string>;
 
   constructor() {
     this.platform = process.platform;
@@ -124,6 +126,19 @@ export class ResourceManager {
    * 生产环境：<App>/Contents/Resources/mac/com.dsanying.shadowvpn.helper；开发环境：resources/mac-${arch}/com.dsanying.shadowvpn.helper。
    * 仅 macOS 有意义；安装时由 HelperManager 复制到 /Library/PrivilegedHelperTools/。
    */
+  getCompatibilityCorePath(engine: 'xray' | 'mihomo'): string {
+    return path.join(
+      this.getPlatformResourceDir(),
+      engine + (this.platform === 'win32' ? '.exe' : '')
+    );
+  }
+
+  getEntryProbeHelperPath(): string {
+    if (this.platform === 'win32') return this.getWinHelperPath();
+    if (this.platform === 'linux') return this.getLinuxHelperPath();
+    return this.getMacHelperPath();
+  }
+
   getMacHelperPath(): string {
     return path.join(this.getPlatformResourceDir(), 'com.dsanying.shadowvpn.helper');
   }
@@ -239,6 +254,22 @@ export class ResourceManager {
     if (this.hasIndex(overrideDir)) return overrideDir;
     const bundled = this.getBundledDashboardDir();
     return this.hasIndex(bundled) ? bundled : null;
+  }
+
+  async prepareDashboardServeDir(overrideDir: string): Promise<string | null> {
+    const selected = this.resolveDashboardServeDir(overrideDir);
+    if (!selected || selected !== this.getBundledDashboardDir()) return selected;
+    // 一个进程只准备一次；内容摘要区分版本，更新不覆盖正在使用的资源。
+    this.stagedDashboard ??= stageDashboard(
+      selected,
+      path.join(app.getPath('userData'), 'bundled-dashboard')
+    );
+    try {
+      return await this.stagedDashboard;
+    } catch (error) {
+      this.stagedDashboard = undefined;
+      throw error;
+    }
   }
 
   getGeoIPPath(): string {

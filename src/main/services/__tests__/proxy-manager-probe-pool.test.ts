@@ -29,7 +29,12 @@ afterAll(() => {
 });
 
 function makeSvc(): any {
-  return new ProxyManager(undefined, undefined, path.join(TMP, 'cfg.json'), path.join(TMP, 'sing-box'));
+  return new ProxyManager(
+    undefined,
+    undefined,
+    path.join(TMP, 'cfg.json'),
+    path.join(TMP, 'sing-box')
+  );
 }
 
 describe('§15 ProxyManager 探测池端口分配', () => {

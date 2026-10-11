@@ -1,3 +1,6 @@
+jest.mock('../entry-probe', () => ({
+  probeNodeEntry: jest.fn(async () => ({ status: 'unsupported' })),
+}));
 /**
  * runSpeedTest 编排单测（L1 根治）：锁定唯一传播——渲染逐节点广播 + 托盘回写 + 测速态置位/复位。
  * 修复的历史漂移：渲染（服务器页/首页）入口测速曾只广播、漏 trayManager.updateSpeedTestResults → 托盘列表不同步。
@@ -94,4 +97,139 @@ describe('runSpeedTest', () => {
     expect(tray.setSpeedTesting).toHaveBeenCalledWith(false);
     expect(tray.updateSpeedTestResults).not.toHaveBeenCalled();
   });
+});
+
+it('a reachable TCP entry cannot turn a failed proxy request into a usable node', async () => {
+  const { deps, send } = makeDeps([makeServer('entry-only')]);
+  deps.entryProbe = async () => ({ status: 'ok', latencyMs: 52 });
+  const result = await runSpeedTest(deps);
+  expect(result.results.get('entry-only')).toBeNull();
+  expect(result.details?.['entry-only'].entry).toEqual({ status: 'ok', latencyMs: 52 });
+  expect(resultSends(send)).toEqual([{ serverId: 'entry-only', latency: -1 }]);
+});
+
+it('入口检测使用 16 个并发，80 个 4 秒超时不会退化成逐个或 4 路排队', async () => {
+  jest.useFakeTimers();
+  try {
+    const { deps } = makeDeps(Array.from({ length: 80 }, (_, i) => makeServer(`s${i}`)));
+    let active = 0;
+    let maxActive = 0;
+    deps.entryProbe = async () => {
+      active++;
+      maxActive = Math.max(active, maxActive);
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      active--;
+      return { status: 'timeout' };
+    };
+    const start = Date.now();
+    const run = runSpeedTest(deps);
+    await jest.runAllTimersAsync();
+    const result = await run;
+    expect(maxActive).toBe(16);
+    expect(active).toBe(0);
+    expect(Object.keys(result.details ?? {})).toHaveLength(80);
+    expect(Date.now() - start).toBe(20000);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('入口慢节点不阻止空闲 worker 检测后续节点', async () => {
+  const { deps } = makeDeps(Array.from({ length: 18 }, (_, i) => makeServer(`s${i}`)));
+  let release!: () => void;
+  const slow = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let nextStarted!: () => void;
+  const next = new Promise<void>((resolve) => {
+    nextStarted = resolve;
+  });
+  deps.entryProbe = async (server) => {
+    if (server.id === 's0') await slow;
+    if (server.id === 's16') nextStarted();
+    return { status: 'ok', latencyMs: 20 };
+  };
+  const run = runSpeedTest(deps);
+  try {
+    await next;
+  } finally {
+    release();
+  }
+  const result = await run;
+  expect(Object.keys(result.details ?? {})).toHaveLength(18);
+  expect(result.details?.s16.entry.status).toBe('ok');
+});
+
+it.each([false, true])(
+  'saved TUN preference only blocks direct entry while takeover is actually active: %s',
+  async (active) => {
+    const { deps } = makeDeps([makeServer('n1')]);
+    jest
+      .spyOn(deps.configManager, 'loadConfig')
+      .mockResolvedValue({ servers: [makeServer('n1')], proxyModeType: 'tun' } as never);
+    deps.isTunActive = () => active;
+    const probe = jest.fn(async () => ({ status: 'unsupported' as const }));
+    deps.entryProbe = probe;
+    await runSpeedTest(deps);
+    expect(probe).toHaveBeenCalledWith(expect.objectContaining({ id: 'n1' }), !active, {});
+  }
+);
+
+it('entry probe exception retains completed proxy results and records an unavailable entry', async () => {
+  const { deps, tray } = makeDeps([makeServer('a')]);
+  deps.entryProbe = async () => {
+    throw new Error('private endpoint');
+  };
+  const result = await runSpeedTest(deps);
+  expect(result.results.has('a')).toBe(true);
+  expect(result.details?.a.entry).toEqual({ status: 'unavailable', reason: 'ENTRY_PROBE_FAILED' });
+  expect(tray.updateSpeedTestResults).toHaveBeenCalledTimes(1);
+});
+
+it('single-flight remains active through slow entry probes and merges identical requests', async () => {
+  const { deps, tray, speedTestService } = makeDeps([makeServer('a')]);
+  let release!: () => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const slow = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  deps.entryProbe = async () => {
+    entered();
+    await slow;
+    return { status: 'ok', latencyMs: 12 };
+  };
+  const measure = jest.spyOn(speedTestService, 'testAllServers');
+  const first = runSpeedTest(deps);
+  await started;
+  const second = runSpeedTest(deps);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(measure).toHaveBeenCalledTimes(1);
+  release();
+  const [a, b] = await Promise.all([first, second]);
+  expect(b).toBe(a);
+  expect(b.details?.a.entry.latencyMs).toBe(12);
+  expect(tray.updateSpeedTestResults).toHaveBeenCalledTimes(1);
+});
+
+it('all entry points broadcast the full task lifetime, including local failures', async () => {
+  const { deps, send, speedTestService } = makeDeps([makeServer('s1'), makeServer('s2')]);
+  jest
+    .spyOn(speedTestService, 'testAllServers')
+    .mockRejectedValueOnce(new Error('probe unavailable'));
+  await expect(runSpeedTest(deps)).rejects.toThrow('probe unavailable');
+  const progress = send.mock.calls
+    .filter((call) => call[0] === IPC_CHANNELS.EVENT_SPEED_TEST_PROGRESS)
+    .map((call) => call[1]);
+  expect(progress[0]).toEqual({
+    tested: 0,
+    ok: 0,
+    total: 2,
+    serverIds: ['s1', 's2'],
+    active: true,
+  });
+  expect(progress.at(-1)).toEqual({ active: false });
 });
