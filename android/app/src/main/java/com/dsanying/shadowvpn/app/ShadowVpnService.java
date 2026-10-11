@@ -61,9 +61,12 @@ public final class ShadowVpnService extends VpnService implements PlatformInterf
                     core = Libbox.newCommandServer(this, this);
                     core.start();
                 }
-                core.startOrReloadService(requestedConfig, new OverrideOptions());
-                config = requestedConfig;
-                if (tun == null) throw new IllegalStateException("内核未建立 VPN 隧道");
+                try (NativeVpnNetworkReady network = new NativeVpnNetworkReady(this)) {
+                    core.startOrReloadService(requestedConfig, new OverrideOptions());
+                    config = requestedConfig;
+                    if (tun == null) throw new IllegalStateException("内核未建立 VPN 隧道");
+                    network.await();
+                }
                 // A disk failure tears down the tunnel instead of acknowledging an unrecoverable start.
                 journal.committed(requestedConfig, nodes);
                 NativeRuntime.applied(requestedConfig, nodes);
