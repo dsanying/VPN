@@ -10,6 +10,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import { buildMihomoMainConfig } from '../mihomo-config-builder';
 import { buildMihomoUserRules } from '../mihomo-rules';
 import { MihomoApiClient } from '../MihomoApiClient';
+import { probeMihomoReadiness } from '../mihomo-readiness';
 import type { ServerConfig, UserConfig } from '../../../shared/types';
 
 jest.setTimeout(30000);
@@ -34,17 +35,13 @@ let children: ChildProcess[];
 let origin: Server;
 let api: MihomoApiClient | undefined;
 let fixtureSecret: string;
-let expectedMihomoGroups: string[];
-let expectedMihomoPorts: number[];
-let expectedMihomoRules: string[];
+let expectedMihomoConfig: Record<string, unknown>;
 
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'shadowvpn-mihomo-native-'));
   children = [];
   fixtureSecret = `fixture-${randomUUID()}`;
-  expectedMihomoGroups = [];
-  expectedMihomoPorts = [];
-  expectedMihomoRules = [];
+  expectedMihomoConfig = {};
   origin = createServer((_req, res) => res.end('fixture-origin'));
   origin.listen(0, '127.0.0.1');
   await once(origin, 'listening');
@@ -74,20 +71,7 @@ async function port(): Promise<number> {
   return result;
 }
 function launch(name: 'mihomo' | 'xray', config: object): void {
-  if (name === 'mihomo') {
-    const value = config as {
-      'proxy-groups'?: Array<{ name: string }>;
-      'mixed-port'?: number;
-      listeners?: Array<{ port: number }>;
-      rules?: string[];
-    };
-    expectedMihomoGroups = (value['proxy-groups'] ?? []).map((group) => group.name);
-    expectedMihomoRules = value.rules ?? [];
-    expectedMihomoPorts = [
-      value['mixed-port'],
-      ...(value.listeners ?? []).map((listener) => listener.port),
-    ].filter((port): port is number => typeof port === 'number' && port > 0);
-  }
+  if (name === 'mihomo') expectedMihomoConfig = config as Record<string, unknown>;
   const file = join(directory, `${name}.json`);
   writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
   const check =
@@ -105,42 +89,7 @@ async function ready(): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (children.some((child) => child.exitCode !== null)) throw new Error('Fixture core exited');
     try {
-      await api!.probe(100);
-      // /version is served before Mihomo finishes applying its initial configuration.
-      const groups = await api!.request<{ proxies: Record<string, unknown> }>(
-        'GET',
-        '/proxies',
-        undefined,
-        100
-      );
-      if (!expectedMihomoGroups.every((name) => Object.hasOwn(groups.proxies, name)))
-        throw new Error('Fixture groups not ready');
-      const rules = await api!.request<{ rules: Array<{ type: string; proxy: string }> }>(
-        'GET',
-        '/rules',
-        undefined,
-        100
-      );
-      const expectedMatch = expectedMihomoRules.at(-1)?.split(',');
-      if (
-        rules.rules.length !== expectedMihomoRules.length ||
-        (expectedMatch?.[0] === 'MATCH' && rules.rules.at(-1)?.proxy !== expectedMatch[1])
-      )
-        throw new Error('Fixture routing policy not ready');
-      await Promise.all(
-        expectedMihomoPorts.map(
-          (port) =>
-            new Promise<void>((resolve, reject) => {
-              const socket = connect(port, '127.0.0.1');
-              socket.once('connect', () => {
-                socket.destroy();
-                resolve();
-              });
-              socket.once('error', reject);
-              socket.setTimeout(100, () => socket.destroy(new Error('Fixture listener not ready')));
-            })
-        )
-      );
+      await probeMihomoReadiness(api!, expectedMihomoConfig, 100);
       return;
     } catch {
       await new Promise((done) => setTimeout(done, 30));
