@@ -140,3 +140,14 @@ test('clean CI prepares pinned native binaries before tests and uploads referenc
   assert.ok(release.jobs['create-release'].needs.includes('native-mac'));
   assert.deepEqual(release.jobs['native-mac'].strategy.matrix.include.map(row => row.arch).sort(), ['arm64', 'x64']);
 });
+
+test('each desktop installer runs native layout regression with its declared test dependencies', () => {
+  const release = load(fs.readFileSync(path.join(scripts, '../.github/workflows/release.yml'), 'utf8'));
+  const steps = release.jobs['native-mac'].steps;
+  const dependencies = steps.findIndex(step => step.run?.includes('pnpm --dir web install --frozen-lockfile'));
+  const native = steps.findIndex(step => step.run?.includes('verify-desktop-installed.mjs'));
+  assert.ok(dependencies >= 0 && dependencies < native);
+  assert.ok(steps[native].run.includes('--layout --exe'));
+  const windows = fs.readFileSync(path.join(scripts, 'verify-windows-install.ps1'), 'utf8');
+  assert.ok(windows.includes('verify-desktop-installed.mjs --layout --exe'));
+});

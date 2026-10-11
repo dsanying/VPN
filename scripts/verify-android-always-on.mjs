@@ -38,7 +38,7 @@ const git = args => {
 const commit = git(['rev-parse', 'HEAD']);
 const dirty = !!git(['status', '--porcelain']);
 const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
-const report = { version, commit, dirty, passed: false, status: 'running', checkedAt: new Date().toISOString() };
+const report = { version, commit, dirty, passed: false, status: 'running', checkedAt: new Date().toISOString(), previousVpnSettings: Object.fromEntries(settings.map((key, index) => [key, before[index]])) };
 fs.writeFileSync(reportPath, JSON.stringify(report) + '\n');
 const instrument = phase => {
   const result = device(['shell', 'am', 'instrument', '-w', '-e', 'bootPhase', phase,
@@ -57,12 +57,17 @@ try {
   device(['shell', 'settings', 'put', 'secure', settings[0], packageId]);
   const boot = device(['shell', 'cat', '/proc/sys/kernel/random/boot_id']);
   device(['reboot']);
-  const deadline = Date.now() + 120_000;
+  // A cold emulator can expose boot_completed before a restarted system_server
+  // registers its Binder services. This is OS test readiness, not VPN confirmation.
+  const deadline = Date.now() + 300_000;
   let rebooted = false;
   while (Date.now() < deadline) {
     try {
       const next = device(['shell', 'cat', '/proc/sys/kernel/random/boot_id'], 5_000);
-      if (next !== boot && device(['shell', 'getprop', 'sys.boot_completed'], 5_000) === '1') {
+      if (next !== boot &&
+          device(['shell', 'getprop', 'sys.boot_completed'], 5_000) === '1' &&
+          device(['shell', 'service', 'check', 'activity'], 5_000) === 'Service activity: found' &&
+          device(['shell', 'service', 'check', 'settings'], 5_000) === 'Service settings: found') {
         rebooted = true; break;
       }
     } catch { /* The OS is offline during the requested reboot; no application status polling. */ }

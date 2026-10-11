@@ -11,7 +11,7 @@ $process = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S',
 if ($process.ExitCode -ne 0) { throw "NSIS installation failed: $($process.ExitCode)" }
 $executable = Join-Path $destination '暗影VPN.exe'
 if (!(Test-Path $executable -PathType Leaf)) { throw 'Installer ignored the selected destination.' }
-& node scripts/verify-desktop-installed.mjs --exe $executable
+& node scripts/verify-desktop-installed.mjs --layout --exe $executable
 if ($LASTEXITCODE -ne 0) { throw 'Installed native application checks failed.' }
 @{ destinationSelected = $true; installedExecutable = $true; checkedAt = (Get-Date).ToUniversalTime().ToString('o') } |
   ConvertTo-Json | Set-Content 'artifacts/windows-x64/custom-install.json' -Encoding utf8

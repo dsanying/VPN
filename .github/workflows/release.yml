@@ -192,6 +192,12 @@ jobs:
         with:
           name: release-mac
           path: downloaded
+      - name: Setup native UI test dependencies
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - name: Install native UI test dependencies
+        run: pnpm --dir web install --frozen-lockfile
       - name: Install exact architecture DMG and test its native business APIs
         env:
           TARGET_ARCH: ${{ matrix.arch }}
@@ -205,7 +211,7 @@ jobs:
           hdiutil attach "$DMG" -readonly -nobrowse -mountpoint "$MOUNT"
           trap 'hdiutil detach "$MOUNT" || true' EXIT
           ditto "$MOUNT/暗影VPN.app" "$INSTALLED/暗影VPN.app"
-          node scripts/verify-desktop-installed.mjs --exe "$INSTALLED/暗影VPN.app/Contents/MacOS/暗影VPN"
+          node scripts/verify-desktop-installed.mjs --layout --exe "$INSTALLED/暗影VPN.app/Contents/MacOS/暗影VPN"
       - name: Upload actual native acceptance results
         if: always()
         uses: actions/upload-artifact@v7.0.1

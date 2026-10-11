@@ -8,6 +8,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { verifyInstalledUi } from './installed-ui-checks.mjs';
 
 if (!['darwin', 'win32'].includes(process.platform)) throw new Error('A native desktop runner is required');
 const at = process.argv.indexOf('--exe');
@@ -28,14 +30,23 @@ const port = await new Promise((resolve, reject) => {
   const server = net.createServer(); server.on('error', reject);
   server.listen(0, '127.0.0.1', () => { const selected = server.address().port; server.close(() => resolve(selected)); });
 });
-const child = spawn(executable, [`--validation-profile=${profile}`, '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${port}`], { stdio: ['ignore', log, log] });
+const args = [`--validation-profile=${profile}`, '--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${port}`];
+let nativeApplication;
+let child;
 let launchError;
-child.on('error', error => { launchError = error; });
 let socket;
 let invoke;
 let originalAutostart;
 const checks = {};
 try {
+  if (process.argv.includes('--layout')) {
+    const { _electron } = createRequire(path.resolve('web/package.json'))('@playwright/test');
+    nativeApplication = await _electron.launch({ executablePath: executable, args, timeout: 90_000 });
+    child = nativeApplication.process();
+    const stream = fs.createWriteStream(null, { fd: log, autoClose: false });
+    child.stdout?.pipe(stream); child.stderr?.pipe(stream);
+  } else child = spawn(executable, args, { stdio: ['ignore', log, log] });
+  child.on('error', error => { launchError = error; });
   let target;
   const until = Date.now() + 90_000;
   while (Date.now() < until) {
@@ -97,14 +108,16 @@ try {
   assert.equal(await invoke('autoStart:set', { enabled: false }), true);
   assert.equal((await invoke('autoStart:getStatus')).enabled, false);
   checks.autostart = 'passed';
+  const ui = process.argv.includes('--layout') ? await verifyInstalledUi(nativeApplication, output) : undefined;
+  if (ui) checks.layout = 'passed';
   const archive = path.resolve(path.dirname(executable), process.platform === 'darwin' ? '../Resources/app.asar' : 'resources/app.asar');
   fs.writeFileSync(reportFile, JSON.stringify({
     version, commit: identity.buildCommit, dirty: identity.buildDirty,
     passed: true, status: 'passed',
     executableSha256: createHash('sha256').update(fs.readFileSync(executable)).digest('hex'),
     applicationArchiveSha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
-    platform: identity.platform, arch: identity.arch, native: true, checkedAt: new Date().toISOString(), checks,
-    excludes: ['layout', 'network', 'updates', 'login-after-reboot', 'version-upgrade'],
+    platform: identity.platform, arch: identity.arch, native: true, checkedAt: new Date().toISOString(), checks, ui,
+    excludes: [...(ui ? [] : ['layout']), 'network', 'updates', 'login-after-reboot', 'version-upgrade'],
   }, null, 2) + '\n');
 } finally {
   if (invoke && originalAutostart !== undefined) {
@@ -112,7 +125,8 @@ try {
     catch (error) { console.error('Failed to restore acceptance autostart state'); process.exitCode = 1; }
   }
   socket?.close();
-  if (child.pid) {
+  if (nativeApplication) await nativeApplication.close().catch(() => {});
+  if (child?.pid) {
     if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
     else child.kill('SIGTERM');
   }
