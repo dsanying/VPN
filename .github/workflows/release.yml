@@ -142,14 +142,16 @@ jobs:
 
             echo "Creating ${ARCH} DMG..."
             TEMP_DIR=$(mktemp -d)
+            trap 'rm -rf "$TEMP_DIR"' EXIT
             cp -R "$APP_PATH" "$TEMP_DIR/"
             ln -s /Applications "$TEMP_DIR/Applications"
             # 此构建无 Developer ID/公证；发布说明必须如实注明，不能引导关闭系统保护。
-            hdiutil create -volname "暗影VPN ${VERSION} (${ARCH})" \
+            node scripts/create-dmg.mjs -volname "暗影VPN ${VERSION} (${ARCH})" \
               -srcfolder "$TEMP_DIR" \
               -ov -format UDZO \
               "$DMG_PATH"
             rm -rf "$TEMP_DIR"
+            trap - EXIT
             echo "Created: $DMG_PATH"
           done
 
