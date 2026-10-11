@@ -172,6 +172,7 @@ jobs:
 
   native-mac:
     needs: release
+    if: always() && !cancelled()
     permissions:
       contents: read
     strategy:

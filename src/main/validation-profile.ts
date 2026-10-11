@@ -13,3 +13,9 @@ export function resolveUserDataPath(appData: string, arguments_: readonly string
     throw new Error('Validation profile must include a drive or network share');
   return resolved;
 }
+
+/** Disposable acceptance profiles must never rebind the machine's persistent service. */
+export function assertPersistentHelperProfile(arguments_: readonly string[] = process.argv): void {
+  if (arguments_.some((argument) => argument.startsWith('--validation-profile=')))
+    throw new Error('隔离验收模式不能安装、修复或卸载系统助手；请在正常配置中管理助手');
+}

@@ -1,3 +1,4 @@
+import { assertPersistentHelperProfile } from '../validation-profile';
 /**
  * Windows 提权服务客户端（对齐 macOS HelperManager，实现 IPrivilegedHelper）。
  *
@@ -275,6 +276,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
    * ⚠️ 真机必验：sc create binPath= 含空格路径的引号语义、helper.token ACL、UAC 取消回退、非管理员经已装服务起核。
    */
   async install(): Promise<{ success: boolean; error?: string; status: HelperStatus }> {
+    assertPersistentHelperProfile();
     if (!this.supported) {
       return {
         success: false,
@@ -339,6 +341,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
    * 最后删客户端 token 副本。镜像「日常启停零提权」的同一 token 鉴权边界（卸载也走零提权主路径）。
    */
   async uninstall(): Promise<{ success: boolean; error?: string; status: HelperStatus }> {
+    assertPersistentHelperProfile();
     if (!this.supported) {
       return {
         success: false,

@@ -31,6 +31,22 @@ const binary = (name: string) =>
 const children: ChildProcess[] = [];
 let sequence = 0;
 let cores: CompatibilityCoreService;
+const fixturePorts = new Set<number>();
+let fixtureOutput = '';
+async function fixturePort(): Promise<number> {
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const port = await allocateCompatibilityPort();
+    if (!fixturePorts.has(port)) {
+      fixturePorts.add(port);
+      return port;
+    }
+  }
+  throw new Error('Could not allocate distinct fixture ports');
+}
+beforeEach(() => {
+  fixturePorts.clear();
+  fixtureOutput = '';
+});
 async function ready(port: number): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
     if (
@@ -54,7 +70,12 @@ function launch(name: string, config: object): ChildProcess {
   const file = join(dir, `${name}-${sequence++}.json`);
   writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
   const args = name === 'sing-box' ? ['run', '-c', file] : ['run', '-config', file];
-  const child = spawn(binary(name), args, { stdio: 'ignore' });
+  const child = spawn(binary(name), args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const collect = (chunk: Buffer) => {
+    fixtureOutput = (fixtureOutput + chunk.toString()).slice(-8000);
+  };
+  child.stdout?.on('data', collect);
+  child.stderr?.on('data', collect);
   children.push(child);
   return child;
 }
@@ -71,7 +92,13 @@ async function fetchThrough(port: number, target: string): Promise<string> {
         res.on('end', () => done(body));
       });
       req.setTimeout(4000, () => req.destroy(new Error('request timeout')));
-      req.once('error', fail);
+      req.once('error', (error) =>
+        fail(
+          new Error(
+            `${error.message}; proxy=${port}; fixture ports=${[...fixturePorts].join(',')}; core output=${fixtureOutput}`
+          )
+        )
+      );
       req.end();
     });
   } finally {
@@ -104,9 +131,10 @@ it.each(['auto', 'packet-up', 'stream-up', 'invalid-uuid'])(
     await once(http, 'listening');
     try {
       const originPort = (http.address() as { port: number }).port;
-      const nodePort = await allocateCompatibilityPort();
-      const directPort = await allocateCompatibilityPort();
-      const entryPort = await allocateCompatibilityPort();
+      fixturePorts.add(originPort);
+      const nodePort = await fixturePort();
+      const directPort = await fixturePort();
+      const entryPort = await fixturePort();
       const uuid = '00000000-0000-4000-8000-000000000001';
       launch('xray', {
         log: { loglevel: 'warning' },
@@ -136,7 +164,9 @@ it.each(['auto', 'packet-up', 'stream-up', 'invalid-uuid'])(
         createdAt: '2026-10-08T00:00:00Z',
         updatedAt: '2026-10-08T00:00:00Z',
       };
-      cores = new CompatibilityCoreService(binary, () => undefined);
+      cores = new CompatibilityCoreService(binary, (_level, message) => {
+        fixtureOutput = (fixtureOutput + message).slice(-8000);
+      });
       await cores.prepare([server], directPort);
       expect(cores.failures.size).toBe(0);
       const bridge = cores.bridges.get(server.id)!;
@@ -176,9 +206,10 @@ it('mihomo native nodes carry requests through authenticated loopback bridges an
   await once(http, 'listening');
   try {
     const targetPort = (http.address() as { port: number }).port;
-    const nodePort = await allocateCompatibilityPort();
-    const directPort = await allocateCompatibilityPort();
-    const entryPort = await allocateCompatibilityPort();
+    fixturePorts.add(targetPort);
+    const nodePort = await fixturePort();
+    const directPort = await fixturePort();
+    const entryPort = await fixturePort();
     launch('sing-box', {
       inbounds: [{ type: 'socks', listen: '127.0.0.1', listen_port: nodePort }],
       outbounds: [{ type: 'direct' }],
@@ -205,7 +236,9 @@ it('mihomo native nodes carry requests through authenticated loopback bridges an
         outbound: { type: 'unknown-fixture-type', server: 'example.com', port: 443 },
       },
     };
-    cores = new CompatibilityCoreService(binary, () => undefined);
+    cores = new CompatibilityCoreService(binary, (_level, message) => {
+      fixtureOutput = (fixtureOutput + message).slice(-8000);
+    });
     await cores.prepare([server, invalid], directPort);
     expect(cores.failures.has('invalid')).toBe(true);
     const bridge = cores.bridges.get(server.id)!;
@@ -335,7 +368,7 @@ it('carries a complete request through Mihomo → authenticated sing-box compati
   try {
     const directPort = await allocateCompatibilityPort(),
       entryPort = await allocateCompatibilityPort(),
-      controllerPort = await allocateCompatibilityPort();
+      controllerPort = await fixturePort();
     const node = {
       id: 'fixture-http',
       name: 'fixture',
