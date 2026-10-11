@@ -29,6 +29,21 @@ func normalizedWindowsPath(name string) string {
 	return strings.ToLower(filepath.Clean(name))
 }
 
+// Expands legitimate 8.3 names without resolving junctions or symlinks.
+// The final handle path must still identify this same lexical directory.
+func longWindowsPath(name string) (string, error) {
+	input, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return "", err
+	}
+	buffer := make([]uint16, 32768)
+	count, err := windows.GetLongPathName(input, &buffer[0], uint32(len(buffer)))
+	if err != nil || count == 0 || count >= uint32(len(buffer)) {
+		return "", fmt.Errorf("cannot expand directory name: %v", err)
+	}
+	return windows.UTF16ToString(buffer[:count]), nil
+}
+
 func directoryHandle(name string) (windows.Handle, error) {
 	utf16, err := windows.UTF16PtrFromString(name)
 	if err != nil {
@@ -54,7 +69,11 @@ func openConfinedFile(name string, appendLog bool) (*os.File, string, error) {
 		return nil, "", err
 	}
 	// --confdir 本身也不能被重定向至其他目录。
-	if normalizedWindowsPath(base) != normalizedWindowsPath(confDir) {
+	expectedBase, err := longWindowsPath(confDir)
+	if err != nil {
+		return nil, "", err
+	}
+	if normalizedWindowsPath(base) != normalizedWindowsPath(expectedBase) {
 		return nil, "", fmt.Errorf("config-directory-reparse-denied")
 	}
 	parentHandle, err := directoryHandle(filepath.Dir(name))
