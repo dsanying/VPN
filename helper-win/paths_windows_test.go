@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestConfinedFiles(t *testing.T) {
@@ -56,6 +58,35 @@ func TestConfinedFiles(t *testing.T) {
 	confDir = ""
 	if cfgAllowed(config) {
 		t.Fatal("empty confdir allowed")
+	}
+}
+
+func TestConfinedFilesAcceptShortDirectoryName(t *testing.T) {
+	old := confDir
+	defer func() { confDir = old }()
+	directory := filepath.Join(t.TempDir(), "long-directory-name-for-confined-config")
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	input, err := windows.UTF16PtrFromString(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buffer := make([]uint16, 32768)
+	count, err := windows.GetShortPathName(input, &buffer[0], uint32(len(buffer)))
+	if err != nil || count == 0 || count >= uint32(len(buffer)) {
+		t.Skipf("8.3 names unavailable: %v", err)
+	}
+	confDir = windows.UTF16ToString(buffer[:count])
+	if normalizedWindowsPath(confDir) == normalizedWindowsPath(directory) {
+		t.Skip("filesystem does not create distinct 8.3 aliases")
+	}
+	config := filepath.Join(confDir, "config.json")
+	if err := os.WriteFile(config, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !cfgAllowed(config) {
+		t.Fatal("legitimate short-name directory was denied")
 	}
 }
 
