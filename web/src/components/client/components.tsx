@@ -260,6 +260,7 @@ export function MultiSelect<T extends string = string>({
 }: SelectProps<T[]> & { freeInput?: boolean; label?: string }) {
   return (
     <Select
+      showSearch={freeInput === true}
       {...props}
       mode={freeInput ? 'tags' : 'multiple'}
       aria-label={label ?? props['aria-label']}
