@@ -1,0 +1,36 @@
+name: Verified update catalog
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: update-catalog
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '26'
+      - name: Sign publisher metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHADOW_RELEASE_CATALOG_KEY: ${{ secrets.SHADOW_RELEASE_CATALOG_KEY }}
+        run: node scripts/publish-release-catalog.mjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist-catalog
+      - uses: actions/deploy-pages@v4
+        id: deployment
