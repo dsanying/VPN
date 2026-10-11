@@ -13,6 +13,22 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class NativeNetworkDeviceTest {
+    @Test public void physicalSelectionPrefersValidatedPathsDuringVpnTeardown() {
+        android.net.Network vpn = android.net.Network.fromNetworkHandle((101L << 32) | 0xcafed00dL);
+        android.net.Network wifi = android.net.Network.fromNetworkHandle((102L << 32) | 0xcafed00dL);
+        android.net.Network mobile = android.net.Network.fromNetworkHandle((103L << 32) | 0xcafed00dL);
+        java.util.Set<android.net.Network> validated = new java.util.HashSet<>();
+        validated.add(mobile);
+        java.util.function.Predicate<android.net.Network> physical = network -> network.equals(wifi) || network.equals(mobile);
+        android.net.Network[] available = { vpn, wifi, mobile };
+        assertEquals(mobile, NativeNetworkPlatform.findPhysicalNetwork(vpn, available, physical, validated::contains));
+        assertEquals(mobile, NativeNetworkPlatform.findPhysicalNetwork(wifi, available, physical, validated::contains));
+        validated.add(wifi);
+        assertEquals(wifi, NativeNetworkPlatform.findPhysicalNetwork(wifi, available, physical, validated::contains));
+        validated.clear();
+        assertEquals(wifi, NativeNetworkPlatform.findPhysicalNetwork(vpn, available, physical, validated::contains));
+        assertNull(NativeNetworkPlatform.findPhysicalNetwork(vpn, new android.net.Network[]{vpn}, physical, validated::contains));
+    }
     @Test public void repeatedPhysicalNetworkObservationsDoNotMutateVpnPath() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         AtomicInteger notifications = new AtomicInteger();

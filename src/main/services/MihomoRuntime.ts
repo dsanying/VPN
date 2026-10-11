@@ -5,6 +5,7 @@ import { join } from 'path';
 import { createServer } from 'net';
 import { StringDecoder } from 'string_decoder';
 import { MihomoApiClient } from './MihomoApiClient';
+import { probeMihomoReadiness } from './mihomo-readiness';
 import { redactLogText } from '../../shared/log-redact';
 
 const run = promisify(execFile);
@@ -113,7 +114,7 @@ export class MihomoRuntime {
             if (spawnError || child.exitCode !== null || child.signalCode !== null)
               throw new Error('Mihomo exited before readiness');
             try {
-              await api.probe(250);
+              await probeMihomoReadiness(api, config, 250);
               break;
             } catch {
               if (Date.now() >= deadline) throw new Error('Mihomo controller did not become ready');

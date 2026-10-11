@@ -62,15 +62,31 @@ final class NativeNetworkPlatform implements PlatformInterface, AutoCloseable {
     }
     static Network findPhysicalNetwork(ConnectivityManager connectivity) {
         Network active = connectivity.getActiveNetwork();
+        Network[] available = connectivity.getAllNetworks();
+        Map<Network, NetworkCapabilities> observed = new HashMap<>();
+        for (Network network : available) observed.put(network, connectivity.getNetworkCapabilities(network));
+        if (active != null && !observed.containsKey(active)) observed.put(active, connectivity.getNetworkCapabilities(active));
+        return findPhysicalNetwork(active, available, network -> {
+            NetworkCapabilities caps = observed.get(network);
+            return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN);
+        }, network -> observed.get(network).hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+    }
+    static Network findPhysicalNetwork(Network active, Network[] available, java.util.function.Predicate<Network> physical, java.util.function.Predicate<Network> validated) {
         List<Network> candidates = new ArrayList<>();
         if (active != null) candidates.add(active);
-        candidates.addAll(Arrays.asList(connectivity.getAllNetworks()));
+        candidates.addAll(Arrays.asList(available));
+        Network fallback = null;
         for (Network network : candidates) {
-            NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
-            if (capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return network;
+            if (physical.test(network)) {
+                // The VPN can remain the system default briefly after teardown. Do not
+                // select an unvalidated Wi-Fi path ahead of working mobile/Ethernet.
+                if (validated.test(network)) return network;
+                if (fallback == null) fallback = network;
+            }
         }
-        return null;
+        // Captive/restricted networks remain usable for local endpoints when none is validated.
+        return fallback;
     }
     synchronized void startNetworkMonitor() {
         if (networkCallback != null) return;
