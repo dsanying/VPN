@@ -7,6 +7,7 @@ export function clearRetiredRuntimeSettings(config: UserConfig): boolean {
   const raw = config as unknown as Record<string, unknown>;
   for (const key of [
     'autoCheckUpdate',
+    'mainSessionViaProxy',
     'autoUpdateSubscriptionOnStart',
     'subscriptionUpdateIntervalHours',
     'blockQuic',

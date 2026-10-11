@@ -1528,13 +1528,11 @@ if (gotTheLock) {
     coreUpdateService.setConfigProvider(() => configManager.loadConfig());
     // #60：App 自更新下载兜底镜像也用用户配置的 ghProxyPrefix（与内核/资源下载同一加速前缀，口径对齐）。
     updateService.setConfigProvider(() => configManager.loadConfig());
-    // Phase 1（更新网络统一层）：更新链路（检查/资源/应用）统一会话层——独立 partition 会话按 mainSessionViaProxy
-    // ×proxyRunning 选经代理(socks 入站)/直连，取代裸 net.request 走 default session。proxyManager 已就绪。
+    // 更新链路使用独立会话，按本应用运行态自动选择已有代理入口或直连。
     const updateNetwork = new UpdateNetwork();
-    // 主更新链路 viaProxy/port 决策 providers 一次注入 UpdateNetwork（共享 configManager/proxyManager）；
+    // 主更新链路注入廉价的运行态 providers；
     // UpdateService/RoutingDataService/CoreDownloader 三处只调 resolveSessionForMainUpdate，不再各自重复决策（防漂移）。
     updateNetwork.setMainUpdateProviders({
-      configProvider: () => configManager.loadConfig(),
       proxyRunningProvider: () => proxyManager?.getStatus().running ?? false,
       updateInPortProvider: () => proxyManager?.getUpdateInPort() ?? null,
     });
@@ -1552,7 +1550,6 @@ if (gotTheLock) {
       updateNetwork,
       proxyRunningProvider: () => proxyManager?.getStatus().running ?? false,
       updateInPortProvider: () => proxyManager?.getUpdateInPort() ?? null,
-      configProvider: () => configManager.loadConfig(),
       logManager,
     });
     // 后台预热内核版本缓存（getCoreVersion 写 this.coreVersion）：使「关于」页**首次**进入也命中缓存、

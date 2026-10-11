@@ -286,7 +286,7 @@ export class UpdateService {
 
   /**
    * 更新链路（检查/下载）统一会话。viaProxy/port 决策收口到 UpdateNetwork.resolveSessionForMainUpdate（类2，
-   * 三链路单点防漂移）：mainSessionViaProxy×proxyRunning×updateInPort 求值、端口不可用/读 config 失败回落直连、
+   * 三链路单点防漂移）：proxyRunning×updateInPort 求值、端口不可用回落直连、
    * 经 sessionForOrDirect 绝不消费 default session。未注入 updateNetwork → undefined（旧行为兜底）；
    * 极罕见 direct 也 reject → undefined 守 net.request「绝不抛」契约。
    */

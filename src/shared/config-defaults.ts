@@ -27,7 +27,6 @@ export function createDefaultConfig(installationSecret: string): UserConfig {
     hardwareAcceleration: true, // 图形兼容逃生门：默认开（关闭=opt-in 自救，app ready 前禁硬件加速改软件渲染，见 services/graphics-compat）
     windowEffects: true, // 窗口特效（Win Mica / mac 毛玻璃）默认开；关闭=opt-in 自救，主窗回落实色底
     desktopNotifications: true, // 桌面通知总开关，默认开（仅严重错误事件发通知）
-    mainSessionViaProxy: true, // 更新检查/规则资源默认走代理（运行时）
     rememberWindowSize: true, // 默认启用记忆窗口大小（用户调整后下次沿用；已显式关闭的用户配置不受影响）
     interruptConnectionsOnSwitch: true, // 切换节点默认断开旧连接（精准断连 pair 模型，避免误杀规则固定节点；已显式关闭的用户配置不受影响）
     enableIPv6: false, // 默认不启用 IPv6 解析（防假死兜底）

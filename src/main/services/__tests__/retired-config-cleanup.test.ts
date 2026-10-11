@@ -57,6 +57,18 @@ function makeConfig(over: Record<string, unknown> = {}): UserConfig {
 }
 
 describe('废弃订阅配置集中清理', () => {
+  it.each([true, false, 'legacy'])(
+    '加载清除旧更新路径开关 %s，而非继续执行隐藏策略',
+    async (value) => {
+      const file = path.join(TMP, 'retired-update-routing.json');
+      fs.writeFileSync(file, JSON.stringify(makeConfig({ mainSessionViaProxy: value })));
+      const manager = new ConfigManager(file);
+      const config = await manager.loadConfig();
+      expect(config).not.toHaveProperty('mainSessionViaProxy');
+      await manager.saveConfig(config);
+      expect(JSON.parse(fs.readFileSync(file, 'utf8'))).not.toHaveProperty('mainSessionViaProxy');
+    }
+  );
   let dir: string;
   beforeAll(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'subscription-cleanup-'));

@@ -1,7 +1,7 @@
 /**
  * icon-protocol 单测（node env）：mock electron protocol（捕获 handler）+ session.fetch + node dns。
  * 覆盖 M2：flowz-icon:// 首跳 + 逐跳 redirect SSRF guard；协议限制；URL 解码往返。
- * proxyRunning=false → viaProxy 恒 false（direct），cfgMsvpCache 不影响判定，故跨用例无污染。
+ * proxyRunning=false → viaProxy 恒 false（direct），不读取配置或保留跨请求配置缓存。
  */
 let capturedHandler: ((req: { url: string }) => Promise<Response>) | null = null;
 const mockRegisterSchemes = jest.fn();
@@ -42,7 +42,6 @@ describe('icon-protocol flowz-icon://', () => {
       updateNetwork: { sessionFor: jest.fn().mockResolvedValue({ fetch: mockFetch }) } as never,
       proxyRunningProvider: () => false, // viaProxy 恒 false（direct）
       updateInPortProvider: () => null,
-      configProvider: () => Promise.resolve({} as never),
       logManager: { addLog: jest.fn() } as never,
     });
   });
