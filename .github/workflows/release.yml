@@ -73,7 +73,7 @@ jobs:
         run: pnpm --dir web install --frozen-lockfile
 
       - name: Validate declared platform scope
-        run: node --test scripts/release-pipeline.test.mjs && npm run check:platforms
+        run: node --test scripts/release-pipeline.test.mjs scripts/development-validation.test.mjs && npm run check:platforms
 
       - name: Validate release version
         run: node scripts/check-release-version.mjs ${{ github.event_name == 'workflow_dispatch' && '--candidate' || '' }}

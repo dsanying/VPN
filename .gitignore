@@ -150,5 +150,6 @@ android/app/src/main/assets/licenses/
 
 # Isolated native validation builds
 /dist-validation*/
+/dist-native-candidate/
 
 /android/app/src/main/assets/headless/
