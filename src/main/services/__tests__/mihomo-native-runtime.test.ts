@@ -3,7 +3,8 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { createServer, request, type Server } from 'http';
-import { createServer as createTcpServer, connect } from 'net';
+import { connect } from 'net';
+import { allocateCompatibilityPort } from '../CompatibilityCoreService';
 import { once } from 'events';
 import { randomUUID } from 'crypto';
 import { HttpsProxyAgent } from 'https-proxy-agent';
@@ -67,20 +68,9 @@ afterEach(async () => {
 });
 
 async function port(): Promise<number> {
-  // Closing a reservation allows Windows to offer the same ephemeral port again.
-  // A fixture's mixed, controller, probe and upstream endpoints must stay distinct.
-  for (let attempt = 0; attempt < 32; attempt++) {
-    const server = createTcpServer();
-    server.listen(0, '127.0.0.1');
-    await once(server, 'listening');
-    const result = (server.address() as { port: number }).port;
-    await new Promise<void>((done) => server.close(() => done()));
-    if (fixturePorts.has(result)) continue;
-    fixturePorts.add(result);
-    return result;
-  }
-  throw new Error('Cannot allocate distinct native fixture ports');
+  return allocateCompatibilityPort(fixturePorts);
 }
+
 function launch(name: 'mihomo' | 'xray', config: object): void {
   if (name === 'mihomo') expectedMihomoConfig = config as Record<string, unknown>;
   const file = join(directory, `${name}.json`);
