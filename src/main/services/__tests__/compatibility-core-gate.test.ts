@@ -34,15 +34,9 @@ let cores: CompatibilityCoreService;
 const fixturePorts = new Set<number>();
 let fixtureOutput = '';
 async function fixturePort(): Promise<number> {
-  for (let attempt = 0; attempt < 32; attempt++) {
-    const port = await allocateCompatibilityPort();
-    if (!fixturePorts.has(port)) {
-      fixturePorts.add(port);
-      return port;
-    }
-  }
-  throw new Error('Could not allocate distinct fixture ports');
+  return allocateCompatibilityPort(fixturePorts);
 }
+
 beforeEach(() => {
   fixturePorts.clear();
   fixtureOutput = '';

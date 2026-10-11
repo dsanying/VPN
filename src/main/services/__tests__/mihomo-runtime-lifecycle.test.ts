@@ -1,4 +1,5 @@
 import { MihomoRuntime } from '../MihomoRuntime';
+import { allocateCompatibilityPort } from '../CompatibilityCoreService';
 import { buildMihomoMainConfig } from '../mihomo-config-builder';
 import type { UserConfig } from '../../../shared/types';
 import { mkdtempSync, rmSync } from 'fs';
@@ -23,17 +24,19 @@ const binary = resolve(
   'mihomo' + (process.platform === 'win32' ? '.exe' : '')
 );
 let directory: string, runtime: MihomoRuntime;
+const fixturePorts = new Set<number>();
+let fixtureOutput = '';
 async function port(): Promise<number> {
-  const server = createServer();
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const value = (server.address() as { port: number }).port;
-  await new Promise<void>((done) => server.close(() => done()));
-  return value;
+  return allocateCompatibilityPort(fixturePorts);
 }
+
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'shadowvpn-mihomo-lifecycle-'));
-  runtime = new MihomoRuntime(binary, directory);
+  fixturePorts.clear();
+  fixtureOutput = '';
+  runtime = new MihomoRuntime(binary, directory, (message) => {
+    fixtureOutput = (fixtureOutput + message + '\n').slice(-8000);
+  });
 });
 afterEach(async () => {
   await runtime.stop();
@@ -56,7 +59,11 @@ async function config(controllerPort: number) {
 it('owns real startup, readiness, restart and stop without leaving a controller', async () => {
   const controllerPort = await port();
   const first = await config(controllerPort);
-  await runtime.start(first, controllerPort, 'fictional-secret');
+  await runtime.start(first, controllerPort, 'fictional-secret').catch((error) => {
+    throw new Error(
+      `${error.message}; controller=${controllerPort}; mixed=${first['mixed-port']}; ${fixtureOutput}`
+    );
+  });
   const client = runtime.client!,
     firstPid = runtime.pid;
   expect(firstPid).toBeGreaterThan(0);
