@@ -741,7 +741,7 @@ async function createWindow(forceShow = false) {
     width: windowWidth,
     height: windowHeight,
     minWidth: 800,
-    minHeight: 720,
+    minHeight: 560,
     title: mt('productName'),
     icon: resourceManager.getAppIconPath(),
     show: false, // 先不显示，等待加载完成

@@ -41,6 +41,10 @@ export async function verifyInstalledUi(application, output) {
     await resize(800, 600);
     await expect(main).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(800);
+    await expect.poll(() => page.evaluate(() => window.innerHeight)).toBeLessThanOrEqual(600);
+    // Wait for native resize and existing notification exit animations to settle.
+    // Keep the same overflow threshold; a persistent layout defect still fails.
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
     await screenshot('installed-settings-en-short.png');
     const geometry = await main.evaluate(element => ({
       width: element.clientWidth, height: element.clientHeight, scrollHeight: element.scrollHeight,
