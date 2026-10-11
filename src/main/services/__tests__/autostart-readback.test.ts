@@ -8,10 +8,15 @@ jest.mock('electron', () => ({
   },
 }));
 import { createAutoStartManager } from '../AutoStartManager';
+import { setPlatform, restorePlatform } from './platform-test-utils';
 beforeEach(() => {
+  // These assertions exercise Electron login items on both supported desktop OSes.
+  // Linux uses a separate .desktop file implementation, not Electron's APIs.
+  setPlatform('darwin');
   mockSet.mockReset();
   mockGet.mockReset();
 });
+afterEach(restorePlatform);
 it('registers the current executable and reads back the actual OS state', async () => {
   mockGet
     .mockReturnValueOnce({ openAtLogin: false })
