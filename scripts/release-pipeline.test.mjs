@@ -107,6 +107,12 @@ test('candidate builds cannot publish a release or bypass tag validation', () =>
   assert.equal(release.jobs['create-release'].if, "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')");
   assert.ok(release.jobs['create-release'].steps.some(step => step.run?.includes('check-client-platforms.mjs --release')));
 });
+test('Android release setup does not request the retired SDK tools package', () => {
+  const release = load(fs.readFileSync(path.join(scripts, '../.github/workflows/release.yml'), 'utf8'));
+  const setup = release.jobs.release.steps.find(step => step.name === 'Setup Android SDK');
+  assert.equal(setup.uses, 'android-actions/setup-android@v4');
+  assert.equal(setup.with.packages, 'platform-tools');
+});
 test('clean CI prepares pinned native binaries before tests and uploads referenced native reports', () => {
   const workflow = name => load(fs.readFileSync(path.join(scripts, '../.github/workflows', name), 'utf8'));
   for (const [name, job] of [['ci.yml', 'test'], ['release.yml', 'release']]) {
