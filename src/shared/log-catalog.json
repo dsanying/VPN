@@ -761,12 +761,6 @@
     "en": "builtinGeoMeta must be an object; resetting to default"
   },
   {
-    "id": "log.1502dd3f824d",
-    "parts": ["mainSessionViaProxy must be a boolean; resetting to default (enabled)"],
-    "zh": "mainSessionViaProxy 必须为布尔值，已重置为默认开启",
-    "en": "mainSessionViaProxy must be a boolean; resetting to default (enabled)"
-  },
-  {
     "id": "log.3408e5ea966f",
     "parts": ["hardwareAcceleration must be a boolean; resetting to default (enabled)"],
     "zh": "hardwareAcceleration 必须为布尔值，已重置为默认开启",

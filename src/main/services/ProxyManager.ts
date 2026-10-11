@@ -2101,9 +2101,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       this.logToManager('warn', '热切换失败，退回重启式切换');
     }
 
-    // 生成无关变更（仅 mainSessionViaProxy/ghProxyPrefix/订阅元数据/内置 geo 戳/未引用资源 等归一化字段，
-    // 且节点未变、且无规则 targetServerId 变化）→ 既无需热切换也无需重启：直接更新缓存。避免纯切「更新检查
-    // 走代理」开关触发 ~1.2s 断流。注意 planHotSwitch=none 已排除规则 targetServerId 变化（那会进 rules/both）。
+    // 生成无关变更（仅 ghProxyPrefix/订阅元数据/内置 geo 戳/未引用资源 等归一化字段，
+    // 且节点未变、且无规则 targetServerId 变化）→ 既无需热切换也无需重启：直接更新缓存。
+    // planHotSwitch=none 已排除规则 targetServerId 变化（那会进 rules/both）。
     if (
       !plan.mustRestart && // §2 F1：规则目标变更无法热切 → 不落 no-op（否则 targetServerId 出 norm 被误吞），走最终重启腿
       this.currentConfig &&
@@ -2386,7 +2386,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   /**
    * 配置的「生成相关」归一化键：剔除只影响下载/调度/Electron 会话/元数据、不影响 sing-box 配置生成的字段
    * （selectedServerId、ghProxyPrefix、ruleResource* 调度、builtinGeoMeta、subscriptions 元数据、
-   * mainSessionViaProxy、未被引用的本地资源、servers 的 updatedAt/createdAt 时间戳）。
+   * 未被引用的本地资源、servers 的 updatedAt/createdAt 时间戳）。
    * 两配置此键相等 ⇔ 生成的 sing-box 配置等价。供 canHotSwitch（判纯切节点）与 switchMode（判生成无关变更 → 免重启 no-op）共用。
    *
    * issue #176 P2-A：可选 serverIds 把 servers 投影过滤到「被引用集」——两配置此「引用归一键」相等 ⇔ 生成配置中
@@ -2421,7 +2421,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       selectedServerId: null,
       ghProxyPrefix: null,
       subscriptions: null,
-      mainSessionViaProxy: null,
       // 登录期出口让位开关：运行期由 ProxyManager live 读（shouldEngageLoginFallback），不喂 generateSingBoxConfig
       // → 切它走 hotSwitchSelector 零重启，绝不触发整核重启断流。关开关的 disengage 由 switchMode 无重启腿处理（见 reconcileLoginFallback）。
       meshLoginFallbackDirect: null,

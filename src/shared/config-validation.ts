@@ -502,11 +502,6 @@ export function validateUserConfig(
     }
   }
 
-  // mainSessionViaProxy 新增字段：非法类型 sanitize（undefined=true 兼容老配置，gate 用 !== false）
-  if (config.mainSessionViaProxy !== undefined && typeof config.mainSessionViaProxy !== 'boolean') {
-    log('warn', 'mainSessionViaProxy must be a boolean; resetting to default (enabled)');
-    delete config.mainSessionViaProxy;
-  }
   if (typeof config.autoConnect !== 'boolean') {
     throw new Error('autoConnect must be a boolean');
   }

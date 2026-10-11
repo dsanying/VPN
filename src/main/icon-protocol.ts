@@ -10,7 +10,6 @@ import { resolveUpdateProxyTarget } from '../shared/update-proxy';
 import { safeRedirectFetch, SafeFetchError } from './safe-redirect-fetch';
 import { APP_USER_AGENT } from '../shared/constants';
 import type { UpdateNetwork } from './services/UpdateNetwork';
-import type { UserConfig } from '../shared/types';
 import type { LogManager } from './services/LogManager';
 
 /** app ready 前注册 privileged scheme（standard+secure，<img> 可加载该 scheme）。 */
@@ -27,15 +26,8 @@ export interface IconProtocolDeps {
   updateNetwork: UpdateNetwork;
   proxyRunningProvider: () => boolean;
   updateInPortProvider: () => number | null;
-  configProvider: () => Promise<UserConfig>;
   logManager: LogManager;
 }
-
-// viaProxy 决策的 config 短 TTL 缓存：图标库网格一次渲染会并发数百个 flowz-icon:// 请求，每请求都
-// loadConfig（读盘+校验+sweepStaleTmpFiles）会拖垮主进程。mainSessionViaProxy 变化频率
-// 远低于渲染，1s TTL 足够新鲜；proxyRunning / update-in 端口走 thunk（内存、廉价）每次取最新、不缓存。
-let cfgMsvpCache: { value: boolean | undefined; expiry: number } | null = null;
-const CFG_CACHE_TTL_MS = 1000;
 
 /** app ready 后注册 flowz-icon:// handler（经 update-in 统一会话拉取图标，回退 direct）。 */
 export function registerIconProtocol(deps: IconProtocolDeps): void {
@@ -53,28 +45,10 @@ export function registerIconProtocol(deps: IconProtocolDeps): void {
       return new Response(null, { status: 400 });
     }
 
-    // viaProxy × update-in 端口（同四链路口径，端口闸共用 resolveUpdateProxyTarget）：代理运行 ∧
-    // mainSessionViaProxy 未关 ∧ 端口可用 → 经 update-in。config 经 TTL 缓存避免网格批量渲染逐请求读盘；
-    // 端口/运行态走廉价 thunk 每次取最新。
-    let viaProxy: boolean;
-    let port = 0;
-    try {
-      const now = Date.now();
-      let msvp: boolean | undefined;
-      if (cfgMsvpCache && cfgMsvpCache.expiry > now) {
-        msvp = cfgMsvpCache.value;
-      } else {
-        msvp = (await deps.configProvider()).mainSessionViaProxy;
-        cfgMsvpCache = { value: msvp, expiry: now + CFG_CACHE_TTL_MS };
-      }
-      ({ viaProxy, port } = resolveUpdateProxyTarget(
-        deps.proxyRunningProvider(),
-        msvp,
-        deps.updateInPortProvider()
-      ));
-    } catch {
-      viaProxy = false; // 读 config 失败 → 直连兜底
-    }
+    const { viaProxy, port } = resolveUpdateProxyTarget(
+      deps.proxyRunningProvider(),
+      deps.updateInPortProvider()
+    );
 
     // SSRF + 逐跳 redirect 复检收口到 safeRedirectFetch（首跳 + 每跳 Location 过 assertHostAllowed）：图标 URL
     // 部分来自用户手动输入，仅实际经代理（socks，本机内网不可达）时豁免 FlowZ FakeIP。安全拒绝按 reason 映射

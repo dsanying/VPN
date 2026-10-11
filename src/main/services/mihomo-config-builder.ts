@@ -105,7 +105,7 @@ export function buildMihomoMainConfig(
   listen(
     'update-in',
     deps.updatePort,
-    user.mainSessionViaProxy === false || user.proxyMode === 'direct' ? 'DIRECT' : 'proxy-selector',
+    user.proxyMode === 'direct' ? 'DIRECT' : 'proxy-selector',
     'socks'
   );
   for (const [index, port] of (deps.probePorts ?? []).entries()) {

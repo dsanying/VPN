@@ -398,10 +398,6 @@ export interface UserConfig {
   //   规避合成失效（electron #38743/#46753/#28255/#48031）的 hide/show 白屏。窗口 chrome（titleBarStyle 等）不受影响。
   windowEffects?: boolean;
   desktopNotifications?: boolean; // 桌面通知总开关（默认开）：当前仅严重错误事件发系统通知，关闭则一概不发
-  // 更新链路（应用/资源/订阅/核心）是否经代理（默认 true=代理运行时经 update-in 借道，更新源多在 GitHub、
-  // 墙内借道更可靠）；false=强制直连。经 shared/update-proxy#resolveMainSessionViaProxy 求值，Phase 1b 后
-  // 仅控这四条更新链路；不再影响 default session（已回归 Electron 默认跟随系统代理）。
-  mainSessionViaProxy?: boolean;
   rememberWindowSize?: boolean; // 记忆调整后的窗口大小
   enableIPv6?: boolean; // 启用系统全局 IPv6 解析及路由 (不建议开启)
   autoPrivacyMode?: boolean; // 自动进入隐私模式
