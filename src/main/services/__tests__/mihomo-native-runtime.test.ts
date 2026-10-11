@@ -32,6 +32,8 @@ const binary = (name: string) =>
 const uuid = '00000000-0000-4000-8000-000000000001';
 let directory: string;
 let children: ChildProcess[];
+let fixturePorts: Set<number>;
+let coreOutput: string;
 let origin: Server;
 let api: MihomoApiClient | undefined;
 let fixtureSecret: string;
@@ -40,6 +42,8 @@ let expectedMihomoConfig: Record<string, unknown>;
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'shadowvpn-mihomo-native-'));
   children = [];
+  fixturePorts = new Set();
+  coreOutput = '';
   fixtureSecret = `fixture-${randomUUID()}`;
   expectedMihomoConfig = {};
   origin = createServer((_req, res) => res.end('fixture-origin'));
@@ -63,12 +67,19 @@ afterEach(async () => {
 });
 
 async function port(): Promise<number> {
-  const server = createTcpServer();
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const result = (server.address() as { port: number }).port;
-  await new Promise<void>((done) => server.close(() => done()));
-  return result;
+  // Closing a reservation allows Windows to offer the same ephemeral port again.
+  // A fixture's mixed, controller, probe and upstream endpoints must stay distinct.
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const server = createTcpServer();
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const result = (server.address() as { port: number }).port;
+    await new Promise<void>((done) => server.close(() => done()));
+    if (fixturePorts.has(result)) continue;
+    fixturePorts.add(result);
+    return result;
+  }
+  throw new Error('Cannot allocate distinct native fixture ports');
 }
 function launch(name: 'mihomo' | 'xray', config: object): void {
   if (name === 'mihomo') expectedMihomoConfig = config as Record<string, unknown>;
@@ -81,9 +92,16 @@ function launch(name: 'mihomo' | 'xray', config: object): void {
     spawn(
       binary(name),
       name === 'mihomo' ? ['-d', directory, '-f', file] : ['run', '-config', file],
-      { stdio: 'ignore' }
+      { stdio: ['ignore', 'pipe', 'pipe'] }
     )
   );
+  const child = children.at(-1)!;
+  child.stdout?.on('data', (chunk) => {
+    coreOutput += String(chunk);
+  });
+  child.stderr?.on('data', (chunk) => {
+    coreOutput += String(chunk);
+  });
 }
 async function ready(): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -113,7 +131,13 @@ async function fetchThrough(proxyPort: number): Promise<string> {
           res.on('end', () => done(body));
         }
       );
-      req.once('error', fail);
+      req.once('error', (error) =>
+        fail(
+          new Error(
+            `${error.message}; requested proxy ${proxyPort}; configured mixed ${expectedMihomoConfig['mixed-port']}; controller ${expectedMihomoConfig['external-controller']}; core output: ${coreOutput.slice(-8000)}`
+          )
+        )
+      );
       req.setTimeout(4000, () => req.destroy(new Error('Fixture request timed out')));
       req.end();
     });
