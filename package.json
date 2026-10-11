@@ -26,7 +26,7 @@
     "test": "npm run test:types && jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:core-gate": "jest --testPathIgnorePatterns=/node_modules/ --runTestsByPath src/main/services/__tests__/singbox-check-gate.test.ts src/shared/__tests__/core-manifest-invariants.test.ts src/main/services/__tests__/compatibility-core-gate.test.ts src/main/services/__tests__/mihomo-native-runtime.test.ts src/main/services/__tests__/mihomo-runtime-lifecycle.test.ts src/main/services/__tests__/mihomo-dns-runtime.test.ts src/main/services/__tests__/mihomo-rule-data.test.ts",
+    "test:core-gate": "jest --runInBand --testPathIgnorePatterns=/node_modules/ --runTestsByPath src/main/services/__tests__/singbox-check-gate.test.ts src/shared/__tests__/core-manifest-invariants.test.ts src/main/services/__tests__/compatibility-core-gate.test.ts src/main/services/__tests__/mihomo-native-runtime.test.ts src/main/services/__tests__/mihomo-runtime-lifecycle.test.ts src/main/services/__tests__/mihomo-dns-runtime.test.ts src/main/services/__tests__/mihomo-rule-data.test.ts",
     "lint": "oxlint --config .oxlintrc.json src && eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
