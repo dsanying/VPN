@@ -253,162 +253,184 @@ describe('#147 race on：dns-node-race 装配面 + domain_resolver 引用闭合�
 });
 
 // 平台限定：baseline 为 Linux 捕获，而生成 config 含平台相关字段（如 Windows TUN inbound 的 route_exclude_address
-// 大列表防回流、macOS DNS strategy），在 macOS/Windows CI 上与单平台 baseline 必然不符。仅 Linux 跑此 byte-diff。
-const byteDiffDescribe = process.platform === 'linux' ? describe : describe.skip;
-byteDiffDescribe(
-  '#57 ⑥ auto 档 byte-diff：仅限有意改动，其余零变化（平台相关 config，仅 Linux baseline）',
-  () => {
-    const pm = new ProxyManager();
-    const baselinePath = path.join(__dirname, 'dns-resolver-baseline.json');
-    const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf-8'));
+// 大列表防回流、macOS DNS strategy）。显式固定 Linux 使所有 CI 宿主均验证该基线。
+const byteDiffDescribe = describe;
+byteDiffDescribe('#57 ⑥ Linux 基线：解析器与自动管理策略的明确变化，其余字节保持', () => {
+  beforeEach(() => setPlatform('linux'));
+  afterEach(restorePlatform);
+  const pm = new ProxyManager();
+  const baselinePath = path.join(__dirname, 'dns-resolver-baseline.json');
+  const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf-8'));
 
-    // 基线键名（采集脚本用 buildFixtures 的 auto 缺字段 fixture）：tun-smart__auto / tun-global__auto / systemproxy__auto
-    const fixtures = buildFixtures().filter((f) => f.resolver === undefined);
+  // 基线键名（采集脚本用 buildFixtures 的 auto 缺字段 fixture）：tun-smart__auto / tun-global__auto / systemproxy__auto
+  const fixtures = buildFixtures().filter((f) => f.resolver === undefined);
 
-    for (const fx of fixtures) {
-      it(`${fx.name}: 与基线 diff 仅 rule1 全量化(去keyword) + 恒加 dns-node server + 1.12.12.12 直连（rule1.server 仍 dns-domestic）`, () => {
-        const cur = extractDnsRoute(pm.generateSingBoxConfig(fx.config));
-        const base = baseline[fx.name];
-        expect(base).toBeDefined();
+  for (const fx of fixtures) {
+    it(`${fx.name}: 保持解析器基线并精确验证自动 FakeIP、QUIC 保护`, () => {
+      const cur = extractDnsRoute(pm.generateSingBoxConfig(fx.config));
+      const frozen = baseline[fx.name];
+      // FakeIP is now application-managed for every ingress. The retired
+      // system-proxy switch cannot disable it; retain the frozen smart DNS
+      // expectation while still comparing this fixture's own ingress/routes.
+      const base =
+        fx.modeType === 'systemProxy'
+          ? { ...frozen, dns: baseline['tun-smart__auto'].dns }
+          : frozen;
+      expect(base).toBeDefined();
 
-        // --- A. dns.servers：当前 = 基线 + 仅多一个 dns-node，其余 server 逐字节相同、相对顺序不变 ---
-        const baseServers = base.dns.servers as AnyCfg[];
-        const curServers = cur.dns.servers as AnyCfg[];
-        const curMinusNode = curServers.filter((s) => s.tag !== 'dns-node');
-        expect(JSON.stringify(curMinusNode)).toBe(JSON.stringify(baseServers));
-        expect(curServers.some((s) => s.tag === 'dns-node')).toBe(true);
+      // --- A. dns.servers：当前 = 基线 + 仅多一个 dns-node，其余 server 逐字节相同、相对顺序不变 ---
+      const baseServers = base.dns.servers as AnyCfg[];
+      const curServers = cur.dns.servers as AnyCfg[];
+      const curMinusNode = curServers.filter((s) => s.tag !== 'dns-node');
+      expect(JSON.stringify(curMinusNode)).toBe(JSON.stringify(baseServers));
+      expect(curServers.some((s) => s.tag === 'dns-node')).toBe(true);
 
-        // --- B. dns.rules：除 rule1（节点域名规则）外逐字节相同；rule1 为有意全量化改动 ---
-        const baseRules = base.dns.rules as AnyCfg[];
-        // fake-ip-filter 默认清单（默认开，基线 frozen 在其之前的有意新增）：与 rule1 同理，从逐字节对比剥离、单独断言。
-        // captive 探测 → dns-local；NTP/STUN/TURN → dns-domestic。FakeIP 档（含 fakeip server）注入 2 条，否则 0 条。
-        const allCurRules = cur.dns.rules as AnyCfg[];
-        const isFakeIpFilter = (r: AnyCfg) =>
-          (r.server === 'dns-local' &&
-            Array.isArray(r.domain) &&
-            r.domain.includes('captive.apple.com')) ||
-          (r.server === 'dns-domestic' &&
-            Array.isArray(r.domain_keyword) &&
-            (r.domain_keyword as string[]).includes('stun'));
-        // R1（§14.4）：FakeIP 分支的境内/境外「影子规则」（S0 geosite-cn→境内 / S1 dns-remote catch-all 经隧道），
-        // 均 query_type:[A,AAAA] 且 server≠fakeip——治 endpoint 目的域名 dial 解析被投毒。与 fake-ip-filter 同理从
-        // 逐字节对比剥离、单独断言条数。基线（frozen 于 R1 前）FakeIP 档仅 fakeip 一条 query_type 规则。
-        const isShadowRule = (r: AnyCfg) =>
-          Array.isArray(r.query_type) &&
-          (r.query_type as string[]).includes('A') &&
-          r.server !== 'fakeip';
-        const curRules = allCurRules.filter((r) => !isFakeIpFilter(r) && !isShadowRule(r));
-        const hasFakeIp = (cur.dns.servers as AnyCfg[]).some((s) => s.tag === 'fakeip');
-        expect(allCurRules.filter(isFakeIpFilter).length).toBe(hasFakeIp ? 2 : 0);
-        // FakeIP 档影子规则条数：
-        //   · smart + region 开 → S0(region-local geo→境内) + S1(catch-all→隧道) = 2（本测试环境 srs 齐全）；
-        //   · global → **1**（#347：S0 与 route 侧 geo 块同门控。global 恒 final=代理、route 侧没有
-        //     geosite-cn→direct，此时再把 geosite-cn 交给境内解析器就是「境内视角地址送进隧道」的错配）。
-        //   · 无 FakeIP 档 → 0。
-        const expectShadow = hasFakeIp ? (fx.config.proxyMode === 'smart' ? 2 : 1) : 0;
-        expect(allCurRules.filter(isShadowRule).length).toBe(expectShadow);
-        expect(curRules.length).toBe(baseRules.length); // 规则条数不变（rule1 原位替换，fake-ip-filter/影子规则已剥离）
-        // 基线 rule1：含 node-a 域名的那条
-        const baseR1Idx = baseRules.findIndex(
+      // --- B. dns.rules：除 rule1（节点域名规则）外逐字节相同；rule1 为有意全量化改动 ---
+      const baseRules = base.dns.rules as AnyCfg[];
+      // fake-ip-filter 默认清单（默认开，基线 frozen 在其之前的有意新增）：与 rule1 同理，从逐字节对比剥离、单独断言。
+      // captive 探测 → dns-local；NTP/STUN/TURN → dns-domestic。FakeIP 档（含 fakeip server）注入 2 条，否则 0 条。
+      const allCurRules = cur.dns.rules as AnyCfg[];
+      const isFakeIpFilter = (r: AnyCfg) =>
+        (r.server === 'dns-local' &&
+          Array.isArray(r.domain) &&
+          r.domain.includes('captive.apple.com')) ||
+        (r.server === 'dns-domestic' &&
+          Array.isArray(r.domain_keyword) &&
+          (r.domain_keyword as string[]).includes('stun'));
+      // R1（§14.4）：FakeIP 分支的境内/境外「影子规则」（S0 geosite-cn→境内 / S1 dns-remote catch-all 经隧道），
+      // 均 query_type:[A,AAAA] 且 server≠fakeip——治 endpoint 目的域名 dial 解析被投毒。与 fake-ip-filter 同理从
+      // 逐字节对比剥离、单独断言条数。基线（frozen 于 R1 前）FakeIP 档仅 fakeip 一条 query_type 规则。
+      const isShadowRule = (r: AnyCfg) =>
+        Array.isArray(r.query_type) &&
+        (r.query_type as string[]).includes('A') &&
+        r.server !== 'fakeip';
+      const curRules = allCurRules.filter((r) => !isFakeIpFilter(r) && !isShadowRule(r));
+      const hasFakeIp = (cur.dns.servers as AnyCfg[]).some((s) => s.tag === 'fakeip');
+      expect(allCurRules.filter(isFakeIpFilter).length).toBe(hasFakeIp ? 2 : 0);
+      // FakeIP 档影子规则条数：
+      //   · smart + region 开 → S0(region-local geo→境内) + S1(catch-all→隧道) = 2（本测试环境 srs 齐全）；
+      //   · global → **1**（#347：S0 与 route 侧 geo 块同门控。global 恒 final=代理、route 侧没有
+      //     geosite-cn→direct，此时再把 geosite-cn 交给境内解析器就是「境内视角地址送进隧道」的错配）。
+      //   · 无 FakeIP 档 → 0。
+      const expectShadow = hasFakeIp ? (fx.config.proxyMode === 'smart' ? 2 : 1) : 0;
+      expect(allCurRules.filter(isShadowRule).length).toBe(expectShadow);
+      expect(curRules.length).toBe(baseRules.length); // 规则条数不变（rule1 原位替换，fake-ip-filter/影子规则已剥离）
+      // 基线 rule1：含 node-a 域名的那条
+      const baseR1Idx = baseRules.findIndex(
+        (r) =>
+          Array.isArray(r.domain) &&
+          r.domain.includes(NODE_A.address) &&
+          !r.query_type &&
+          !r.rule_set
+      );
+      const curR1Idx = curRules.findIndex(
+        (r) =>
+          Array.isArray(r.domain) &&
+          r.domain.includes(NODE_A.address) &&
+          !r.query_type &&
+          !r.rule_set
+      );
+      expect(curR1Idx).toBe(baseR1Idx); // rule1 位置不变
+      // #347 有意 delta：fakeip catch-all 恒带 rewrite_ttl=60（压反查错配窗口，600s→60s；根因已由上游
+      // sing-box#4406 修复，本值只兜住残留的 10s 分配窗口，故从最初的 5 下调保护强度）。
+      // 先正向断言它真的在（否则下面剥离等于把回归也一起剥掉），再从逐字节对比里剥离该键。
+      const curFakeIpRule = curRules.find((r) => r.server === 'fakeip');
+      expect(hasFakeIp ? curFakeIpRule?.rewrite_ttl : undefined).toBe(hasFakeIp ? 60 : undefined);
+      const stripTtl = (r: AnyCfg): AnyCfg => {
+        if (r.server !== 'fakeip' || r.rewrite_ttl === undefined) return r;
+        const { rewrite_ttl: _drop, ...rest } = r;
+        return rest;
+      };
+      // 除 rule1 外的所有 DNS 规则逐字节相同
+      const stripR1 = (rs: AnyCfg[], idx: number) => rs.filter((_, i) => i !== idx).map(stripTtl);
+      expect(JSON.stringify(stripR1(curRules, curR1Idx))).toBe(
+        JSON.stringify(stripR1(baseRules, baseR1Idx))
+      );
+      // rule1 自身的有意改动：基线含 domain_keyword/仅 selectedServer；当前去 keyword/全节点。
+      // server 忠实回 dns-domestic（doh.pub，与基线一致，auto 档不与 dial 的 dns-bootstrap 统一）。
+      expect(baseRules[baseR1Idx].domain_keyword).toBeDefined();
+      expect(curRules[curR1Idx].domain_keyword).toBeUndefined();
+      expect(curRules[curR1Idx].server).toBe('dns-domestic');
+      expect(baseRules[baseR1Idx].server).toBe('dns-domestic'); // 与基线同档，server 非 delta
+
+      // --- C. dns 顶层其余字段（final/strategy/fakeip）零变化 ---
+      const topOnly = (d: AnyCfg) => ({ final: d.final, strategy: d.strategy, fakeip: d.fakeip });
+      expect(JSON.stringify(topOnly(cur.dns))).toBe(JSON.stringify(topOnly(base.dns)));
+
+      // --- D. route.rules：除「含 1.12.12.12/32 的直连规则」+「#347 resolve 规则」外逐字节相同 ---
+      // #347：`resolve` **默认关**（失败即 fatalErr 无兜底，默认开等于给每条连接加一个新单点），故这批夹具
+      // （均未设该开关）的 route.rules 不含它——基线字节因此不受本特性影响。正向覆盖用同一夹具显式开一次生成
+      // 变体，断言「开了才有、位置正确」；只断言缺席等于让默认关把回归一起遮掉。
+      // **不按 hasFakeIp 门控**：谓词已撤掉 usesFakeIp 前置门，而本组夹具里 systemProxy 档
+      // （dns-resolver-fixtures：enableFakeIp=false）恰是「FakeIP 关」这一新可达格的唯一样本。
+      const curRouteRules = cur.routeRules as AnyCfg[];
+      expect(curRouteRules.findIndex((r) => r.action === 'resolve')).toBe(-1);
+      {
+        const onCfg = { ...fx.config, resolveDestination: true } as typeof fx.config;
+        const onRules = extractDnsRoute(pm.generateSingBoxConfig(onCfg)).routeRules as AnyCfg[];
+        const idxResolve = onRules.findIndex((r) => r.action === 'resolve');
+        expect(idxResolve).toBeGreaterThanOrEqual(0);
+        expect(onRules[idxResolve]).toEqual({ action: 'resolve', timeout: '5s' });
+        // 位置不变量：必须在网银强制直连之后（那些域名公网 NXDOMAIN，resolve 失败会硬断连接）。
+        const idxBank = onRules.findIndex(
           (r) =>
-            Array.isArray(r.domain) &&
-            r.domain.includes(NODE_A.address) &&
-            !r.query_type &&
-            !r.rule_set
+            Array.isArray(r.domain_suffix) &&
+            (r.domain_suffix as string[]).some((d) => d.includes('icbc.com.cn'))
         );
-        const curR1Idx = curRules.findIndex(
-          (r) =>
-            Array.isArray(r.domain) &&
-            r.domain.includes(NODE_A.address) &&
-            !r.query_type &&
-            !r.rule_set
-        );
-        expect(curR1Idx).toBe(baseR1Idx); // rule1 位置不变
-        // #347 有意 delta：fakeip catch-all 恒带 rewrite_ttl=60（压反查错配窗口，600s→60s；根因已由上游
-        // sing-box#4406 修复，本值只兜住残留的 10s 分配窗口，故从最初的 5 下调保护强度）。
-        // 先正向断言它真的在（否则下面剥离等于把回归也一起剥掉），再从逐字节对比里剥离该键。
-        const curFakeIpRule = curRules.find((r) => r.server === 'fakeip');
-        expect(hasFakeIp ? curFakeIpRule?.rewrite_ttl : undefined).toBe(hasFakeIp ? 60 : undefined);
-        const stripTtl = (r: AnyCfg): AnyCfg => {
-          if (r.server !== 'fakeip' || r.rewrite_ttl === undefined) return r;
-          const { rewrite_ttl: _drop, ...rest } = r;
-          return rest;
-        };
-        // 除 rule1 外的所有 DNS 规则逐字节相同
-        const stripR1 = (rs: AnyCfg[], idx: number) => rs.filter((_, i) => i !== idx).map(stripTtl);
-        expect(JSON.stringify(stripR1(curRules, curR1Idx))).toBe(
-          JSON.stringify(stripR1(baseRules, baseR1Idx))
-        );
-        // rule1 自身的有意改动：基线含 domain_keyword/仅 selectedServer；当前去 keyword/全节点。
-        // server 忠实回 dns-domestic（doh.pub，与基线一致，auto 档不与 dial 的 dns-bootstrap 统一）。
-        expect(baseRules[baseR1Idx].domain_keyword).toBeDefined();
-        expect(curRules[curR1Idx].domain_keyword).toBeUndefined();
-        expect(curRules[curR1Idx].server).toBe('dns-domestic');
-        expect(baseRules[baseR1Idx].server).toBe('dns-domestic'); // 与基线同档，server 非 delta
-
-        // --- C. dns 顶层其余字段（final/strategy/fakeip）零变化 ---
-        const topOnly = (d: AnyCfg) => ({ final: d.final, strategy: d.strategy, fakeip: d.fakeip });
-        expect(JSON.stringify(topOnly(cur.dns))).toBe(JSON.stringify(topOnly(base.dns)));
-
-        // --- D. route.rules：除「含 1.12.12.12/32 的直连规则」+「#347 resolve 规则」外逐字节相同 ---
-        // #347：`resolve` **默认关**（失败即 fatalErr 无兜底，默认开等于给每条连接加一个新单点），故这批夹具
-        // （均未设该开关）的 route.rules 不含它——基线字节因此不受本特性影响。正向覆盖用同一夹具显式开一次生成
-        // 变体，断言「开了才有、位置正确」；只断言缺席等于让默认关把回归一起遮掉。
-        // **不按 hasFakeIp 门控**：谓词已撤掉 usesFakeIp 前置门，而本组夹具里 systemProxy 档
-        // （dns-resolver-fixtures：enableFakeIp=false）恰是「FakeIP 关」这一新可达格的唯一样本。
-        const curRouteRules = cur.routeRules as AnyCfg[];
-        expect(curRouteRules.findIndex((r) => r.action === 'resolve')).toBe(-1);
-        {
-          const onCfg = { ...fx.config, resolveDestination: true } as typeof fx.config;
-          const onRules = extractDnsRoute(pm.generateSingBoxConfig(onCfg)).routeRules as AnyCfg[];
-          const idxResolve = onRules.findIndex((r) => r.action === 'resolve');
-          expect(idxResolve).toBeGreaterThanOrEqual(0);
-          expect(onRules[idxResolve]).toEqual({ action: 'resolve', timeout: '5s' });
-          // 位置不变量：必须在网银强制直连之后（那些域名公网 NXDOMAIN，resolve 失败会硬断连接）。
-          const idxBank = onRules.findIndex(
-            (r) =>
-              Array.isArray(r.domain_suffix) &&
-              (r.domain_suffix as string[]).some((d) => d.includes('icbc.com.cn'))
+        expect(idxBank).toBeGreaterThanOrEqual(0);
+        expect(idxBank).toBeLessThan(idxResolve);
+      }
+      const stripNodeIp = (rules: AnyCfg[]) =>
+        rules
+          .filter((r) => r.action !== 'resolve')
+          .map((r) =>
+            Array.isArray(r.ip_cidr)
+              ? { ...r, ip_cidr: r.ip_cidr.filter((c: string) => c !== '1.12.12.12/32') }
+              : r
           );
-          expect(idxBank).toBeGreaterThanOrEqual(0);
-          expect(idxBank).toBeLessThan(idxResolve);
-        }
-        const stripNodeIp = (rules: AnyCfg[]) =>
-          rules
-            .filter((r) => r.action !== 'resolve')
-            .map((r) =>
-              Array.isArray(r.ip_cidr)
-                ? { ...r, ip_cidr: r.ip_cidr.filter((c: string) => c !== '1.12.12.12/32') }
-                : r
-            );
-        expect(JSON.stringify(stripNodeIp(cur.routeRules))).toBe(JSON.stringify(base.routeRules));
+      // Automatic QUIC protection precedes each proxy route and covers the
+      // proxy final route. Compare the exact additions, never filter them out.
+      const expectedRoutes = (base.routeRules as AnyCfg[]).flatMap((r) =>
+        r.outbound === 'proxy-selector'
+          ? [
+              Object.assign(
+                Object.fromEntries(
+                  Object.entries(r).filter(([key]) => key !== 'action' && key !== 'outbound')
+                ),
+                { network: ['udp'], port: [443], action: 'reject' }
+              ),
+              r,
+            ]
+          : [r]
+      );
+      expectedRoutes.push({ network: ['udp'], port: [443], action: 'reject' });
+      expect(JSON.stringify(stripNodeIp(cur.routeRules))).toBe(JSON.stringify(expectedRoutes));
 
-        // --- E. default_domain_resolver / inbounds 零变化 ---
-        //    (Linux 加法态 §12：route_exclude_address 已省略、baseline 同步删除；win/mac 的 carve/回环分支不在此平台触发) ---
-        expect(cur.routeDefaultDomainResolver).toBe(base.routeDefaultDomainResolver);
-        expect(JSON.stringify(cur.inbounds)).toBe(JSON.stringify(base.inbounds));
+      // --- E. default_domain_resolver / inbounds 零变化 ---
+      //    (Linux 加法态 §12：route_exclude_address 已省略、baseline 同步删除；win/mac 的 carve/回环分支不在此平台触发) ---
+      expect(cur.routeDefaultDomainResolver).toBe(base.routeDefaultDomainResolver);
+      expect(JSON.stringify(cur.inbounds)).toBe(JSON.stringify(base.inbounds));
 
-        // --- F. 节点 outbound resolver：**tag 与基线逐个不变**，唯一 delta = 关 IPv6 时外包一层
-        //        strategy:'prefer_ipv4'（IPv6-only 域名节点修复：per-outbound strategy 覆盖顶层 ipv4_only，
-        //        让内核对节点域名发出 AAAA；顶层 dns.strategy 一字不动，见上方 C 段零变化断言）。
-        //        基线 JSON 保持 frozen（改前字节）——delta 写成显式「包裹」而不是重录基线：换了 tag、换了
-        //        strategy 值、键名 typo、少包或多包一层，都在此死。
-        const wrapped = (base.outboundResolvers as AnyCfg[]).map((o) => ({
-          ...o,
-          domain_resolver: { server: o.domain_resolver, strategy: 'prefer_ipv4' },
-        }));
-        expect(JSON.stringify(cur.outboundResolvers)).toBe(JSON.stringify(wrapped));
+      // --- F. 节点 outbound resolver：**tag 与基线逐个不变**，唯一 delta = 关 IPv6 时外包一层
+      //        strategy:'prefer_ipv4'（IPv6-only 域名节点修复：per-outbound strategy 覆盖顶层 ipv4_only，
+      //        让内核对节点域名发出 AAAA；顶层 dns.strategy 一字不动，见上方 C 段零变化断言）。
+      //        基线 JSON 保持 frozen（改前字节）——delta 写成显式「包裹」而不是重录基线：换了 tag、换了
+      //        strategy 值、键名 typo、少包或多包一层，都在此死。
+      const wrapped = (base.outboundResolvers as AnyCfg[]).map((o) => ({
+        ...o,
+        domain_resolver: { server: o.domain_resolver, strategy: 'prefer_ipv4' },
+      }));
+      expect(JSON.stringify(cur.outboundResolvers)).toBe(JSON.stringify(wrapped));
 
-        // --- F′. 开 IPv6 分支：节点 resolver **逐字节回到 frozen 基线原样字符串**（该分支零变化）。
-        //         条件反转（=true 结构化 / =false 字符串）在此与 F 一起被封死。
-        const v6on = extractDnsRoute(
-          pm.generateSingBoxConfig({ ...fx.config, enableIPv6: true } as AnyCfg)
-        );
-        expect(JSON.stringify(v6on.outboundResolvers)).toBe(JSON.stringify(base.outboundResolvers));
-      });
-    }
+      // --- F′. 开 IPv6 分支：节点 resolver **逐字节回到 frozen 基线原样字符串**（该分支零变化）。
+      //         条件反转（=true 结构化 / =false 字符串）在此与 F 一起被封死。
+      const v6on = extractDnsRoute(
+        pm.generateSingBoxConfig({ ...fx.config, enableIPv6: true } as AnyCfg)
+      );
+      expect(JSON.stringify(v6on.outboundResolvers)).toBe(JSON.stringify(base.outboundResolvers));
+    });
   }
-);
+});
 
 describe('Q1 Windows takeover：消除 type:local 死循环（dns-local 改路由，生成物验证）', () => {
   // 每个用例后即还原（不只 afterAll）：杜绝 platform mutation 泄漏到后续 describe（review LOW，隔离健壮性）。

@@ -17,6 +17,8 @@ import manifest from '../../shared/compatibility-core-manifest.json';
 import primaryManifest from '../../shared/core-manifest.json';
 import { buildSingBoxCompatibilityConfig } from './singbox-compatibility-config';
 import { buildMihomoConfig, buildXrayConfig, type BridgeNode } from './compatibility-config';
+import { MihomoApiClient } from './MihomoApiClient';
+import { probeMihomoReadiness } from './mihomo-readiness';
 
 const run = promisify(execFile);
 function safeCoreError(error: unknown, servers: ServerConfig[]): string {
@@ -165,6 +167,11 @@ export class CompatibilityCoreService {
             : engine === 'sing-box'
               ? buildSingBoxCompatibilityConfig
               : buildMihomoConfig;
+        // Auxiliary Mihomo listeners may bind before its proxy map is applied.
+        // Keep the controller private and authenticate startup configuration checks.
+        const controllerPort = engine === 'mihomo' ? await allocateCompatibilityPort() : 0;
+        const controllerSecret = controllerPort ? randomBytes(24).toString('hex') : '';
+        let runtimeConfig: Record<string, unknown> = {};
         const args =
           engine === 'xray'
             ? ['run', '-test', '-config', file]
@@ -172,7 +179,16 @@ export class CompatibilityCoreService {
               ? ['check', '-c', file]
               : ['-t', '-d', dir, '-f', file];
         const check = async (batch: BridgeNode[]) => {
-          await writeFile(file, JSON.stringify(build(batch, directPort)), { mode: 0o600 });
+          runtimeConfig = {
+            ...build(batch, directPort),
+            ...(controllerPort
+              ? {
+                  'external-controller': `127.0.0.1:${controllerPort}`,
+                  secret: controllerSecret,
+                }
+              : {}),
+          };
+          await writeFile(file, JSON.stringify(runtimeConfig), { mode: 0o600 });
           await run(binary, args, { timeout: 15000, windowsHide: true, maxBuffer: 1024 * 1024 });
         };
         let valid = nodes;
@@ -230,12 +246,25 @@ export class CompatibilityCoreService {
               engine
             );
         });
+        const startupApi = controllerPort
+          ? new MihomoApiClient(controllerPort, controllerSecret)
+          : undefined;
         const deadline = Date.now() + 8000;
         while (true) {
           if (generation !== this.generation)
             throw new Error('Compatibility core startup superseded');
           if (failed || child.exitCode !== null || child.signalCode !== null)
             throw new Error(failed || output || `${engine} startup failed`);
+          if (startupApi) {
+            try {
+              await probeMihomoReadiness(startupApi, runtimeConfig, 250);
+              break;
+            } catch (error) {
+              if (Date.now() > deadline) throw error;
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              continue;
+            }
+          }
           if (
             await Promise.all(
               valid.map(

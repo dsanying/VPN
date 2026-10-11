@@ -50,3 +50,14 @@ it('requires the configured DNS listener as well as the loaded policy', async ()
   }
   await expect(probeMihomoReadiness(api, withDns, 100)).rejects.toThrow();
 });
+
+it('requires auxiliary node and dial proxies even with already-bound listeners', async () => {
+  const auxiliary = { proxies: [{ name: 'node-0' }, { name: 'dial-0' }], rules: ['MATCH,REJECT'] };
+  const policy = [{ type: 'Match', proxy: 'REJECT' }];
+  await expect(
+    probeMihomoReadiness(controller(['node-0'], policy), auxiliary, 100)
+  ).rejects.toThrow('groups');
+  await expect(
+    probeMihomoReadiness(controller(['node-0', 'dial-0'], policy), auxiliary, 100)
+  ).resolves.toBeUndefined();
+});

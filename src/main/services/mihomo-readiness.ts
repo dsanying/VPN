@@ -15,7 +15,10 @@ export async function probeMihomoReadiness(
     undefined,
     timeoutMs
   );
-  const expectedGroups = (config['proxy-groups'] ?? []) as Array<{ name: string }>;
+  const expectedGroups = [
+    ...((config['proxy-groups'] ?? []) as Array<{ name: string }>),
+    ...((config.proxies ?? []) as Array<{ name: string }>),
+  ];
   if (
     !groups.proxies ||
     !expectedGroups.every((group) => Object.hasOwn(groups.proxies, group.name))

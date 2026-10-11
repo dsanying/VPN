@@ -23,7 +23,7 @@ public class NativeVpnDeviceTest {
         assertNull("Authorize this application as VPN on the isolated test device first", VpnService.prepare(context));
         NativeRuntime.initialize(context);
         assertFalse("A test must not replace an existing tunnel", NativeRuntime.status().getBoolean("running", false));
-        String config = "{\"log\":{\"level\":\"warn\"},\"dns\":{\"servers\":[{\"type\":\"local\",\"tag\":\"local\"}]},\"inbounds\":[{\"type\":\"tun\",\"tag\":\"tun\",\"address\":[\"172.19.0.1/30\"],\"auto_route\":true,\"stack\":\"gvisor\"}],\"outbounds\":[{\"type\":\"direct\",\"tag\":\"direct\"}],\"route\":{\"final\":\"direct\",\"auto_detect_interface\":true,\"default_domain_resolver\":\"local\"}}";
+        String config = NativeVpnTestFixtures.directTunConfig();
         CompletableFuture<JSObject> started = NativeRuntime.begin();
         try {
             ContextCompat.startForegroundService(context, new Intent(context, ShadowVpnService.class)
