@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { verifyInstalledUi } from './installed-ui-checks.mjs';
+import { candidateDirectories, unregisterCandidate } from './clean-native-candidates.mjs';
 
 if (!['darwin', 'win32'].includes(process.platform)) throw new Error('A native desktop runner is required');
 const at = process.argv.indexOf('--exe');
@@ -129,6 +130,11 @@ try {
   if (child?.pid) {
     if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
     else child.kill('SIGTERM');
+  }
+  // Isolated native acceptance must not leave another product entry in LaunchServices.
+  if (process.platform === 'darwin') {
+    const bundle = path.resolve(path.dirname(executable), '../..');
+    if (candidateDirectories(root).some(directory => bundle.startsWith(directory + path.sep))) unregisterCandidate(bundle);
   }
   fs.closeSync(log);
   const report = JSON.parse(fs.readFileSync(reportFile, 'utf8'));
