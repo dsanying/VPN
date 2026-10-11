@@ -6,7 +6,10 @@ export function resolveUserDataPath(appData: string, arguments_: readonly string
   if (prefixes.length > 1) throw new Error('Only one validation profile is allowed');
   if (!prefixes.length) return path.join(appData, 'ShadowVPN-FlowZ');
   const profile = prefixes[0].slice('--validation-profile='.length);
-  if (!path.isAbsolute(profile) || path.normalize(profile) === path.parse(profile).root)
+  const resolved = path.resolve(profile);
+  if (!path.isAbsolute(profile) || resolved === path.parse(resolved).root)
     throw new Error('Validation profile must be an absolute non-root directory');
-  return path.resolve(profile);
+  if (process.platform === 'win32' && !/^(?:[a-z]:[\\/]|\\\\[^\\]+\\[^\\]+)/i.test(profile))
+    throw new Error('Validation profile must include a drive or network share');
+  return resolved;
 }

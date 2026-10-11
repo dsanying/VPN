@@ -1,3 +1,4 @@
+import { closeMeasurementDatabases } from '../MeasurementDatabase';
 jest.mock('../subscription-connectivity', () => ({ checkSubscriptionConnectivity: jest.fn() }));
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -57,6 +58,7 @@ it('database survives service restart; rename preserves, URL changes invalidate,
     const db = await fs.readFile(path.join(dir, 'measurements.sqlite'));
     expect(db.includes(Buffer.from('private-token'))).toBe(false);
   } finally {
+    closeMeasurementDatabases(path.join(dir, 'measurements.sqlite'));
     await fs.rm(dir, { recursive: true, force: true });
   }
 });

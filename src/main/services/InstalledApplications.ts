@@ -87,12 +87,13 @@ export function macBundleIconCandidates(bundle: string, info: Record<string, unk
           (name): name is string =>
             typeof name === 'string' &&
             !!name &&
-            path.basename(name) === name &&
+            path.posix.basename(name) === name &&
+            !name.includes('\\') &&
             !/[\r\n\0]/.test(name)
         )
-        .flatMap((name) => (path.extname(name) ? [name] : [`${name}.icns`, `${name}.png`]))
+        .flatMap((name) => (path.posix.extname(name) ? [name] : [`${name}.icns`, `${name}.png`]))
     ),
-  ].map((name) => path.join(bundle, 'Contents/Resources', name));
+  ].map((name) => path.posix.join(bundle, 'Contents/Resources', name));
 }
 
 async function macApplications(): Promise<InstalledApplication[]> {

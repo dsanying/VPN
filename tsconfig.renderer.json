@@ -1,13 +1,11 @@
 {
   "extends": "./web/tsconfig.app.json",
-  "include": [
-    "web/src/**/*",
-    "src/shared/**/*",
-    "web/update-popup/**/*"
-  ],
+  "include": ["web/src/**/*", "src/shared/**/*", "web/update-popup/**/*"],
   "exclude": [
     "node_modules",
     "dist",
-    "web/src/**/__tests__/**"
+    "web/src/**/__tests__/**",
+    "src/shared/**/__tests__/**",
+    "src/shared/**/*.test.ts"
   ]
 }

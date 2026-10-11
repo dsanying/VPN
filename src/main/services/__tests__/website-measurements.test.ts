@@ -1,3 +1,4 @@
+import { closeMeasurementDatabases } from '../MeasurementDatabase';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -16,6 +17,7 @@ it('restores real website outcomes across restart and clears a mismatched route 
     expect(new WebsiteMeasurementStore(file).read('route2')).toBeNull();
     expect(new WebsiteMeasurementStore(file).read('route1')).toBeNull();
   } finally {
+    closeMeasurementDatabases(path.join(dir, 'measurements.sqlite'));
     await fs.rm(dir, { recursive: true, force: true });
   }
 });

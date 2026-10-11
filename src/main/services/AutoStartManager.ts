@@ -35,7 +35,11 @@ class ElectronAutoStart extends AutoStartLogBase implements IAutoStartManager {
     try {
       // Startup reconciliation must not rewrite an already-correct OS registration.
       if ((await this.isAutoStartEnabled()) === enabled) return true;
-      app.setLoginItemSettings({ openAtLogin: enabled, path: app.getPath('exe') });
+      app.setLoginItemSettings({
+        openAtLogin: enabled,
+        path: app.getPath('exe'),
+        ...(process.platform === 'win32' ? { enabled } : {}),
+      });
       // Read the OS registration, including Windows Startup Apps' disabled state.
       const actual = await this.isAutoStartEnabled();
       if (actual !== enabled) return false;
@@ -47,7 +51,13 @@ class ElectronAutoStart extends AutoStartLogBase implements IAutoStartManager {
   }
 
   async isAutoStartEnabled(): Promise<boolean> {
-    const settings = app.getLoginItemSettings({ path: app.getPath('exe') });
+    // Electron 44 parses the lookup path as a command line on Windows.
+    // Quote it so custom installation directories containing spaces remain intact.
+    // Newer Electron versions also accept surrounding quotes (upstream #54364).
+    const executable = app.getPath('exe');
+    const settings = app.getLoginItemSettings({
+      path: process.platform === 'win32' ? `"${executable}"` : executable,
+    });
     return (
       settings.openAtLogin &&
       (process.platform !== 'win32' || settings.executableWillLaunchAtLogin !== false)
