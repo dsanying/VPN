@@ -209,7 +209,7 @@
       "available": "当前可用",
       "checking": "检测中",
       "failed": "当前不可用",
-      "stale": "待复测"
+      "stale": "历史结果"
     },
     "awaitingSource": "等待配置内容",
     "backup": "备份与恢复",

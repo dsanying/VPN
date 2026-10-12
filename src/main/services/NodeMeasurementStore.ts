@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { measurementDatabase } from './MeasurementDatabase';
 import { createHash } from 'crypto';
-import { BACKGROUND_REFRESH_MS } from '../../shared/background-refresh';
+import { measurementExpired } from '../../shared/node-availability';
 import { supportsQUICEntry } from './entry-probe';
 import * as fs from 'fs/promises';
 import type { ServerConfig } from '../../shared/types';
@@ -120,9 +120,7 @@ export function dueMeasurements(
       return (
         !record ||
         record.detail?.entry.reason === 'ENTRY_RECHECK_REQUIRED' ||
-        !Number.isFinite(record.testedAt) ||
-        record.testedAt > now ||
-        now - record.testedAt >= BACKGROUND_REFRESH_MS
+        measurementExpired(record.testedAt, now)
       );
     })
     .sort(

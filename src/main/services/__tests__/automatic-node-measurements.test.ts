@@ -21,7 +21,7 @@ import {
   getSubscriptionSynchronizer,
 } from '../../ipc/handlers/subscription-handlers';
 import type { UserConfig } from '../../../shared/types';
-it('initializes missing records once, config changes reconcile missing identities, and no periodic/page polling exists', async () => {
+it('initializes missing records, automatically rechecks expired results, and shares the maintenance scheduler', async () => {
   jest.useFakeTimers();
   const run = jest.mocked(runSpeedTest);
   run.mockClear();
@@ -30,7 +30,7 @@ it('initializes missing records once, config changes reconcile missing identitie
     .mocked(getNodeMeasurementStore)
     .mockReturnValue({ save: async () => {}, get: async () => records } as never);
   run.mockImplementation(async () => {
-    records = { example: { testedAt: 1 } };
+    records = { example: { testedAt: Date.now() } };
     return {} as never;
   });
   const deps = {
@@ -47,18 +47,23 @@ it('initializes missing records once, config changes reconcile missing identitie
     const refresh = registerSpeedTestHandlers(deps);
     await refresh();
     expect(run).toHaveBeenCalledTimes(1);
-    records = { example: { testedAt: 1 } };
+    records = { example: { testedAt: Date.now() } };
     await jest.advanceTimersByTimeAsync(24 * 60 * 60_000);
     expect(run).toHaveBeenCalledTimes(1);
     mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED);
     await refresh();
-    expect(run).toHaveBeenCalledTimes(1);
-    await refresh(false);
     expect(run).toHaveBeenCalledTimes(2);
+    // A six-hour-old failure is due too, without a manual request.
+    records = { example: { testedAt: Date.now() - 6 * 60 * 60_000 } };
+    await refresh();
+    expect(run).toHaveBeenCalledTimes(3);
+    records = { example: { testedAt: Date.now() - 120_000 } };
+    await refresh(false);
+    expect(run).toHaveBeenCalledTimes(4);
     records = {};
     mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED);
     await refresh();
-    expect(run).toHaveBeenCalledTimes(3);
+    expect(run).toHaveBeenCalledTimes(5);
   } finally {
     mainEventEmitter.removeAllListeners(MAIN_EVENTS.CONFIG_CHANGED);
     measurementRefreshEvents.removeAllListeners();

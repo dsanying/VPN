@@ -18,7 +18,7 @@ import { isSpeedTestable } from '../../shared/endpoint-routes';
 
 /** 陈旧阈值：超此时长未重测视为历史值；主进程保存记录，自动任务按成功/失败周期刷新。单一真值。 */
 export { NODE_MEASUREMENT_FRESH_MS as STALE_MS } from '../../shared/node-availability';
-import { NODE_MEASUREMENT_FRESH_MS as STALE_MS } from '../../shared/node-availability';
+import { measurementExpired } from '../../shared/node-availability';
 
 export type LatencyBadge =
   | { kind: 'exit-invalid'; reason: ProxyExitBlock } // 「出口无效」warn；title 可按 reason 细分三原因
@@ -72,7 +72,7 @@ export function deriveLatencyBadge(i: LatencyBadgeInput): LatencyBadge {
     return { kind: 'not-logged-in' };
   }
   // P3 有值显值（伴测/测速同管道；-1 仅测速入口产生，伴测绝不写 -1）。
-  const stale = i.testedAt !== undefined && i.now - i.testedAt > STALE_MS;
+  const stale = i.testedAt !== undefined && measurementExpired(i.testedAt, i.now);
   if (i.latency === -1) return { kind: 'timeout', stale };
   if (i.latency !== undefined) return { kind: 'value', latency: i.latency, stale };
   // P4 诚实边界：不可测且无值。**点过全量测速才显「不支持测速」**（解释「为什么它没值」）；未点过则与未测同显
