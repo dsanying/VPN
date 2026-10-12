@@ -20,6 +20,10 @@ export async function verifyInstalledUi(application, output) {
     await resize(1280, 900);
     const main = page.getByRole('main');
     await expect(main).toBeVisible();
+    const brand = page.locator('.ds-brand-header__icon img');
+    await expect(brand).toBeVisible();
+    await expect(brand).toHaveAttribute('src', /(?:^data:image\/svg\+xml,|brand-icon.*\.svg)/);
+    await expect.poll(() => brand.evaluate(element => element.complete && element.naturalWidth > 0)).toBe(true);
     for (const route of ['nodes', 'connections', 'rules', 'logs', 'settings']) {
       await page.locator(`a[href$="/${route}"]`).click();
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -38,6 +42,7 @@ export async function verifyInstalledUi(application, output) {
     await page.getByRole('combobox', { name: '语言' }).click();
     await page.getByRole('option', { name: 'English', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    await expect(brand).toBeVisible();
     await resize(800, 600);
     await expect(main).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(800);
@@ -56,6 +61,6 @@ export async function verifyInstalledUi(application, output) {
     await expect(page.getByRole('button', { name: /^(Restore|Import)$/ })).toBeInViewport();
     await screenshot('installed-settings-en-scrolled.png');
     assert.deepEqual(errors, [], 'Installed renderer emitted an uncaught exception');
-    return { routes: 5, themes: ['light', 'dark'], languages: ['zh-CN', 'en-US'], windowSizes: [[1280, 900], [800, 600]] };
+    return { routes: 5, brandIcon: 'passed', themes: ['light', 'dark'], languages: ['zh-CN', 'en-US'], windowSizes: [[1280, 900], [800, 600]] };
   } finally { page.removeListener('pageerror', captureError); }
 }

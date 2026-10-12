@@ -16,8 +16,11 @@ jest.mock('electron', () => ({
   },
   Menu: { buildFromTemplate: () => ({}) },
   nativeImage: {
-    createFromPath: () => ({ resize: () => ({}), isEmpty: () => false }),
-    createFromDataURL: () => ({}),
+    createFromPath: () => ({
+      resize: () => ({ setTemplateImage: jest.fn() }),
+      isEmpty: () => false,
+    }),
+    createFromDataURL: () => ({ resize: () => ({ setTemplateImage: jest.fn() }) }),
   },
 }));
 

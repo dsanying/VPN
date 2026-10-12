@@ -218,7 +218,7 @@ final class NativeNetworkPlatform implements PlatformInterface, AutoCloseable {
     @Override public void registerMyInterface(String name) { /* Android owns interface naming. */ }
     @Override public String tailscaleHostname() { return "shadowvpn-android"; }
     @Override public void sendNotification(io.nekohasekai.libbox.Notification n) {
-        ((NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE)).notify(n.getIdentifier(), n.getTypeID(), new NotificationCompat.Builder(context, "vpn").setSmallIcon(android.R.drawable.ic_lock_lock).setContentTitle(n.getTitle()).setContentText(n.getBody()).build());
+        ((NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE)).notify(n.getIdentifier(), n.getTypeID(), new NotificationCompat.Builder(context, "vpn").setSmallIcon(R.drawable.ic_notification).setContentTitle(n.getTitle()).setContentText(n.getBody()).build());
     }
     @Override public void cancelNotification(String identifier, int type) { ((NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(identifier, type); }
     @Override public boolean usePlatformShell() { return false; }

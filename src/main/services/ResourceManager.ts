@@ -208,9 +208,10 @@ export class ResourceManager {
     return path.join(process.resourcesPath, 'app.png');
   }
 
-  /** @param connected 是否已连接，true 返回彩色图标，false 返回灰色图标 */
+  /** 同一品牌标志；Mac 使用随系统反色的模板，其他平台使用黑底图标。 */
   getTrayIconPath(connected: boolean = false): string {
-    const filename = connected ? 'app.png' : 'app-gray.png';
+    const state = connected ? 'connected' : 'idle';
+    const filename = `tray-${state}${this.platform === 'darwin' ? 'Template' : ''}.png`;
     if (this.isDev) {
       return path.join(process.cwd(), 'resources', filename);
     }

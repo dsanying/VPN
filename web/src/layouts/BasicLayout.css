@@ -38,11 +38,11 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--ds-color-border-strong);
-  border-radius: 6px;
-  font-weight: 600;
   line-height: 1;
   flex: none;
+}
+.ds-brand-header__icon img {
+  display: block;
 }
 .ds-brand-header__title {
   font-weight: 600;

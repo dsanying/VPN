@@ -45,7 +45,7 @@
         "to": ".",
         "filter": [
           "app.png",
-          "app-gray.png"
+          "tray-*.png"
         ]
       },
       {
@@ -140,7 +140,7 @@
         "to": ".",
         "filter": [
           "app.png",
-          "app-gray.png"
+          "tray-*.png"
         ]
       }
     ]
@@ -212,7 +212,7 @@
         "to": ".",
         "filter": [
           "app.png",
-          "app-gray.png"
+          "tray-*.png"
         ]
       }
     ]

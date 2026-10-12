@@ -1,25 +1,57 @@
-const pngToIco = require('png-to-ico').default || require('png-to-ico');
-const fs = require('fs');
-const path = require('path');
-
-async function generateIcon() {
-    try {
-        const inputPath = path.join(__dirname, '../resources/app.png');
-        const outputPath = path.join(__dirname, '../build/icon.ico');
-
-        console.log('Generating ICO file from PNG...');
-        console.log('Input:', inputPath);
-        console.log('Output:', outputPath);
-
-        const buf = await pngToIco(inputPath);
-        fs.writeFileSync(outputPath, buf);
-
-        console.log('✓ ICO file generated successfully!');
-        console.log('File size:', buf.length, 'bytes');
-    } catch (error) {
-        console.error('✗ Error generating ICO file:', error);
-        process.exit(1);
-    }
+// One font-independent vector master generates every shipped brand asset.
+const fs = require('node:fs');
+const path = require('node:path');
+const { Resvg } = require('@resvg/resvg-js');
+const icoModule = require('png-to-ico');
+const pngToIco = icoModule.default || icoModule;
+const root = path.resolve(__dirname, '..');
+const check = process.argv.includes('--check');
+const master = fs.readFileSync(path.join(root, 'build/brand/mark.svg'), 'utf8');
+const group = master.match(/<g[\s\S]*<\/g>/)[0];
+const glyph = color => group.replace('currentColor', color);
+const svg = body => `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">${body}</svg>`;
+const app = svg(`<defs><linearGradient id="bg" x2=".8" y2="1"><stop stop-color="#262626"/><stop offset="1" stop-color="#080808"/></linearGradient><linearGradient id="silver" x2=".2" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#d4d4d4"/></linearGradient></defs><rect x="20" y="20" width="472" height="472" rx="106" fill="url(#bg)"/><rect x="21" y="21" width="470" height="470" rx="105" fill="none" stroke="#454545" stroke-width="2"/>${glyph('url(#silver)')}`);
+const tray = (connected, template = false) => svg(`${template ? glyph('#000000') : `<rect x="8" y="8" width="496" height="496" rx="108" fill="#151515"/>${glyph('#f5f5f5')}`}${connected ? `<circle cx="456" cy="450" r="43" fill="${template ? '#000000' : '#52c98a'}"/>` : ''}`);
+function write(file, bytes) {
+  const target = path.join(root, file);
+  if (check) {
+    if (!fs.existsSync(target) || !fs.readFileSync(target).equals(Buffer.from(bytes))) throw new Error(`Brand asset is stale: ${file}; run npm run brand:generate`);
+  } else { fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, bytes); }
 }
-
-generateIcon();
+function png(source, size) { return new Resvg(source, { fitTo: { mode: 'width', value: size }, font: { loadSystemFonts: false } }).render().asPng(); }
+function androidVector(size, scale, offset) {
+  return `<?xml version="1.0" encoding="utf-8"?>\n<!-- Generated from build/brand/mark.svg; edit the master, not this file. -->\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="${size}dp" android:height="${size}dp" android:viewportWidth="${size}" android:viewportHeight="${size}">\n<group android:translateX="${offset}" android:translateY="${offset}" android:scaleX="${scale}" android:scaleY="${scale}">\n<group android:translateX="-128" android:translateY="-120" android:scaleX=".9" android:scaleY=".9">\n${[...master.matchAll(/<path d="([^"]+)"\/>/g)].map(([, d]) => `<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="${d}"/>`).join('\n')}\n</group></group></vector>\n`;
+}
+async function main() {
+  write('ui/icon.svg', app); write('web/src/assets/brand-icon.svg', app);
+  write('ui/favicon.svg', svg(glyph('#111111'))); write('ui/favicon-dark.svg', svg(glyph('#ffffff')));
+  write('web/public/favicon.svg', app);
+  const sizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
+  for (const size of sizes) write(`build/icons/${size}x${size}.png`, png(app, size));
+  for (const file of ['build/icon.png', 'resources/app.png', 'docs/logo.png']) write(file, png(app, 1024));
+  write('ui/apple-touch-icon.png', png(app, 180));
+  const ico = await pngToIco([16, 32, 48, 256].map(size => png(app, size)));
+  write('build/icon.ico', ico); write('ui/favicon.ico', ico);
+  const chunks = [[16, 'icp4'], [32, 'icp5'], [64, 'icp6'], [128, 'ic07'], [256, 'ic08'], [512, 'ic09'], [1024, 'ic10']].map(([size, type]) => {
+    const data = png(app, size); const header = Buffer.alloc(8); header.write(type); header.writeUInt32BE(data.length + 8, 4); return Buffer.concat([header, data]);
+  });
+  const header = Buffer.alloc(8); header.write('icns'); header.writeUInt32BE(8 + chunks.reduce((sum, chunk) => sum + chunk.length, 0), 4);
+  write('build/icon.icns', Buffer.concat([header, ...chunks]));
+  for (const connected of [false, true]) {
+    const state = connected ? 'connected' : 'idle';
+    write(`resources/tray-${state}.png`, png(tray(connected), 64));
+    for (const [size, suffix] of [[18, ''], [36, '@2x']]) write(`resources/tray-${state}Template${suffix}.png`, png(tray(connected, true), size));
+  }
+  // PNG fallback remains a real brand image even if an external resource is missing.
+  write('src/shared/brand-icon.ts', `// Generated by scripts/generate-icon.js from build/brand/mark.svg.\nexport const BRAND_TRAY_PNG =\n  '${png(tray(false), 64).toString('base64')}';\nexport const BRAND_TRAY_TEMPLATE_PNG =\n  '${png(tray(false, true), 36).toString('base64')}';\n`);
+  write('android/app/src/main/res/drawable/ic_launcher_foreground.xml', androidVector(108, .125, 22));
+  write('android/app/src/main/res/drawable/ic_notification.xml', androidVector(24, .046875, 0));
+  for (const [density, size] of [['mdpi', 48], ['hdpi', 72], ['xhdpi', 96], ['xxhdpi', 144], ['xxxhdpi', 192]]) {
+    write(`android/app/src/main/res/mipmap-${density}/ic_launcher.png`, png(app, size));
+    write(`android/app/src/main/res/mipmap-${density}/ic_launcher_round.png`, png(app, size));
+  }
+  if (check && fs.existsSync(path.join(root, 'resources/app-gray.png'))) throw new Error('Obsolete app-gray.png remains; run npm run brand:generate');
+  if (!check) fs.rmSync(path.join(root, 'resources/app-gray.png'), { force: true });
+  console.log(`${check ? 'Verified' : 'Generated'} application, Dock, tray, web and Android icons from the 影 master.`);
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });
