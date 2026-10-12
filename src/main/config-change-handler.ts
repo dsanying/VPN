@@ -4,8 +4,8 @@ import { prepareAutomaticTakeover } from '../shared/automatic-takeover';
  * 配置变更监听器 —— 从 index.ts whenReady 抽出。
  *
  * 监听 MAIN_EVENTS.CONFIG_CHANGED：运行日志策略同步 / 托盘刷新 / 运行中切配置(switchMode 热切换) /
- * 自动换节点开关同步 / 内核自动更新 kick。经 deps 注入主进程服务与可变引用
- * （proxyManager/autoSwitchService/coreUpdateScheduler 用 getter 取 call-time 当前值）+ index.ts 函数
+ * 自动换节点开关同步。经 deps 注入主进程服务与可变引用
+ * （proxyManager/autoSwitchService 用 getter 取 call-time 当前值）+ index.ts 函数
  * （getPrivacyMode/updateTrayMenuState，注入避免重建 TrayManager 已断的服务→入口循环依赖）。
  * 无 config 快照网（app 生命周期域）；真机冒烟验证（自动换节点开关/语言 等热生效）。
  */
@@ -15,7 +15,6 @@ import type { LogManager } from './services/LogManager';
 import type { ConfigManager } from './services/ConfigManager';
 import type { ProxyManager } from './services/ProxyManager';
 import type { AutoSwitchService } from './services/AutoSwitchService';
-import type { CoreUpdateScheduler } from './services/CoreUpdateScheduler';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
 import { effectiveLogLevel } from '../shared/log-level';
 import { setDesktopNotificationsEnabled } from './notify-user';
@@ -26,7 +25,6 @@ export interface ConfigChangeDeps {
   logManager: LogManager;
   getProxyManager: () => ProxyManager | null;
   getAutoSwitchService: () => AutoSwitchService | null;
-  getCoreUpdateScheduler: () => CoreUpdateScheduler | null;
   updateTrayMenuState: (isProxyRunning: boolean, hasError?: boolean) => void;
   getPrivacyMode: () => boolean;
   /** 据最新 config.language（读 configManager 缓存）重设主进程 i18n；注入自 index.ts（需系统偏好，避免本文件依赖 electron）。 */
@@ -42,7 +40,6 @@ export function registerConfigChangeListener(deps: ConfigChangeDeps): void {
     logManager,
     getProxyManager,
     getAutoSwitchService,
-    getCoreUpdateScheduler,
     updateTrayMenuState,
     getPrivacyMode,
     applyLanguageFromConfig,
@@ -51,7 +48,6 @@ export function registerConfigChangeListener(deps: ConfigChangeDeps): void {
   mainEventEmitter.on(MAIN_EVENTS.CONFIG_CHANGED, async (changedConfig?: UserConfig) => {
     const proxyManager = getProxyManager();
     const autoSwitchService = getAutoSwitchService();
-    const coreUpdateScheduler = getCoreUpdateScheduler();
     // 语言热同步：据最新 config.language（configManager 缓存）重设主进程 i18n，必须在下方 updateTrayMenuState
     // 之前——托盘菜单经 mt() 取文案，先切语言再重渲染才能立即以新语言呈现（用户在设置页改语言即时生效，无需重启 app）。
     applyLanguageFromConfig();
@@ -92,8 +88,5 @@ export function registerConfigChangeListener(deps: ConfigChangeDeps): void {
         autoSwitchService.disable();
       }
     }
-
-    // 4. 内核自动更新开关刚开 → kick 一次即时检查（无需等 6h tick）；未开/未 due 自然跳过，幂等
-    coreUpdateScheduler?.kick();
   });
 }

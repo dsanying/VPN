@@ -73,7 +73,6 @@ import { GlobalUpdateService } from './services/GlobalUpdateService';
 import { setGlobalUpdateService } from './ipc/handlers/update-handlers';
 import { UpdateService } from './services/UpdateService';
 import { CoreUpdateService } from './services/CoreUpdateService';
-import { CoreUpdateScheduler } from './services/CoreUpdateScheduler';
 import { SpeedTestService } from './services/SpeedTestService';
 import { AutoSwitchService } from './services/AutoSwitchService';
 import {
@@ -343,7 +342,6 @@ let coreUpdateService: CoreUpdateService;
 let subscriptionService: SubscriptionService;
 let speedTestService: SpeedTestService;
 let autoSwitchService: AutoSwitchService;
-let coreUpdateScheduler: CoreUpdateScheduler | null = null;
 let globalUpdateService: GlobalUpdateService | null = null;
 let refreshMeasurements: ((missingOnly?: boolean) => Promise<void>) | undefined;
 let pendingUpdateConfig = false;
@@ -1294,7 +1292,6 @@ async function runCleanup(): Promise<void> {
       clearInterval(idleCheckInterval);
       idleCheckInterval = null;
     }
-    coreUpdateScheduler?.stop();
     globalUpdateService?.stop();
     autoSwitchService?.destroy();
     // T4：终止 stats utilityProcess（停 respawn + kill worker），避免退出后遗留子进程。
@@ -1918,15 +1915,6 @@ if (gotTheLock) {
       }
     }
 
-    // Legacy lifecycle adapter is managed by the single global update clock.
-    coreUpdateScheduler = new CoreUpdateScheduler(
-      configManager,
-      coreUpdateService,
-      logManager,
-      () => proxyManager?.getStatus().running ?? false
-    );
-    coreUpdateScheduler.start(true);
-
     // 自动空闲模式：powerMonitor 真实系统输入空闲轮询（app ready 后才可用），替代窗口 blur/hide 边沿武装。
     // 同节拍搭车渲染进程内存 watchdog（issue #242 §4）：60s 采一次 renderer RSS，超阈值兜底回收/告警（不新增 interval）。
     idleCheckInterval = setInterval(() => {
@@ -1941,8 +1929,11 @@ if (gotTheLock) {
       maintenanceError: (error) => logManager.addLog('error', `后台维护失败: ${error}`, '更新'),
       refreshMeasurements: async () => {
         await refreshMeasurements?.(false);
-        const checkedAt = unlockService?.getSnapshot()?.checkedAt;
-        if (!checkedAt || Date.now() - checkedAt >= 60_000) await unlockService?.run(true);
+        await Promise.all([
+          smartRoutingService?.refresh(true),
+          ipInfoService?.refresh(true),
+          unlockService?.run(true),
+        ]);
       },
       publish: (snapshot) =>
         ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_UPDATE_PROGRESS, {
@@ -1964,7 +1955,7 @@ if (gotTheLock) {
           };
         },
         core: async () => {
-          await coreUpdateService.runAutoUpdateCycle(true);
+          await coreUpdateService.runAutoUpdateCycle();
           const status = await coreUpdateService.getAutoStatus();
           return {
             kind: 'core',
@@ -2197,10 +2188,6 @@ if (gotTheLock) {
       // 所有「进程不再运行」的路径都已在 ProxyManager 内部**同步门控**地调过 ensureSystemProxyCleared：
       // handleProcessExit（信号死/崩溃终态）、performHealthCheck（达上限）、giveUpAutoRestart、restart 的 start
       // 腿失败、退避 abort；用户主动停止由 IPC/托盘在 stop() 前置清理。故此处删除，避免越过门控。
-
-      // 内核自动更新：代理停止 → 安全窗口，延 5s 双查后落位 staged 内核（规避 attemptAutoRestart/switchMode
-      // 的 stop→start 瞬时窗口）。调度器内部守 running===false，绝不在重启间隙落位（不断流硬不变量）。
-      coreUpdateScheduler?.onProxyStopped();
     });
 
     // 注入 LogManager 供 IPC 注册器在生产环境记录「同名 channel 重复注册」等异常（须在任意 register* 之前）
@@ -2369,13 +2356,11 @@ if (gotTheLock) {
 
     updateTrayMenuState(false);
 
-    // 启动期延迟任务（自动连接 + 自动检查更新）已抽到 startup-tasks.scheduleStartupTasks。
+    // 启动安全窗口（内核落位、自动连接）由 startup-tasks.scheduleStartupTasks 负责。
     updateService.confirmUpdateStartup();
     scheduleStartupTasks({
-      allowAppUpdates: app.isPackaged,
       configManager,
       coreUpdateService,
-      updateService,
       logManager,
       getProxyManager: () => proxyManager,
       updateTrayMenuState,
@@ -2389,7 +2374,6 @@ if (gotTheLock) {
       logManager,
       getProxyManager: () => proxyManager,
       getAutoSwitchService: () => autoSwitchService,
-      getCoreUpdateScheduler: () => coreUpdateScheduler,
       updateTrayMenuState,
       getPrivacyMode,
       // 语言解析需系统偏好（auto→系统），故在 index.ts 内注入；config-change-handler 本身不依赖 electron。

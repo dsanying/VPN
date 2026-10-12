@@ -671,7 +671,6 @@ export const coreUpdateApi = {
   },
 
   async getAutoStatus(): Promise<{
-    autoUpdateEnabled: boolean;
     lastCheckAt: number | null;
     staged: { version: string; stagedAt: string } | null;
     crossBandLatest: string | null;
@@ -690,7 +689,6 @@ export const coreUpdateApi = {
 
   onAutoStatusChanged(
     listener: (data: {
-      // autoUpdateEnabled 不随事件推送（主进程同步 emit 算不出真值）；真值由 getAutoStatus 快照提供。
       lastCheckAt: number | null;
       staged: { version: string; stagedAt: string } | null;
       crossBandLatest: string | null;

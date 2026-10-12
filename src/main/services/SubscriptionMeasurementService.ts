@@ -1,4 +1,4 @@
-import { MEASUREMENT_COALESCE_MS } from '../../shared/background-refresh';
+import { observationIsFresh, MEASUREMENT_COALESCE_MS } from '../../shared/background-refresh';
 import { createHash } from 'crypto';
 import * as path from 'path';
 import type { ConfigManager } from './ConfigManager';
@@ -72,6 +72,7 @@ export class SubscriptionMeasurementService {
     const queue = (config.subscriptions ?? []).filter(
       (sub) =>
         !records[sub.id] ||
+        !observationIsFresh(records[sub.id].checkedAt) ||
         (requested.has(sub.id) &&
           Date.parse(records[sub.id].checkedAt) <= requested.get(sub.id)!) ||
         (!missingOnly &&

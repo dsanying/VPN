@@ -118,3 +118,23 @@ it('rejects malformed or incomplete stored snapshots and closed commands', async
   await expect(service.run()).rejects.toThrow('关闭');
   expect(host.requestText).not.toHaveBeenCalled();
 });
+
+it('startup refresh is automatic after six hours, while page reads remain side-effect free', async () => {
+  jest.useFakeTimers();
+  try {
+    const f = setup();
+    await f.service.ensureCurrent();
+    expect(f.host.requestText).toHaveBeenCalledTimes(SERVICE_IDS.length);
+    await jest.advanceTimersByTimeAsync(6 * 3600000 - 1);
+    await f.service.ensureCurrent();
+    expect(f.host.requestText).toHaveBeenCalledTimes(SERVICE_IDS.length);
+    await jest.advanceTimersByTimeAsync(1);
+    await f.service.read();
+    expect(f.host.requestText).toHaveBeenCalledTimes(SERVICE_IDS.length);
+    await Promise.all([f.service.ensureCurrent(), f.service.ensureCurrent()]);
+    expect(f.host.requestText).toHaveBeenCalledTimes(2 * SERVICE_IDS.length);
+    f.service.close();
+  } finally {
+    jest.useRealTimers();
+  }
+});

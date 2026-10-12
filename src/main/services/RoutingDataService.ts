@@ -1,3 +1,4 @@
+import { observationIsFresh, BACKGROUND_REFRESH_MS } from '../../shared/background-refresh';
 /** Background routing data only: no catalog, manual CRUD, application-service presets or renderer IPC. */
 import { net, type Session } from 'electron';
 import * as fs from 'fs/promises';
@@ -28,7 +29,6 @@ import type { UpdateNetwork } from './UpdateNetwork';
 const IDLE_TIMEOUT_MS = 15_000;
 const OVERALL_TIMEOUT_MS = 120_000;
 const MAX_SIZE = 64 * 1024 * 1024;
-const DATA_TTL_MS = 24 * 60 * 60_000;
 type FetchResult =
   { ok: true; buf: Buffer } | { ok: false; errorCode: string; statusCode?: number };
 type DataFile = { tag: string; sourceUrl: string; dest: string };
@@ -39,7 +39,7 @@ export class RoutingDataService {
   private prepared = new Map<string, Buffer>();
   private retiredFilesRemoved = false;
   private inflight = new Map<string, Promise<boolean>>();
-  private backoff = new BackoffTracker(10 * 60_000, 6 * 60 * 60_000);
+  private backoff = new BackoffTracker(10 * 60_000, BACKGROUND_REFRESH_MS);
 
   constructor(
     private readonly deps: {
@@ -64,7 +64,7 @@ export class RoutingDataService {
       const valid = isValidSrsFile(file.dest);
       if (valid) {
         const stat = await fs.stat(file.dest).catch(() => null);
-        if (!force && stat && Date.now() - stat.mtimeMs < DATA_TTL_MS) return true;
+        if (!force && stat && observationIsFresh(Math.floor(stat.mtimeMs))) return true;
       }
       if (!this.backoff.isEligible(file.dest, Date.now())) {
         this.failures.add(file.dest);
@@ -81,6 +81,7 @@ export class RoutingDataService {
         this.failures.delete(file.dest);
         const previous = await fs.readFile(file.dest).catch(() => null);
         if (previous?.equals(result.buf)) {
+          await fs.utimes(file.dest, new Date(), new Date());
           this.prepared.delete(file.dest);
           this.backoff.recordSuccess(file.dest);
           return true;

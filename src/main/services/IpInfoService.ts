@@ -1,3 +1,4 @@
+import { observationIsFresh } from '../../shared/background-refresh';
 import * as https from 'https';
 /**
  * 出口 IP 信息服务：测出「本地直连出口 IP」与「代理出口 IP」，经 EVENT_IP_INFO_UPDATED 推渲染端。
@@ -7,17 +8,13 @@ import * as https from 'https';
  * (系统代理/TUN/手动)」与「分流策略(全局/智能/直连)」如何组合，都能稳定测出真实出口 IP。代理未运行时，
  * direct 退回主进程裸 fetch（此时无 TUN，必直连），proxy 置 null。
  *
- * 事件驱动刷新（无周期轮询）：省第三方配额、不持续暴露行为。60s TTL + in-flight 去重；失败保留旧值。
+ * 事件驱动刷新（无周期轮询）：省第三方配额、不持续暴露行为。六小时共享有效期 + in-flight 去重；失败保留旧值。
  */
 import { isIP } from 'net';
 import { parseIpTrace as parseTrace } from '../../shared/ip-trace';
 import type { IpInfo, IpInfoSnapshot, ProxyExitBlock } from '../../shared/types';
 import { countryFromChineseLocation, normalizeCountryCode } from '../../shared/country';
 
-const TTL_MS = 60_000;
-// 终态短 TTL：error（探测失败保留旧值）/ proxyBlocked（TS 出口直判无效）用更短 TTL——既不像正常态那样 60s 长缓存
-// 而误导用户看陈旧失败态，又不像旧实现那样「粘滞 error 使 TTL 恒失效、每次首页挂载全量重探」空转退避。10s 后可重探自愈。
-const ERROR_TTL_MS = 10_000;
 const REQ_TIMEOUT_MS = 6000; // 单个探测请求超时上限（httpText，用户定 6s）——重试不会无限阻塞
 // 整体探测总预算硬顶（含所有重试 + 间隔）：无论单请求多慢、重试多少轮，一次 withRetry 整体 ≤ 此值 → 杜绝
 // 「检测中」无限空转（用户定 10s，不无限延长/无限测试）。超时即视作本轮失败、落终态（检测超时/出口无效）；
@@ -220,14 +217,11 @@ export class IpInfoService {
     });
   }
 
-  /** 取出口 IP；命中 TTL 直接返回缓存；force 排队重测，非 force 复用在途。
-   *  终态（error 探测失败 / proxyBlocked 直判无效）用短 TTL(10s)：既不 60s 长缓存误导陈旧失败态，又不像旧实现
-   *  「粘滞 error → TTL 恒失效 → 每次首页挂载全量重探」空转（无效 TS 出口下会跑满退避）。 */
+  /** Shared six-hour cache for both success and failure; lifecycle changes still invalidate immediately. */
   //  visible=true（仅手动重探传，恒与 force 搭配）：可见流程——先清当前显示的出口（running→proxy / 否则→direct）
   //  置「检测中…」，探测失败丢旧值显「检测超时」；被动路径（启动/切节点/停核/TTL）不传，保留旧值不闪（见 doRefresh）。
   async refresh(force = false, visible = false): Promise<IpInfoSnapshot> {
-    const ttl = this.snapshot.error || this.snapshot.proxyBlocked ? ERROR_TTL_MS : TTL_MS;
-    if (!force && Date.now() - this.snapshot.updatedAt < ttl) {
+    if (!force && observationIsFresh(this.snapshot.updatedAt)) {
       return this.getSnapshot();
     }
     // 非强制：有在途则复用其结果（去重正确）；强制：链式排队，不被在途吞掉

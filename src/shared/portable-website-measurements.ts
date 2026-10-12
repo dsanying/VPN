@@ -1,3 +1,4 @@
+import { observationIsFresh } from './background-refresh';
 import type { ConfigDocumentStore } from './config-repository';
 import { createHostTextRequester, type HostTextTransport } from './host-text-request';
 import { SERVICE_IDS, type UnlockSnapshot, type UnlockResult } from './unlock-detection';
@@ -71,6 +72,10 @@ export class PortableWebsiteMeasurements {
           result.httpStatus >= 200 &&
           result.httpStatus <= 599))
     );
+  }
+  async ensureCurrent(): Promise<UnlockSnapshot> {
+    const snapshot = await this.read();
+    return observationIsFresh(snapshot.checkedAt) ? snapshot : this.run();
   }
   run(): Promise<UnlockSnapshot> {
     if (this.closed) return Promise.reject(new Error('网站检测服务已关闭'));

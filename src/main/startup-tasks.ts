@@ -1,44 +1,27 @@
 import { prepareAutomaticTakeover } from '../shared/automatic-takeover';
-/**
- * 启动期任务调度 —— 从 index.ts whenReady 抽出。
- *
- * 两个延迟任务：① 2s 后自动连接（先落位上轮 staged 内核再 autoConnect）② 5s 后自动检查更新。
- * 经 deps 注入主进程服务；proxyManager 用 getter 取 call-time 当前值（setTimeout 触发时已初始化）。
- * 回调体逐字保留——proxyManager 经「同名 local const 捕获」保持原文不变。
- * 无 config 快照网（app 生命周期域）；真机冒烟验证（冷启动自动连接 / 自动检查更新）。
- */
+/** 启动安全窗口负责内核落位和用户选择的自动连接；后台检查由统一维护周期负责。 */
 
 import type { LogManager } from './services/LogManager';
 import type { ConfigManager } from './services/ConfigManager';
 import type { ProxyManager } from './services/ProxyManager';
-import type { UpdateService } from './services/UpdateService';
 import type { CoreUpdateService } from './services/CoreUpdateService';
 import { getWarpDeregisterQueue } from './services/WarpDeregisterQueue';
 
 /** 注入依赖：服务单例 + proxyManager getter（call-time 取值）+ 托盘状态刷新。 */
 export interface StartupTaskDeps {
-  /** 开发版通过源码更新，不查询或安装发行包。 */
-  allowAppUpdates: boolean;
   configManager: ConfigManager;
   coreUpdateService: CoreUpdateService;
-  updateService: UpdateService;
   logManager: LogManager;
   getProxyManager: () => ProxyManager | null;
   updateTrayMenuState: (isProxyRunning: boolean, hasError?: boolean) => void;
 }
 
 /**
- * 调度启动期延迟任务（自动连接 + 自动检查更新），与 whenReady 内原内联两 setTimeout 逐字等价。
+ * 调度自动连接与待注销队列清理，独立于后台维护时钟。
  */
 export function scheduleStartupTasks(deps: StartupTaskDeps): void {
-  const {
-    configManager,
-    coreUpdateService,
-    updateService,
-    logManager,
-    getProxyManager,
-    updateTrayMenuState,
-  } = deps;
+  const { configManager, coreUpdateService, logManager, getProxyManager, updateTrayMenuState } =
+    deps;
 
   // 启动时自动连接（延迟 2 秒，等待窗口和服务初始化完成）
   setTimeout(async () => {
@@ -88,8 +71,6 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
       updateTrayMenuState(false, true);
     }
   }, 2000);
-
-  if (deps.allowAppUpdates) updateService.startAutomaticUpdates();
 
   // 启动后机会式 drain WARP 待注销队列（延迟 8 秒，让网络/服务先就绪；fire-and-forget 不阻塞、绝不抛）。
   // 与「成功注册 WARP 后」并为两个触发点；无常驻定时器——不重开 app 者既不 drain 也不产生新孤儿（副作用自洽）。

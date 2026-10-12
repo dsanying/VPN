@@ -1,3 +1,4 @@
+import { observationIsFresh } from '../../shared/background-refresh';
 import { clearRetiredRuntimeSettings } from '../../shared/retired-config-data';
 import { prepareAutomaticTakeover } from '../../shared/automatic-takeover';
 import { routingDataNeeds } from '../../shared/routing-data-needs';
@@ -2412,7 +2413,6 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       windowBounds: null,
       autoSwitchNode: null,
       restrictCoreUpdateToCompatibleMinor: null,
-      autoUpdateCore: null,
       uiTheme: null,
       tunStackMigrated: null,
       tunMtuMigrated: null,
@@ -4182,7 +4182,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   private isRemoteRuleSetReachable(url: string): Promise<boolean> {
     const now = Date.now();
     const cached = this.ruleSetReachCache.get(url);
-    if (cached && now - cached.at < (cached.reachable ? 6 * 3600_000 : 30 * 60_000)) {
+    if (cached && observationIsFresh(cached.at, now)) {
       return Promise.resolve(cached.reachable);
     }
     return new Promise<boolean>((resolve) => {

@@ -97,7 +97,6 @@ it.each([
   'ExitProbeLatency',
   'Unlock',
   'AutoStart',
-  'CoreUpdateScheduler',
   'CoreUpdateService',
   'Helper',
   'ProtocolParser',

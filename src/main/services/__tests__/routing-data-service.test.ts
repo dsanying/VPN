@@ -117,3 +117,14 @@ it('unified checks report network failures while preserving usable cached routin
   await expect(data.refreshRequired(true)).rejects.toThrow('cached data retained');
   expect(fs.readFileSync(file, 'utf8')).toBe('SRS-old');
 });
+it('an unchanged verified download renews the six-hour cache instead of retrying on each access', async () => {
+  const file = path.join(getRuleSetRuntimeDir(), 'geoip-jp.srs');
+  fs.writeFileSync(file, 'SRS-same');
+  fs.utimesSync(file, 1, 1);
+  const { data, fetch } = service();
+  fetch.mockResolvedValue({ ok: true, buf: Buffer.from('SRS-same') });
+  expect(await data.ensureCountryRuleSet('jp')).toBe(true);
+  expect(await data.ensureCountryRuleSet('jp')).toBe(true);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fs.readFileSync(file, 'utf8')).toBe('SRS-same');
+});

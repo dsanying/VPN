@@ -172,3 +172,16 @@ test('a native write conflict invalidates stale cache, emits nothing and rereads
   });
   expect(await repo.read()).toMatchObject({ language: 'en-US', autoConnect: true });
 });
+
+test('retired kernel scheduler setting is removed durably on load and save', async () => {
+  const initial = createDefaultConfig('0123456789abcdef0123456789abcdef');
+  Object.assign(initial, { autoUpdateCore: false });
+  const f = setup(JSON.stringify({ schema: 1, value: initial }));
+  expect(await f.repo.read()).not.toHaveProperty('autoUpdateCore');
+  expect(JSON.parse(f.persisted()!).value).not.toHaveProperty('autoUpdateCore');
+  await f.repo.update((config) => {
+    Object.assign(config, { autoUpdateCore: true });
+  });
+  expect(await f.reopen().read()).not.toHaveProperty('autoUpdateCore');
+  expect(JSON.parse(f.persisted()!).value).not.toHaveProperty('autoUpdateCore');
+});

@@ -1,12 +1,10 @@
-import { BACKGROUND_REFRESH_MS } from './background-refresh';
+import { BACKGROUND_REFRESH_MS, observationIsFresh } from './background-refresh';
 
 /** A successful proxy request is evidence of availability only within its measurement lifetime. */
 export const NODE_MEASUREMENT_FRESH_MS = BACKGROUND_REFRESH_MS;
 /** Both display freshness and automatic scheduling use the same boundary. */
 export function measurementExpired(testedAt: number, now: number): boolean {
-  return (
-    !Number.isFinite(testedAt) || testedAt > now || now - testedAt >= NODE_MEASUREMENT_FRESH_MS
-  );
+  return !observationIsFresh(testedAt, now);
 }
 export type NodeAvailabilityState = 'available' | 'failed' | 'stale' | 'untested' | 'unknown';
 export function nodeAvailability(

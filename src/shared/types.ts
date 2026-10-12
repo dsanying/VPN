@@ -480,10 +480,6 @@ export interface UserConfig {
   // 核心更新：仅在配置生成器已验证的 sing-box minor 版本带内自动更新（默认 true）。关闭后允许自动
   // 更新跨越 minor（如 1.13→1.14），但跨 minor 的 schema 变更可能导致配置不兼容、需手动处理。
   restrictCoreUpdateToCompatibleMinor?: boolean;
-  // 内核自动更新总开关（默认 false；读取端 === true 判定，不进 createDefaultConfig）。开启后调度器周期检查、
-  // 仅在「同 major.minor 兼容版本带内」（如 1.13.x→1.13.y）自动下载+预检+落位；跨 minor 一律不自动，仅提示。
-  // 落位永远只在代理进程不存在时发生（运行中暂存 staged，延到停止/启动/用户点立即应用），绝不静默断流。
-  autoUpdateCore?: boolean;
   /** @deprecated 已迁移至 customRules（processName+direct）；仅保留兼容旧配置，ConfigManager 启动时清空迁移。 */
   bypassProcesses?: string[];
 
