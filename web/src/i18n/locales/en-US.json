@@ -209,7 +209,7 @@
       "available": "available now",
       "checking": "checking",
       "failed": "unavailable now",
-      "stale": "retest needed"
+      "stale": "previous result"
     },
     "awaitingSource": "waiting for configuration",
     "backup": "backup and restore",

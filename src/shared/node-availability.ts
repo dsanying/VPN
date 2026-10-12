@@ -1,5 +1,13 @@
+import { BACKGROUND_REFRESH_MS } from './background-refresh';
+
 /** A successful proxy request is evidence of availability only within its measurement lifetime. */
-export const NODE_MEASUREMENT_FRESH_MS = 30 * 60 * 1000;
+export const NODE_MEASUREMENT_FRESH_MS = BACKGROUND_REFRESH_MS;
+/** Both display freshness and automatic scheduling use the same boundary. */
+export function measurementExpired(testedAt: number, now: number): boolean {
+  return (
+    !Number.isFinite(testedAt) || testedAt > now || now - testedAt >= NODE_MEASUREMENT_FRESH_MS
+  );
+}
 export type NodeAvailabilityState = 'available' | 'failed' | 'stale' | 'untested' | 'unknown';
 export function nodeAvailability(
   latency: number | undefined,
@@ -16,7 +24,7 @@ export function nodeAvailability(
     !Number.isFinite(latency)
   )
     return 'untested';
-  if (testedAt > now || now - testedAt > NODE_MEASUREMENT_FRESH_MS) return 'stale';
+  if (measurementExpired(testedAt, now)) return 'stale';
   if (latency < 0 && isProbeUnavailable(reason)) return 'unknown';
   return latency >= 0 ? 'available' : 'failed';
 }

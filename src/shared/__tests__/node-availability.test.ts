@@ -15,3 +15,14 @@ it('local probe failures cannot label the remote node unavailable', () => {
     expect(nodeAvailability(-1, 1000, 1000, false, reason)).toBe('unknown');
   expect(nodeAvailability(-1, 1000, 1000, false, 'tunnel-ECONNRESET')).toBe('failed');
 });
+
+it('shares the six-hour boundary with maintenance for successes and failures', () => {
+  const now = 1_900_000_000_000;
+  expect(NODE_MEASUREMENT_FRESH_MS).toBe(6 * 60 * 60_000);
+  for (const latency of [42, -1]) {
+    expect(nodeAvailability(latency, now - NODE_MEASUREMENT_FRESH_MS + 1, now)).toBe(
+      latency >= 0 ? 'available' : 'failed'
+    );
+    expect(nodeAvailability(latency, now - NODE_MEASUREMENT_FRESH_MS, now)).toBe('stale');
+  }
+});

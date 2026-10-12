@@ -12,6 +12,6 @@ export function NodeAvailability({nodeId}:{nodeId:string}) {
  const testing=useSpeedTestStore(s=>s.testing.includes(nodeId));
  const measured=useAppStore(s=>s.latencyTestedAt[nodeId]);
  const state=useAppStore(s=>cachedNodeAvailability(s,nodeId,Math.max(time,now().valueOf())));
- const tag=<StatusTag tone={testing?'info':state==='available'?'success':state==='failed'?'error':state==='stale'||state==='unknown'?'warning':'neutral'}>{testing?t('vpn.availability.checking'):nodeAvailabilityLabel(state,t)}</StatusTag>;
+ const tag=<StatusTag tone={testing?'info':state==='available'?'success':state==='failed'?'error':state==='unknown'?'warning':'neutral'}>{testing?t('vpn.availability.checking'):nodeAvailabilityLabel(state,t)}</StatusTag>;
  return measured&&!testing?<HelpTip title={formatDateTime(measured)}>{tag}</HelpTip>:tag;
 }
