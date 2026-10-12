@@ -118,7 +118,7 @@ function subscribeOperationalFeedback() {
 export function useVpnRuntime() {
   const navigate = useNavigate();
   const navigateFromEvent = useEffectEvent((path: string) =>
-    navigate(path === '/server' ? '/nodes' : path === '/home' ? '/' : path)
+    navigate(path)
   );
   useEffect(() => {
     const state = () => useAppStore.getState();

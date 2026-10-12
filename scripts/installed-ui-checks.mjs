@@ -39,6 +39,20 @@ export async function verifyInstalledUi(application, output) {
       await main.evaluate(element => { element.scrollTop = 0; });
       await screenshot(`installed-settings-zh-${mode}.png`);
     }
+    if (process.platform === 'darwin') {
+      const menu = await application.evaluate(({ app }) => app.dock.getMenu()?.items.map(item => ({ label: item.label, enabled: item.enabled })));
+      assert.ok(menu, 'Dock menu is missing');
+      const labels = menu.map(item => item.label);
+      for (const label of ['打开暗影VPN', '连接代理', '选择节点', '分流方式', '打开设置', '全部测速']) assert.ok(labels.includes(label), `Missing Dock action: ${label}`);
+      for (const label of ['选择服务器', '进入轻量模式', '检查更新']) assert.ok(!labels.includes(label), `Legacy Dock action: ${label}`);
+      assert.equal(menu.find(item => item.label === '连接代理').enabled, false, 'Empty profile cannot connect');
+      await application.evaluate(({ app }) => app.dock.getMenu().items.find(item => item.label === '管理节点组').click());
+      await expect(page).toHaveURL(/#\/nodes\/groups$/);
+      await expect(page.getByRole('heading', { level: 1, name: '节点组' })).toBeVisible();
+      await application.evaluate(({ app }) => app.dock.getMenu().items.find(item => item.label === '打开设置').click());
+      await expect(page).toHaveURL(/#\/settings$/);
+      await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible();
+    }
     await page.getByRole('combobox', { name: '语言' }).click();
     await page.getByRole('option', { name: 'English', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
@@ -60,7 +74,19 @@ export async function verifyInstalledUi(application, output) {
     await main.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(page.getByRole('button', { name: /^(Restore|Import)$/ })).toBeInViewport();
     await screenshot('installed-settings-en-scrolled.png');
+    if (process.platform === 'darwin') {
+      await expect.poll(() => application.evaluate(({ app }) => app.dock.getMenu()?.items.map(item => item.label))).toContain('Open Settings');
+      const reopenedPromise = application.waitForEvent('window');
+      await application.evaluate(({ app, BrowserWindow }) => {
+        const window = BrowserWindow.getAllWindows().find(candidate => candidate.webContents.getURL().startsWith('file:'));
+        window.destroy();
+        app.dock.getMenu().items.find(item => item.label === 'Open Settings').click();
+      });
+      const reopened = await reopenedPromise;
+      await expect(reopened).toHaveURL(/#\/settings$/);
+      await expect(reopened.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    }
     assert.deepEqual(errors, [], 'Installed renderer emitted an uncaught exception');
-    return { routes: 5, brandIcon: 'passed', themes: ['light', 'dark'], languages: ['zh-CN', 'en-US'], windowSizes: [[1280, 900], [800, 600]] };
+    return { nativeMenu: process.platform === 'darwin' ? 'passed' : 'not-covered', routes: 5, brandIcon: 'passed', themes: ['light', 'dark'], languages: ['zh-CN', 'en-US'], windowSizes: [[1280, 900], [800, 600]] };
   } finally { page.removeListener('pageerror', captureError); }
 }

@@ -108,6 +108,9 @@ try {
   assert.equal((await invoke('autoStart:getStatus')).enabled, true);
   assert.equal(await invoke('autoStart:set', { enabled: false }), true);
   assert.equal((await invoke('autoStart:getStatus')).enabled, false);
+  // Restore before UI regression can deliberately destroy/recreate the renderer target.
+  assert.equal(await invoke('autoStart:set', { enabled: originalAutostart }), true);
+  originalAutostart = undefined;
   checks.autostart = 'passed';
   const ui = process.argv.includes('--layout') ? await verifyInstalledUi(nativeApplication, output) : undefined;
   if (ui) checks.layout = 'passed';

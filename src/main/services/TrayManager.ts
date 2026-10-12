@@ -1,21 +1,13 @@
 import { nodeDisplayName, nodeGroupName } from '../../shared/node-identity';
 import { BRAND_TRAY_PNG, BRAND_TRAY_TEMPLATE_PNG } from '../../shared/brand-icon';
-import {
-  Tray,
-  Menu,
-  nativeImage,
-  BrowserWindow,
-  app,
-  MenuItemConstructorOptions,
-  shell,
-} from 'electron';
+import { Tray, Menu, nativeImage, BrowserWindow, app, MenuItemConstructorOptions } from 'electron';
 import { LogManager } from './LogManager';
 import { releaseWindowMemory } from './window-memory';
 import { ServerConfig, ProxyMode, ProxyModeType, SubscriptionConfig } from '../../shared/types';
 import { groupServersBySubscription } from '../../shared/server-grouping';
 import { sortServersByLatency } from '../../shared/server-latency-sort';
 import { mt } from '../i18n';
-import { DIRECT_SERVER_ID, isDirectSelection } from '../../shared/direct-selection';
+import { isDirectSelection } from '../../shared/direct-selection';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import type { SpeedTestOutcome } from '../../shared/speed-test';
 
@@ -89,6 +81,7 @@ export class TrayManager implements ITrayManager {
   private logManager: LogManager;
   private currentState: TrayIconState = 'idle';
   private isProxyRunning: boolean = false;
+  private hasError: boolean = false;
   private servers: ServerConfig[] = [];
   private subscriptions: SubscriptionConfig[] = [];
   private selectedServerId: string | null = null;
@@ -105,7 +98,6 @@ export class TrayManager implements ITrayManager {
   private onSelectServer?: (serverId: string) => void;
   private onChangeProxyMode?: (mode: ProxyMode) => void;
   private onOpenSettings?: () => void;
-  private onCheckUpdate?: () => void;
   private onManageServers?: () => void;
   private onSpeedTest?: () => void;
   private onLightweightMode?: () => void;
@@ -128,11 +120,9 @@ export class TrayManager implements ITrayManager {
       onSelectServer?: (serverId: string) => void;
       onChangeProxyMode?: (mode: ProxyMode) => void;
       onOpenSettings?: () => void;
-      onCheckUpdate?: () => void;
       onManageServers?: () => void;
       onSpeedTest?: () => void;
       onLightweightMode?: () => void;
-      onEnterPrivacyMode?: () => void;
     }
   ) {
     this.mainWindow = mainWindow;
@@ -144,7 +134,6 @@ export class TrayManager implements ITrayManager {
     this.onSelectServer = callbacks?.onSelectServer;
     this.onChangeProxyMode = callbacks?.onChangeProxyMode;
     this.onOpenSettings = callbacks?.onOpenSettings;
-    this.onCheckUpdate = callbacks?.onCheckUpdate;
     this.onManageServers = callbacks?.onManageServers;
     this.onSpeedTest = callbacks?.onSpeedTest;
     this.onLightweightMode = callbacks?.onLightweightMode;
@@ -215,10 +204,6 @@ export class TrayManager implements ITrayManager {
 
       this.tray.setImage(icon);
 
-      if (state !== 'connected') {
-        this.speedTestResults.clear();
-      }
-
       this.updateTrayTooltip();
 
       // 托盘图标状态刷新较频繁（状态轮询/重启/切节点都会触发），降到 debug 避免刷屏 info 日志。
@@ -238,6 +223,7 @@ export class TrayManager implements ITrayManager {
   updateTrayMenu(isProxyRunning: boolean): void {
     this.updateFullTrayMenu({
       isProxyRunning,
+      hasError: this.hasError,
       servers: this.servers,
       subscriptions: this.subscriptions,
       selectedServerId: this.selectedServerId,
@@ -254,6 +240,7 @@ export class TrayManager implements ITrayManager {
 
     if (data.nodeRegions) this.nodeRegions = data.nodeRegions;
     this.isProxyRunning = data.isProxyRunning;
+    this.hasError = !!data.hasError;
     this.servers = data.servers;
     this.subscriptions = data.subscriptions || [];
     this.selectedServerId = data.selectedServerId;
@@ -310,21 +297,11 @@ export class TrayManager implements ITrayManager {
     const sortNodes = (arr: ServerConfig[]): ServerConfig[] =>
       this.sortByLatency ? sortServersByLatency(arr, (id) => this.speedTestResults.get(id)) : arr;
 
-    // 「直连」置顶项（全局直连哨兵，#73）：与首页节点选择同概念、同步；选中即 proxy-selector→direct（热切换）。
-    serverSubmenu.push({
-      label: mt('trayDirect'),
-      type: 'radio' as const,
-      checked: isDirectSelection(data.selectedServerId),
-      click: () => this.handleSelectServer(DIRECT_SERVER_ID),
-    });
-    serverSubmenu.push({ type: 'separator' });
-
     if (data.servers.length === 0) {
       serverSubmenu.push({
         label: mt('trayNoServers'),
         enabled: false,
       });
-      serverSubmenu.push({ type: 'separator' });
     } else {
       const groups = groupServersBySubscription(data.servers, data.subscriptions);
       if (groups.length <= 1) {
@@ -339,13 +316,7 @@ export class TrayManager implements ITrayManager {
           });
         }
       }
-      serverSubmenu.push({ type: 'separator' });
     }
-
-    serverSubmenu.push({
-      label: mt('trayManageServers'),
-      click: () => this.handleManageServers(),
-    });
 
     const proxyModeLabels: Record<ProxyMode, string> = {
       global: mt('trayGlobalProxy'),
@@ -354,7 +325,7 @@ export class TrayManager implements ITrayManager {
     };
 
     const proxyModeSubmenu: MenuItemConstructorOptions[] = (
-      ['global', 'smart', 'direct'] as ProxyMode[]
+      ['smart', 'global', 'direct'] as ProxyMode[]
     ).map((mode) => ({
       label: proxyModeLabels[mode],
       type: 'radio' as const,
@@ -362,7 +333,7 @@ export class TrayManager implements ITrayManager {
       click: () => this.handleChangeProxyMode(mode),
     }));
 
-    const contextMenu = Menu.buildFromTemplate([
+    const template: MenuItemConstructorOptions[] = [
       {
         label: statusLabel,
         icon: this.statusDotIcon(statusState),
@@ -375,6 +346,10 @@ export class TrayManager implements ITrayManager {
       },
       {
         label: data.isProxyRunning ? mt('trayDisableProxy') : mt('trayEnableProxy'),
+        enabled:
+          data.isProxyRunning ||
+          isDirectSelection(data.selectedServerId) ||
+          data.servers.some((server) => server.id === data.selectedServerId),
         click: () => {
           if (data.isProxyRunning) {
             this.handleStopProxy();
@@ -392,33 +367,33 @@ export class TrayManager implements ITrayManager {
         label: mt('trayRouting'),
         submenu: proxyModeSubmenu,
       },
-      { type: 'separator' },
       {
-        label: mt('trayLightweightMode'),
-        click: () => this.handleLightweightMode(),
+        label: mt('trayManageServers'),
+        click: () => this.handleManageServers(),
       },
-      {
-        label: mt('trayOpenSettings'),
-        click: () => this.handleOpenSettings(),
-      },
-      {
-        label: mt('trayCheckUpdates'),
-        click: () => this.handleCheckUpdate(),
-      },
-      { type: 'separator' },
       {
         label: this.getSpeedTestLabel(),
-        enabled: !this.isSpeedTesting,
+        enabled: !this.isSpeedTesting && data.servers.length > 0,
         click: () => this.handleSpeedTest(),
       },
       { type: 'separator' },
       {
+        label: mt('trayOpenSettings'),
+        click: () => this.handleOpenSettings(),
+      },
+      { type: 'separator' },
+      {
+        id: 'quit',
         label: mt('trayQuit'),
         click: () => this.handleQuit(),
       },
-    ]);
+    ];
 
-    this.tray.setContextMenu(contextMenu);
+    this.tray.setContextMenu(Menu.buildFromTemplate(template));
+    // macOS appends its standard Quit item to the Dock menu. Keep the product actions identical.
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.setMenu(Menu.buildFromTemplate(template.slice(0, -2)));
+    }
     this.logManager.addLog('debug', 'Tray menu updated', 'TrayManager');
   }
 
@@ -543,16 +518,6 @@ export class TrayManager implements ITrayManager {
     }
   }
 
-  private handleCheckUpdate(): void {
-    this.logManager.addLog('info', 'Check update clicked from tray', 'TrayManager');
-    if (this.onCheckUpdate) {
-      this.onCheckUpdate();
-    } else {
-      // 默认行为：打开 GitHub releases 页面
-      shell.openExternal('https://github.com/dsanying/VPN/releases');
-    }
-  }
-
   private handleManageServers(): void {
     this.logManager.addLog('info', 'Manage servers clicked from tray', 'TrayManager');
     if (this.onManageServers) {
@@ -561,7 +526,7 @@ export class TrayManager implements ITrayManager {
       // 默认行为：显示窗口并导航到服务器页面
       this.handleShowWindow();
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        this.mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/server');
+        this.mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/nodes/groups');
       }
     }
   }

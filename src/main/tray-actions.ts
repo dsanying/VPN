@@ -1,25 +1,14 @@
 import { prepareAutomaticTakeover } from '../shared/automatic-takeover';
-/**
- * 托盘动作回调构造 —— 从 index.ts whenReady 抽出。
- *
- * 把 TrayManager 的 13 个点击回调（启停代理 / 切节点·模式·接管 / 设置·更新·管理服务器 / 测速 / 隐私模式）
- * 从 whenReady 闭包搬出，经 deps 注入主进程服务与可变引用（mainWindow/trayManager/proxyManager 用 getter
- * 取 call-time 当前值，与原闭包语义一致）。回调体逐字保留——可变引用经「同名 local const 捕获」保持原文不变。
- *
- * 无 config 字节快照网（属 app 装配/生命周期）；行为由真机冒烟验证（逐项点击托盘菜单）。
- */
+/** Shared Dock and tray actions use the current client routes and business services. */
 
 import { app, BrowserWindow } from 'electron';
 import type { LogManager } from './services/LogManager';
 import type { ConfigManager } from './services/ConfigManager';
 import type { ProxyManager } from './services/ProxyManager';
-import type { UpdateService } from './services/UpdateService';
 import type { SpeedTestService } from './services/SpeedTestService';
 import type { TrayManager } from './services/TrayManager';
 import type { ProxyMode } from '../shared/types';
-import { mt } from './i18n';
 import { ipcEventEmitter } from './ipc/ipc-events';
-import { IPC_CHANNELS } from '../shared/ipc-channels';
 import { resourceManager } from './services/ResourceManager';
 import { runSpeedTest } from './services/speed-test-runner';
 import { releaseWindowMemory } from './services/window-memory';
@@ -31,11 +20,9 @@ export interface TrayActionDeps {
   getProxyManager: () => ProxyManager | null;
   logManager: LogManager;
   configManager: ConfigManager;
-  updateService: UpdateService;
   speedTestService: SpeedTestService;
-  showWindow: () => void;
+  showWindow: (route?: string) => void | Promise<void>;
   updateTrayMenuState: (isProxyRunning: boolean, hasError?: boolean) => void;
-  setPrivacyMode: (value: boolean) => void;
   /**
    * 标记「即将发生的窗口销毁是轻量模式触发的」，供 window-all-closed 据此跳过 minimizeToTray 退出判定
    * ——轻量模式（手动/10 分钟空闲自动）语义上恒不应退出 app（代理不中断），与「用户点关闭按钮」是两件
@@ -54,7 +41,6 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
     getProxyManager,
     logManager,
     configManager,
-    updateService,
     speedTestService,
     showWindow,
     updateTrayMenuState,
@@ -96,13 +82,7 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
       }
     },
     onShowWindow: () => {
-      showWindow();
-      // 「打开主窗口」回首页（与「打开设置」恒切 /settings 对称）：原仅 show 保持上次路由 → 停设置页则仍显示设置页。
-      // getMainWindow 在 showWindow 后取（窗口可能刚重建），导航到首页。
-      const mainWindow = getMainWindow();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/home');
-      }
+      void showWindow();
     },
     onQuit: () => {
       // 收敛到单一退出管线：app.quit() → before-quit(置 isQuitting) → close 放行 → will-quit → cleanupResources → exit
@@ -156,36 +136,10 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
       }
     },
     onOpenSettings: () => {
-      const mainWindow = getMainWindow();
-      showWindow();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/settings');
-      }
-    },
-    onCheckUpdate: async () => {
-      const mainWindow = getMainWindow();
-      const result = await updateService.prepareUpdate();
-      if (result.hasUpdate) {
-        void updateService.promptReadyUpdate();
-      } else if (!result.error) {
-        // 没有更新，显示提示
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          const { dialog } = require('electron');
-          dialog.showMessageBox(mainWindow, {
-            type: 'info',
-            title: mt('trayCheckUpdates'), // 复用打开本 dialog 的托盘菜单项文案，不另造近重复 key
-            message: mt('trayNoUpdateBody'),
-            buttons: [mt('trayNoUpdateOk')],
-          });
-        }
-      }
+      void showWindow('/settings');
     },
     onManageServers: () => {
-      const mainWindow = getMainWindow();
-      showWindow();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/server');
-      }
+      void showWindow('/nodes/groups');
     },
     onSpeedTest: async () => {
       // 全量测速经唯一编排器 runSpeedTest：传播副作用（渲染广播 + 托盘回写 + 测速态）统一在一处。

@@ -1,11 +1,10 @@
 /**
- * tray-actions 导航单测：托盘「打开主窗口」回首页(/home)、「打开设置」切设置(/settings)、「管理服务器」切 /server。
+ * tray-actions 导航单测：原生菜单打开窗口保留当前位置，设置和节点组使用当前路由。
  * mock electron（仅 app/BrowserWindow 占位）；验 showWindow + webContents.send(EVENT_NAVIGATE) 行为。
  */
 jest.mock('electron', () => ({ app: { quit: jest.fn() }, BrowserWindow: class {} }));
 
 import { buildTrayCallbacks } from '../tray-actions';
-import { IPC_CHANNELS } from '../../shared/ipc-channels';
 
 function makeDeps(opts: { noWindow?: boolean; windowDestroyed?: boolean } = {}) {
   const send = jest.fn();
@@ -37,23 +36,23 @@ function makeDeps(opts: { noWindow?: boolean; windowDestroyed?: boolean } = {}) 
 }
 
 describe('tray-actions 导航', () => {
-  it('onShowWindow → showWindow + 导航首页 /home（与「打开设置」对称，不再停留上次页）', () => {
+  it('打开应用保留当前位置', () => {
     const { deps, send, showWindow } = makeDeps();
     buildTrayCallbacks(deps as never).onShowWindow();
     expect(showWindow).toHaveBeenCalled();
-    expect(send).toHaveBeenCalledWith(IPC_CHANNELS.EVENT_NAVIGATE, '/home');
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('onOpenSettings → showWindow + 导航 /settings', () => {
-    const { deps, send } = makeDeps();
+    const { deps, showWindow } = makeDeps();
     buildTrayCallbacks(deps as never).onOpenSettings();
-    expect(send).toHaveBeenCalledWith(IPC_CHANNELS.EVENT_NAVIGATE, '/settings');
+    expect(showWindow).toHaveBeenCalledWith('/settings');
   });
 
-  it('onManageServers → 导航 /server', () => {
-    const { deps, send } = makeDeps();
+  it('管理节点组交给窗口统一导航，支持窗口重建', () => {
+    const { deps, showWindow } = makeDeps({ noWindow: true });
     buildTrayCallbacks(deps as never).onManageServers();
-    expect(send).toHaveBeenCalledWith(IPC_CHANNELS.EVENT_NAVIGATE, '/server');
+    expect(showWindow).toHaveBeenCalledWith('/nodes/groups');
   });
 
   it('onLightweightMode → 先标记 markLightweightModeTransition（供 window-all-closed 跳过退出判定）再销毁主窗口，带 clearLogsAndGc', () => {
