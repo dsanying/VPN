@@ -560,7 +560,22 @@ function ensureWindow(forceShow = false): Promise<void> {
   return creatingWindow;
 }
 
-async function showWindow() {
+let pendingNavigation: string | null = null;
+let readyNavigationContentsId: number | null = null;
+function flushWindowNavigation(): void {
+  if (
+    !pendingNavigation ||
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    mainWindow.webContents.id !== readyNavigationContentsId
+  )
+    return;
+  mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, pendingNavigation);
+  pendingNavigation = null;
+}
+
+async function showWindow(route?: string) {
+  if (route) pendingNavigation = route;
   // Accessory 态下窗口无法成为 key window/置前 → 必须先回 Regular 再 show
   restoreDockPresence();
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -570,6 +585,7 @@ async function showWindow() {
     mainWindow.show();
     mainWindow.focus();
     if (process.platform === 'darwin') app.focus({ steal: true }); // showWindow 恒为显式用户意图
+    flushWindowNavigation();
     return;
   }
   // 标记待显示：在途创建若属 silent 启动，由 createWindow 的 ready-to-show 在绘制完成后显示（免未绘制帧闪现）
@@ -1027,8 +1043,18 @@ async function createWindow(forceShow = false) {
   // RENDERER_READY：用 webContents.ipc（本 webContents 私有 IpcMain）而非全局 ipcMain.handle——per-window 天然按窗
   // 甄别、跨 reload 存活（reload 不销毁 webContents）、随 webContents 销毁自动清理，且避免窗口重建时全局 handle 重复
   // 注册报错。renderer 用 invoke（preload 未暴露单向 send），故用 .handle（fire-and-forget，返回 undefined）。
+  gateWin.webContents.on('did-start-navigation', (details) => {
+    if (
+      details.isMainFrame &&
+      !details.isSameDocument &&
+      readyNavigationContentsId === gateWin.webContents.id
+    )
+      readyNavigationContentsId = null;
+  });
   gateWin.webContents.ipc.handle(IPC_CHANNELS.RENDERER_READY, () => {
     runMountGate('rendererReady');
+    readyNavigationContentsId = gateWin.webContents.id;
+    flushWindowNavigation();
     // #325 config 重放：renderer 每次挂载后无条件补发一次终态 config，补偿 silent-start 期无窗口订阅者而被静默
     // 丢弃的 event:configChanged（否则首页定格「无节点」直到退出重开）。fire-and-forget，绝不阻塞/打断 mount gate。
     void replayConfigOnRendererReady<UserConfig>({
@@ -2321,11 +2347,9 @@ if (gotTheLock) {
         getProxyManager: () => proxyManager,
         logManager,
         configManager,
-        updateService,
         speedTestService,
         showWindow,
         updateTrayMenuState,
-        setPrivacyMode,
         // 轻量模式恒不因 minimizeToTray 退出（代理不中断是其硬性契约）——等价于按 minimizeToTray=true
         // 算 shouldQuitOnAllWindowsClosed，但 hasTray 兜底仍要判：托盘图标创建失败时，轻量模式销毁窗口
         // 后台也会变成无窗口+无图标的僵尸，那种情形下仍需退出（10 分钟空闲自动触发时尤其够不着托盘菜单）。

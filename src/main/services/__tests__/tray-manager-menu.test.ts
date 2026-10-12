@@ -2,7 +2,7 @@
  * TrayManager 菜单映射回归（#75）。
  *
  * 守护「托盘状态头 / 启停开关 / 图标」三者恒与 isProxyRunning 一致」——即同一次渲染内不可能出现
- * 「状态头=已连接 而 开关=启用代理」这种自相矛盾（截图里的现象其实是托盘整体停在断开态、未随
+ * 「状态头=已连接 而 开关=连接代理」这种自相矛盾（截图里的现象其实是托盘整体停在断开态、未随
  * 代理 started 刷新；根因修复在 index.ts on('started') 补刷，本测守住菜单映射这一半）。
  *
  * 仅依赖 electron / ResourceManager mock；不拉主进程 bootstrap。
@@ -12,7 +12,7 @@
 let lastTemplate: any[] = [];
 const buildFromTemplate = jest.fn((tpl: any[]) => {
   lastTemplate = tpl;
-  return { __menu: true };
+  return { __menu: true, template: tpl };
 });
 const imgStub: any = { resize: () => imgStub, setTemplateImage: jest.fn(), isEmpty: () => false };
 
@@ -22,6 +22,7 @@ jest.mock('electron', () => ({
     getLocale: () => 'zh-CN',
     getPreferredSystemLanguages: () => ['zh-Hans-CN'],
     isPackaged: false,
+    dock: { setMenu: jest.fn() },
   },
   BrowserWindow: class {},
   Tray: class {
@@ -48,6 +49,7 @@ jest.mock('../ResourceManager', () => ({
 }));
 
 import { TrayManager, type TrayMenuData } from '../TrayManager';
+import { app } from 'electron';
 import { setMainLanguage } from '../../i18n';
 
 const makeLogger = () => ({ addLog: jest.fn() }) as any;
@@ -64,7 +66,7 @@ const baseData = (isProxyRunning: boolean): TrayMenuData => ({
 /** 从最近一次模板里取「状态头」label 与「启停开关」label。 */
 function readMenu(): { status: string; toggle: string } {
   const status = String(lastTemplate[0]?.label ?? '');
-  const toggleItem = lastTemplate.find((i) => i?.label === '启用代理' || i?.label === '禁用代理');
+  const toggleItem = lastTemplate.find((i) => i?.label === '连接代理' || i?.label === '断开代理');
   return { status, toggle: String(toggleItem?.label ?? '') };
 }
 
@@ -84,24 +86,24 @@ beforeEach(() => {
 });
 
 describe('TrayManager 菜单状态映射 (#75)', () => {
-  it('代理运行中 → 状态头「已连接」且开关「禁用代理」', () => {
+  it('代理运行中 → 状态头「已连接」且开关「断开代理」', () => {
     const tm = makeTray();
     tm.updateFullTrayMenu(baseData(true));
 
     const { status, toggle } = readMenu();
     expect(status).toBe('已连接');
-    expect(toggle).toBe('禁用代理');
+    expect(toggle).toBe('断开代理');
     // 状态头带圆点图标（connected）
     expect(lastTemplate[0]?.icon).toBe(imgStub);
   });
 
-  it('代理已停止 → 状态头「已断开」且开关「启用代理」', () => {
+  it('代理已停止 → 状态头「已断开」且开关「连接代理」', () => {
     const tm = makeTray();
     tm.updateFullTrayMenu(baseData(false));
 
     const { status, toggle } = readMenu();
     expect(status).toBe('已断开');
-    expect(toggle).toBe('启用代理');
+    expect(toggle).toBe('连接代理');
   });
 
   it('hasError → 状态头「连接异常」（开关仍按运行态）', () => {
@@ -110,20 +112,20 @@ describe('TrayManager 菜单状态映射 (#75)', () => {
     expect(readMenu().status).toBe('连接异常');
   });
 
-  it('不变量：状态头与开关恒一致，绝不出现「已连接 + 启用代理」', () => {
+  it('不变量：状态头与开关恒一致，绝不出现「已连接 + 连接代理」', () => {
     const tm = makeTray();
     for (const running of [true, false, true, false]) {
       tm.updateFullTrayMenu(baseData(running));
       const { status, toggle } = readMenu();
-      if (status === '已连接') expect(toggle).toBe('禁用代理');
-      if (status === '已断开') expect(toggle).toBe('启用代理');
+      if (status === '已连接') expect(toggle).toBe('断开代理');
+      if (status === '已断开') expect(toggle).toBe('连接代理');
     }
   });
 
   it('updateTrayMenu(true) 简化入口也渲染连接态', () => {
     const tm = makeTray();
     tm.updateTrayMenu(true);
-    expect(readMenu()).toEqual({ status: '已连接', toggle: '禁用代理' });
+    expect(readMenu()).toEqual({ status: '已连接', toggle: '断开代理' });
   });
 
   it('updateTrayIcon(connected) 取彩色图标并 setImage', () => {
@@ -176,4 +178,66 @@ it('托盘节点名称复用测量地区，刷新和失效不改写原始名称'
   tm.updateFullTrayMenu({ ...baseData(true), servers, nodeRegions: {} });
   expect(labels().some((label) => label.startsWith('自建节点 / 🌐 日本名称'))).toBe(true);
   expect(servers[0].name).toBe('日本名称');
+});
+
+it('Dock 与托盘共用当前功能，Dock 不重复系统退出项', () => {
+  const tm = makeTray();
+  tm.updateFullTrayMenu(baseData(false));
+  const templates = buildFromTemplate.mock.calls.slice(-2).map((call) => call[0]);
+  if (process.platform === 'darwin') {
+    expect(app.dock?.setMenu).toHaveBeenCalled();
+    expect(templates[1]).toEqual(templates[0].slice(0, -2));
+  }
+  const labels = lastTemplate.map((item) => item.label).filter(Boolean);
+  expect(labels).toEqual(
+    expect.arrayContaining([
+      '打开暗影VPN',
+      '连接代理',
+      '选择节点',
+      '分流方式',
+      '打开设置',
+      '全部测速',
+    ])
+  );
+  expect(labels).not.toEqual(expect.arrayContaining(['进入轻量模式']));
+  expect(labels).not.toContain('检查更新');
+  expect(lastTemplate.find((item) => item.label === '连接代理').enabled).toBe(false);
+  expect(lastTemplate.find((item) => item.label === '全部测速').enabled).toBe(false);
+});
+
+it('仅显示实际节点来源；选用节点后可以连接', () => {
+  const onStartProxy = jest.fn();
+  const onManageServers = jest.fn();
+  const tm = new TrayManager(null, makeLogger(), { onStartProxy, onManageServers });
+  tm.createTray();
+  tm.updateFullTrayMenu({
+    ...baseData(false),
+    selectedServerId: 'a',
+    servers: [
+      { id: 'a', name: '示例', address: 'example.com', protocol: 'vmess', subscriptionId: 's' },
+    ] as any,
+    subscriptions: [{ id: 's', name: '示例订阅' }] as any,
+  });
+  const nodes = lastTemplate.find((item) => item.label === '选择节点').submenu;
+  expect(
+    nodes.some(
+      (item: any) => item.label === '直连' || item.label === '自建节点' || item.label === '组网'
+    )
+  ).toBe(false);
+  lastTemplate.find((item) => item.label === '管理节点组').click();
+  expect(onManageServers).toHaveBeenCalledTimes(1);
+  const connect = lastTemplate.find((item) => item.label === '连接代理');
+  expect(connect.enabled).toBe(true);
+  connect.click();
+  expect(onStartProxy).toHaveBeenCalledTimes(1);
+});
+
+it('测速或排序刷新不会清除异常状态，断开仍保留已知测速结果', () => {
+  const tm = makeTray();
+  tm.updateFullTrayMenu({ ...baseData(false), hasError: true });
+  tm.setSortByLatency(true);
+  expect(readMenu().status).toBe('连接异常');
+  tm.updateSpeedTestResults(new Map([['a', 42]]), []);
+  tm.updateTrayIcon('idle');
+  expect((tm as any).speedTestResults.get('a')).toBe(42);
 });
