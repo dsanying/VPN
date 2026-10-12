@@ -1,4 +1,5 @@
 import { nodeDisplayName, nodeGroupName } from '../../shared/node-identity';
+import { BRAND_TRAY_PNG, BRAND_TRAY_TEMPLATE_PNG } from '../../shared/brand-icon';
 import {
   Tray,
   Menu,
@@ -431,14 +432,6 @@ export class TrayManager implements ITrayManager {
     if (fs.existsSync(iconPath)) {
       icon = nativeImage.createFromPath(iconPath);
       this.logManager.addLog('debug', `Loaded tray icon from: ${iconPath}`, 'TrayManager');
-
-      // macOS 托盘图标需要调整大小为 22x22（或 16x16）
-      // 高 DPI 屏幕会自动使用 @2x 版本
-      if (process.platform === 'darwin') {
-        icon = icon.resize({ width: 18, height: 18 });
-        // 不用模板图：模板图强制单色，会抹掉「已连接(蓝)/未连接(灰)」的颜色区分，菜单栏看起来恒亮。
-        // 连接态用彩色 app.png / 灰色 app-gray.png 区分（updateTrayIcon 按状态切换）。
-      }
     } else {
       this.logManager.addLog(
         'warn',
@@ -447,22 +440,16 @@ export class TrayManager implements ITrayManager {
       );
       icon = this.createDefaultTrayIcon();
     }
-
+    if (process.platform === 'darwin') {
+      icon = icon.resize({ width: 18, height: 18 });
+      icon.setTemplateImage(true);
+    }
     return icon;
   }
 
   private createDefaultTrayIcon(): Electron.NativeImage {
-    const size = 22;
-    const canvas = `
-      <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-        <rect width="${size}" height="${size}" fill="transparent"/>
-        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" 
-              font-family="Arial" font-size="16" font-weight="bold" fill="black">V</text>
-      </svg>
-    `;
-    return nativeImage.createFromDataURL(
-      `data:image/svg+xml;base64,${Buffer.from(canvas).toString('base64')}`
-    );
+    const png = process.platform === 'darwin' ? BRAND_TRAY_TEMPLATE_PNG : BRAND_TRAY_PNG;
+    return nativeImage.createFromDataURL(`data:image/png;base64,${png}`);
   }
 
   private handleTrayClick(): void {

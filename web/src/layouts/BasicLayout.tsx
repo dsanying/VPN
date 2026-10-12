@@ -14,6 +14,7 @@ import { IconButton, LoadingState, RouteCrumbsContext, SidebarMenu } from '@/com
 import { menuRoutes, type MenuEntry } from '@/routes';
 import { matchMenuChain, selectedMenuKey } from '@/routes/menuMatch';
 import { useThemeStore } from '@/stores/useThemeStore';
+import brandIcon from '@/assets/brand-icon.svg';
 import './BasicLayout.css';
 
 const collapsedKey = 'shadowvpn-sider-collapsed';
@@ -49,7 +50,7 @@ function Brand() {
   return (
     <Link className="ds-brand-header" to="/">
       <span className="ds-brand-header__icon" aria-hidden>
-        {Array.from(t('common.brand'))[0]}
+        <img src={brandIcon} alt="" width={24} height={24} />
       </span>
       <span className="ds-brand-header__title">{t('common.brand')}</span>
     </Link>

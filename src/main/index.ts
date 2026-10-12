@@ -1482,8 +1482,8 @@ if (gotTheLock) {
       powerSaveBlocker.start('prevent-app-suspension');
     }
 
-    // macOS Dock 图标用 bundle 内置 icon.icns（已为透明球图标）；不再运行期 setIcon 覆盖，
-    // 避免「启动后图标从带背景切成透明」的可见跳变（带背景仅来自旧图标的系统图标缓存，已透明化）。
+    // macOS Dock 使用随包品牌 icon.icns；不在运行期覆盖正式安装图标，
+    // 避免应用启动时发生图标跳变。
 
     // 加载配置并处理错误
     try {

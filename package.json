@@ -52,7 +52,11 @@
     "build:android:core": "node scripts/build-android-core.mjs",
     "android:build:tests": "node scripts/android-gradle.mjs :app:assembleDebugAndroidTest",
     "prepare:package": "node scripts/prepare-runtime-package.mjs",
-    "verify:android:release": "node scripts/verify-android-release.mjs"
+    "verify:android:release": "node scripts/verify-android-release.mjs",
+    "brand:generate": "node scripts/generate-icon.js",
+    "brand:check": "node scripts/generate-icon.js --check",
+    "prebuild": "npm run brand:check",
+    "preprepare:package": "npm run brand:check"
   },
   "keywords": [
     "electron",
@@ -73,6 +77,7 @@
     "@capacitor/cli": "8.5.3",
     "@capacitor/core": "8.5.3",
     "@eslint/js": "^10.0.1",
+    "@resvg/resvg-js": "2.6.2",
     "@swc-contrib/mut-cjs-exports": "^19.0.0",
     "@swc/core": "^1.16.13",
     "@swc/jest": "^0.2.39",

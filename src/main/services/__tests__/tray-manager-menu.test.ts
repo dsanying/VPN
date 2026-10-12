@@ -14,7 +14,7 @@ const buildFromTemplate = jest.fn((tpl: any[]) => {
   lastTemplate = tpl;
   return { __menu: true };
 });
-const imgStub: any = { resize: () => imgStub, isEmpty: () => false };
+const imgStub: any = { resize: () => imgStub, setTemplateImage: jest.fn(), isEmpty: () => false };
 
 jest.mock('electron', () => ({
   // currentLanguage 初值改用 getPreferredSystemLanguages（getLocale 恒返 app bundle locale=en 不可用）→ mock 返中文偏好。

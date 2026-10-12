@@ -82,7 +82,7 @@ public final class ShadowVpnService extends VpnService implements PlatformInterf
         PendingIntent stopIntent = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         android.app.Notification notification = new NotificationCompat.Builder(this, "vpn")
-            .setSmallIcon(android.R.drawable.ic_lock_lock).setContentTitle("暗影VPN")
+            .setSmallIcon(R.drawable.ic_notification).setContentTitle("暗影VPN")
             .setContentText("正在管理网络连接").setContentIntent(open).setOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "断开", stopIntent).build();
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);

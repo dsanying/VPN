@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Shared client initial, drawn locally; no Capacitor template artwork. -->
+<!-- Generated from build/brand/mark.svg; edit the master, not this file. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M39,33H51C65,33 73,41 73,54C73,67 65,75 51,75H39Z M47,41V67H51C60,67 65,62 65,54C65,46 60,41 51,41Z"/>
-</vector>
+<group android:translateX="22" android:translateY="22" android:scaleX="0.125" android:scaleY="0.125">
+<group android:translateX="-128" android:translateY="-120" android:scaleX=".9" android:scaleY=".9">
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M245 242H467L457 256V345H257V256Z M310 270H401V289H310Z M310 305H401V324H310Z"/>
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M328 345H382V367H475V394H207L225 367H328Z"/>
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M253 409H455V493H379V578L357 600H282L302 577H322V493H253Z M310 435H400V461H310Z"/>
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M248 510H307L267 573H208Z M388 510H429L475 573H417Z"/>
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M498 324C539 300 588 273 624 244C618 290 562 345 498 379Z"/>
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M498 417C546 394 599 361 638 328C632 381 565 441 487 476Z"/>
+<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="M507 512C551 490 606 457 644 426C638 478 574 535 493 568Z"/>
+</group></group></vector>
