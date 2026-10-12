@@ -1,3 +1,4 @@
+import { dueMeasurementScope } from '@shared/measurement-refresh-scope';
 import { ConfigRepository, type ConfigDocumentStore } from '@shared/config-repository';
 import { PortableConfigOperations } from '@shared/portable-config-operations';
 import { PortableClientService } from '@shared/portable-client-service';
@@ -262,11 +263,21 @@ export async function createMobileServiceRuntime(
       ],
       [
         C.STATS_SUBSCRIBE,
-        async (args: unknown) => live.subscription((args as { topic?: unknown })?.topic, true, (args as { viewOwner?: string })?.viewOwner),
+        async (args: unknown) =>
+          live.subscription(
+            (args as { topic?: unknown })?.topic,
+            true,
+            (args as { viewOwner?: string })?.viewOwner
+          ),
       ],
       [
         C.STATS_UNSUBSCRIBE,
-        async (args: unknown) => live.subscription((args as { topic?: unknown })?.topic, false, (args as { viewOwner?: string })?.viewOwner),
+        async (args: unknown) =>
+          live.subscription(
+            (args as { topic?: unknown })?.topic,
+            false,
+            (args as { viewOwner?: string })?.viewOwner
+          ),
       ],
       [
         C.CONNECTIONS_CLOSE,
@@ -320,7 +331,8 @@ export async function createMobileServiceRuntime(
       void core.start().catch(() => report('启动连接'));
     }
     // Saved results are reconciled here; opening a page never initiates a network probe.
-    await Promise.all([nodes.read(), links.read(), logs.read()]);
+    const [savedNodes, savedLinks] = await Promise.all([nodes.read(), links.read(), logs.read()]);
+    refresh.request(dueMeasurementScope(initial, savedNodes, savedLinks, host.now?.()));
     const listener = await native.addListener('coreEvent', (event) => {
       if (closed) return;
       live.event(event.topic, event.data);
@@ -357,6 +369,7 @@ export async function createMobileServiceRuntime(
     detachNetwork = () => networkListener.remove();
     await native.subscribeCoreEvents({ topics: ['logs'] });
     void ips.ensureCurrent().catch(() => report('出口检测'));
+    void websites.ensureCurrent().catch(() => report('网站检测'));
   } catch (error) {
     closed = true;
     offState();

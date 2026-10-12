@@ -1,14 +1,3 @@
-/**
- * CoreUpdateScheduler + CoreUpdateService.runAutoUpdateCycle 单测（fake timers + mock 依赖）。
- *
- * 覆盖不变量：
- * - autoUpdateCore 默认/false → 不触发 runAutoUpdateCycle（总开关守门）
- * - 距上次检查 < 24h → 跳过；≥ 24h → 触发（CHECK_INTERVAL due）
- * - onProxyStopped：延 5s 双查，仍 running → 不落位（不断流：规避 stop→start 窗口）
- * - kick 幂等：cycleIfDue 内 isRunning 防重入，并发调用只跑一轮
- * - runAutoUpdateCycle：带内→stage、跨带→发事件不下载、known-bad→跳、staged 同版本→免重下
- */
-
 // electron 仅在方法内被调用（构造期不触碰）；mock 掉 app.getPath 供 state/known-bad 文件路径用临时目录。
 jest.mock('electron', () => {
   const os = require('os');
@@ -34,7 +23,6 @@ jest.mock('../ResourceManager', () => ({
 import * as fs from 'fs';
 import { setTimeout as realSetTimeout } from 'timers';
 
-import { CoreUpdateScheduler } from '../CoreUpdateScheduler';
 import { CoreUpdateService } from '../CoreUpdateService';
 
 // M1 修复：jest30 + node26 组合下 useFakeTimers() 会删除 globalThis.setTimeout，且 useRealTimers() 不恢复
@@ -45,156 +33,6 @@ import { CoreUpdateService } from '../CoreUpdateService';
 function makeLogManager() {
   return { addLog: jest.fn() } as any;
 }
-
-function makeConfigManager(config: any) {
-  return { loadConfig: jest.fn().mockResolvedValue(config) } as any;
-}
-
-describe('CoreUpdateScheduler', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-  afterEach(() => {
-    jest.clearAllTimers();
-    jest.useRealTimers();
-    jest.clearAllMocks();
-  });
-
-  function makeCoreService(autoStatus: any = { lastCheckAt: null }) {
-    return {
-      getAutoStatus: jest.fn().mockResolvedValue(autoStatus),
-      runAutoUpdateCycle: jest.fn().mockResolvedValue(undefined),
-      tryApplyStaged: jest.fn().mockResolvedValue('noop'),
-    } as any;
-  }
-
-  it('autoUpdateCore 未设 → 启动 30s 后不触发 runAutoUpdateCycle', async () => {
-    const core = makeCoreService();
-    const sched = new CoreUpdateScheduler(
-      makeConfigManager({}),
-      core,
-      makeLogManager(),
-      () => false
-    );
-    sched.start();
-    await jest.advanceTimersByTimeAsync(30_000);
-    expect(core.runAutoUpdateCycle).not.toHaveBeenCalled();
-    sched.stop();
-  });
-
-  it('autoUpdateCore=false → 不触发', async () => {
-    const core = makeCoreService();
-    const sched = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: false }),
-      core,
-      makeLogManager(),
-      () => false
-    );
-    sched.start();
-    await jest.advanceTimersByTimeAsync(30_000);
-    expect(core.runAutoUpdateCycle).not.toHaveBeenCalled();
-    sched.stop();
-  });
-
-  it('autoUpdateCore=true 且无 lastCheckAt → 启动 30s 后触发一次', async () => {
-    const core = makeCoreService({ lastCheckAt: null });
-    const sched = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: true }),
-      core,
-      makeLogManager(),
-      () => false
-    );
-    sched.start();
-    await jest.advanceTimersByTimeAsync(30_000);
-    expect(core.runAutoUpdateCycle).toHaveBeenCalledTimes(1);
-    sched.stop();
-  });
-
-  it('距上次检查 < 24h → 跳过；≥ 24h → 触发', async () => {
-    const now = Date.now();
-    // < 24h
-    const coreRecent = makeCoreService({ lastCheckAt: now - 1 * 60 * 60_000 });
-    const sched1 = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: true }),
-      coreRecent,
-      makeLogManager(),
-      () => false
-    );
-    sched1.start();
-    await jest.advanceTimersByTimeAsync(30_000);
-    expect(coreRecent.runAutoUpdateCycle).not.toHaveBeenCalled();
-    sched1.stop();
-
-    // ≥ 24h
-    const coreStale = makeCoreService({ lastCheckAt: now - 25 * 60 * 60_000 });
-    const sched2 = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: true }),
-      coreStale,
-      makeLogManager(),
-      () => false
-    );
-    sched2.start();
-    await jest.advanceTimersByTimeAsync(30_000);
-    expect(coreStale.runAutoUpdateCycle).toHaveBeenCalledTimes(1);
-    sched2.stop();
-  });
-
-  it('onProxyStopped：5s 后仍 running → 不落位（不断流，规避重启窗口）', async () => {
-    const core = makeCoreService();
-    let running = false;
-    const sched = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: true }),
-      core,
-      makeLogManager(),
-      () => running
-    );
-    sched.start();
-    sched.onProxyStopped();
-    // 5s 内代理又起来了（attemptAutoRestart/switchMode 的 stop→start 窗口）
-    running = true;
-    await jest.advanceTimersByTimeAsync(5_000);
-    expect(core.tryApplyStaged).not.toHaveBeenCalled();
-    sched.stop();
-  });
-
-  it('onProxyStopped：5s 后确实未运行 → 落位 staged', async () => {
-    const core = makeCoreService();
-    const sched = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: true }),
-      core,
-      makeLogManager(),
-      () => false
-    );
-    sched.start();
-    sched.onProxyStopped();
-    await jest.advanceTimersByTimeAsync(5_000);
-    expect(core.tryApplyStaged).toHaveBeenCalledWith('proxy-stopped');
-    sched.stop();
-  });
-
-  it('kick 幂等：并发 cycleIfDue 防重入，只跑一轮', async () => {
-    let resolveCycle: () => void = () => {};
-    const core = makeCoreService({ lastCheckAt: null });
-    core.runAutoUpdateCycle = jest.fn(() => new Promise<void>((r) => (resolveCycle = r)));
-    const sched = new CoreUpdateScheduler(
-      makeConfigManager({ autoUpdateCore: true }),
-      core,
-      makeLogManager(),
-      () => false
-    );
-    sched.start();
-    // 第一次 kick 启动一轮（在途未结束）
-    sched.kick();
-    await Promise.resolve();
-    // 第二次 kick：isRunning 防重入，应被吞
-    sched.kick();
-    await Promise.resolve();
-    resolveCycle();
-    await jest.advanceTimersByTimeAsync(0);
-    expect(core.runAutoUpdateCycle).toHaveBeenCalledTimes(1);
-    sched.stop();
-  });
-});
 
 describe('CoreUpdateService.runAutoUpdateCycle', () => {
   function makeProxyManager(running: boolean) {
@@ -243,7 +81,7 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
 
   it('带内新版 → 下载并 stage', async () => {
     const { svc, downloadSpy, stageSpy } = makeService({
-      config: { autoUpdateCore: true },
+      config: {},
       checkResult: {
         hasUpdate: true,
         currentVersion: '1.13.13',
@@ -264,7 +102,7 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
    */
   it('取不到资产摘要 → 自动腿中止，绝不下载安装未校验的内核', async () => {
     const { svc, downloadSpy, stageSpy } = makeService({
-      config: { autoUpdateCore: true },
+      config: {},
       checkResult: {
         hasUpdate: true,
         currentVersion: '1.13.13',
@@ -275,14 +113,14 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
     });
     // 现取也拿不到（releases 里没有匹配 URL 的 asset）
     jest.spyOn(svc as any, 'resolveAssetSha256').mockResolvedValue(null);
-    await svc.runAutoUpdateCycle();
+    await expect(svc.runAutoUpdateCycle()).rejects.toThrow('checksum unavailable');
     expect(downloadSpy).not.toHaveBeenCalled();
     expect(stageSpy).not.toHaveBeenCalled();
   });
 
   it('跨 minor 新版 → 发跨带事件、绝不下载', async () => {
     const { svc, events, downloadSpy, stageSpy } = makeService({
-      config: { autoUpdateCore: true },
+      config: {},
       checkResult: {
         hasUpdate: false, // checkUpdate 内 ceiling 闸通常已挡，但即便放行也不下载
         currentVersion: '1.13.13',
@@ -295,20 +133,20 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
     expect(events.some((e) => e.channel === 'event:coreAutoUpdateStatus')).toBe(true);
   });
 
-  it('autoUpdateCore=false → 直接返回，不检查不下载', async () => {
+  it('旧配置开关不再阻止统一周期检查', async () => {
     const { svc, downloadSpy } = makeService({
       config: { autoUpdateCore: false },
       checkResult: { hasUpdate: true, currentVersion: '1.13.13', latestVersion: '1.13.14' },
     });
     const checkSpy = jest.spyOn(svc as any, 'checkUpdate');
     await svc.runAutoUpdateCycle();
-    expect(checkSpy).not.toHaveBeenCalled();
+    expect(checkSpy).toHaveBeenCalledTimes(1);
     expect(downloadSpy).not.toHaveBeenCalled();
   });
 
   it('已有相同版本 staged → tryApplyStaged，免重下', async () => {
     const { svc, downloadSpy } = makeService({
-      config: { autoUpdateCore: true },
+      config: {},
       checkResult: {
         hasUpdate: true,
         currentVersion: '1.13.13',
@@ -329,7 +167,7 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
   // M3：用户手动升级追上跨带提示版本 → 清除残留跨带提示
   it('M3：current 追上 crossBandNotifiedVersion → 清除提示并发 crossBandLatest:null', async () => {
     const { svc, events } = makeService({
-      config: { autoUpdateCore: true },
+      config: {},
       // 当前已升到 1.14.0，无更新（latest 缺省）→ 仍应清掉旧的 1.14.0 跨带提示
       checkResult: { hasUpdate: false, currentVersion: '1.14.0', latestVersion: undefined },
     });
@@ -344,7 +182,7 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
 
   it('M3：current 仍落后 notified → 不清除', async () => {
     const { svc } = makeService({
-      config: { autoUpdateCore: true },
+      config: {},
       checkResult: { hasUpdate: false, currentVersion: '1.13.13', latestVersion: undefined },
     });
     const saved: any[] = [];
@@ -396,21 +234,18 @@ describe('CoreUpdateService.tryApplyStaged / applyStagedNow', () => {
   /**
    * 构造一个 staged 已就绪、可落位的 service。
    * @param opts.running 代理是否运行
-   * @param opts.autoUpdateCore 开关（M4 守门）
+  
    * @param opts.installImpl installCoreFromDir 桩实现（用于模拟 M2 中途失败）
    */
   function makeSvc(opts: {
     running: boolean;
-    autoUpdateCore?: boolean;
     installImpl?: (dir: string, ver: any, onBackupDone?: () => void) => Promise<void>;
     hasStaged?: boolean;
   }) {
     const svc = new CoreUpdateService(makeLogManager());
     const proxy = makeProxy(opts.running);
     svc.setProxyManager(proxy);
-    svc.setConfigProvider(() =>
-      Promise.resolve({ autoUpdateCore: opts.autoUpdateCore ?? true } as any)
-    );
+    svc.setConfigProvider(() => Promise.resolve({} as any));
     svc.setEventSender(() => {});
 
     // 文件/状态边界打桩
@@ -477,16 +312,16 @@ describe('CoreUpdateService.tryApplyStaged / applyStagedNow', () => {
     expect(restoreSpy).not.toHaveBeenCalled();
   });
 
-  it('M4：自动触发(proxy-stopped) + 开关关 → deferred，保留 staged 不换核', async () => {
-    const { svc, installSpy, clearSpy } = makeSvc({ running: false, autoUpdateCore: false });
+  it('统一自动更新在停核后安全应用暂存内核', async () => {
+    const { svc, installSpy, clearSpy } = makeSvc({ running: false });
     const r = await svc.tryApplyStaged('proxy-stopped');
-    expect(r).toBe('deferred');
-    expect(installSpy).not.toHaveBeenCalled();
-    expect(clearSpy).not.toHaveBeenCalled();
+    expect(r).toBe('applied');
+    expect(installSpy).toHaveBeenCalled();
+    expect(clearSpy).toHaveBeenCalled();
   });
 
-  it('M4：manual-apply 不受开关影响 → 开关关也落位 applied', async () => {
-    const { svc } = makeSvc({ running: false, autoUpdateCore: false });
+  it('手动应用与自动应用共用落位机制', async () => {
+    const { svc } = makeSvc({ running: false });
     const r = await svc.tryApplyStaged('manual-apply');
     expect(r).toBe('applied');
   });

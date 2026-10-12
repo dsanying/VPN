@@ -7,7 +7,7 @@ import {
   type MeasurementRefreshScope,
 } from '../../services/measurement-refresh';
 import type { UserConfig } from '../../../shared/types';
-import { measurementExpired } from '../../../shared/node-availability';
+import { dueMeasurements } from '../../services/NodeMeasurementStore';
 import { MEASUREMENT_COALESCE_MS } from '../../../shared/background-refresh';
 /**
  * 测速相关 IPC 处理器。
@@ -121,6 +121,11 @@ export function registerSpeedTestHandlers(
         const store = getNodeMeasurementStore(deps.configManager);
         await store?.save(config.servers, DEFAULT_SPEED_TEST_URL, {});
         const records = (await store?.get(config.servers, DEFAULT_SPEED_TEST_URL)) ?? {};
+        const due = new Set(
+          dueMeasurements(config.servers, records, config.selectedServerId, Date.now()).map(
+            (node) => node.id
+          )
+        );
         const nodes = config.servers.filter(
           (node) =>
             isSpeedTestable(node, { mainCorePool: !!deps.isTunActive?.() }) &&
@@ -135,9 +140,7 @@ export function registerSpeedTestHandlers(
                     groups.get(node.subscriptionId ?? '') ?? -1
                   ))) ||
               (all && Date.now() - records[node.id]?.testedAt >= MEASUREMENT_COALESCE_MS) ||
-              !records[node.id] ||
-              measurementExpired(records[node.id].testedAt, Date.now()) ||
-              records[node.id].detail?.entry.reason === 'ENTRY_RECHECK_REQUIRED')
+              due.has(node.id))
         );
         if (nodes.length) await runSpeedTest(deps, { serverIds: nodes.map((node) => node.id) });
       }

@@ -63,7 +63,7 @@ export type { StagedCoreInfo, CoreAutoUpdateState };
  * tryApplyStaged 落位结果枚举（供 applyStagedNow / UI 区分反馈）：
  * - applied:   已换核落位成功（installCoreFromDir 完成、staged 已清）
  * - discarded: staged 已不适用被作废（不再领先 / known-bad / 缺文件 / 重预检失败），未换核
- * - deferred:  代理运行中暂不落位，保持 staged（待安全窗口生效）；或开关已关不自动落位
+ * - deferred:  代理运行中暂不落位，保持 staged（待安全窗口生效）
  * - failed:    落位中途异常（已尽力 restoreBackup），staged 保留待重试
  * - noop:      无 staged 可落位 / isUpdating 重入 → 无操作
  */
@@ -71,7 +71,6 @@ export type StagedApplyResult = 'applied' | 'discarded' | 'deferred' | 'failed' 
 
 /** 推渲染端的内核自动更新状态快照（UI：待生效行 / 跨带提示行）。 */
 export interface CoreAutoStatus {
-  autoUpdateEnabled: boolean;
   lastCheckAt: number | null;
   staged: { version: string; stagedAt: string } | null;
   crossBandLatest: string | null; // 检测到但跨 minor、不自动的最新版本
@@ -81,7 +80,7 @@ export interface CoreAutoStatus {
  * 兼容版本带「地板」= 随 App 出厂的内核版本带（编码 major*1000+minor，1.13.13→1013）。出厂内核必经 FlowZ
  * 配置生成器验证，故其版本带即官方背书的兼容下限，**从出厂内核动态推导、不再独立硬编码**（去掉了 manifest 的
  * compatibleCeiling 字段，消除「两字段手动同步」隐患）。有效兼容上限 = max(地板, 当前实跑带, verifiedCeiling)，
- * 见 checkUpdate；跨越有效上限默认不自动更新（可在设置关闭）。
+ * 见 checkUpdate；跨越有效上限默认不自动更新。
  */
 const BUNDLED_CEILING = encodeMajorMinor(coreManifest.bundledCoreVersion);
 
@@ -692,9 +691,7 @@ export class CoreUpdateService {
     if (!this.eventSender) return;
     try {
       const st = this.loadAutoState();
-      // M3：事件 payload 不含 autoUpdateEnabled——其真值需 await configProvider（同步 emit 拿不到），旧实现发
-      // 占位 false 会在渲染端覆盖 getAutoStatus 拉到的真值。真值仅由 getAutoStatus 快照提供（UI 另读 config）。
-      const payload: Omit<CoreAutoStatus, 'autoUpdateEnabled'> = {
+      const payload: CoreAutoStatus = {
         lastCheckAt: st.lastCheckAt ?? null,
         staged: st.staged ? { version: st.staged.version, stagedAt: st.staged.stagedAt } : null,
         crossBandLatest:
@@ -711,15 +708,7 @@ export class CoreUpdateService {
   /** UI 拉取的内核自动更新状态快照。 */
   async getAutoStatus(): Promise<CoreAutoStatus> {
     const st = this.loadAutoState();
-    let enabled = false;
-    try {
-      const cfg = this.configProvider ? await this.configProvider() : null;
-      enabled = cfg?.autoUpdateCore === true;
-    } catch {
-      /* ignore */
-    }
     return {
-      autoUpdateEnabled: enabled,
       lastCheckAt: st.lastCheckAt ?? null,
       staged: st.staged ? { version: st.staged.version, stagedAt: st.staged.stagedAt } : null,
       crossBandLatest: st.crossBandNotifiedVersion ?? null,
@@ -754,24 +743,21 @@ export class CoreUpdateService {
 
   /**
    * 内核自动更新一轮：检查→（带内）下载+预检+暂存/落位；跨带仅发事件不下载。
-   * 唯一入口由 CoreUpdateScheduler.cycleIfDue 调用；isUpdating 防重入。
+   * 唯一入口由 GlobalUpdateService 调用；isUpdating 防重入。
    * 不变量：自动路径恒强制 sameMajorMinor（跨 minor 绝不自动），不受 restrictCoreUpdateToCompatibleMinor 影响。
    */
-  async runAutoUpdateCycle(unified = false): Promise<void> {
+  async runAutoUpdateCycle(): Promise<void> {
     if (this.isUpdating) return;
     // H1：入口同步持闸（与 isUpdating 检查间无 await，原子），覆盖 check→下载→解压→预检→暂存→落位全程，
     // 防与手动 updateCore 并发双换核（原仅末尾 tryApplyStaged 持闸，数十秒下载/暂存段 isUpdating=false 留并发
     // 窗口，两条链同写 core-staged/目标目录/*.bak 互相覆盖、备份取自半替换核心、回滚失真）。内部 tryApplyStaged
-    // 传 lockHeld=true 复用本闸、不二次检查/置/复位。autoUpdateCore 关时短暂持闸即经 finally 复位，无害。
+    // 传 lockHeld=true 复用本闸、不二次检查/置/复位。统一入口持闸，finally 复位。
     this.isUpdating = true;
     try {
-      const cfg = this.configProvider ? await this.configProvider() : null;
-      if (!unified && cfg?.autoUpdateCore !== true) return;
-
       const check = await this.checkUpdate();
-      if (unified && check.error) throw new Error(check.error);
+      if (check.error) throw new Error(check.error);
       // 仅成功检查才刷新 lastCheckAt：失败轮（network/API 限流等，check.error 有值）保留旧值，
-      // 让 6h tick 在下个周期重试，而非把整 24h due 推迟（原无条件刷新致失败后停检一整天）。
+      // 由统一六小时周期重试。
       if (!check.error) {
         this.saveAutoState({ lastCheckAt: Date.now() });
       }
@@ -820,7 +806,7 @@ export class CoreUpdateService {
       // 带内：若已有相同版本 staged，直接尝试落位（避免重复下载）
       const staged = this.loadAutoState().staged;
       if (staged && staged.version === latest) {
-        await this.tryApplyStaged(unified ? 'manual-apply' : 'staged-same-version', true);
+        await this.tryApplyStaged('staged-same-version', true);
         return;
       }
 
@@ -839,8 +825,7 @@ export class CoreUpdateService {
             '自动更新中止：无法获取内核资产的官方 sha256 摘要（拒绝安装未经校验的内核）',
             'CoreUpdateService'
           );
-          if (unified) throw new Error('Core asset checksum unavailable');
-          return;
+          throw new Error('Core asset checksum unavailable');
         }
         tempPath = await this.coreDownloader.downloadFile(check.downloadUrl, false, sha256);
         const extracted = await this.coreDownloader.extractCore(tempPath);
@@ -853,14 +838,13 @@ export class CoreUpdateService {
             `自动更新预检失败，放弃 ${latest}：${preflight.reason}`,
             'CoreUpdateService'
           );
-          if (unified) throw new Error('Core compatibility validation failed');
-          return;
+          throw new Error('Core compatibility validation failed');
         }
         // 暂存（从解压目录复制到 core-staged，因临时目录随后清理）
         this.stageCore(path.dirname(extracted.corePath), preflight.version ?? latest);
         this.emitAutoStatus();
         // 下载后立即尝试落位（代理未运行→直接换；运行中→保持 staged，延到安全窗口）
-        await this.tryApplyStaged(unified ? 'manual-apply' : 'post-download', true);
+        await this.tryApplyStaged('post-download', true);
       } finally {
         try {
           if (tempPath) fs.unlinkSync(tempPath);
@@ -887,9 +871,7 @@ export class CoreUpdateService {
    * 返回 StagedApplyResult，供 applyStagedNow / UI 区分反馈（修 M1：原 void 返回让调用方只能靠
    * 「staged 是否还在」二值推断，把 discarded/deferred/failed 一律误判，UI 误报「已应用」）。
    *
-   * @param trigger 触发来源；非 'manual-apply' 的自动触发（startup / proxy-stopped / tick /
-   *   post-download / staged-same-version）须经 autoUpdateCore 守门（修 M4：撤回同意后已暂存内核
-   *   不应自动换核；保留 staged，用户重开开关或点「立即应用」即生效）。
+   * @param trigger 触发来源；所有入口共用运行状态、完整性与兼容性保护。
    */
   async tryApplyStaged(trigger: string, lockHeld = false): Promise<StagedApplyResult> {
     // L1：入口同步置 applying 闸（与 isUpdating 检查间无 await），防并发 tryApplyStaged 双通过。
@@ -913,26 +895,6 @@ export class CoreUpdateService {
 
       const staged = this.loadAutoState().staged;
       if (!staged) return 'noop';
-
-      // M4：自动触发（非用户「立即应用」）须开关开启才落位；关则保持 staged、不动现役核心。
-      if (trigger !== 'manual-apply') {
-        let autoEnabled = false;
-        try {
-          const cfg = this.configProvider ? await this.configProvider() : null;
-          autoEnabled = cfg?.autoUpdateCore === true;
-        } catch {
-          /* 读配置失败 → 失败安全：视作未开启，不自动落位 */
-        }
-        if (!autoEnabled) {
-          this.logManager.addLog(
-            'info',
-            `自动更新已关闭，内核 ${staged.version} 保持暂存不自动落位（${trigger}）`,
-            'CoreUpdateService'
-          );
-          this.emitAutoStatus();
-          return 'deferred';
-        }
-      }
 
       // staged 已不再领先当前 / 已知坏：作废清理
       const current = await this.getCurrentVersion();

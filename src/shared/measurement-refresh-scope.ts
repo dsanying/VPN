@@ -1,3 +1,4 @@
+import { observationIsFresh } from './background-refresh';
 import type { UserConfig } from './types';
 import { nodeMeasurementIdentity, subscriptionMeasurementIdentity } from './measurement-identity';
 import { DEFAULT_SPEED_TEST_URL } from './speed-test';
@@ -81,5 +82,26 @@ export function changedMeasurementScope(
     syncGroupIds: [...sync],
     nodeIds: [...nodes],
     subscriptionIds: [...subscriptions],
+  };
+}
+
+/** Select expired or missing observations after identity reconciliation by the repositories. */
+export function dueMeasurementScope(
+  config: UserConfig,
+  nodes: Record<string, { testedAt: number; detail?: { entry?: { reason?: string } } }>,
+  subscriptions: Record<string, { checkedAt: string }>,
+  now = Date.now()
+): MeasurementRefreshScope {
+  return {
+    nodeIds: config.servers
+      .filter(
+        (node) =>
+          !observationIsFresh(nodes[node.id]?.testedAt, now) ||
+          nodes[node.id]?.detail?.entry?.reason === 'ENTRY_RECHECK_REQUIRED'
+      )
+      .map((node) => node.id),
+    subscriptionIds: (config.subscriptions ?? [])
+      .filter((sub) => !observationIsFresh(subscriptions[sub.id]?.checkedAt, now))
+      .map((sub) => sub.id),
   };
 }

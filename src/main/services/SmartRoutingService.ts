@@ -1,5 +1,5 @@
 import { normalizeCountryCode } from '../../shared/country';
-import { BACKGROUND_REFRESH_MS } from '../../shared/background-refresh';
+import { observationIsFresh } from '../../shared/background-refresh';
 import type { IpInfo, IpInfoSnapshot, RegionRoutingConfig } from '../../shared/types';
 
 type State = NonNullable<IpInfoSnapshot['smartRouting']>;
@@ -47,8 +47,7 @@ export class SmartRoutingService {
     const fingerprint = this.deps.fingerprint();
     const changed = fingerprint !== this.fingerprint;
     if (this.inflight && !changed) return this.inflight;
-    const ttl = this.state.status === 'ready' ? BACKGROUND_REFRESH_MS : 60_000;
-    if (!force && !changed && Date.now() - this.checkedAt < ttl) return Promise.resolve();
+    if (!force && !changed && observationIsFresh(this.checkedAt)) return Promise.resolve();
     this.fingerprint = fingerprint;
     const generation = ++this.generation;
     // A new network must not keep a previous country's direct policy.

@@ -1,3 +1,4 @@
+import { observationIsFresh } from '../../shared/background-refresh';
 /** Installed application discovery; no shell interpolation, privileges or launching applications. */
 import { execFile } from 'child_process';
 import { createHash } from 'crypto';
@@ -279,7 +280,7 @@ export async function listInstalledApplications(): Promise<InstalledApplication[
 export async function readApplicationIcon(file: string): Promise<string | undefined> {
   const { app, nativeImage } = await import('electron');
   const cached = iconCache.get(file);
-  if (cached && Date.now() - cached.at < 300_000) return cached.value;
+  if (cached && observationIsFresh(cached.at)) return cached.value;
   let icon: Electron.NativeImage | undefined;
   let bundleIcon = process.platform === 'darwin' ? macIconFiles.get(file) : undefined;
   if (!bundleIcon && process.platform === 'darwin' && file.endsWith('.app')) {

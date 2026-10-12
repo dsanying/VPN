@@ -94,13 +94,12 @@ it('guards development builds, including recovered installers', async () => {
     s.checkForUpdate = jest.fn();
     expect((await s.prepareUpdate()).hasUpdate).toBe(false);
     expect(s.checkForUpdate).not.toHaveBeenCalled();
-    s.startAutomaticUpdates();
     expect(s.checkForUpdate).not.toHaveBeenCalled();
   } finally {
     (app as any).isPackaged = true;
   }
 });
-it('legacy software startup creates no separate clock and never installs a recovered package', async () => {
+it('service construction creates no separate clock and never installs a recovered package', async () => {
   jest.useFakeTimers();
   try {
     const s = service();
@@ -108,8 +107,6 @@ it('legacy software startup creates no separate clock and never installs a recov
     s.prepareUpdate = jest.fn();
     s.installUpdate = jest.fn();
     s.promptReadyUpdate = jest.fn();
-    s.startAutomaticUpdates();
-    s.startAutomaticUpdates();
     await jest.advanceTimersByTimeAsync(2 * 86400000);
     expect(s.prepareUpdate).not.toHaveBeenCalled();
     expect(s.installUpdate).not.toHaveBeenCalled();

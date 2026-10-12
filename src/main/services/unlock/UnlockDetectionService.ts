@@ -1,4 +1,4 @@
-import { BACKGROUND_REFRESH_MS } from '../../../shared/background-refresh';
+import { observationIsFresh } from '../../../shared/background-refresh';
 /**
  * 解锁检测编排器（main）。
  *
@@ -35,10 +35,6 @@ import {
 } from './unlock-http';
 
 const PARTITION = 'flowz-unlock';
-/** 非 force 缓存 TTL（解锁态随出口时变，30min 足够且省对端配额）。 */
-const TTL_MS = 30 * 60_000;
-/** 含 timeout 的低置信快照缓存 TTL（R3）：2min 后即允许自然重检，不需手动刷新。 */
-export const TIMEOUT_TTL_MS = 120_000;
 /** force 硬下限（绕 TTL 但仍防手点连发触发对端限频）。 */
 const FORCE_MIN_MS = 15_000;
 /**
@@ -400,11 +396,7 @@ export class UnlockDetectionService {
     // 缓存命中（非 force + 未过 TTL + 本轮未被作废）→ 直接返回缓存（不重打 checker）。
     if (!force && startEpoch === this.epoch) {
       const c = this.cache.get(egress.ip);
-      // R3：TTL 挂置信度——含 timeout 的快照（partial-timeout 补测轮写入）用短 TTL（2min）自然重检；全高置信 30min。
-      const hasTimeout = c
-        ? Object.values(c.snap.results).some((r) => ['timeout', 'error'].includes(r.status))
-        : false;
-      if (c && this.now() - c.at < (hasTimeout ? TIMEOUT_TTL_MS : TTL_MS)) {
+      if (c && observationIsFresh(c.at, this.now())) {
         this.lastSnapshot = c.snap;
         return c.snap;
       }
@@ -425,10 +417,8 @@ export class UnlockDetectionService {
     };
     await Promise.allSettled(SERVICE_IDS.map(runOne));
 
-    // warmup 定向补测（settle-retry）：就绪门只证「单点(cloudflare)连通」，非「各目标端点已热」；冷隧道/DNS 前几秒
-    // 个别 checker（大 body / 多请求链）会撞 8s 超时。timeout 是低置信瞬态兜底，不该与命中 marker 的 ok/blocked/partial
-    // 同权落定并缓存 30min。故 commit 前仅对 timeout 的服务退避补测 ≤N 轮（保留高置信结果、只重打灰的，对端友好），
-    // 收敛后再 commit → 缓存写收敛快照。退避 sleep 复用就绪门句柄（invalidate 可唤醒放弃，单飞保证同时至多一个）。
+    // 冷启动期间的超时在本轮预算内有限补测；收敛后的结果共用六小时有效期。
+    // 这是检测轮内退避，不创建新的缓存有效期或周期调度器。
     for (let round = 1; round <= SETTLE_RETRY_MAX_ROUNDS; round++) {
       const timeoutIds = SERVICE_IDS.filter((id) =>
         ['timeout', 'error'].includes(results[id]?.status)
@@ -446,13 +436,8 @@ export class UnlockDetectionService {
       await Promise.allSettled(timeoutIds.map(runOne));
     }
 
-    // B2 低置信不缓存：就绪门撞运气过（egress 非 null）但所有 checker 全 timeout（flap 期典型）→ 提交 lastSnapshot
-    // 使 UI 如实显示灰/超时 + mount 水合零网络，但**跳过 cache 写入**（传 null egress 键）+ 标 lowConfidence——避免垃圾
-    // 快照按 egressIp 锁 30min，下一真触发（含 G-flip2 伴测成功）即重检。命中任一 marker 的高置信结果照常入缓存。
-    // R1/R2 修：settle-retry 对 slow-timeout 结构性不可达（budget 恒烧到 deadline → 补测退避跨界 break）。partial-timeout
-    // （个别 checker 超时、非全超，冷启 NF 典型）原会照写 30min 缓存 + G-flip2 不认 partial + commit 后无后续触发事件 →
-    // 陈旧 timeout 驻留到手动刷新。修：partial-timeout **不锁 30min 缓存** + 挂**一次性** warm 定向补测（隧道此时已热
-    // ~10s，+RECHECK_DELAY_MS 后单发重打 timeout 项，非加轮内轮数、单发不循环）。全超(lowConfidence)/全绿行为原封。
+    // 就绪门偶然通过但所有目标均超时，不将结果绑定为可信出口身份。
+    // 部分超时允许一次定向热身补测；完成后同样按共享有效期缓存。
     const timeoutIds = SERVICE_IDS.filter((id) =>
       ['timeout', 'error'].includes(results[id]?.status)
     );
@@ -481,7 +466,7 @@ export class UnlockDetectionService {
     const snap = this.commit(
       { results, checkedAt: this.now(), egress, ...(lowConfidence ? { lowConfidence: true } : {}) },
       startEpoch,
-      lowConfidence || partialTimeout ? null : egress // partial-timeout 低置信 → 不锁 30min 缓存
+      lowConfidence || partialTimeout ? null : egress // partial-timeout 低置信 → 不保存出口身份缓存
     );
     if (partialTimeout && startEpoch === this.epoch) {
       this.scheduleRecheck(timeoutIds, egress, startEpoch);
@@ -497,7 +482,7 @@ export class UnlockDetectionService {
       this.lastSnapshot?.route ===
         (this.deps.getRoutingPort && this.deps.isRunning() ? 'routed' : 'direct') &&
       this.lastSnapshot.checkedAt &&
-      this.now() - this.lastSnapshot.checkedAt < BACKGROUND_REFRESH_MS
+      observationIsFresh(this.lastSnapshot.checkedAt, this.now())
     ) {
       return this.getSnapshot() as UnlockSnapshot;
     }
@@ -532,7 +517,7 @@ export class UnlockDetectionService {
   /**
    * partial-timeout 一次性 warm 定向补测（R1/R2）：commit 后 RECHECK_DELAY_MS（隧道已热、DNS 已 prime、旧 8s 传输定时器
    * 排干）单发重打 timeout 服务，替代 settle-retry 在 slow-timeout 下不可达的缺口。注册 inflight（run() 单飞 join、W1
-   * whenIdle 可见）。单发不循环——补测轮仍 timeout 则由短 TTL（R3）2min 后自然重检兜底。
+   * whenIdle 可见）。单发不循环——补测轮仍 timeout 则由共享六小时周期到期后自然重检兜底。
    */
   private scheduleRecheck(ids: ServiceId[], egress: UnlockEgress, startEpoch: number): void {
     if (this.recheckTimer) clearTimeout(this.recheckTimer);
@@ -598,7 +583,7 @@ export class UnlockDetectionService {
         return this.getSnapshot() ?? { results: {}, checkedAt: null, egress: null };
       }
     }
-    // 无论收敛与否均写缓存：warm 复测过的 timeout 已是可信终态（含 timeout 快照由 R3 短 TTL 兜底，2min 后可再自然重检）。
+    // 无论收敛与否均写缓存：warm 复测过的 timeout 已是可信终态（timeout 快照同样使用共享六小时有效期）。
     return this.commit({ results, checkedAt: this.now(), egress }, startEpoch, egress);
   }
 

@@ -1,3 +1,4 @@
+import { BACKGROUND_REFRESH_MS } from '../../../../shared/background-refresh';
 import { WEBSITE_CATALOG } from '../../../../shared/website-catalog';
 /**
  * UnlockDetectionService 编排单测（node env）：mock electron session（fromPartition + setProxy）+ 注入
@@ -17,7 +18,6 @@ import {
   SETTLE_RETRY_MAX_ROUNDS,
   TOTAL_DETECTION_BUDGET_MS,
   RECHECK_DELAY_MS,
-  TIMEOUT_TTL_MS,
   UnlockDetectionService,
   type UnlockServiceDeps,
 } from '../UnlockDetectionService';
@@ -225,7 +225,7 @@ describe('缓存 / TTL', () => {
     const h = build();
     await h.svc.run();
     expect(h.netflixCalls()).toBe(1);
-    h.setTime(1_000_000 + 60_000); // < 30min
+    h.setTime(1_000_000 + 60_000); // < 6h
     await h.svc.run();
     // run1 = 就绪门(1)+bracket(1)=2；run2 命中 TTL 缓存（就绪门(1) → 命中即返回，在 bracket 之前）=1 → 共 3。
     expect(h.egressCalls()).toBe(3);
@@ -235,7 +235,7 @@ describe('缓存 / TTL', () => {
   it('超 TTL → 重打', async () => {
     const h = build();
     await h.svc.run();
-    h.setTime(1_000_000 + 31 * 60_000); // > 30min
+    h.setTime(1_000_000 + BACKGROUND_REFRESH_MS); // >= 6h
     await h.svc.run();
     expect(h.netflixCalls()).toBe(2);
   });
@@ -811,7 +811,7 @@ describe('partial-timeout warm 补测', () => {
     expect(g).toBe(gAfterMain); // 补测被取消 → gemini 未再打
   });
 
-  it('补测仍 timeout → 写缓存但短 TTL（2min 内命中不重打、2min 后自然重检）', async () => {
+  it('补测仍 timeout → 写缓存但统一 TTL（六小时内命中，六小时后自然重检）', async () => {
     jest.useFakeTimers();
     let g = 0;
     const h = build({
@@ -830,16 +830,16 @@ describe('partial-timeout warm 补测', () => {
     await jest.advanceTimersByTimeAsync(RECHECK_DELAY_MS + 100); // 补测仍失败 → 写缓存（含 timeout）
     const gAfterRecheck = g;
     expect(h.svc.getSnapshot()?.results.gemini.status).toBe('timeout');
-    // 2min 内 run(false) → 命中短 TTL 缓存（不重打）
+    // 六小时内 run(false) → 命中共享缓存（不重打）
     h.setTime(1_000_000 + 60_000);
     await h.svc.run(false);
     expect(g).toBe(gAfterRecheck); // 缓存命中，gemini 未重打
     // 2min 后 run(false) → 缓存过期 → 重检（gemini 再打）
-    h.setTime(1_000_000 + TIMEOUT_TTL_MS + 60_000);
+    h.setTime(1_000_000 + BACKGROUND_REFRESH_MS);
     const p2 = h.svc.run(false);
     await jest.advanceTimersByTimeAsync(SETTLE_ALL);
     await p2;
-    expect(g).toBeGreaterThan(gAfterRecheck); // 短 TTL 过期 → 自然重检
+    expect(g).toBeGreaterThan(gAfterRecheck); // 六小时过期 → 自然重检
   });
 });
 

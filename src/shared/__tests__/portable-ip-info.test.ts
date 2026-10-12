@@ -96,3 +96,25 @@ test('concurrent startup and connection preparation share initialization and res
   f.service.close();
   restarted.close();
 });
+
+test.each([false, true])(
+  'success and failure share six-hour expiry; failed reads do not cause retry storms: %p',
+  async (failure) => {
+    jest.useFakeTimers();
+    try {
+      const f = setup();
+      if (failure) f.host.trace.mockResolvedValue({ status: 200, body: 'invalid' });
+      await f.service.ensureCurrent();
+      const calls = f.host.trace.mock.calls.length;
+      await jest.advanceTimersByTimeAsync(6 * 3600000 - 1);
+      await f.service.ensureCurrent();
+      expect(f.host.trace).toHaveBeenCalledTimes(calls);
+      await jest.advanceTimersByTimeAsync(1);
+      await f.service.ensureCurrent();
+      expect(f.host.trace.mock.calls.length).toBeGreaterThan(calls);
+      f.service.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  }
+);

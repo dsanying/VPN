@@ -1,3 +1,4 @@
+import { SERVICE_IDS } from '@shared/unlock-detection';
 jest.mock('@capacitor/core', () => ({
   registerPlugin: () => {
     throw new Error('Portable service must not initialize the UI bridge');
@@ -41,7 +42,7 @@ function fixture() {
     remove,
   };
 }
-test('boot initializes only unknown exit facts; page reads do not sync subscriptions or probe nodes', async () => {
+test('boot initializes missing observations; page reads do not sync subscriptions or probe nodes', async () => {
   const f = fixture();
   let settled!: () => void;
   const savedIp = new Promise<void>((resolve) => {
@@ -60,12 +61,13 @@ test('boot initializes only unknown exit facts; page reads do not sync subscript
   await runtime.transport.invoke(C.SUBSCRIPTION_MEASUREMENTS);
   expect(f.facts.measureNode).not.toHaveBeenCalled();
   await savedIp;
-  expect(f.facts.requestText).toHaveBeenCalledTimes(1);
+  await runtime.transport.invoke(C.UNLOCK_RUN);
+  expect(f.facts.requestText).toHaveBeenCalledTimes(1 + SERVICE_IDS.length);
   expect(f.facts.requestText).toHaveBeenCalledWith(
     expect.objectContaining({ route: 'direct', url: 'https://cloudflare.com/cdn-cgi/trace' })
   );
   await runtime.transport.invoke(C.IP_INFO_GET, { peek: true });
-  expect(f.facts.requestText).toHaveBeenCalledTimes(1);
+  expect(f.facts.requestText).toHaveBeenCalledTimes(1 + SERVICE_IDS.length);
   expect(await runtime.transport.invoke<any>(C.VERSION_GET_INFO)).toEqual({
     success: true,
     data: { appVersion: 'fixture' },

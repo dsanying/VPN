@@ -1,5 +1,5 @@
 import type { ConfigDocumentStore } from './config-repository';
-import { BACKGROUND_REFRESH_MS } from './background-refresh';
+import { BACKGROUND_REFRESH_MS, observationIsFresh } from './background-refresh';
 
 /** Durable cadence shared by host wake-ups; a page read is never a wake-up. */
 export class MaintenanceCycle {
@@ -29,11 +29,7 @@ export class MaintenanceCycle {
       }
       const current = this.now();
       if (!active()) return current + BACKGROUND_REFRESH_MS;
-      if (
-        attemptedAt !== undefined &&
-        attemptedAt <= current &&
-        current - attemptedAt < BACKGROUND_REFRESH_MS
-      )
+      if (attemptedAt !== undefined && observationIsFresh(attemptedAt, current))
         return attemptedAt + BACKGROUND_REFRESH_MS;
       // Commit before network work so relaunching after failure cannot repeatedly hammer providers.
       // New configuration initialization uses its own dependency scope, never this cadence receipt.

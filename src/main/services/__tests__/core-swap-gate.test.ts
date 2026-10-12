@@ -196,7 +196,7 @@ describe('T2：CoreUpdateService 4 写核路径 setCoreSwapInProgress try/finall
   function makeSvc(proxy: any) {
     const svc = new CoreUpdateService(makeLogManager());
     svc.setProxyManager(proxy);
-    svc.setConfigProvider(() => Promise.resolve({ autoUpdateCore: true } as any));
+    svc.setConfigProvider(() => Promise.resolve({} as any));
     svc.setEventSender(() => {});
     // rollbackCore 在 win32 分支经 privilegeService.copyFileElevated 写核（生产由 index.ts 无条件注入）；
     // 非 win32 分支直接 fs.copyFileSync。注入等价 stub（复刻 service 首步 copyFileSync），使 copySpy 计数
@@ -427,7 +427,7 @@ describe('T3：replaceManualCore skipBackup 分支（reset 到出厂）', () => 
   function makeSvc(proxy: any) {
     const svc = new CoreUpdateService(makeLogManager());
     svc.setProxyManager(proxy);
-    svc.setConfigProvider(() => Promise.resolve({ autoUpdateCore: true } as any));
+    svc.setConfigProvider(() => Promise.resolve({} as any));
     svc.setEventSender(() => {});
     return svc;
   }
@@ -595,7 +595,7 @@ describe('T4：replaceManualCore B-2 基线预判 + B-3 来源识别', () => {
   function makeSvc(proxy: any) {
     const svc = new CoreUpdateService(makeLogManager());
     svc.setProxyManager(proxy);
-    svc.setConfigProvider(() => Promise.resolve({ autoUpdateCore: true } as any));
+    svc.setConfigProvider(() => Promise.resolve({} as any));
     svc.setEventSender(() => {});
     return svc;
   }

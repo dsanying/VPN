@@ -63,7 +63,6 @@ export class UpdateService {
   private readyUpdate: { info: UpdateInfo; filePath: string; attempted: boolean } | null = null;
 
   /** Scheduling belongs to GlobalUpdateService. Kept for legacy startup callers. */
-  startAutomaticUpdates(): void {}
 
   async installPreparedUpdate(): Promise<void> {
     if (!this.readyUpdate) throw new Error('No prepared software update');

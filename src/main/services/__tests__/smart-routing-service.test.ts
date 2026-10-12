@@ -141,3 +141,23 @@ describe('automatic local-network routing', () => {
     expect(f.policies).toHaveLength(before);
   });
 });
+it.each([true, false])(
+  'country detection success/failure uses the shared six-hour boundary: %p',
+  async (success) => {
+    jest.useFakeTimers();
+    const f = fixture();
+    try {
+      if (!success) f.detect.mockResolvedValue(null);
+      await f.service.refresh();
+      await jest.advanceTimersByTimeAsync(6 * 3600000 - 1);
+      await f.service.refresh();
+      expect(f.detect).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await f.service.refresh();
+      expect(f.detect).toHaveBeenCalledTimes(2);
+    } finally {
+      f.service.dispose();
+      jest.useRealTimers();
+    }
+  }
+);

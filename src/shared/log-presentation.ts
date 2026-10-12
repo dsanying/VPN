@@ -98,7 +98,6 @@ const sources: Record<string, string> = {
   ExitProbeLatency: '出口延迟',
   Unlock: '网站连通性',
   AutoStart: '开机启动',
-  CoreUpdateScheduler: '内核自动更新',
   CoreUpdateService: '内核更新',
   Helper: '提权助手',
   ProtocolParser: '协议解析',

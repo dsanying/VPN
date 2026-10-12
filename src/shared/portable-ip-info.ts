@@ -1,3 +1,4 @@
+import { observationIsFresh } from './background-refresh';
 import type { ConfigDocumentStore } from './config-repository';
 import type { IpInfo, IpInfoSnapshot } from './types';
 import { parseIpTrace } from './ip-trace';
@@ -69,7 +70,9 @@ export class PortableIpInfo {
       const context = await this.host.identity();
       if (
         !this.closed &&
-        (context.key !== this.identity || !this.value.direct || this.value.loading)
+        (context.key !== this.identity ||
+          !observationIsFresh(this.value.updatedAt) ||
+          this.value.loading)
       )
         await this.refresh();
       return this.read();
