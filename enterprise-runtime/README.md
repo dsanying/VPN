@@ -6,7 +6,7 @@
 
 本目录自有代码采用 AGPL-3.0-only，与 zju-connect 的授权一致；应用的其他模块仍按各自许可证分发。分发引擎时必须同时提供对应源码（含上游、修改和构建脚本）及许可证。OpenConnect 和依赖按各自许可证独立分发。
 
-支持范围为 macOS 桌面端，OpenConnect 及依赖随源码目录分发。OpenConnect 认证通过 libopenconnect 的结构化回调统一解析，支持初始表单只读发现、登录分组保存与运行时附加字段。网关协议解析使用上游实现，不自行猜测登录 POST。客户端证书、浏览器 SSO 与姿态准入不在支持范围。aTrust / EasyConnect 交互挑战经 IPC 返回界面，验证码与外部登录由用户完成。
+支持范围为桌面端：macOS arm64 打包自包含全部引擎（openconnect 及依赖库随包分发）；macOS x64 与 Windows 仅含纯 Go 运行时，对应 aTrust / EasyConnect，OpenConnect 系按引擎未安装如实拒绝；Android 不含企业引擎。OpenConnect 认证通过 libopenconnect 的结构化回调统一解析，支持初始表单只读发现、登录分组保存与运行时附加字段。网关协议解析使用上游实现，不自行猜测登录 POST。客户端证书、浏览器 SSO 与姿态准入不在支持范围。aTrust / EasyConnect 交互挑战经 IPC 返回界面，验证码与外部登录由用户完成。
 
 Cisco AnyConnect 与 aTrust 已在真实网关完成端到端验证：表单/分组认证、OAuth2（ADFS）外部登录、用户态隧道与 SOCKS 桥接请求均通过（TLS 校验开启）；应用全局开关可正常启停。其余厂商仅依据上游协议支持与适配器契约接入，不凭厂商列表宣称真实网关兼容。
 

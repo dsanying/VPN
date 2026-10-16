@@ -73,6 +73,13 @@ export class EnterpriseEngine {
           ? '/opt/homebrew/bin/openconnect'
           : undefined;
     if (!command) throw new Error('OpenConnect 引擎尚未安装');
+    if (
+      command === openconnect &&
+      typeof manifest.openconnectSha256 === 'string' &&
+      createHash('sha256').update(readFileSync(openconnect)).digest('hex') !==
+        manifest.openconnectSha256
+    )
+      throw new Error('OpenConnect 引擎完整性校验失败');
     // The script is exclusively our integrity-checked binary, not gateway-provided executable content.
     const script = `'${binary.replace(/'/g, "'\\''")}' --openconnect; bridge_status=$?; printf '{"type":"error","stage":"tunnel-exit-%d"}\\n' "$bridge_status"`;
     const args = sangfor ? [] : ['--connect', profile.protocol, profile.gateway, command, script];
