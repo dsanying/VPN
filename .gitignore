@@ -157,6 +157,9 @@ android/app/src/main/assets/licenses/
 # Enterprise engine generated pinned source and binaries
 /enterprise-runtime/.upstream/
 resources/*/enterprise-runtime*
+# OpenConnect 引擎及其 Homebrew 依赖库（由 build:enterprise 在打包机上现编现打）
+resources/*/openconnect
+resources/*/libs/
 resources/**/openconnect-auth
 
 # Local-only development records: not part of the open-source repository.
