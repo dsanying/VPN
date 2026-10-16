@@ -42,8 +42,8 @@ beforeEach(() => {
 
 describe('notifyUser', () => {
   it('默认开 → 弹通知并带入 title/body', () => {
-    notifyUser('FlowZ Proxy Error', 'boom');
-    expect(ctorMock).toHaveBeenCalledWith({ title: 'FlowZ Proxy Error', body: 'boom' });
+    notifyUser('暗影VPN Proxy Error', 'boom');
+    expect(ctorMock).toHaveBeenCalledWith({ title: '暗影VPN Proxy Error', body: 'boom' });
     expect(showMock).toHaveBeenCalledTimes(1);
   });
 

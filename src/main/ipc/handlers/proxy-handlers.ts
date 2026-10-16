@@ -81,7 +81,7 @@ export function registerProxyHandlers(
   registerIpcHandler<void, void>(IPC_CHANNELS.PROXY_STOP, async (_event: IpcMainInvokeEvent) => {
     // 用户主动停止：先清系统代理（在 stop() 之前调，stopping 仍为 false → 会真正清）。
     // 经 ProxyManager.ensureSystemProxyCleared 而非裸 disableProxy → marker + 指向门控：
-    // 仅清 FlowZ 自己设置的系统代理，TUN/manual 模式或用户自配的企业代理无 marker → 不动（修 M4 stomp）。
+    // 仅清 暗影VPN 自己设置的系统代理，TUN/manual 模式或用户自配的企业代理无 marker → 不动（修 M4 stomp）。
     await proxyManager.ensureSystemProxyCleared().catch(() => {});
 
     await proxyManager.stop();

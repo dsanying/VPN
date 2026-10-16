@@ -1,3 +1,15 @@
+import { exportDiagnosticReport } from './ipc/handlers/diagnostic-handlers';
+import { nodeRegionCode, nodeRegionEvidence } from '../shared/node-identity';
+import { discoverEnterpriseForms } from './services/enterprise/OpenConnectForms';
+import { LocalSecretCodec } from './services/enterprise/LocalSecretCodec';
+import { EnterpriseVpnService } from './services/enterprise/EnterpriseVpnService';
+import { EnterpriseProfileStore } from './services/enterprise/EnterpriseProfileStore';
+import { EnterpriseDiscovery } from './services/enterprise/EnterpriseDiscovery';
+import {
+  EnterpriseEngine,
+  enterpriseResourceDirectory,
+} from './services/enterprise/EnterpriseEngine';
+import { registerEnterpriseHandlers } from './ipc/handlers/enterprise-handlers';
 import { closeMeasurementDatabases } from './services/MeasurementDatabase';
 import { resolveUserDataPath, assertPersistentHelperProfile } from './validation-profile';
 import { RUNTIME_POLICY } from '../shared/runtime-policy';
@@ -11,7 +23,25 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 app.setName('暗影VPN');
-app.setPath('userData', resolveUserDataPath(app.getPath('appData'), process.argv));
+// 品牌迁移：旧 userData 目录 ShadowVPN-FlowZ → ShadowVPN（仅默认数据路径、目标不存在时整体
+// 改名，不覆盖；--validation-profile 隔离验收目录绝不接管生产数据）。
+{
+  const resolvedUserData = resolveUserDataPath(app.getPath('appData'), process.argv);
+  const defaultUserData = path.join(app.getPath('appData'), 'ShadowVPN');
+  const legacyUserData = path.join(app.getPath('appData'), 'ShadowVPN-FlowZ');
+  if (
+    resolvedUserData === defaultUserData &&
+    !fs.existsSync(resolvedUserData) &&
+    fs.existsSync(legacyUserData)
+  ) {
+    try {
+      fs.renameSync(legacyUserData, resolvedUserData);
+    } catch {
+      // 迁移失败不阻断启动；新目录照常创建，旧目录保留。
+    }
+  }
+  app.setPath('userData', resolvedUserData);
+}
 
 import { ConfigManager } from './services/ConfigManager';
 import { NetworkChangeMonitor } from './services/NetworkChangeMonitor';
@@ -39,7 +69,7 @@ import { createSystemDnsManager, SystemDnsBase } from './services/SystemDnsManag
 import { resourceManager } from './services/ResourceManager';
 import { registerIconProtocolSchemes, registerIconProtocol } from './icon-protocol';
 import { notifyUser, setDesktopNotificationsEnabled } from './notify-user';
-import { mt, setMainLanguage } from './i18n';
+import { mt, setMainLanguage, getMainLanguage } from './i18n';
 import { runCliEarlyExit } from './cli-early-exit';
 import { selectPortableStaleOld } from './services/update-install-script';
 import { SubscriptionService } from './services/SubscriptionService';
@@ -85,7 +115,7 @@ import { StatsSubscriptionRegistry } from './services/StatsSubscriptionRegistry'
 import { PlatformPrivilegeService } from './services/PlatformPrivilegeService';
 import { IpInfoService } from './services/IpInfoService';
 import { SmartRoutingService } from './services/SmartRoutingService';
-import { networkInterfaces } from 'os';
+import { networkInterfaces, release as osRelease } from 'os';
 import { computeNetworkFingerprint } from './services/network-fingerprint';
 import { createExitProbeLatencyRunner } from './services/exit-probe-latency';
 import { UnlockDetectionService } from './services/unlock/UnlockDetectionService';
@@ -135,7 +165,7 @@ function logStartupTimingOnce(): void {
 // ── CLI / 非 GUI 早退（必须在 Electron GUI 平台初始化前；无 DISPLAY 下 GUI 初始化失败会卡死 + segfault）──
 // 编排/判定全在 cli-early-exit（纯函数 + IO 注入，可单测）；此处仅注入真实 IO：
 // - writeStdout/Stderr 用 fs.writeSync(同步落 fd)：process.stdout.write 写管道是异步缓冲，紧跟 exit 会丢
-//   `flowz -V | cat` / `$(flowz -V)` 的输出。
+//   `shadow-vpn -V | cat` / `$(shadow-vpn -V)` 的输出。
 // - exit 用 process.exit(而非 app.exit)：保证同步终止、绝不 fall-through 落回下方 GUI init（ready 前无 GUI 状态需清理）。
 // - setLanguage 经 resolveAutoLanguage 智能匹配系统 locale(ru-RU→ru / zh_HK→zh-TW)，与 normal 路径一致，禁硬编码。
 runCliEarlyExit({
@@ -187,7 +217,7 @@ try {
 // Linux：QEMU/虚拟显卡 + xrdp/VNC 等远程桌面/虚拟机环境无可用硬件加速，Chromium GPU 进程反复启动失败
 // （ContextResult::kTransientFailure → GPU process launch failed error_code=1002）会触发
 // "GPU process isn't usable. Goodbye." FATAL，整个 app 闪退（实测 QEMU stdvga + xrdp 必现）。
-// FlowZ 为轻量代理工具 UI（无 3D/视频/canvas 密集渲染），软件渲染体验无感，故 Linux 一律禁用硬件加速换稳定。
+// 暗影VPN 为轻量代理工具 UI（无 3D/视频/canvas 密集渲染），软件渲染体验无感，故 Linux 一律禁用硬件加速换稳定。
 // 必须在 app ready 之前调用（Electron 约束），放在单实例锁之前 = 模块加载期最早处。
 if (process.platform === 'linux') {
   app.disableHardwareAcceleration();
@@ -269,7 +299,7 @@ async function checkIdleAutoModes(): Promise<void> {
 // 窗口全额回收、可见态只告警。定位=lifecycle hygiene（同浏览器 tab discard），非泄漏修复。high 阈值 1.5GB 远超
 // 正常 ~250MB，隐藏态回收对用户透明 → 「用户永远看不到 2GB」。**always-on 安全网**（非 gate 在 autoLightweightMode：
 // 那是用户偏好的空闲省电，本 watchdog 是防失控的红线兜底，两者正交；隐藏态回收无副作用，无需开关门）。
-const RENDERER_RSS_LIMIT_MB = parseRendererRssLimitMb(process.env.FLOWZ_RENDERER_RSS_LIMIT_MB);
+const RENDERER_RSS_LIMIT_MB = parseRendererRssLimitMb(process.env.SHADOWVPN_RENDERER_RSS_LIMIT_MB);
 const RENDERER_MEM_WARN_COOLDOWN_MS = 5 * 60 * 1000; // 可见态告警冷却 5min，防刷屏
 let lastRendererWarnAt = 0;
 let rendererDiscardCount = 0; // 本会话隐藏态回收次数（诊断导出）
@@ -334,12 +364,14 @@ function checkRendererMemory(): void {
 let configManager: ConfigManager;
 let protocolParser: ProtocolParser;
 let logManager: LogManager;
+let diagnosticService: DiagnosticService | undefined;
 let proxyManager: ProxyManager | null = null;
 let systemProxyManager: ReturnType<typeof createSystemProxyManager>;
 let systemDnsManager: ReturnType<typeof createSystemDnsManager>;
 let updateService: UpdateService;
 let coreUpdateService: CoreUpdateService;
 let subscriptionService: SubscriptionService;
+let enterpriseService: EnterpriseVpnService | undefined;
 let speedTestService: SpeedTestService;
 let autoSwitchService: AutoSwitchService;
 let globalUpdateService: GlobalUpdateService | null = null;
@@ -773,8 +805,8 @@ async function createWindow(forceShow = false) {
       // 界面语言选择注入 preload（config.language 单一真值源）：供 i18n 初始化直接用，取代旧 localStorage 真值源。
       //   每个 additionalArguments 项作为独立 argv 项传递，'auto'/语言码均为安全 ASCII，无需转义。
       additionalArguments: [
-        `--flowz-sys-langs=${JSON.stringify(getPreferredSystemLanguagesSafe())}`,
-        `--flowz-lang-choice=${cfg.language ?? ''}`,
+        `--shadowvpn-sys-langs=${JSON.stringify(getPreferredSystemLanguagesSafe())}`,
+        `--shadowvpn-lang-choice=${cfg.language ?? ''}`,
       ],
     },
     // macOS：集成式窗口（红绿灯内嵌 + sidebar 半透材质）。titleBarStyle 是窗口 chrome、恒设；
@@ -1029,8 +1061,8 @@ async function createWindow(forceShow = false) {
         break;
       case 'fatal':
         enterTerminalFallback(
-          'FlowZ 界面无响应 / Interface not responding',
-          '界面重复加载失败，已停止自动重试；请尝试重新加载或重启 FlowZ。/ The interface repeatedly failed to load. Please reload or restart FlowZ.'
+          '暗影VPN 界面无响应 / Interface not responding',
+          '界面重复加载失败，已停止自动重试；请尝试重新加载或重启 暗影VPN。/ The interface repeatedly failed to load. Please reload or restart 暗影VPN.'
         );
         break;
       case 'none':
@@ -1091,13 +1123,22 @@ async function createWindow(forceShow = false) {
   // 可观测信号——Electron 不发主进程事件。限频（防错误风暴刷爆 logManager）+ 截断（防超长 message 撑爆单行）。
   // Electron ^42 的 console-message 回调签名为 details 对象（level 是 'info'|'warning'|'error'|'debug' 字符串，
   // 旧的 (event,level:number,message,line,sourceId) 位置参数已 deprecated）。只转 error 级。
+  gateWin.on('unresponsive', () =>
+    logManager.addLog('error', 'Renderer became unresponsive', 'Renderer')
+  );
+  gateWin.on('responsive', () =>
+    logManager.addLog('info', 'Renderer responsiveness restored', 'Renderer')
+  );
   let consoleForwardTimes: number[] = [];
   gateWin.webContents.on('console-message', (details) => {
     if (details.level !== 'error') return;
     const now = Date.now();
     const { recent, admit } = admitConsoleMessage(consoleForwardTimes, now);
     consoleForwardTimes = recent;
-    if (!admit) return;
+    if (!admit) {
+      logManager.recordRendererDrop();
+      return;
+    }
     logManager.addLog('error', `[renderer] ${truncateConsoleMessage(details.message)}`, 'Renderer');
   });
 
@@ -1124,8 +1165,8 @@ async function createWindow(forceShow = false) {
         // 二次主 frame 失败（生产）：不再空转 reload，落终局兜底（与 GAP-1a 二次超时共用 enterTerminalFallback）。
         // 与 N3 一致，dev **不**弹终局模态：dev 下 vite 未起是常见工作流，Chromium 原生连接错误页 + devtools 更利排障。
         enterTerminalFallback(
-          'FlowZ 加载失败 / Failed to load',
-          `界面加载重复失败（${errorDescription}）；请检查安装完整性或重启 FlowZ。/ The interface repeatedly failed to load (${errorDescription}). Please check the installation or restart FlowZ.`
+          '暗影VPN 加载失败 / Failed to load',
+          `界面加载重复失败（${errorDescription}）；请检查安装完整性或重启 暗影VPN。/ The interface repeatedly failed to load (${errorDescription}). Please check the installation or restart 暗影VPN.`
         );
       }
     }
@@ -1277,7 +1318,23 @@ async function cleanupResources(): Promise<void> {
       } catch (e) {
         console.error('cleanupResources error:', e);
       } finally {
+        await enterpriseService?.close();
+        enterpriseService = undefined;
         closeMeasurementDatabases();
+        logManager?.addLog('info', 'session.shutdown: exit boundary reached', 'Lifecycle');
+        if (logManager) {
+          let flushTimer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              logManager.flush(),
+              new Promise<void>((resolve) => {
+                flushTimer = setTimeout(resolve, 1000);
+              }),
+            ]);
+          } finally {
+            if (flushTimer) clearTimeout(flushTimer);
+          }
+        }
       }
     })();
   }
@@ -1286,6 +1343,7 @@ async function cleanupResources(): Promise<void> {
 
 async function runCleanup(): Promise<void> {
   try {
+    await enterpriseService?.disconnect();
     smartRoutingService?.dispose();
     // 0. 停止后台定时器（订阅调度 / 自动换节点 / 自动空闲轮询）
     if (idleCheckInterval) {
@@ -1304,8 +1362,8 @@ async function runCleanup(): Promise<void> {
       logManager.addLog('info', 'Proxy torn down', 'Main');
     }
 
-    // 2. 清理系统代理设置（marker 门控：仅关 FlowZ 自己设置的系统代理；TUN 模式 / 用户自配的企业/第三方
-    //    代理无 marker → 不动，符合通用-E「仅 FlowZ 自己设置的才被强关」不变量。跨会话残留由 marker 兜）。
+    // 2. 清理系统代理设置（marker 门控：仅关 暗影VPN 自己设置的系统代理；TUN 模式 / 用户自配的企业/第三方
+    //    代理无 marker → 不动，符合通用-E「仅 暗影VPN 自己设置的才被强关」不变量。跨会话残留由 marker 兜）。
     try {
       const proxyStatus = await systemProxyManager.getProxyStatus();
       if (proxyStatus.enabled && SystemProxyBase.readMarker()) {
@@ -1320,7 +1378,7 @@ async function runCleanup(): Promise<void> {
       console.warn('Failed to disable system proxy:', error);
     }
 
-    // 2.5 还原系统 DNS（marker 门控：仅还原 FlowZ 接管过的；非 TUN / 无接管无 marker → 不动）。
+    // 2.5 还原系统 DNS（marker 门控：仅还原本应用接管过的；非 TUN / 无接管无 marker → 不动）。
     //     与系统代理同级：跨会话残留由启动期 marker 恢复兜，正常退出由此还原。
     try {
       if (systemDnsManager?.hasMarker()) {
@@ -1361,7 +1419,13 @@ async function updateTrayMenuState(isProxyRunning: boolean, hasError?: boolean):
       nodeRegions: Object.fromEntries(
         Object.entries(measurements ?? {}).map(([id, record]) => [
           id,
-          record.detail?.exit?.countryCode,
+          nodeRegionCode(record.detail),
+        ])
+      ),
+      nodeRegionSources: Object.fromEntries(
+        Object.entries(measurements ?? {}).map(([id, record]) => [
+          id,
+          nodeRegionEvidence(record.detail)?.source,
         ])
       ),
       isProxyRunning,
@@ -1381,7 +1445,7 @@ async function updateTrayMenuState(isProxyRunning: boolean, hasError?: boolean):
 }
 
 if (gotTheLock) {
-  // app ready 前注册图标代理 scheme（privileged）：renderer 外部图标 <img> 经 flowz-icon:// 由 main update-in 拉取
+  // app ready 前注册图标代理 scheme（privileged）：renderer 外部图标 <img> 经 shadowvpn-icon:// 由 main update-in 拉取
   registerIconProtocolSchemes();
   app.whenReady().then(async () => {
     startupMark('whenReady');
@@ -1404,6 +1468,21 @@ if (gotTheLock) {
     configManager = new ConfigManager();
     protocolParser = new ProtocolParser();
     logManager = new LogManager();
+    logManager.addLog(
+      'info',
+      JSON.stringify({
+        event: 'session.start',
+        version: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        osRelease: osRelease(),
+        electron: process.versions.electron,
+        node: process.versions.node,
+        packaged: app.isPackaged,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+      'Lifecycle'
+    );
     systemProxyManager = createSystemProxyManager();
     systemDnsManager = createSystemDnsManager();
     updateService = new UpdateService(logManager);
@@ -1573,7 +1652,7 @@ if (gotTheLock) {
     });
     // §8 四链路收口：核更新链路（CoreDownloader）也接入 update-in；viaProxy 时经 update-in，否则 direct 兜底（自举）。
     coreUpdateService.setUpdateNetwork(updateNetwork);
-    // Phase 1b §8：图标代理协议 flowz-icon:// 也经 update-in（renderer 外部图标 <img> 不再走 default session）。
+    // Phase 1b §8：图标代理协议 shadowvpn-icon:// 也经 update-in（renderer 外部图标 <img> 不再走 default session）。
     registerIconProtocol({
       updateNetwork,
       proxyRunningProvider: () => proxyManager?.getStatus().running ?? false,
@@ -1691,11 +1770,11 @@ if (gotTheLock) {
       getEndpoint: () => proxyManager?.getStatsApiEndpoint() ?? null,
       log: (level, message) => logManager.addLog(level, message, 'StatsWorker'),
     };
-    // 泄漏定证 harness（issue #242 §5）：FLOWZ_STATS_SIM 存在时用合成 churn 注入器取代真实 stats worker——直接向
+    // 泄漏定证 harness（issue #242 §5）：SHADOWVPN_STATS_SIM 存在时用合成 churn 注入器取代真实 stats worker——直接向
     // UI 门控层灌 aggregate/stats（绕内核/流量/TUN），把 reporter 数天暴露压缩到小时级。dev-only，零业务行为变更；
     // StatsSimulator 构造内经 logManager 打「模拟器激活」warn banner + 解析防御。
-    statsService = process.env.FLOWZ_STATS_SIM
-      ? new StatsSimulator(statsHostOptions, process.env.FLOWZ_STATS_SIM)
+    statsService = process.env.SHADOWVPN_STATS_SIM
+      ? new StatsSimulator(statsHostOptions, process.env.SHADOWVPN_STATS_SIM)
       : new StatsWorkerHost(statsHostOptions);
     // 杀核前静默 StatsService：停其到管理 API 的 Status/Connections gRPC 流（核将死，提前 cancel 避免 RST 噪音）。
     proxyManager.setQuiesceStats(() => {
@@ -2080,9 +2159,9 @@ if (gotTheLock) {
       }
     );
 
-    // 主进程更新链路（应用/资源/订阅/核心）+ renderer 外部图片（图标库/自定义图标/国旗，经 flowz-icon://
-    // 协议）已全迁 UpdateNetwork 专用会话经 update-in 入站；default session 不再 pin FlowZ http 入站，回归
-    // Electron 默认（跟随系统代理）。至此 default session 无 FlowZ 外部请求消费者（WarpService 走 node https
+    // 主进程更新链路（应用/资源/订阅/核心）+ renderer 外部图片（图标库/自定义图标/国旗，经 shadowvpn-icon://
+    // 协议）已全迁 UpdateNetwork 专用会话经 update-in 入站；default session 不再 pin 暗影VPN http 入站，回归
+    // Electron 默认（跟随系统代理）。至此 default session 无 暗影VPN 外部请求消费者（WarpService 走 node https
     // 自成一路、不经 default session）（Phase 1b 删 applyMainSessionProxy）。
 
     proxyManager.on('started', async () => {
@@ -2194,8 +2273,34 @@ if (gotTheLock) {
     setIpcLogger(logManager);
 
     // 注册 IPC 处理器（需要在 ProxyManager 创建后）
+    enterpriseService = new EnterpriseVpnService(
+      new EnterpriseProfileStore(
+        path.join(path.dirname(configManager.getConfigPath()), 'enterprise.sqlite'),
+        new LocalSecretCodec(
+          path.join(path.dirname(configManager.getConfigPath()), 'enterprise.key')
+        )
+      ),
+      new EnterpriseDiscovery(undefined, (detected) =>
+        discoverEnterpriseForms(
+          enterpriseResourceDirectory(app.isPackaged, process.resourcesPath, app.getAppPath()),
+          detected
+        )
+      ),
+      () =>
+        new EnterpriseEngine(
+          enterpriseResourceDirectory(app.isPackaged, process.resourcesPath, app.getAppPath()),
+          app.isPackaged
+        ),
+      proxyManager,
+      configManager,
+      (snapshot) => ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_ENTERPRISE_CHANGED, snapshot)
+    );
+    await enterpriseService.initialize();
+    registerEnterpriseHandlers(enterpriseService);
     registerConfigHandlers(configManager);
-    registerServerHandlers(protocolParser, configManager, logManager);
+    registerServerHandlers(protocolParser, configManager, logManager, (id) =>
+      enterpriseService!.remove(id)
+    );
     registerLogHandlers(logManager, proxyManager, isUiBroadcastActive);
     registerProxyHandlers(proxyManager, configManager);
     // §3.7：STATS_SUBSCRIBE/STATS_UNSUBSCRIBE（渲染端 useStatsTopic 声明/撤销 topic 订阅）。
@@ -2225,7 +2330,7 @@ if (gotTheLock) {
 
     // 注册诊断报告处理器（汇集环境/脱敏配置/日志 tail → 单 Markdown）。此处 proxyManager 已构造（非空）。
     if (proxyManager) {
-      const diagnosticService = new DiagnosticService(
+      diagnosticService = new DiagnosticService(
         configManager,
         logManager,
         proxyManager,
@@ -2251,7 +2356,37 @@ if (gotTheLock) {
           thresholdMb: RENDERER_RSS_LIMIT_MB,
         }),
         // 测速专项诊断：最近一次临时测速 sing-box config + 逐节点失败 reason。DiagnosticService 内统一脱敏。
-        () => speedTestService?.getLastSpeedTestDiagnostics() ?? null
+        () => speedTestService?.getLastSpeedTestDiagnostics() ?? null,
+        async () => {
+          const enterprise = enterpriseService?.snapshot();
+          return {
+            helper: helperManager
+              ? await helperManager.getStatus().catch(() => ({ status: 'unavailable' }))
+              : { status: 'unavailable' },
+            enterprise: enterprise
+              ? {
+                  supported: enterprise.supported,
+                  protocols: enterprise.profiles.map((profile) => profile.protocol),
+                  sessions: enterprise.sessions?.map((session) => ({
+                    state: session.state,
+                    phase: session.phase,
+                    error: session.error,
+                    challengeKind: session.challenge?.kind,
+                  })),
+                }
+              : { status: 'unavailable' },
+            updates: globalUpdateService?.getSnapshot(),
+            collection: {
+              application: 'JSONL history with operation correlation',
+              renderer: 'error console, load failures, hangs and process exits',
+              kernel: 'current log and startup output',
+              credentials:
+                'excluded; request payloads, passwords, cookies and authentication forms are not captured',
+              nativeCrashDump: 'not included; memory dumps can contain credentials',
+              android: 'separate native host; desktop report does not collect Android system logs',
+            },
+          };
+        }
       );
       registerDiagnosticHandlers(diagnosticService);
     }
@@ -2279,6 +2414,7 @@ if (gotTheLock) {
 
     // 注册测速处理器（注入唯一编排器依赖：含 getTrayManager 惰性访问器，使渲染入口测速也回写托盘列表）
     refreshMeasurements = registerSpeedTestHandlers({
+      enterpriseProbe: (node, interactive) => enterpriseService!.measure(node, interactive),
       entryHelperPath: resourceManager.getEntryProbeHelperPath(),
       isTunActive: () => !!proxyManager?.getStatus().running && proxyManager.isTunModeNow(),
       configManager,
@@ -2349,6 +2485,31 @@ if (gotTheLock) {
         },
       })
     );
+    if (diagnosticService)
+      trayManager.setDiagnosticExport(() => {
+        void exportDiagnosticReport(diagnosticService!)
+          .then((result) => {
+            if (result.success)
+              logManager.addLog(
+                'info',
+                'Diagnostic report exported from native menu',
+                'Diagnostic'
+              );
+          })
+          .catch((error) => {
+            logManager.addLog(
+              'error',
+              error instanceof Error ? error.message : 'Diagnostic export failed',
+              'Diagnostic'
+            );
+            dialog.showErrorBox(
+              mt('trayExportDiagnostics'),
+              getMainLanguage().startsWith('en')
+                ? 'Export failed. Please retry.'
+                : '导出失败，请重试。'
+            );
+          });
+      });
     trayManager.createTray();
     // 补应用「按延迟排序」开关：若渲染端 mount 推送早于本行（极端时序），上面 handler 的 trayManager?. 已丢弃该值，
     // 此处用持有的最近值兜底（幂等：默认 false 时 no-op）。覆盖「持久 true 偏好在冷启被丢、托盘整会话停默认序」。
@@ -2485,7 +2646,7 @@ function syncCleanupOnExit(): void {
     // （即便 fire-and-forget / process.exit 语境），违反"退出零弹框"不变量、可能在 app 死后冒孤儿 UAC。
     proxyManager.stop({ quitting: true }).catch(() => {});
   }
-  // marker 门控：仅当 marker 存在（FlowZ 设置过系统代理且尚未拆除）才同步强关，
+  // marker 门控：仅当 marker 存在（暗影VPN 设置过系统代理且尚未拆除）才同步强关，
   // 防每次退出无条件 stomp 用户自配/第三方系统代理（设计 通用-E）。
   // 正常退出链 cleanupResources→disableProxy 已删 marker → 此处自然跳过，不重复操作。
   if (SystemProxyBase.readMarker()) {
@@ -2497,7 +2658,7 @@ function syncCleanupOnExit(): void {
       /* ignore */
     }
   }
-  // 系统 DNS 同步还原（marker 门控）：仅 FlowZ 接管过的才还原；受控 IP 是真实 8.8.8.8，
+  // 系统 DNS 同步还原（marker 门控）：仅 暗影VPN 接管过的才还原；受控 IP 是真实 8.8.8.8，
   // 即便此处漏还原也不断网（降级为真 DNS），下次启动 marker 恢复兜底。
   if (SystemDnsBase.readMarker()) {
     try {
@@ -2514,7 +2675,7 @@ function syncCleanupOnExit(): void {
 // App 从不发它（死代码 → Windows 注销/关机后系统代理残留、重启断网）。已改挂窗口级（见 createWindow 内 'session-end'）。
 // macOS/Linux 关机由 launchd/systemd 发 SIGTERM → SIGTERM handler → cleanupResources 覆盖；
 // 另有 powerMonitor 'shutdown' 更早钩子（whenReady 末尾注册）。process'exit'/session-end/shutdown
-// 三入口统一经 syncCleanupOnExit 的 marker 门控（通用-E），仅 FlowZ 自己设置的系统代理才被强关。
+// 三入口统一经 syncCleanupOnExit 的 marker 门控（通用-E），仅 暗影VPN 自己设置的系统代理才被强关。
 
 // 进程退出时的最后兜底（同步执行）
 process.on('exit', () => {

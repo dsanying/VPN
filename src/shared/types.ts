@@ -115,7 +115,8 @@ export type Protocol =
   | 'ssh'
   | 'wireguard'
   | 'tailscale'
-  | 'custom';
+  | 'custom'
+  | 'enterprise';
 export type Network = 'tcp' | 'ws' | 'grpc' | 'http' | 'httpupgrade' | 'xhttp';
 export type Security = 'none' | 'tls' | 'reality';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
@@ -162,6 +163,15 @@ export interface ServerConfig {
   protocol: Protocol;
   address: string;
   port: number;
+
+  /** Credentials live in the encrypted local database, never in node JSON. */
+  enterpriseSettings?: {
+    profileId: string;
+    gateway: string;
+    client: import('./enterprise-vpn').EnterpriseProtocol;
+    /** Runtime-only loopback resolver serving gateway resources through its authenticated tunnel. */
+    dnsPort?: number;
+  };
 
   // 代理链（前置代理）ID
   detour?: string;
@@ -278,7 +288,7 @@ export interface TunModeConfig {
   // 「连入来源排除」网段（CIDR，v4/v6）：本机作服务端被 off-subnet 私网连入时（如经 ZeroTier→路由器 DNAT），
   // 声明这些来源段绕过 TUN 捕获（追加进 route_exclude_address），使回包走物理网卡、不被 TUN 用户态栈误劫持。
   // 区别于 bypassLANList（route.rules 直连偏好，不影响是否进 TUN）。生成期减 mesh force-route 段 / fakeip 段；
-  // macOS 额外减本机物理 LAN 段（NE 反向路由 guard）。详见 docs/design/flowz-tun-lan-exclusion-scenarios.md。
+  // macOS 额外减本机物理 LAN 段（NE 反向路由 guard）。详见 docs/design/shadowvpn-tun-lan-exclusion-scenarios.md。
   inboundExcludeCidrs?: string[];
 }
 
@@ -443,7 +453,7 @@ export interface UserConfig {
   // 新装缺省 7890（DEFAULT_MIXED_PORT，对齐业内）；旧配置迁移自 httpPort。统一经 shared/proxy-ports#localProxyPort 取用。
   mixedPort?: number;
   // clash_api 外部控制端口。新装缺省 9090（DEFAULT_CONTROL_PORT，对齐业内）。可改：当 9090 被另一 clash 系应用/
-  // 任意进程占用时，FlowZ 据此改 external_controller 端口，避免 clash_api 无法 bind 的死局。统一经 shared/proxy-ports#controlApiPort 取用。
+  // 任意进程占用时，暗影VPN 据此改 external_controller 端口，避免 clash_api 无法 bind 的死局。统一经 shared/proxy-ports#controlApiPort 取用。
   controlPort?: number;
   allowLan?: boolean; // 局域网共享代理（允许其他设备连接）
   bypassLAN?: boolean; // 绕过局域网总开关（关 → 不绕过，内网/清单内目标也走代理）

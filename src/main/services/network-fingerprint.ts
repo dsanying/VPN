@@ -5,7 +5,7 @@
  *  ① 事件流有周期性噪音：IPv6 RA 刷新地址 lifetime、短租期 DHCP renew 都会推送 `ip monitor` / RTM_NEWADDR，
  *     而网络其实没变。以「收到事件」为判据 = 稳态下每个限频窗口都刷一次系统 DNS 缓存，把缓存寿命永久钉在
  *     限频间隔上，解析延迟持续劣化且无任何异常日志。
- *  ② 事件流会自触发：FlowZ 自己的路由操作（mesh 出口 reconcile 的 ip rule/route、macOS 侧同类 route 调用）
+ *  ② 事件流会自触发：暗影VPN 自己的路由操作（mesh 出口 reconcile 的 ip rule/route、macOS 侧同类 route 调用）
  *     同样进事件流，会把限频窗口白白耗掉，随后用户真实换网的那一次反而被丢弃——正是 issue #368 要修的场景。
  *
  * 故：**事件只作为「去看一眼」的唤醒信号，是否真的变了由本模块的指纹对差判定**。指纹相同 = 什么都没发生，

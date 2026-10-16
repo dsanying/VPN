@@ -12,7 +12,7 @@
  */
 import { create } from 'zustand';
 
-const STORAGE_KEY = 'flowz.nodeSortByLatency';
+const STORAGE_KEY = 'shadow-vpn.nodeSortByLatency';
 
 // 导出供单测直接验证（renderer 测试禁 require，故走显式函数）。
 export function loadNodeSortByLatency(): boolean {

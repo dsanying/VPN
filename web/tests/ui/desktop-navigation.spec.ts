@@ -14,11 +14,11 @@ for (const language of ['zh-CN', 'en-US']) {
       const links = page.getByRole('menu').first().getByRole('link');
       await expect(links).toHaveCount(5);
       expect((await links.allTextContents()).slice(0, 2)).toEqual(labels.slice(0, 2));
-      const connect = page.getByRole('button', { name: language === 'zh-CN' ? '连接代理' : 'Connect', exact: true });
+      const connect = page.getByRole('button', { name: language === 'zh-CN' ? '开启代理' : 'Enable proxy', exact: true });
       await expect(connect).toBeVisible();
       await expect(page.locator('[data-chart-fit="content"]')).toHaveCount(0);
       await connect.click();
-      await expect(page.getByRole('button', { name: language === 'zh-CN' ? '断开' : 'Disconnect', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: language === 'zh-CN' ? '关闭代理' : 'Disable proxy', exact: true })).toBeVisible();
       await links.nth(1).click();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(labels[1]);
       await expect(page.getByRole('table')).toHaveCount(1);

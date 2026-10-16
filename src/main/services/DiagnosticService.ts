@@ -1,3 +1,6 @@
+import { createDefaultConfig } from '../../shared/config-defaults';
+import { BUILD_COMMIT, BUILD_DATE, BUILD_DIRTY } from '../../shared/build-info';
+import { collectLogArchive } from './DiagnosticArchive';
 import { RUNTIME_POLICY } from '../../shared/runtime-policy';
 import compatibilityManifest from '../../shared/compatibility-core-manifest.json';
 import { diagnosticText } from '../../shared/diagnostic-text';
@@ -72,8 +75,23 @@ export class DiagnosticService {
       thresholdMb: number;
     },
     /** 最近一次测速诊断快照（临时测速 config + 逐节点失败 reason）；缺省=无测速诊断段。 */
-    private readonly speedTestDiagnosticsProvider?: () => SpeedTestDiagnosticSnapshot | null
+    private readonly speedTestDiagnosticsProvider?: () => SpeedTestDiagnosticSnapshot | null,
+    private readonly evidenceProvider?: () => unknown
   ) {}
+
+  private async bounded<T>(task: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        task,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('Diagnostic collection timed out')), 2000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
 
   /** 读文件尾部最多 maxBytes 字节；不存在/失败返回占位串（绝不抛）。 */
   private async readTail(filePath: string, maxBytes: number): Promise<string> {
@@ -131,7 +149,16 @@ export class DiagnosticService {
   }
 
   async buildReport(): Promise<string> {
-    const config: UserConfig = await this.configManager.loadConfig();
+    let config: UserConfig;
+    let configFailure: string | undefined;
+    try {
+      config = await this.bounded(this.configManager.loadConfig());
+    } catch (error) {
+      config = createDefaultConfig('diagnostic-placeholder');
+      configFailure = redactLogText(
+        error instanceof Error ? error.message : 'Configuration unavailable'
+      );
+    }
 
     // 落盘待写日志先 flush，确保 tail 含最新行
     let flushComplete: boolean;
@@ -169,11 +196,13 @@ export class DiagnosticService {
           : Promise.resolve(undefined),
       ]);
 
-    const coreVersion = await this.proxyManager.getCoreVersion().catch(() => 'unknown');
+    const coreVersion = await this.bounded(this.proxyManager.getCoreVersion()).catch(
+      () => 'unknown'
+    );
     const status = this.proxyManager.getStatus();
-    const sysProxy = await this.systemProxyManager.getProxyStatus().catch(() => null);
+    const sysProxy = await this.bounded(this.systemProxyManager.getProxyStatus()).catch(() => null);
 
-    // 生成「实际下发给内核」的 sing-box 配置并脱敏（#57：直接看 DNS/route 形态）。
+    // 读取磁盘上「实际下发给内核」的 sing-box 配置并脱敏（#57：直接看 DNS/route 形态）。
     // custom 协议在生成时已把 customSettings.outbound 展平进 outbound 顶层、剥离 customSettings 包装，
     // → redactDeep 无法在生成配置里就地读到 secretKeys。故先汇总所有 custom 节点声明的 secretKeys（归一化）
     //   作为 extraSecretKeys 传入，确保第三方协议自定义密钥键在生成配置段也被打码（红线：零明文密钥）。
@@ -184,26 +213,47 @@ export class DiagnosticService {
         for (const k of sk) if (typeof k === 'string') customSecretKeys.add(normalizeKey(k));
     }
     let redactedSingbox: unknown;
+    let coreConfigSource: unknown;
     try {
-      redactedSingbox = redactDeep(
-        this.proxyManager.generateSingBoxConfig(config),
-        customSecretKeys
-      );
+      if (configFailure) throw new Error('Configuration unavailable; no generated configuration');
+      const stat = await fs.stat(getSingBoxConfigPath());
+      if (stat.size > 5 * 1024 * 1024)
+        throw new Error('Saved core configuration exceeds diagnostic budget');
+      const saved = JSON.parse(await fs.readFile(getSingBoxConfigPath(), 'utf8'));
+      redactedSingbox = redactDeep(saved, customSecretKeys);
+      coreConfigSource = {
+        source: 'on-disk',
+        active: status.running,
+        modifiedAt: stat.mtime.toISOString(),
+        sizeBytes: stat.size,
+      };
     } catch (e: any) {
-      redactedSingbox = { error: diagnosticText(60, [e?.message ?? e], getMainLanguage()) };
+      redactedSingbox = {
+        status: 'unavailable',
+        error: redactLogText(diagnosticText(60, [e?.message ?? e], getMainLanguage())),
+      };
+      coreConfigSource = { status: 'unavailable' };
     }
 
     // 纵深防御：脱敏 UserConfig 也兜底（理论上 config 为 JSON 可序列化、redactDeep 无环不会抛，
     // 但任何未来非 JSON 字段引入都不应让整份报告导出失败）。
     let redactedUserConfig: unknown;
     try {
-      redactedUserConfig = redactDeep(config);
+      redactedUserConfig = configFailure
+        ? { status: 'unavailable', error: configFailure }
+        : redactDeep(config);
     } catch (e: any) {
       redactedUserConfig = { error: diagnosticText(61, [e?.message ?? e], getMainLanguage()) };
     }
 
     let speedTestDiagnostics: DiagnosticReportInput['speedTestDiagnostics'];
-    const rawSpeedTestDiagnostics = this.speedTestDiagnosticsProvider?.();
+    const rawSpeedTestDiagnostics = (() => {
+      try {
+        return this.speedTestDiagnosticsProvider?.();
+      } catch {
+        return null;
+      }
+    })();
     if (rawSpeedTestDiagnostics) {
       let redactedTempConfig: unknown;
       if (rawSpeedTestDiagnostics.tempConfig !== undefined) {
@@ -288,7 +338,19 @@ export class DiagnosticService {
     const wantDeeper =
       levelForHint !== 'debug' && TROUBLE_RE.test(appLogTail) && !config.disableLogFile;
 
+    let evidence: unknown;
+    try {
+      evidence = (await this.bounded(Promise.resolve().then(() => this.evidenceProvider?.()))) ?? {
+        status: 'unavailable',
+        reason: 'No host evidence provider',
+      };
+    } catch {
+      evidence = { status: 'unavailable', reason: 'Host evidence collection failed' };
+    }
+    const logArchive = await collectLogArchive(getLogsPath());
     const input: DiagnosticReportInput = {
+      evidence,
+      logArchive,
       language: getMainLanguage(),
       logging: {
         ...this.logManager.getDiagnostics(),
@@ -297,6 +359,16 @@ export class DiagnosticService {
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         uptimeSeconds: Math.floor(process.uptime()),
         node: process.versions.node,
+        reportSchema: 2,
+        configurationAvailable: !configFailure,
+        coreConfigSource,
+        build: { commit: BUILD_COMMIT, date: BUILD_DATE, dirty: BUILD_DIRTY },
+        scope: 'bounded-local-history-and-current-state',
+        limitations: [
+          'Historical logs rotate; truncated and unavailable files are listed',
+          'External gateway decisions and native crash memory are not fully observable',
+          'Export does not trigger network tests or change proxy state',
+        ],
       },
       previousAppLogTail: redactLogText(previousAppLogTail),
       recentEvents: this.logManager
@@ -308,14 +380,14 @@ export class DiagnosticService {
         .join('\n'),
       generatedAt: new Date().toISOString(),
       app: {
-        flowzVersion: app.getVersion(),
+        shadowvpnVersion: app.getVersion(),
         coreVersion: `${coreVersion}; Xray ${compatibilityManifest.xray.version}; mihomo ${compatibilityManifest.mihomo.version}`,
         os: `${process.platform} ${process.arch} ${os.release()}`,
         electron: process.versions.electron,
       },
       runtime: {
-        proxyMode: config.proxyMode,
-        proxyModeType: config.proxyModeType,
+        proxyMode: configFailure ? 'unknown' : config.proxyMode,
+        proxyModeType: configFailure ? 'unknown' : config.proxyModeType,
         proxyRunning: status.running,
         startedViaHelper: this.proxyManager.isStartedViaHelper(),
         systemProxy: sysProxy?.enabled

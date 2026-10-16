@@ -56,9 +56,9 @@ describe('WindowsServiceHelper', () => {
 
     it('install 脚本锁定 exe + flags、设 token ACL、sc create LocalSystem auto-start', () => {
       const script = helper.buildInstallScript(
-        'C:\\Program Files\\FlowZ\\com.dsanying.shadowvpn.helper.exe',
-        'C:\\Program Files\\FlowZ\\sing-box.exe',
-        'C:\\Users\\doveh\\AppData\\Roaming\\FlowZ',
+        'C:\\Program Files\\暗影VPN\\com.dsanying.shadowvpn.helper.exe',
+        'C:\\Program Files\\暗影VPN\\sing-box.exe',
+        'C:\\Users\\doveh\\AppData\\Roaming\\暗影VPN',
         'deadbeefdeadbeef'
       );
       // New-Service（非 sc create binPath=）：BinaryPathName 单一字符串直达 CreateService，绕开 CommandLineToArgvW 碎裂
@@ -70,8 +70,8 @@ describe('WindowsServiceHelper', () => {
       expect(script).toContain('Get-Service');
       expect(script).toContain('1072');
       // 各含空格路径用**真双引号**包裹（非 \"），锁定 exe + 三参
-      expect(script).toContain('--singbox "C:\\Program Files\\FlowZ\\sing-box.exe"');
-      expect(script).toContain('--confdir "C:\\Users\\doveh\\AppData\\Roaming\\FlowZ"');
+      expect(script).toContain('--singbox "C:\\Program Files\\暗影VPN\\sing-box.exe"');
+      expect(script).toContain('--confdir "C:\\Users\\doveh\\AppData\\Roaming\\暗影VPN"');
       expect(script).toContain('--support');
       // U1 外置：binPath 的引导 exe 必须指向 ProgramData 外置副本、而非 app 安装目录内的 helper.exe（根因修复——
       // 否则服务锁定 app 内文件 → 更新覆盖失败 + 卸载留孤儿）。slash 方向随测试宿主不同，故用 ProgramData 子串判定。
@@ -84,7 +84,7 @@ describe('WindowsServiceHelper', () => {
       );
       // 复制源是 app 内置 helper.exe；目的是 ProgramData\ShadowVPN；带 -Force 覆盖 + 退避重试兜解锁窗口竞态。
       expect(script).toContain(
-        "$helperSrc = 'C:\\Program Files\\FlowZ\\com.dsanying.shadowvpn.helper.exe'"
+        "$helperSrc = 'C:\\Program Files\\暗影VPN\\com.dsanying.shadowvpn.helper.exe'"
       );
       expect(script).toMatch(
         /\$helperDst = '[^']*ProgramData[^']*ShadowVPN[^']*com\.dsanying\.shadowvpn\.helper\.exe'/

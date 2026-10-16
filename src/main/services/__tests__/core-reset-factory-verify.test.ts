@@ -14,7 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createHash } from 'crypto';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-reset-verify-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-reset-verify-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false },

@@ -41,15 +41,16 @@ for (const language of ['zh-CN', 'en-US']) {
       await page.goto('/#/nodes/groups');
       const quota = page.locator('.ds-subscription-quota');
       await expect(quota).toHaveCount(4);
-      await expect(quota.nth(0)).not.toContainText('25 GB');
-      await expect(quota.nth(0)).toContainText('100 GB');
-      await expect(quota.nth(0)).toContainText('75 GB');
-      await expect(quota.nth(0).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '75');
-      await expect(quota.nth(1)).toContainText('—');
-      await expect(quota.nth(1).getByRole('progressbar')).toHaveCount(0);
-      await expect(quota.nth(2)).not.toContainText('120 GB');
-      await expect(quota.nth(2)).toContainText('0 B');
-      await expect(quota.nth(3).getByRole('progressbar')).toHaveCount(0);
+      const record=(name:string)=>page.locator('tbody tr[data-row-key]').filter({has:page.getByText(name,{exact:true})}).locator('.ds-subscription-quota');
+      await expect(record('Quota')).not.toContainText('25 GB');
+      await expect(record('Quota')).toContainText('100 GB');
+      await expect(record('Quota')).toContainText('75 GB');
+      await expect(record('Quota').getByRole('progressbar')).toHaveAttribute('aria-valuenow', '75');
+      await expect(record('Partial')).toContainText('—');
+      await expect(record('Partial').getByRole('progressbar')).toHaveCount(0);
+      await expect(record('Exhausted')).not.toContainText('120 GB');
+      await expect(record('Exhausted')).toContainText('0 B');
+      await expect(record('Zero').getByRole('progressbar')).toHaveCount(0);
       for (const element of await quota.all()) {
         expect(await element.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
       }

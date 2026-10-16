@@ -34,7 +34,7 @@ if (existsSync(join(DEST, 'index.html')) && existsSync(marker) && readFileSync(m
   process.exit(0);
 }
 
-const work = mkdtempSync(join(tmpdir(), 'flowz-dashboard-'));
+const work = mkdtempSync(join(tmpdir(), 'shadowvpn-dashboard-'));
 const zipPath = join(work, 'dashboard.zip');
 const extractDir = join(work, 'extracted');
 

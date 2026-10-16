@@ -46,13 +46,13 @@ export interface TailscalePeer {
 // 保留别名兼容既有 self 引用（self 即一个 TailscalePeer）。
 export type TailscaleSelf = TailscalePeer;
 
-// 对端按归属用户分组的容器（仅承载 peers，分组元信息 FlowZ 不用 → 不映射其它字段）。
+// 对端按归属用户分组的容器（仅承载 peers，分组元信息 暗影VPN 不用 → 不映射其它字段）。
 export interface TailscaleUserGroup {
   peers?: TailscalePeer[];
 }
 
 export interface TailscaleEndpointStatus {
-  endpointTag: string; // = FlowZ 节点 tag（server.name）
+  endpointTag: string; // = 暗影VPN 节点 tag（server.name）
   backendState: string; // NoState | NeedsLogin | Starting | Running | ...
   authURL: string;
   self?: TailscaleSelf;
@@ -255,7 +255,7 @@ export class SingBoxApiClient {
    *
    * createSsl(rootCerts?, privateKey?, certChain?, verifyOptions?)（@grpc/grpc-js）：
    *  - rootCerts=null/undefined → 用系统默认受信 CA 链验证服务端证书（公网正规证书场景）；
-   *  - rootCerts=CA Buffer（PEM）→ 仅用该 CA 验证（自签证书场景，FlowZ 把 tls.ca 字符串转 Buffer 传入）；
+   *  - rootCerts=CA Buffer（PEM）→ 仅用该 CA 验证（自签证书场景，暗影VPN 把 tls.ca 字符串转 Buffer 传入）；
    *  - skipVerify：grpc-js 无「完全关闭校验」单一开关；用 verifyOptions.checkServerIdentity 返回 undefined（不抛=接受）
    *    放过 hostname/SAN 不匹配。注意——仅 checkServerIdentity 仍会按 rootCerts 验证书链；自签且未提供 CA 时链亦不过，
    *    故 skipVerify 同时把 rootCerts 兜底为空 Buffer + 该 no-op，达到「自签便利直连」效果（不安全，仅便利档，UI 警示）。

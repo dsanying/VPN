@@ -13,7 +13,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-diagsvc-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-diagsvc-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
@@ -112,8 +112,8 @@ describe('DiagnosticService — 日志取数路径收口', () => {
     expect(md).toContain('核 stderr');
     // 看护自述日志是「谁停的核」的判据，与 FATAL 互补，Windows 上必须一并收
     expect(seen).toContain(getWindowsWatchdogLogPath());
-    expect(md).toContain('## flowz-win-watchdog.log');
-    expect(md).toContain('tail-of:flowz-win-watchdog.log');
+    expect(md).toContain('## shadowvpn-win-watchdog.log');
+    expect(md).toContain('tail-of:shadowvpn-win-watchdog.log');
   });
 
   it('非 Windows 不出看护脚本日志段（避免恒定的「(无日志文件)」噪声）', async () => {
@@ -127,7 +127,7 @@ describe('DiagnosticService — 日志取数路径收口', () => {
       return { seen, md: (await svc.buildReport()) as string };
     });
     expect(seen).not.toContain(getWindowsWatchdogLogPath());
-    expect(md).not.toContain('## flowz-win-watchdog.log');
+    expect(md).not.toContain('## shadowvpn-win-watchdog.log');
   });
 
   it('helper 路径标注为含核 stdout+stderr 且只追加不截断', async () => {
@@ -249,4 +249,40 @@ describe('Localized diagnostic evidence', () => {
     const report = await service.buildReport();
     expect(report).toContain('"flushComplete": false');
   });
+});
+
+test('corrupt configuration still exports logs and marks configuration facts unavailable', async () => {
+  const service = makeSvc();
+  service.configManager.loadConfig.mockRejectedValueOnce(
+    new Error('invalid config token=fixture-config-secret')
+  );
+  jest.spyOn(service, 'readTail').mockResolvedValue('preserved failure evidence');
+  const report = await service.buildReport();
+  expect(report).toContain('preserved failure evidence');
+  expect(report).toContain('"configurationAvailable": false');
+  expect(report).toContain('Configuration unavailable; no generated configuration');
+  expect(report).not.toContain('fixture-config-secret');
+  expect(service.proxyManager.generateSingBoxConfig).not.toHaveBeenCalled();
+});
+
+test('export reads actual saved core configuration instead of generating a misleading preview', async () => {
+  const service = makeSvc();
+  const corePath = require('../../utils/paths').getSingBoxConfigPath();
+  fsSync.writeFileSync(
+    corePath,
+    JSON.stringify({
+      log: { level: 'info' },
+      outbounds: [{ type: 'trojan', password: 'fixture-core-secret' }],
+    })
+  );
+  try {
+    jest.spyOn(service, 'readTail').mockResolvedValue('');
+    const report = await service.buildReport();
+    expect(report).toContain('"source": "on-disk"');
+    expect(report).toContain('trojan');
+    expect(report).not.toContain('fixture-core-secret');
+    expect(service.proxyManager.generateSingBoxConfig).not.toHaveBeenCalled();
+  } finally {
+    fsSync.unlinkSync(corePath);
+  }
 });

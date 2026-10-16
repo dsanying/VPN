@@ -3,7 +3,11 @@ import { PortableMeasurementRepository } from './portable-measurement-repository
 import { subscriptionMeasurementIdentity } from './measurement-identity';
 import { createHostTextRequester, type HostTextTransport } from './host-text-request';
 import { DEFAULT_SUBSCRIPTION_USER_AGENT } from './subscription-request';
-import type { SubscriptionConnectivity, SubscriptionLinkProbe } from './subscription-connectivity';
+import type {
+  SubscriptionConnectivity,
+  SubscriptionLinkProbe,
+  SubscriptionProbeProgress,
+} from './subscription-connectivity';
 
 export async function portableSha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -39,7 +43,8 @@ export class PortableSubscriptionMeasurements {
     store: ConfigDocumentStore,
     host: HostTextTransport,
     private readonly publish: (records: Record<string, SubscriptionConnectivity>) => void,
-    private readonly hash: (value: string) => Promise<string> = portableSha256
+    private readonly hash: (value: string) => Promise<string> = portableSha256,
+    private readonly progress?: (value: SubscriptionProbeProgress) => void
   ) {
     this.records = new PortableMeasurementRepository(
       store,
@@ -71,6 +76,14 @@ export class PortableSubscriptionMeasurements {
     const abort = new AbortController();
     const observedAt = Date.now();
     const promise = (async () => {
+      const emit = (value: SubscriptionProbeProgress) => {
+        try {
+          this.progress?.(value);
+        } catch {
+          /* Detached view cannot interrupt measurement. */
+        }
+      };
+      emit({ subscriptionId: id, url: sub.url, startedAt: observedAt });
       const probe = async (route: 'direct' | 'current'): Promise<SubscriptionLinkProbe> => {
         const start = performance.now();
         try {
@@ -101,7 +114,12 @@ export class PortableSubscriptionMeasurements {
         }
       };
       // Independent routes share a bounded native request deadline, never confirmation polling.
-      const [direct, current] = await Promise.all([probe('direct'), probe('current')]);
+      const run = async (route: 'direct' | 'current') => {
+        const value = await probe(route);
+        if (!abort.signal.aborted) emit({ subscriptionId: id, url: sub.url, route, probe: value });
+        return value;
+      };
+      const [direct, current] = await Promise.all([run('direct'), run('current')]);
       if (abort.signal.aborted) throw new DOMException('请求已取消', 'AbortError');
       const value = { direct, current, checkedAt: new Date(observedAt).toISOString() };
       await this.records.save(id, { fingerprint, observedAt, value });

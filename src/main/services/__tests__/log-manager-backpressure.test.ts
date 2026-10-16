@@ -36,7 +36,7 @@ describe('LogManager 背压（issue #210 根因 #1）', () => {
   let manager: LogManager;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-log-bp-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-log-bp-'));
     manager = new LogManager(tmpDir);
     appendFileCalls = 0;
     pendingResolvers = [];

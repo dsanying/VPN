@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconButton, ResponsiveActions, AtomicValue, StatusTag } from '@/components/client';
 import { useAppStore } from '@/store/app-store';
+import { useSpeedTestStore } from '@/store/useSpeedTestStore';
 import { api } from '@/ipc';
 import './desktop.css';
 export function DesktopTitlebar() {
@@ -44,8 +45,11 @@ export function DesktopStatus() {
   const running = useAppStore((s) => s.connectionStatus?.proxyCore.running ?? false);
   const config = useAppStore((s) => s.config);
   const ip = useAppStore((s) => s.ipInfo);
+  const testing = useSpeedTestStore((s) => s.testing.length > 0);
+  const progress = useSpeedTestStore((s) => s.progress);
   const { t } = useTranslation();
   const node = config?.servers.find((n) => n.id === config.selectedServerId);
+  const percent = Math.min(100, Math.round((progress.tested / Math.max(progress.total, 1)) * 100));
   return (
     <footer className="ds-desktop-status">
       <StatusTag tone={running ? 'success' : 'neutral'}>
@@ -54,6 +58,14 @@ export function DesktopStatus() {
       {node ? <NodeIdentity nodeId={node.id} name={node.name} /> : null}
       {ip ? (
         <AtomicValue text={(running ? ip.proxy : ip.direct)?.ip ?? t('common.emptyValue')} />
+      ) : null}
+      {testing ? (
+        <span className="ds-desktop-status__progress" role="status">
+          <span>{t('vpn.testing', progress)}</span>
+          <span className="ds-desktop-status__meter" aria-hidden>
+            <span style={{ width: `${percent}%` }} />
+          </span>
+        </span>
       ) : null}
     </footer>
   );

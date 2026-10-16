@@ -26,8 +26,8 @@
     "test:ui:full": "pnpm build:ui && node scripts/run-runtime.mjs ui-full",
     "typecheck": "tsc -b --pretty false",
     "check:static": "node scripts/client-checks.mjs --phase static",
-    "check:client": "node --test scripts/check-expanded.test.mjs && node scripts/check-expanded.mjs --project . --source src/pages --source src/components/vpn && pnpm check:client:time",
-    "check:client:time": "node --test scripts/check-client-time.test.mjs && node scripts/check-client-time.mjs --project . --source src/pages --source src/components/vpn --source src/utils"
+    "check:client": "node --test scripts/check-expanded.test.mjs && node scripts/check-expanded.mjs --project . --source src --source update-popup && pnpm check:client:time",
+    "check:client:time": "node --test scripts/check-client-time.test.mjs && node scripts/check-client-time.mjs --project . --source src --source update-popup"
   },
   "dependencies": {
     "@ant-design/icons": "6.3.4",

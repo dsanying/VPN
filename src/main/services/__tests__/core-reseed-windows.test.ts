@@ -12,7 +12,7 @@ import * as os from 'os';
 import * as fsSync from 'fs';
 import * as path from 'path';
 
-const ROOT = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-reseed-win-'));
+const ROOT = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-reseed-win-'));
 const RESOURCES = path.join(ROOT, 'resources');
 Object.defineProperty(process, 'resourcesPath', { value: RESOURCES, configurable: true });
 

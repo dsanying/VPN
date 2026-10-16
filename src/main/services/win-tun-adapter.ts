@@ -2,7 +2,7 @@
  * Windows TUN（wintun）适配器释放探测与门控（issue #159）。
  *
  * 根因：服务模式 CTRL_BREAK 恒 no-op → 旧 sing-box 被硬杀、不自拆 wintun → 适配器滞留；新核撞同名网卡
- * `open interface take too much time` 而退。修复=起核前等本名（flowz-tun0）网卡真消失再放行。
+ * `open interface take too much time` 而退。修复=起核前等本名（shadowvpn-tun0）网卡真消失再放行。
  *
  * 设计要点：
  *  - 设备级、按名匹配（非按地址）：杜绝与外部 sing-box / 用户手动核 / 自家孤儿核的同址网卡混淆。
@@ -130,7 +130,7 @@ function runNetshProbe(args: string[]): Promise<PsProbeResult> {
  * 从 `netsh interface show interface` 的表里判断本名接口在不在。
  *
  * 判据：netsh 的列是**空白对齐**的，接口名在最后一列，故按 `\s{2,}` 切出的最后一个字段即接口名全称。
- * 这一点比「最后一个空白分隔 token」强：后者会把名为 `VPN flowz-tun0` 的**别的**网卡误判成本名命中
+ * 这一点比「最后一个空白分隔 token」强：后者会把名为 `VPN shadowvpn-tun0` 的**别的**网卡误判成本名命中
  * （`Get-NetAdapter -Name` 是精确匹配，不会）。
  *
  * **含糊时降级为 unknown，绝不降级为 absent**：若某行以子串形式含本名、却切不出干净字段（列间只隔了

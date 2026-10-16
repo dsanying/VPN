@@ -20,7 +20,7 @@ const path = require('path');
 const fsSync = require('fs');
 
 // T1 用临时目录（ProxyManager 构造需 configPath）
-const TMP_PM = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-gate-pm-'));
+const TMP_PM = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-gate-pm-'));
 
 jest.mock('electron', () => ({
   app: {
@@ -39,9 +39,9 @@ jest.mock('electron', () => ({
 // ResourceManager 含 electron 间接依赖；T2 落位路径会读 getSingBoxUpdateTargetPath。
 jest.mock('../ResourceManager', () => ({
   resourceManager: {
-    getSingBoxPath: () => '/tmp/flowz-fake/sing-box',
-    getSingBoxUpdateTargetPath: () => '/tmp/flowz-fake/sing-box',
-    getBundledSingBoxPath: () => '/tmp/flowz-fake/sing-box-bundled',
+    getSingBoxPath: () => '/tmp/shadowvpn-fake/sing-box',
+    getSingBoxUpdateTargetPath: () => '/tmp/shadowvpn-fake/sing-box',
+    getBundledSingBoxPath: () => '/tmp/shadowvpn-fake/sing-box-bundled',
     ensureCronetBeside: jest.fn(),
   },
 }));
@@ -162,7 +162,7 @@ describe('T2：CoreUpdateService 4 写核路径 setCoreSwapInProgress try/finall
   }
 
   /** 真实临时 staged 目录 + sing-box 文件（tryApplyStaged 落位路径需 staged.dir 存文件）。 */
-  const stagedDir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-gate-staged-'));
+  const stagedDir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-gate-staged-'));
   const coreName = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
   fsSync.writeFileSync(path.join(stagedDir, coreName), 'fake-core');
 

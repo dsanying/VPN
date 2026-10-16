@@ -31,7 +31,7 @@ describe('buildFatalErrorPageHtml', () => {
 
   it('无 retryChannel → 按钮内联脚本走 location.reload()', () => {
     const html = buildFatalErrorPageHtml({ title: 'T', message: 'M', reloadLabel: 'R' });
-    expect(html).toContain("getElementById('flowz-reload')");
+    expect(html).toContain("getElementById('shadowvpn-reload')");
     expect(html).toContain('location.reload()');
     expect(html).not.toContain('ipcRenderer.invoke');
   });

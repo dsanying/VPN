@@ -3,7 +3,10 @@ import { createHash } from 'crypto';
 import * as path from 'path';
 import type { ConfigManager } from './ConfigManager';
 import type { SubscriptionConfig } from '../../shared/types';
-import type { SubscriptionConnectivity } from '../../shared/subscription-connectivity';
+import type {
+  SubscriptionConnectivity,
+  SubscriptionProbeProgress,
+} from '../../shared/subscription-connectivity';
 import { checkSubscriptionConnectivity } from './subscription-connectivity';
 import { measurementDatabase } from './MeasurementDatabase';
 import { subscriptionMeasurementIdentity } from '../../shared/measurement-identity';
@@ -18,7 +21,8 @@ export class SubscriptionMeasurementService {
   constructor(
     private readonly manager: ConfigManager,
     private readonly port: () => number | null,
-    private readonly publish: (records: Record<string, SubscriptionConnectivity>) => void
+    private readonly publish: (records: Record<string, SubscriptionConnectivity>) => void,
+    private readonly progress?: (value: SubscriptionProbeProgress) => void
   ) {
     this.database = measurementDatabase(
       path.join(path.dirname(manager.getConfigPath()), 'measurements.sqlite')
@@ -45,7 +49,17 @@ export class SubscriptionMeasurementService {
     const existing = this.flights.get(key);
     if (existing) return existing;
     const task = (async () => {
-      const value = await checkSubscriptionConnectivity(sub, this.port());
+      const emit = (value: SubscriptionProbeProgress) => {
+        try {
+          this.progress?.(value);
+        } catch {
+          /* Detached view cannot interrupt measurement. */
+        }
+      };
+      emit({ subscriptionId: id, url: sub.url, startedAt: Date.now() });
+      const value = await checkSubscriptionConnectivity(sub, this.port(), (route, probe) =>
+        emit({ subscriptionId: id, url: sub.url, route, probe })
+      );
       const latest = await this.manager.loadConfig();
       const current = latest.subscriptions?.find((item) => item.id === id);
       // Deleted or edited while the request was in flight: never resurrect an obsolete record.

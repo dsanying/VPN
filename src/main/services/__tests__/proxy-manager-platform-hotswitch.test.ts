@@ -5,7 +5,7 @@
  * 「gvisor/mixed 未实测，保守起见」。207 补测（wintun + clash_api selector + interrupt_exist_connections
  * + 切换期持续打流）三栈各 3 次切换均 **21/21 零失败、无环路** → guard 依据被推翻，与 Windows 默认栈
  * 改 gvisor 同批删除。留着 guard 等于让全体 Windows 用户换节点从零断流降级成重启核。
- * 注：该补测是**裸 sing-box 最小配置**（无 FakeIP / DNS 劫持 / 规则集 / helper 提权路径），FlowZ 本体的
+ * 注：该补测是**裸 sing-box 最小配置**（无 FakeIP / DNS 劫持 / 规则集 / helper 提权路径），暗影VPN 本体的
  * gvisor 换节点回归已于 2026-08-05 在 207 跑完（换节点 ×10 核 PID 不变、175/175 请求成功），
  * 本 suite 只锁「代码层不再按平台/栈拦截」。
  *
@@ -20,7 +20,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-plat-test-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-plat-test-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },

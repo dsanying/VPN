@@ -24,7 +24,7 @@ export function isDesktopNotificationsEnabled(): boolean {
 
 /**
  * 发一条桌面通知。应用级关 / 系统不支持 / 异常 → 静默不发，绝不抛。
- * @param title   标题（品牌/分类，建议语言中性如 'FlowZ'）
+ * @param title   标题（品牌/分类，建议语言中性如 '暗影VPN'）
  * @param body    正文（应用自生成文案/错误信息，**不得含节点名等身份**）
  * @param onClick 可选：点击通知的回调（如打开设置/浏览器）
  */

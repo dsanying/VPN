@@ -1,3 +1,9 @@
+import type {
+  EnterpriseSnapshot,
+  EnterpriseDetection,
+  EnterpriseProfile,
+  EnterpriseProfileInput,
+} from '@shared/enterprise-vpn';
 import type { SubscriptionConnectivity } from '@shared/subscription-connectivity';
 import type { NodeProbeDetails } from '@shared/speed-test';
 import { ipcClient } from './ipc-client';
@@ -168,7 +174,7 @@ export const proxyApi = {
   },
 
   /**
-   * 监听 TUN 启动后的「无 marker 系统代理残留」提示（非 FlowZ 设的代理仍开着，可能干扰 TUN）。
+   * 监听 TUN 启动后的「无 marker 系统代理残留」提示（非 暗影VPN 设的代理仍开着，可能干扰 TUN）。
    */
   onSystemProxyResidual(listener: (data: { proxy: string }) => void): () => void {
     return ipcClient.on(IPC_CHANNELS.EVENT_SYSTEM_PROXY_RESIDUAL, listener);
@@ -702,6 +708,11 @@ export const subscriptionApi = {
   async measurements(): Promise<Record<string, SubscriptionConnectivity>> {
     return ipcClient.invoke(IPC_CHANNELS.SUBSCRIPTION_MEASUREMENTS);
   },
+  onProbeProgress(
+    listener: (value: import('@shared/subscription-connectivity').SubscriptionProbeProgress) => void
+  ): () => void {
+    return ipcClient.on(IPC_CHANNELS.EVENT_SUBSCRIPTION_PROBE_PROGRESS, listener);
+  },
   onMeasurements(
     listener: (records: Record<string, SubscriptionConnectivity>) => void
   ): () => void {
@@ -822,7 +833,7 @@ export const helperApi = {
 
 export const appApi = {
   /**
-   * B6：完全卸载 FlowZ（清除提权 helper、受保护目录内核、用户配置、应用本体）。
+   * B6：完全卸载 暗影VPN（清除提权 helper、受保护目录内核、用户配置、应用本体）。
    */
   async uninstallAll(): Promise<{ ok: boolean; error?: string }> {
     return ipcClient.invoke(IPC_CHANNELS.APP_UNINSTALL_ALL);
@@ -888,7 +899,28 @@ export const localImportApi = {
   },
 };
 
+export const enterpriseApi = {
+  get: (): Promise<EnterpriseSnapshot> => ipcClient.invoke(IPC_CHANNELS.ENTERPRISE_GET),
+  detect: (gateway: string): Promise<EnterpriseDetection> =>
+    ipcClient.invoke(IPC_CHANNELS.ENTERPRISE_DETECT, { gateway }),
+  save: (input: EnterpriseProfileInput): Promise<EnterpriseProfile> =>
+    ipcClient.invoke(IPC_CHANNELS.ENTERPRISE_SAVE, input),
+  respond: (
+    id: string,
+    value: {
+      fields?: Record<string, string>;
+      code?: string;
+      callbackURL?: string;
+      points?: { x: number; y: number }[];
+      width?: number;
+      height?: number;
+    }
+  ): Promise<void> => ipcClient.invoke(IPC_CHANNELS.ENTERPRISE_RESPOND, { id, value }),
+  onChanged: (listener: (snapshot: EnterpriseSnapshot) => void): (() => void) =>
+    ipcClient.on(IPC_CHANNELS.EVENT_ENTERPRISE_CHANGED, listener),
+};
 export const api = {
+  enterprise: enterpriseApi,
   proxy: proxyApi,
   window: windowApi,
   config: configApi,

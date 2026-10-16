@@ -3,7 +3,7 @@ jest.mock('electron', () => {
   const os = require('os');
   const path = require('path');
   const fs = require('fs');
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-core-test-'));
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-core-test-'));
   return {
     app: { getPath: (_k: string) => tmpRoot },
     net: { request: jest.fn() },
@@ -14,8 +14,8 @@ jest.mock('electron', () => {
 // 「检查→stage/跨带」分支（代理 mock 为 running，永不落位），故 ensureCronetBeside 等不会被调用。
 jest.mock('../ResourceManager', () => ({
   resourceManager: {
-    getSingBoxPath: () => '/tmp/flowz-fake/sing-box',
-    getSingBoxUpdateTargetPath: () => '/tmp/flowz-fake/sing-box',
+    getSingBoxPath: () => '/tmp/shadowvpn-fake/sing-box',
+    getSingBoxUpdateTargetPath: () => '/tmp/shadowvpn-fake/sing-box',
     ensureCronetBeside: jest.fn(),
   },
 }));
@@ -201,7 +201,7 @@ describe('CoreUpdateService.tryApplyStaged / applyStagedNow', () => {
   // 真实临时 staged 目录 + sing-box 文件（避免 spy 不可配置的 fs.existsSync）
   const os = require('os');
   const realPath = require('path');
-  const stagedDir = fs.mkdtempSync(realPath.join(os.tmpdir(), 'flowz-staged-'));
+  const stagedDir = fs.mkdtempSync(realPath.join(os.tmpdir(), 'shadowvpn-staged-'));
   const coreName = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
   fs.writeFileSync(realPath.join(stagedDir, coreName), 'fake-core');
   const STAGED = { version: '1.13.14', dir: stagedDir, stagedAt: 'now' };
@@ -359,7 +359,7 @@ describe('CoreUpdateService.tryApplyStaged / applyStagedNow', () => {
 
   it('staged 暂存核心文件缺失 → clearStaged → discarded（不预检不换核）', async () => {
     // staged.dir 指向一个空临时目录（无 sing-box 二进制）
-    const emptyDir = fs.mkdtempSync(realPath.join(os.tmpdir(), 'flowz-staged-empty-'));
+    const emptyDir = fs.mkdtempSync(realPath.join(os.tmpdir(), 'shadowvpn-staged-empty-'));
     const { svc, clearSpy, installSpy } = makeSvc({ running: false });
     (svc as any).loadAutoState = () => ({
       staged: { version: '1.13.14', dir: emptyDir, stagedAt: 'now' },

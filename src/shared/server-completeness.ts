@@ -26,6 +26,7 @@ export const ALL_PROTOCOLS: readonly Protocol[] = [
   'wireguard',
   'tailscale',
   'custom',
+  'enterprise',
 ];
 
 /** 自定义协议的 outbound 是否合法形态（对象且含非空字符串 type）。语义不校验，交内核。 */
@@ -98,10 +99,16 @@ export function protocolRequirementError(server: ServerConfig): string | null {
     case 'http':
     case 'ssh':
       return null; // 仅需 address/port（调用方通用校验）
+    case 'enterprise':
+      return server.enterpriseSettings?.profileId &&
+        server.enterpriseSettings.gateway &&
+        server.enterpriseSettings.client
+        ? null
+        : 'Enterprise node requires a stored gateway identity';
     case 'tailscale':
       return null; // 账号制：auth_key 可选（无则运行时交互登录），无硬必填项；亦无 address/port
     case 'custom':
-      // raw-JSON 透传：必须是含 type 的 outbound 对象（语义/能否启用由内核 check 判，FlowZ 不校验）。
+      // raw-JSON 透传：必须是含 type 的 outbound 对象（语义/能否启用由内核 check 判，暗影VPN 不校验）。
       return isValidCustomOutbound(server.customSettings?.outbound)
         ? null
         : 'Custom protocol requires a JSON outbound object with a "type" field';

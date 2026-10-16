@@ -132,7 +132,7 @@ export interface ElevatedLaunchPaths {
  * 对不上（Mandatory 缺参 → 隐藏窗口里挂起），issue #324 的 review 已点过这个漂移风险。
  */
 export function windowsWatchdogScriptText(): string {
-  return `# FlowZ elevated watchdog (run by UAC-elevated PowerShell via -File). Do not edit manually.
+  return `# ShadowVPN elevated watchdog (run by UAC-elevated PowerShell via -File). Do not edit manually.
 param(
   [Parameter(Mandatory = $true)][string]$SbPath,
   [Parameter(Mandatory = $true)][string]$CfgPath,
@@ -150,7 +150,7 @@ $ErrorActionPreference = 'Continue'
 function Log([string]$Msg) {
   try { ((Get-Date -Format 'HH:mm:ss') + ' [watchdog] ' + $Msg) | Out-File -FilePath $WatchdogLog -Append -Encoding UTF8 } catch {}
 }
-try { 'FlowZ watchdog starting...' | Out-File -FilePath $WatchdogLog -Encoding UTF8 } catch {}
+try { 'ShadowVPN watchdog starting...' | Out-File -FilePath $WatchdogLog -Encoding UTF8 } catch {}
 if (-not (Test-Path -LiteralPath $SbPath)) { Log 'ERROR: sing-box not found'; exit 1 }
 if (-not (Test-Path -LiteralPath $CfgPath)) { Log 'ERROR: config not found'; exit 1 }
 
@@ -179,7 +179,7 @@ if ($Forward -eq '1') {
 #   "updated default interface" line and zero FATAL - exactly what issue #324 reported).
 #   Without this redirect the failure reason is lost for good and diagnostics can never pin it down.
 # stderr only, no stdout redirect: (1) PowerShell refuses both pointing at the same path;
-#   (2) FlowZ always sets log.output, so stdout measured 0 bytes - a second file buys nothing.
+#   (2) ShadowVPN always sets log.output, so stdout measured 0 bytes - a second file buys nothing.
 # The redirect truncates on open, so each start begins a fresh run - report readers cannot mistake
 #   a previous session's FATAL for this one (sing-box stamps FATAL[0000], a relative second, not a clock).
 try {
@@ -291,7 +291,7 @@ SETCAP="$(command -v setcap || echo /usr/sbin/setcap)"
 "$SETCAP" 'cap_net_admin,cap_net_bind_service,cap_net_raw=+ep' "$CORE"
 mkdir -p /etc/polkit-1/rules.d
 cat > "$RULES" <<'EOF'
-// FlowZ: 允许指定用户改 systemd-resolved 链路 DNS（TUN auto_route 免逐条密码框）。手动删除本文件即恢复默认。
+// 暗影VPN: 允许指定用户改 systemd-resolved 链路 DNS（TUN auto_route 免逐条密码框）。手动删除本文件即恢复默认。
 polkit.addRule(function(action, subject) {
   if (action.id.indexOf("org.freedesktop.resolve1.") === 0 &&
       subject.user === "${user}" && subject.local && subject.active) {
@@ -303,14 +303,14 @@ EOF
 PKLA_DIR=/etc/polkit-1/localauthority/50-local.d
 if [ -d /etc/polkit-1/localauthority ]; then
   mkdir -p "$PKLA_DIR"
-  cat > "$PKLA_DIR/49-flowz-resolved.pkla" <<'EOF2'
-[FlowZ resolved DNS]
+  cat > "$PKLA_DIR/49-shadowvpn-resolved.pkla" <<'EOF2'
+[ShadowVPN resolved DNS]
 Identity=unix-user:${user}
 Action=org.freedesktop.resolve1.*
 ResultActive=yes
 EOF2
 fi
-echo flowz-linux-tun-setup-ok
+echo shadowvpn-linux-tun-setup-ok
 `;
   }
 
@@ -333,7 +333,7 @@ echo flowz-linux-tun-setup-ok
    */
   writeWrapperScript(): void {
     const script = `#!/bin/bash
-# FlowZ 看护脚本（osascript 以 root 执行）；勿手改。
+# 暗影VPN 看护脚本（osascript 以 root 执行）；勿手改。
 SB="$1"; CFG="$2"; LOG="$3"; PIDFILE="$4"; STOPFLAG="$5"; PARENT="$6"; FWD="$7"
 if [ "$FWD" = "1" ]; then sysctl -w net.inet.ip.forwarding=1 >/dev/null 2>&1; sysctl -w net.inet6.ip6.forwarding=1 >/dev/null 2>&1; fi
 "$SB" run -c "$CFG" > "$LOG" 2>&1 &
@@ -365,7 +365,7 @@ rm -f "$STOPFLAG"
    * 字面与 ProxyManager.getWindowsWatchdogScriptPath 恒一致（同上避免循环依赖）。
    */
   private getWindowsWatchdogScriptPath(): string {
-    return path.join(getUserDataPath(), 'flowz-win-watchdog.ps1');
+    return path.join(getUserDataPath(), 'shadowvpn-win-watchdog.ps1');
   }
 
   /**
@@ -481,7 +481,10 @@ rm -f "$STOPFLAG"
       } catch {
         /* 已存在 → 忽略 */
       }
-      const scriptPath = path.join(privDir, `flowz-copy-${randomBytes(12).toString('hex')}.ps1`);
+      const scriptPath = path.join(
+        privDir,
+        `shadowvpn-copy-${randomBytes(12).toString('hex')}.ps1`
+      );
       // 使用 $ErrorActionPreference = 'Stop' 确保出错时非 0 退出。
       // Fix：原 `Stop-Process -Name "sing-box"` 盲杀所有 sing-box.exe，与换核 async 窗口叠加会误杀用户重连启动的核。
       // 改为仅按 ExecutablePath 定向终止「正在运行本次待覆盖二进制(dest)」的进程（与 writeWindowsWatchdogScript 的
@@ -537,11 +540,11 @@ rm -f "$STOPFLAG"
       `chmod 755 ${shq(dest)}`,
       '',
     ].join('\n');
-    const scriptPath = path.join(app.getPath('temp'), `flowz-core-install-${process.pid}.sh`);
+    const scriptPath = path.join(app.getPath('temp'), `shadowvpn-core-install-${process.pid}.sh`);
     fs.writeFileSync(scriptPath, script, { mode: 0o755 });
     try {
       await new Promise<void>((resolve, reject) => {
-        // 路径单引号包裹容忍空格；FlowZ 路径不含单/双引号（同 runRootScript 约束）。
+        // 路径单引号包裹容忍空格；暗影VPN 路径不含单/双引号（同 runRootScript 约束）。
         const proc = spawn('/usr/bin/osascript', [
           '-e',
           `do shell script "/bin/bash '${scriptPath}'" with administrator privileges`,
@@ -879,7 +882,7 @@ rm -f "$STOPFLAG"
 
     const fs = require('fs');
     const corePath = this.ctx.singboxPath();
-    const rulesFile = '/etc/polkit-1/rules.d/49-flowz-resolved.rules';
+    const rulesFile = '/etc/polkit-1/rules.d/49-shadowvpn-resolved.rules';
 
     // 核心不存在 → 直接报「找不到」（命中 nonRetryableErrors），不白弹密码框（P2-3）
     if (!fs.existsSync(corePath)) {
@@ -935,7 +938,7 @@ rm -f "$STOPFLAG"
       'Linux TUN 首次配置：请求一次管理员授权（赋核心网络权限 + 安装 DNS polkit 规则）...'
     );
 
-    const scriptPath = path.join(getUserDataPath(), 'flowz-linux-tun-setup.sh');
+    const scriptPath = path.join(getUserDataPath(), 'shadowvpn-linux-tun-setup.sh');
     try {
       fs.writeFileSync(scriptPath, this.buildLinuxTunSetupScript(corePath, user, rulesFile), {
         mode: 0o755,
@@ -1034,7 +1037,7 @@ rm -f "$STOPFLAG"
    * 迁自 ProxyManager.startSingBoxProcess needsWindowsUAC 分支（command/args + psScript 构造段）：
    * 外层 powershell（非提权）只负责发起 UAC：Start-Process -Verb RunAs 拉起提权 powershell 执行看护脚本。
    * 参数经 -File 传递（不走 -Command 内联，避免多层转义）；-ArgumentList 不会给含空格元素自动加引号
-   * → 路径元素显式内嵌双引号（FlowZ 路径不含单/双引号）。
+   * → 路径元素显式内嵌双引号（暗影VPN 路径不含单/双引号）。
    * 授权成功外层立即退 0（不 -Wait，看护脚本常驻）；取消 UAC 时 Start-Process 抛错 → 退 1，
    * 与旧实现的退出码协议一致（exit 处理留 ProxyManager）。
    */

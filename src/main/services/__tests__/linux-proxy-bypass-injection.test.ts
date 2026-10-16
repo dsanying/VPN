@@ -14,11 +14,11 @@ jest.mock('child_process', () => ({
 
 jest.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/flowz-test-linux-inj',
-    getName: () => 'FlowZ',
+    getPath: () => '/tmp/shadowvpn-test-linux-inj',
+    getName: () => '暗影VPN',
     getVersion: () => '9.9.9',
     isPackaged: false,
-    getAppPath: () => '/tmp/flowz-test-linux-inj',
+    getAppPath: () => '/tmp/shadowvpn-test-linux-inj',
   },
   net: {},
 }));

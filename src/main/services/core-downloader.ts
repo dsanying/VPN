@@ -47,7 +47,7 @@ export class CoreDownloader {
   /** direct 自举兜底会话（强制 mode:direct，绕 default session http 入站挂死）。 */
   private async getDirectSession(): Promise<Session> {
     if (this.updateDirectSession) return this.updateDirectSession;
-    const s = session.fromPartition('flowz-core-update-direct');
+    const s = session.fromPartition('shadowvpn-core-update-direct');
     await s.setProxy({ mode: 'direct' });
     this.updateDirectSession = s;
     return s;

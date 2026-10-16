@@ -123,8 +123,13 @@ export async function createMobileServiceRuntime(
       .then((entries) => service?.emit(C.EVENT_LOG_RECEIVED_BATCH, entries))
       .catch(() => undefined);
   };
-  const links = new PortableSubscriptionMeasurements(config, store, native, (records) =>
-    service?.emit(C.EVENT_SUBSCRIPTION_MEASUREMENTS, records)
+  const links = new PortableSubscriptionMeasurements(
+    config,
+    store,
+    native,
+    (records) => service?.emit(C.EVENT_SUBSCRIPTION_MEASUREMENTS, records),
+    undefined,
+    (value) => service?.emit(C.EVENT_SUBSCRIPTION_PROBE_PROGRESS, value)
   );
   const nodes = new PortableNodeMeasurements(
     config,
@@ -251,6 +256,9 @@ export async function createMobileServiceRuntime(
     speedTest: (ids) => nodes.test(ids),
     version: () => native.clientInfo(),
     logs: () => logs.read(),
+    recordOperation: async (entry) => {
+      await logs.append([entry]);
+    },
     commands: new Map<string, (args: unknown) => Promise<unknown>>([
       [
         C.UPDATE_CHECK,

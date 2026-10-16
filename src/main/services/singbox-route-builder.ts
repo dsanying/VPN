@@ -212,7 +212,7 @@ export function buildRouteConfig(
   //                  时随 final 回退 direct，避免功能流量黑洞——与 probe-proxy-in 固定用 selector 的取舍不同：
   //                  探针黑洞=如实显示出口不可达，更新黑洞=静默失败，故更新走 userExitTag 兜底）
   //   direct       → direct（尊重用户直连意图，§6.2 不偷代理）
-  //   不限 domain：归属 100% 确定（只有 FlowZ pin 此口）→ 不误伤；且覆盖任意订阅 URL（列不出域名集）。
+  //   不限 domain：归属 100% 确定（只有 暗影VPN pin 此口）→ 不误伤；且覆盖任意订阅 URL（列不出域名集）。
   if (deps.updateInPort) {
     rules.push({
       inbound: ['update-in'],
@@ -223,9 +223,15 @@ export function buildRouteConfig(
 
   // 1. 强制放行 sing-box 核心进程：防止流量回流死循环
   // 必须放在最高优先级，确保核心组件的请求能直连物理网卡
-  // 注意：不要把 FlowZ (主进程) 放在直连里，否则会干扰 FlowZ 自身的 GitHub 核心下载和测速。
+  // 注意：不要把 暗影VPN (主进程) 放在直连里，否则会干扰 暗影VPN 自身的 GitHub 核心下载和测速。
   rules.push({
-    process_name: ['sing-box', 'sing-box.exe'],
+    process_name: [
+      'sing-box',
+      'sing-box.exe',
+      ...(config.servers.some((server) => server.enterpriseSettings)
+        ? ['openconnect', 'openconnect.exe', 'enterprise-runtime', 'enterprise-runtime.exe']
+        : []),
+    ],
     action: 'route',
     outbound: 'direct',
   });
@@ -346,9 +352,11 @@ export function buildRouteConfig(
     const ipSet = new Set<string>();
     const domainSet = new Set<string>();
     for (const s of config.servers) {
-      const hosts = [s.address, s.tlsSettings?.serverName].filter(
-        (h): h is string => !!h && h.length > 0
-      );
+      const hosts = [
+        s.address,
+        s.tlsSettings?.serverName,
+        ...(s.enterpriseSettings ? [new URL(s.enterpriseSettings.gateway).hostname] : []),
+      ].filter((h): h is string => !!h && h.length > 0);
       for (const host of hosts) {
         const cidr = isIpv4Host(host) || isIpv6Host(host) ? hostToExcludeCidr(host) : null;
         if (cidr) ipSet.add(cidr);
@@ -426,7 +434,7 @@ export function buildRouteConfig(
   // #347：拨号前把目的域名解析成真实 IP 再交给出站（sing-box route action `resolve`）。
   // 背景：1.13+ 移除 `sniff_override_destination` 且无替代，FakeIP 反查出的域名会原样随包发给节点，节点侧的
   //   策略或其自身解析器成为单点。同机场同时段的 NekoBox（开着 FakeDNS 但拨号前解析成真 IP）一切正常，
-  //   FlowZ 发域名则被对端在 78–107ms 内 FIN —— A/B 对照的唯一变量就是目的地交付形态。
+  //   暗影VPN 发域名则被对端在 78–107ms 内 FIN —— A/B 对照的唯一变量就是目的地交付形态。
   // 机制：actionResolve 只写 metadata.DestinationAddresses、**不动 Destination** →
   //   ① 后续 domain/domain_suffix/domain_keyword/geosite 规则逐字等效（DomainItem.Match 读 metadata.Domain
   //      或 Destination.Fqdn，两者都还在）；② 出站因 DestinationAddresses 非空改走 DialSerialNetwork，收到纯 IP。

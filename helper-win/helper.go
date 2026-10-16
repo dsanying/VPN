@@ -20,12 +20,12 @@ import (
 // 助手应用版本；通信标准固定为 JSON-RPC 2.0，功能通过 capabilities 发现。
 const helperVersion = helperrpc.Version
 
-// route-add/route-del 安全约束：仅允许 FlowZ 自己的内核接口名（flowz-ts/flowz-wg/flowz-tun0…），杜绝任意接口注入。
+// route-add/route-del 安全约束：仅允许 本应用内核接口名（shadowvpn-ts/shadowvpn-wg/shadowvpn-tun0…），杜绝任意接口注入。
 func ifaceAllowed(s string) bool {
-	if !strings.HasPrefix(s, "flowz-") || len(s) > 24 {
+	if !strings.HasPrefix(s, "shadowvpn-") || len(s) > 24 {
 		return false
 	}
-	for _, c := range s[len("flowz-"):] {
+	for _, c := range s[len("shadowvpn-"):] {
 		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
 			return false
 		}
@@ -161,7 +161,7 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 		}
 	case "route-add", "route-del":
 		// proto v2：出口托管在 System 内核接口装/清拆半默认路由（netsh，store=active 非持久、重启自清）。
-		// 约束：iface 白名单（flowz-*）+ net.ParseCIDR 校验。幂等 best-effort，最终由 app 侧校验。
+		// 约束：iface 白名单（shadowvpn-*）+ net.ParseCIDR 校验。幂等 best-effort，最终由 app 侧校验。
 		// Windows 无 ifscope；靠 per-interface 路由 + 内核 metric 选路（与主 TUN 的冲突属真机验证项 #3858）。
 		iface := strings.TrimSpace(args.Next())
 		cidrsLine := strings.TrimSpace(args.Next())
@@ -192,8 +192,8 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 	case "iface-metric":
 		// 退役：自 Windows 禁 System（强制 gVisor）起，客户端不再调用本命令；保留仅为兼容已部署的 proto≥3 helper
 		// （删它需强制用户重装）。新客户端 EXPECTED_PROTO 已降回 v1，不再因缺本能力提示升级。
-		// proto v3：把 FlowZ 内核接口的接口 metric 设高 —— Windows 根治 System TS 出口劫持。
-		// 根因（真机实证）：tsnet 给 flowz-ts 装的 exit 0/0 metric=0，抢过物理网卡 → 把直连/bootstrap DNS
+		// proto v3：把 本应用内核接口的接口 metric 设高 —— Windows 根治 System TS 出口劫持。
+		// 根因（真机实证）：tsnet 给 shadowvpn-ts 装的 exit 0/0 metric=0，抢过物理网卡 → 把直连/bootstrap DNS
 		// （1.12.12.12/223.5.5.5）灌进 TS 出口、源 IP 变 tailnet → SERVFAIL → 解析不出代理节点 → 全网瘫。
 		// Windows 无 macOS 的 ifscope 作用域，等价手段是降权该接口：metric 设高 → 其 0/0 输给以太网、直连回物理；
 		// tailnet /32 仍按最长前缀命中、出口经 sing-box selector 内部转发给 TS outbound 不依赖这条 OS 0/0。
@@ -212,8 +212,8 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 		// 真机实证：`netsh ... set interface metric=N store=active` 不可靠（AutomaticMetric 未关→设了不生效）。改用
 		// PowerShell `Set-NetIPInterface`（用户实证有效，自动关 AutomaticMetric 并持久）。两处加固：
 		//   ① 全路径调 powershell —— SYSTEM 服务 PATH 可能找不到 `powershell`（exec 直接报 not found→设不上）。
-		//   ② 不带 -AddressFamily —— 同时设 IPv4 + IPv6 两族（flowz-ts 若有 ::/0 全隧道出口，IPv6 也会被抢，必须一并降权）。
-		// iface 已过 ifaceAllowed 白名单（flowz- + [a-z0-9-]）→ 单引号字符串无注入；metric 为整数。
+		//   ② 不带 -AddressFamily —— 同时设 IPv4 + IPv6 两族（shadowvpn-ts 若有 ::/0 全隧道出口，IPv6 也会被抢，必须一并降权）。
+		// iface 已过 ifaceAllowed 白名单（shadowvpn- + [a-z0-9-]）→ 单引号字符串无注入；metric 为整数。
 		psExe := filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
 		psCmd := fmt.Sprintf(
 			"Set-NetIPInterface -InterfaceAlias '%s' -InterfaceMetric %d -ErrorAction Stop",

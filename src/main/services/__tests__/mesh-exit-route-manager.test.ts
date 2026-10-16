@@ -36,7 +36,7 @@ function newMgr(helper: ReturnType<typeof mockHelper>) {
   );
 }
 
-// Windows 禁 System（mesh 节点强制 gVisor，无 flowz-ts 内核接口）→ 出口路由托管在 win32 一律 no-op：不读接口
+// Windows 禁 System（mesh 节点强制 gVisor，无 shadowvpn-ts 内核接口）→ 出口路由托管在 win32 一律 no-op：不读接口
 // metric、不调 helper、不装/删 OS 路由。（macOS/Linux 的「该不该装/装哪条」决策见 shared mesh-exit-route.test.ts。）
 describe('MeshExitRouteManager — Windows 禁 System：本管理器 no-op', () => {
   it('win32 + System TS exit → reconcile no-op（不读 metric、不调 helper、不装路由）', async () => {

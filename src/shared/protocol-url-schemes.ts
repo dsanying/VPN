@@ -9,6 +9,11 @@ export const SUPPORTED_URL_SCHEMES = [
   'trojan',
   'hysteria2',
   'hy2',
+  // Hysteria v1 分享链接（v2rayN/NekoBox 生态 hysteria:// 形态），经 mihomo 兼容引擎执行。
+  'hysteria',
+  // WireGuard 节点分享链接（wireguard:// 与 wg:// 均见诸订阅）。
+  'wireguard',
+  'wg',
   'ss',
   'ssr',
   'anytls',

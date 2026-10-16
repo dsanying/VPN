@@ -1,8 +1,8 @@
 /**
- * 图标代理协议处理器（Phase 1b §8）：注册 flowz-icon:// scheme，把 renderer 外部图标 <img> 拉取下沉
+ * 图标代理协议处理器（Phase 1b §8）：注册 shadowvpn-icon:// scheme，把 renderer 外部图标 <img> 拉取下沉
  * 主进程经 update-in 统一会话——取代删 default session pin 后 manual 接管模式下 <img> 直连破图。viaProxy
  * 时经 update-in→sing-box route→proxyMode 决策，否则 direct 兜底；与四链路同口径。图标 URL 部分来自
- * 用户手动输入（add-custom-app），故复用 ssrf-guard 拦内网（仅实际经代理时豁免 FlowZ FakeIP，同订阅链路）。
+ * 用户手动输入（add-custom-app），故复用 ssrf-guard 拦内网（仅实际经代理时豁免 暗影VPN FakeIP，同订阅链路）。
  */
 import { protocol } from 'electron';
 import { ICON_PROXY_SCHEME } from '../shared/icon-proxy';
@@ -29,10 +29,10 @@ export interface IconProtocolDeps {
   logManager: LogManager;
 }
 
-/** app ready 后注册 flowz-icon:// handler（经 update-in 统一会话拉取图标，回退 direct）。 */
+/** app ready 后注册 shadowvpn-icon:// handler（经 update-in 统一会话拉取图标，回退 direct）。 */
 export function registerIconProtocol(deps: IconProtocolDeps): void {
   protocol.handle(ICON_PROXY_SCHEME, async (request) => {
-    // flowz-icon://i/<encodeURIComponent(realUrl)> → 还原真实图标 URL
+    // shadowvpn-icon://i/<encodeURIComponent(realUrl)> → 还原真实图标 URL
     let target: URL;
     try {
       const enc = new URL(request.url).pathname.replace(/^\/+/, '');
@@ -51,7 +51,7 @@ export function registerIconProtocol(deps: IconProtocolDeps): void {
     );
 
     // SSRF + 逐跳 redirect 复检收口到 safeRedirectFetch（首跳 + 每跳 Location 过 assertHostAllowed）：图标 URL
-    // 部分来自用户手动输入，仅实际经代理（socks，本机内网不可达）时豁免 FlowZ FakeIP。安全拒绝按 reason 映射
+    // 部分来自用户手动输入，仅实际经代理（socks，本机内网不可达）时豁免 暗影VPN FakeIP。安全拒绝按 reason 映射
     // 状态码（协议非法→400 / SSRF→403 / 超上限→502）；fetchImpl 网络错误冒泡到末端 catch→502。
     try {
       const ses = await deps.updateNetwork.sessionFor(viaProxy, port);

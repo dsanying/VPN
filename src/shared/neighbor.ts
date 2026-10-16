@@ -20,16 +20,16 @@
  *      故构建期须：① 平台=Linux；② 同时发射 `auto_route` + `auto_redirect`；③ 仅发 include/exclude 之一；
  *      ④ 每个 MAC 合法（脏 MAC 会让 `check`/启动 FATAL）。
  *
- * 这些字段同属 sing-box 的 `shared/neighbor` 邻居解析子系统，故 FlowZ 也收敛到本模块单一真值。
+ * 这些字段同属 sing-box 的 `shared/neighbor` 邻居解析子系统，故 暗影VPN 也收敛到本模块单一真值。
  */
 
 /**
- * MAC 地址（EUI-48）是否合法 —— 严格对齐 Go `net.ParseMAC` 接受、且 FlowZ 关心的三种 6-octet 写法：
+ * MAC 地址（EUI-48）是否合法 —— 严格对齐 Go `net.ParseMAC` 接受、且 暗影VPN 关心的三种 6-octet 写法：
  *   · 冒号分隔   `00:11:22:33:44:55`
  *   · 连字符分隔 `00-11-22-33-44-55`
  *   · Cisco 点分 `0011.2233.4455`（3 组 4 hex）
  * 大小写不敏感。拒：无分隔符 `001122334455`、段数/位数错、非 hex（均经内核实证 FATAL）。
- * （net.ParseMAC 亦接受 EUI-64/20-octet InfiniBand 等更长形态，但 LAN 设备恒为 48-bit，FlowZ 只放行 48-bit。）
+ * （net.ParseMAC 亦接受 EUI-64/20-octet InfiniBand 等更长形态，但 LAN 设备恒为 48-bit，暗影VPN 只放行 48-bit。）
  */
 export function isValidMacAddress(value: string | undefined): boolean {
   const v = (value || '').trim();
@@ -76,7 +76,7 @@ export function isValidNeighborDomain(value: string | undefined): boolean {
 
 /**
  * 当前平台是否支持 source_mac_address / source_hostname（route + DNS rule）。
- * 内核：仅 Linux/macOS（及 Android/macOS 图形客户端）。FlowZ = 桌面 → linux/darwin 支持，win32 不支持。
+ * 内核：仅 Linux/macOS（及 Android/macOS 图形客户端）。暗影VPN = 桌面 → linux/darwin 支持，win32 不支持。
  * 接受 Node 的 process.platform 取值。
  */
 export function isSourceDeviceMatchSupported(

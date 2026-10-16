@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-sf176-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-sf176-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },

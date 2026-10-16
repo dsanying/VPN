@@ -82,7 +82,7 @@ export abstract class SystemProxyBase implements ISystemProxyManager {
 
   /**
    * 写入持久化 marker（enableProxy 成功后调用）
-   * 记录"系统代理由 FlowZ 设置"，供崩溃/强杀后下次启动恢复与退出兜底门控使用。
+   * 记录"系统代理由 暗影VPN 设置"，供崩溃/强杀后下次启动恢复与退出兜底门控使用。
    * 同步 fs API（文件极小）；失败仅告警，绝不抛出影响代理设置结果。
    * originalSettings 可选：保存 enable 前的原始代理快照，供 disableProxySync（关机新建实例路径，
    * 跨平台）读回恢复——否则关机时实例 originalSettings 为 null，恢复分支不可达。
@@ -242,9 +242,9 @@ export class WindowsSystemProxy extends SystemProxyBase {
           // 在显式系统代理下会自禁 QUIC、回退 TCP→CONNECT（正确走代理）。旧版的「防火墙 block 全部 UDP443」是**blanket**、
           // 会误杀国内 QUIC（与「只拦海外代理域名 QUIC」的 route 设计不符）→ 已移除。选择性 QUIC 阻断（仅海外代理域名、
           // CN 豁免）由 sing-box route 规则在 TUN 模式实现（系统代理下 QUIC 不进核、route 够不着，靠上述 app 自禁）。
-          // 仅保留 delete：清理历史版本残留的 FlowZ_Block_QUIC 规则（升级迁移），不再 add。
+          // 仅保留 delete：清理历史版本残留的 暗影VPN_Block_QUIC 规则（升级迁移），不再 add。
           await execAsync(
-            `"${this.netshExe}" advfirewall firewall delete rule name="FlowZ_Block_QUIC"`
+            `"${this.netshExe}" advfirewall firewall delete rule name="暗影VPN_Block_QUIC"`
           ).catch(() => {});
 
           await this.notifyProxyChange();
@@ -305,7 +305,7 @@ export class WindowsSystemProxy extends SystemProxyBase {
 
     // 禁用代理时务必清除 QUIC 阻断规则
     await execAsync(
-      `"${this.netshExe}" advfirewall firewall delete rule name="FlowZ_Block_QUIC"`
+      `"${this.netshExe}" advfirewall firewall delete rule name="暗影VPN_Block_QUIC"`
     ).catch(() => {});
 
     try {
@@ -339,7 +339,7 @@ export class WindowsSystemProxy extends SystemProxyBase {
     const { execSync } = require('child_process');
     try {
       // 禁用代理时务必清除 QUIC 阻断规则
-      execSync(`"${this.netshExe}" advfirewall firewall delete rule name="FlowZ_Block_QUIC"`, {
+      execSync(`"${this.netshExe}" advfirewall firewall delete rule name="暗影VPN_Block_QUIC"`, {
         stdio: 'ignore',
       });
     } catch {
@@ -417,7 +417,7 @@ export class WindowsSystemProxy extends SystemProxyBase {
     } else {
       await execAsync(`"${this.regExe}" add "${this.regPath}" /v ProxyEnable /t REG_DWORD /d 0 /f`);
       await execAsync(
-        `"${this.netshExe}" advfirewall firewall delete rule name="FlowZ_Block_QUIC"`
+        `"${this.netshExe}" advfirewall firewall delete rule name="暗影VPN_Block_QUIC"`
       ).catch(() => {});
     }
 
@@ -771,7 +771,7 @@ export class LinuxSystemProxy extends SystemProxyBase {
         },
         { maxRetries: 1, delay: 500 }
       );
-      // 持久化 marker：标记系统代理由 FlowZ 设置（崩溃/强杀后下次启动据此恢复）+ 携带 originalSettings
+      // 持久化 marker：标记系统代理由 暗影VPN 设置（崩溃/强杀后下次启动据此恢复）+ 携带 originalSettings
       // 快照（跨平台：disableProxySync 关机时新建实例 originalSettings=null，需从 marker 读回恢复）。
       this.writeMarker(`${address}:${httpPort}`, this.originalSettings);
       this.log('info', 'Linux 系统代理设置成功');
@@ -800,7 +800,7 @@ export class LinuxSystemProxy extends SystemProxyBase {
   /**
    * 三 schema 的恢复计划（capture-three）：hp 非空=回写该快照值；null=该 schema 原本未设，须**清空**
    * （host=''）以**撤销 enableProxy 期对它的写入**——enableProxy 无条件把 https/socks host 写成
-   * 127.0.0.1，若不清，disable 后会残留指向 FlowZ 死端口的 https/socks（且 mode 因 http 存在保持 manual）。
+   * 127.0.0.1，若不清，disable 后会残留指向 暗影VPN 死端口的 https/socks（且 mode 因 http 存在保持 manual）。
    */
   private static restorePlan(
     snap: SystemProxyStatus | null

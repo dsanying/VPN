@@ -1,4 +1,4 @@
-import { nodeDisplayName, nodeGroupName, resolveNodeIdentity } from '@shared/node-identity';
+import { nodeDisplayName, nodeGroupName, nodeRegionCode, nodeRegionEvidence, resolveNodeIdentity } from '@shared/node-identity';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/app-store';
 import { useCallback, useMemo } from 'react';
@@ -69,12 +69,12 @@ export function ConnectionGraph({
       return node
         ? nodeDisplayName(
             node.name,
-            details[node.id]?.exit?.countryCode,
+            nodeRegionCode(details[node.id]),
             nodeGroupName(node, subscriptions, {
               manual: t('common.vocab.manualNodes'),
               mesh: t('common.vocab.meshNetworking'),
             })
-          )
+          ) + (nodeRegionEvidence(details[node.id])?.source === 'gateway' ? ` · ${t('vpn.gatewayRegion')}` : '')
         : display(n.name);
     };
     const appByPath = new Map(applications.map((application) => [application.path, application]));

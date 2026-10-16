@@ -28,7 +28,7 @@ export function resolveGlobalExitTag(
 }
 
 /**
- * 删「当前选中」节点时的兜底出口（D4，见 docs/design/flowz-node-change-restart）：从剩余候选里挑**最快**
+ * 删「当前选中」节点时的兜底出口（D4，见 docs/design/shadowvpn-node-change-restart）：从剩余候选里挑**最快**
  * （latencyMap 最低正值），无任何正测速值则回退列表第一个候选，空候选返回 null（调用方置 selectedServerId=null → direct）。
  * 纯函数、注入 latencyMap（渲染端会话态），可离线单测。latency<=0（超时 -1 / 未测）不参与「最快」比较，仅靠首个兜底。
  * candidateIds 须按列表序传入（保「无测速值回退第一个」= 用户列表第一个）。

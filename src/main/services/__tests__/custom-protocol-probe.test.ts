@@ -1,11 +1,11 @@
 /**
  * 自定义协议（custom raw-JSON，如 snell）兼容性 probe 单测。
- * 本项目铁律：runtime 语义（内核兼容性）code review 判不准，须以「mock 内核 check 行为 + 断言 FlowZ 包裹/判定」验证。
+ * 本项目铁律：runtime 语义（内核兼容性）code review 判不准，须以「mock 内核 check 行为 + 断言 暗影VPN 包裹/判定」验证。
  *
  * 验证「内核即权威」不变量：ProxyManager.probeOutbound 把用户 JSON 包成最小 config 跑 sing-box check，
  * verdict 完全由内核 check 结果决定。covers：
  *  - snell 在官方内核 → check 报 `unknown outbound type: snell` → probe fail（不支持需第三方内核）。
- *  - 同一份 snell 在第三方内核（mock check 通过）→ probe ok（证 verdict 只跟内核走，与 FlowZ 无关）。
+ *  - 同一份 snell 在第三方内核（mock check 通过）→ probe ok（证 verdict 只跟内核走，与 暗影VPN 无关）。
  *  - 第三方内核字段校验委托：字段非法（缺 psk 等）→ 内核 fail → probe 透传该错。
  *  - outbound vs endpoint 两种最小 config 包裹形态正确（probe tag 注入 / direct 兜底 / route.final）。
  *  - failOpen（核缺失/超时）→ indeterminate（中性「无法判定」，非红色「不支持」）。
@@ -18,7 +18,7 @@ import * as os from 'os';
 import * as fsSync from 'fs';
 import * as path from 'path';
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-probe-test-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-probe-test-'));
 jest.mock('electron', () => ({
   app: {
     getPath: () => TMP,

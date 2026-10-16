@@ -1,5 +1,5 @@
 # 客户端前端规范
 
-本目录记录暗影VPN当前 React + Ant Design 客户端契约，不分发历史专有模板。可执行检查与文档清单保持一致，见 [manifest.json](../manifest.json)。来源边界见 [实现替换记录](../前端实现替换记录.md)。
+本目录记录暗影VPN当前 React + Ant Design 客户端契约。可执行检查与文档清单保持一致，见 [manifest.json](../manifest.json)。
 
 按任务阅读架构主题、布局响应式、组件提示、表格查询、页面流程、国际化、数据反馈与门禁。静态及浏览器验证不能代替 Electron、Android、Windows 的原生权限、服务、安装和升级验收。平台发布证据独立记录，未验证内容不能标成完成。

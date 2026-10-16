@@ -58,7 +58,8 @@ export async function measureSubscriptionLink(
 /** Sessions are exclusive to this operation; core restarts cannot repin another in-flight request. */
 export async function checkSubscriptionConnectivity(
   subscription: SubscriptionConfig,
-  directPort: number | null
+  directPort: number | null,
+  onResult?: (route: 'direct' | 'current', probe: SubscriptionLinkProbe) => void
 ): Promise<SubscriptionConnectivity> {
   const suffix = subscription.id.replace(/[^a-zA-Z0-9_-]/g, '');
   const current = session.fromPartition(`shadowvpn-link-current-${suffix}`);
@@ -74,13 +75,21 @@ export async function checkSubscriptionConnectivity(
   }
   const userAgent = DEFAULT_SUBSCRIPTION_USER_AGENT;
   const [direct, normal] = await Promise.all([
-    measureSubscriptionLink(subscription.url, userAgent, directFetch, !!directPort),
+    measureSubscriptionLink(subscription.url, userAgent, directFetch, !!directPort).then(
+      (value) => {
+        onResult?.('direct', value);
+        return value;
+      }
+    ),
     measureSubscriptionLink(
       subscription.url,
       userAgent,
       (url, init) => current.fetch(url, { ...init, cache: 'no-store' }),
       true
-    ),
+    ).then((value) => {
+      onResult?.('current', value);
+      return value;
+    }),
   ]);
   return { direct, current: normal, checkedAt: new Date().toISOString() };
 }

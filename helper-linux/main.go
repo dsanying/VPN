@@ -61,7 +61,7 @@ func main() {
 	}()
 
 	if console {
-		fmt.Printf("FlowZ linux helper (console) listening on %s, coredir=%s, proto v%s\n", sockPath, coreDir, helperVersion)
+		fmt.Printf("ShadowVPN linux helper (console) listening on %s, coredir=%s, proto v%s\n", sockPath, coreDir, helperVersion)
 	}
 	methods := []string{"ping", "version", "status", "start", "start-mihomo", "install-mihomo", "stop", "cleanup", "freeport", "install-core"}
 	authorize := func(r *http.Request) bool {

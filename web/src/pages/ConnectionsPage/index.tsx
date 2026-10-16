@@ -1,8 +1,7 @@
 import './ConnectionsPage.css';
-import { ReloadOutlined } from '@ant-design/icons';
 import { NodeRoute } from '@/components/vpn/NodeRoute';
 import { useCallback, useMemo, useState } from 'react';
-import { Button, Flex, Form, Select } from 'antd';
+import { Form } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   AppPage,
@@ -12,6 +11,8 @@ import {
   SearchInput,
   DEFAULT_PAGE_SIZE,
   buildTablePagination,
+  QueryForm,
+  FilterSelect,
 } from '@/components/client';
 import { useInstalledApplications } from '@/hooks/use-installed-applications';
 import { useStatsTopic } from '@/hooks/use-stats-topic';
@@ -19,6 +20,7 @@ import { useAppStore } from '@/store/app-store';
 import type { ConnectionsSnapshot } from '@shared/types';
 import {
   connectionApplication,
+  connectionDestination,
   connectionOutbound,
   filterConnections,
   UNKNOWN_APPLICATION,
@@ -38,10 +40,12 @@ export default function ConnectionsPage() {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   const [search, setSearch] = useState('');
-  const [selection, setSelection] = useState<ConnectionSelection>({});
-  const [network, setNetwork] = useState<string>();
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
+  const [selectedOutbounds, setSelectedOutbounds] = useState<string[]>([]);
+  const [network, setNetwork] = useState<string[]>([]);
   const onSelect = useCallback((value: ConnectionSelection) => {
-    setSelection(value);
+    setSelectedApplications(value.application ? [value.application] : []);
+    setSelectedOutbounds(value.outbound ? [value.outbound] : []);
     setPage(1);
   }, []);
   useStatsTopic<ConnectionsSnapshot>('detail', setSnapshot);
@@ -51,8 +55,12 @@ export default function ConnectionsPage() {
       : undefined;
   const all = useMemo(() => current?.connections ?? [], [current]);
   const applications = useMemo(() => {
-    const merged = new Map((current?.applications ?? []).map(app => [app.path, app]));
-    for (const app of installedApplications) merged.set(app.path, { ...app, iconDataUrl: app.iconDataUrl ?? merged.get(app.path)?.iconDataUrl });
+    const merged = new Map((current?.applications ?? []).map((app) => [app.path, app]));
+    for (const app of installedApplications)
+      merged.set(app.path, {
+        ...app,
+        iconDataUrl: app.iconDataUrl ?? merged.get(app.path)?.iconDataUrl,
+      });
     return [...merged.values()];
   }, [current?.applications, installedApplications]);
   const display = useCallback(
@@ -80,12 +88,12 @@ export default function ConnectionsPage() {
     () =>
       searched.filter(
         (c) =>
-          (!selection.application ||
-            connectionApplication(c, applications).identity === selection.application) &&
-          (!selection.outbound || connectionOutbound(c) === selection.outbound) &&
-          (!network || c.metadata?.network?.toLowerCase() === network)
+          (!selectedApplications.length ||
+            selectedApplications.includes(connectionApplication(c, applications).identity)) &&
+          (!selectedOutbounds.length || selectedOutbounds.includes(connectionOutbound(c))) &&
+          (!network.length || network.includes(c.metadata?.network?.toLowerCase() ?? ''))
       ),
-    [searched, selection, network, applications]
+    [searched, selectedApplications, selectedOutbounds, network, applications]
   );
   const applicationOptions = useMemo(
     () => [
@@ -113,10 +121,12 @@ export default function ConnectionsPage() {
     [all]
   );
   // Preserve a selected graph identity while its last active connection disappears.
-  const withSelected = (options: { value: string; label: string }[], value?: string) =>
-    value && !options.some((o) => o.value === value)
-      ? [...options, { value, label: display(value) }]
-      : options;
+  const withSelected = (options: { value: string; label: string }[], values: string[]) => [
+    ...options,
+    ...values
+      .filter((value) => !options.some((option) => option.value === value))
+      .map((value) => ({ value, label: display(value) })),
+  ];
   return (
     <AppPage showBreadcrumb={false}>
       <PageStack>
@@ -129,78 +139,76 @@ export default function ConnectionsPage() {
           onSelect={onSelect}
         />
         <TablePanel>
-          <Form layout="inline" className="vpn-connection-filters">
-            <Flex wrap gap="small">
-              <Form.Item label={t('common.vocab.search')}>
-                <SearchInput
-                  aria-label={t('common.vocab.connections')}
-                  hint={t('vpn.connectionSearchHint')}
-                  allowClear
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </Form.Item>
-              <Form.Item label={t('common.vocab.application')}>
-                <Select
-                  className="vpn-connection-filter-control"
-                  aria-label={t('common.vocab.application')}
-                  showSearch
-                  allowClear
-                  options={withSelected(applicationOptions, selection.application)}
-                  optionFilterProp="label"
-                  value={selection.application}
-                  onChange={(application) => onSelect({ ...selection, application })}
-                />
-              </Form.Item>
-              <Form.Item label={t('common.vocab.outbound')}>
-                <Select
-                  className="vpn-connection-filter-control"
-                  aria-label={t('common.vocab.outbound')}
-                  showSearch
-                  allowClear
-                  optionRender={(option) => (
-                    <NodeRoute values={[String(option.value)]} display={display} />
-                  )}
-                  labelRender={(option) => (
-                    <NodeRoute values={[String(option.value)]} display={display} />
-                  )}
-                  options={withSelected(outboundOptions, selection.outbound)}
-                  optionFilterProp="label"
-                  value={selection.outbound}
-                  onChange={(outbound) => onSelect({ ...selection, outbound })}
-                />
-              </Form.Item>
-              <Form.Item label={t('common.vocab.protocol')}>
-                <Select
-                  className="vpn-connection-filter-control"
-                  aria-label={t('common.vocab.protocol')}
-                  allowClear
-                  options={networks}
-                  value={network}
-                  onChange={(value) => {
-                    setNetwork(value);
-                    setPage(1);
-                  }}
-                />
-              </Form.Item>
-              <Button
-                icon={<ReloadOutlined aria-hidden />}
-                onClick={() => {
-                  setSearch('');
-                  setNetwork(undefined);
-                  onSelect({});
+          <QueryForm mode="local">
+            <Form.Item label={t('common.vocab.search')} data-filter-purpose="keyword">
+              <SearchInput
+                allowClear
+                aria-label={t('common.vocab.connections')}
+                hint={t('vpn.connectionSearchHint')}
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
                 }}
-              >
-                {t('common.actions.reset')}
-              </Button>
-            </Flex>
-          </Form>
+              />
+            </Form.Item>
+            <Form.Item
+              label={t('common.vocab.application')}
+              data-filter-column="./columns#application"
+            >
+              <FilterSelect
+                kind="enum"
+                className="vpn-connection-filter-control"
+                aria-label={t('common.vocab.application')}
+                showSearch
+                options={withSelected(applicationOptions, selectedApplications)}
+                optionFilterProp="label"
+                value={selectedApplications}
+                onChange={(value) => {
+                  setSelectedApplications(value);
+                  setPage(1);
+                }}
+              />
+            </Form.Item>
+            <Form.Item label={t('common.vocab.outbound')} data-filter-column="./columns#outbound">
+              <FilterSelect
+                kind="enum"
+                className="vpn-connection-filter-control"
+                aria-label={t('common.vocab.outbound')}
+                showSearch
+                optionRender={(option) => (
+                  <NodeRoute values={[String(option.value)]} display={display} />
+                )}
+                labelRender={(option) => (
+                  <NodeRoute values={[String(option.value)]} display={display} />
+                )}
+                options={withSelected(outboundOptions, selectedOutbounds)}
+                optionFilterProp="label"
+                value={selectedOutbounds}
+                onChange={(value) => {
+                  setSelectedOutbounds(value);
+                  setPage(1);
+                }}
+              />
+            </Form.Item>
+            <Form.Item label={t('common.vocab.protocol')} data-filter-column="./columns#network">
+              <FilterSelect
+                kind="enum"
+                className="vpn-connection-filter-control"
+                aria-label={t('common.vocab.protocol')}
+                options={networks}
+                value={network}
+                onChange={(value) => {
+                  setNetwork(value);
+                  setPage(1);
+                }}
+              />
+            </Form.Item>
+          </QueryForm>
           <Table
             rowKey="id"
             dataSource={filtered}
+            orderBy={(row) => {const value=connectionDestination(row);return value===UNKNOWN_DESTINATION?'':value;}}
             columns={buildConnectionColumns(t, applications)}
             pagination={buildTablePagination({
               current: Math.min(page, Math.max(1, Math.ceil(filtered.length / size))),

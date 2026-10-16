@@ -1,8 +1,8 @@
 /**
- * LinuxSystemDns（P2：经 systemd-resolved 接管 FlowZ 自己那条 TUN 链路）单测。
+ * LinuxSystemDns（P2：经 systemd-resolved 接管 暗影VPN 自己那条 TUN 链路）单测。
  *
  * 判据分两类：
- *  ① **越权面**——接管只能落在 FlowZ 自己的 TUN 链路上。认错链路 = 改掉 OpenVPN/WireGuard/别的代理的 DNS，
+ *  ① **越权面**——接管只能落在 暗影VPN 自己的 TUN 链路上。认错链路 = 改掉 OpenVPN/WireGuard/别的代理的 DNS，
  *    是本实现最严重的失败模式，故「按地址认、认不出就不接管」的每条分支都要有反向对照。
  *  ② **降级面**——无 resolvectl / 无地址 / 接口没出现 / polkit 拒绝，四条路径都必须回到「不写 marker、不动系统」，
  *    否则重演 Windows 接管那次的 stuck marker（set 失败但 marker 已写 → 每次启动反复还原失败刷错误日志）。
@@ -27,7 +27,7 @@ const TUN_ADDR = '172.19.0.1';
 
 type Iface = { address: string; family: string; internal: boolean };
 
-/** 默认接口表：一条真实网卡 + FlowZ 的 TUN + loopback。 */
+/** 默认接口表：一条真实网卡 + 暗影VPN 的 TUN + loopback。 */
 function ifaces(withTun = true): NodeJS.Dict<Iface[]> {
   const base: NodeJS.Dict<Iface[]> = {
     lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
@@ -120,7 +120,7 @@ function seedMarker(original: Record<string, string[]>, tunInet4Address?: string
 }
 
 beforeEach(() => {
-  tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-linuxdns-'));
+  tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-linuxdns-'));
 });
 afterEach(() => {
   try {
@@ -167,11 +167,11 @@ describe('LinuxSystemDns — 接管目标只能是自己的 TUN 链路', () => {
 
   it('接口名与我们无关但地址对得上 → 照样接管（判据是地址不是名字）', async () => {
     const renamed: NodeJS.Dict<Iface[]> = {
-      flowz9: [{ address: TUN_ADDR, family: 'IPv4', internal: false }],
+      shadowvpn9: [{ address: TUN_ADDR, family: 'IPv4', internal: false }],
     };
     const h = makeDns({ ifaces: () => renamed });
     await h.dns.setDns({ tunInet4Address: TUN_ADDR });
-    expect(h.calls).toContainEqual(['dns', 'flowz9', CONTROLLED]);
+    expect(h.calls).toContainEqual(['dns', 'shadowvpn9', CONTROLLED]);
   });
 });
 
@@ -360,8 +360,8 @@ describe('LinuxSystemDns — 与基类 marker 契约', () => {
 
 describe('LinuxSystemDns — 跨会话还原只认地址，绝不按名字盲发', () => {
   it('上次崩溃留下 marker，而现在的 tun0 是别人的（地址对不上）→ 一个 revert 都不发', async () => {
-    // 失败输入（reviewer 用探针实证过的形态）：TUN 会话中 FlowZ 崩溃 → 用户连 OpenVPN 占了 tun0 →
-    // 再启 FlowZ → 启动恢复若按 marker 键名 revert tun0，改掉的是 OpenVPN 的链路 DNS。
+    // 失败输入（reviewer 用探针实证过的形态）：TUN 会话中 暗影VPN 崩溃 → 用户连 OpenVPN 占了 tun0 →
+    // 再启 暗影VPN → 启动恢复若按 marker 键名 revert tun0，改掉的是 OpenVPN 的链路 DNS。
     seedMarker({ tun0: [] }, TUN_ADDR);
     const foreign: NodeJS.Dict<Iface[]> = {
       tun0: [{ address: '10.8.0.6', family: 'IPv4', internal: false }],
@@ -454,7 +454,7 @@ describe('LinuxSystemDns — 方案B 不因 marker 在而退化', () => {
 
 describe('LinuxSystemDns — revert 前的身份核验（地址在崩溃后不再等价于属主）', () => {
   it('同址接口存在但链路上不是我们的受控 IP → 只清 marker，一个 revert 都不发', async () => {
-    // 失败输入：FlowZ 崩溃 → 另一个 sing-box 系客户端用同一默认地址 172.19.0.1 起了 TUN 且配了 resolved →
+    // 失败输入：暗影VPN 崩溃 → 另一个 sing-box 系客户端用同一默认地址 172.19.0.1 起了 TUN 且配了 resolved →
     // 按地址单命中到它（同址双接口的 fail-closed 挡不住「现在只剩它一个」）。
     seedMarker({ tun0: [] }, TUN_ADDR);
     const h = makeDns({ linkDns: { tun0: ['10.0.0.53'] } });

@@ -1,6 +1,6 @@
 /**
  * 本地代理端口单一真值（mixed-only 架构）。
- * FlowZ 用单个 sing-box `mixed` inbound 同口服务 HTTP + SOCKS（对齐 Stash/Clash 业内做法）；
+ * 暗影VPN 用单个 sing-box `mixed` inbound 同口服务 HTTP + SOCKS（对齐 Stash/Clash 业内做法）；
  * 独立 http/socks 端口与 mixed 开关已移除。`httpPort`/`socksPort` 仅为旧配置兼容/迁移保留（@deprecated）。
  */
 

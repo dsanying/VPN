@@ -117,9 +117,7 @@ function subscribeOperationalFeedback() {
 /** 唯一常驻事件入口：页面切换不丢配置、测速或组网状态，卸载逐一退订。 */
 export function useVpnRuntime() {
   const navigate = useNavigate();
-  const navigateFromEvent = useEffectEvent((path: string) =>
-    navigate(path)
-  );
+  const navigateFromEvent = useEffectEvent((path: string) => navigate(path));
   useEffect(() => {
     const state = () => useAppStore.getState();
     const refresh = () => {
@@ -148,9 +146,14 @@ export function useVpnRuntime() {
         const store = useSpeedTestStore.getState();
         useSpeedTestStore.setState({
           ...(event.active === true
-            ? { testing: event.serverIds ?? [] }
+            ? {
+                testing: event.serverIds ?? [],
+                ...(event.tested === 0
+                  ? { proxyPending: event.serverIds ?? [], entryPending: event.serverIds ?? [] }
+                  : {}),
+              }
             : event.active === false
-              ? { testing: [] }
+              ? { testing: [], proxyPending: [], entryPending: [] }
               : {}),
           progress: {
             tested: event.tested ?? store.progress.tested,
@@ -159,12 +162,14 @@ export function useVpnRuntime() {
           },
         });
       }),
-      api.server.onSpeedTestResult(({ serverId, latency }) =>
-        state().applyLatencyResults({ [serverId]: latency })
-      ),
-      api.server.onSpeedTestDetails(({ serverId, detail }) =>
-        state().applyLatencyResults({}, [], { [serverId]: detail })
-      ),
+      api.server.onSpeedTestResult(({ serverId, latency }) => {
+        state().applyLatencyResults({ [serverId]: latency });
+        useSpeedTestStore.getState().received(serverId, 'proxy');
+      }),
+      api.server.onSpeedTestDetails(({ serverId, detail }) => {
+        state().applyLatencyResults({}, [], { [serverId]: detail });
+        useSpeedTestStore.getState().received(serverId, 'entry');
+      }),
       api.ipInfo.onUpdated((ipInfo) => useAppStore.setState({ ipInfo })),
       api.proxy.onTailscaleAuth(({ serverId, url }) => {
         if (serverId) state().setTailscaleAuthUrl(serverId, url);

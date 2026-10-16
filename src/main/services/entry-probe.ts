@@ -80,6 +80,7 @@ export async function probeNodeEntry(
       signal?: AbortSignal
     ) => Promise<EntryProbeResult>;
     signal?: AbortSignal;
+    onAddress?: (address: string) => void;
     resolve?: (host: string) => Promise<{ address: string }[]>;
   } = {}
 ): Promise<EntryProbeResult> {
@@ -139,6 +140,7 @@ export async function probeNodeEntry(
         ...new Set(addresses.map((item) => item.address).filter((ip) => net.isIP(ip))),
       ];
       if (!candidates.length) return { status: 'failed', reason: 'ENOTFOUND' };
+      deps.onAddress?.(candidates[0]);
       if (deps.signal?.aborted) return { status: 'unavailable', reason: 'ENTRY_ABORTED' };
       if (boundProbe) {
         // Race address families; do not wait for a broken family after a successful dial.
@@ -156,7 +158,10 @@ export async function probeNodeEntry(
               while (next < endpoints.length && !controller.signal.aborted) {
                 const endpoint = endpoints[next++];
                 const result = await boundProbe(endpoint.address, endpoint.port, controller.signal);
-                if (result.status === 'ok') return result;
+                if (result.status === 'ok') {
+                  deps.onAddress?.(endpoint.address);
+                  return result;
+                }
                 results.push(result);
               }
               throw new Error('ENTRY_FAILED');
@@ -201,6 +206,7 @@ export async function probeNodeEntry(
       settled = true;
       clearTimeout(timer);
       deps.signal?.removeEventListener('abort', abort);
+      if (status === 'ok' && socket?.remoteAddress) deps.onAddress?.(socket.remoteAddress);
       socket?.destroy();
       resolve(
         status === 'ok'
@@ -261,6 +267,7 @@ export function entryTransport(server: ServerConfig): 'tcp' | 'udp' | 'unknown' 
   )
     return 'unknown';
   return [
+    'enterprise',
     'ss',
     'ssr',
     'shadowsocks',

@@ -9,7 +9,7 @@
  */
 import * as path from 'path';
 
-const FAKE_USER_DATA = '/tmp/flowz-test-userdata';
+const FAKE_USER_DATA = '/tmp/shadowvpn-test-userdata';
 jest.mock('../../utils/paths', () => ({
   getUserDataPath: () => FAKE_USER_DATA,
 }));

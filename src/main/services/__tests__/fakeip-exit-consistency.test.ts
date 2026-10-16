@@ -14,7 +14,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-exit-consistency-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-exit-consistency-'));
 jest.mock('electron', () => ({
   app: {
     getPath: () => TMP,

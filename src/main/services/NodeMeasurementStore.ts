@@ -100,7 +100,16 @@ export class NodeMeasurementStore {
         this.records[id] = {
           ...record,
           detail: record.detail
-            ? { ...record.detail, exit: record.detail.exit ?? this.records[id]?.detail?.exit }
+            ? {
+                ...record.detail,
+                exit: record.detail.exit ?? this.records[id]?.detail?.exit,
+                gateway: record.detail.gateway?.countryCode
+                  ? record.detail.gateway
+                  : !record.detail.gateway ||
+                      record.detail.gateway.ip === this.records[id]?.detail?.gateway?.ip
+                    ? (this.records[id]?.detail?.gateway ?? record.detail.gateway)
+                    : record.detail.gateway,
+              }
             : this.records[id]?.detail,
         };
       }

@@ -10,7 +10,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-control-port-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-control-port-'));
 
 jest.mock('electron', () => ({
   app: {

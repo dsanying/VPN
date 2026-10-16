@@ -70,11 +70,14 @@ const allCheckingResults = (): Record<string, UnlockResult> =>
 
 // loadConfig 单飞：防 configChanged 风暴 / 启动期重复拉取（替代原 isLoading 重入守卫）
 let loadConfigInflight: Promise<void> | null = null;
+// 状态/差集刷新单飞：事件风暴（stopped+error+configChanged 同帧）合并为一次 IPC，不占队列。
+let connectionStatusInflight: Promise<void> | null = null;
+let pendingChangesInflight: Promise<void> | null = null;
 // loadConfig 代际计数：mutation（删/存节点等）成功后自增。单飞会复用「在 mutation 前就已开始拉取」的
 // 在飞 promise，其 api.config.get() 拿的是 mutation 前旧快照，回填会用旧配置覆盖 store
 // （典型症状：删节点后 UI 复活已删节点）。故在飞 load 回填前用代际比对丢弃陈旧快照。
 let loadConfigGeneration = 0;
-let privacyRevision=0;
+let privacyRevision = 0;
 // mutation 落库/乐观 set 后调用：自增代际使在飞的旧 load 回填被丢弃，并置空单飞句柄，
 // 令后续 loadConfig 重新拉取删/存后的最新配置，而非复用陈旧的在飞 promise。
 function invalidateLoadConfig(): void {
@@ -211,7 +214,7 @@ interface AppState {
   // Privacy Protection Mode
   isPrivacyMode: boolean;
   privacyReady: boolean;
-  applyPrivacyFromEvent:(value:boolean)=>void;
+  applyPrivacyFromEvent: (value: boolean) => void;
 
   // macOS 提权 helper 状态
   helperStatus: HelperStatus | null;
@@ -228,7 +231,11 @@ interface AppState {
   setSettingsSection: (section: string) => void;
   /** 应用一批测速结果（serverId→latency）：合并 latencyMap + 打 latencyTestedAt 时间戳（单一结果应用路径，会话内存态）。
    *  notInPool（§16.3.3）：本次「非池成员」缺席节点 id → 加入 speedTestNotInPool；拿到真值的节点从该集合移除（已入池）。 */
-  applyLatencyResults: (results: Record<string, number>, notInPool?: string[], details?: Record<string, NodeProbeDetails>) => void;
+  applyLatencyResults: (
+    results: Record<string, number>,
+    notInPool?: string[],
+    details?: Record<string, NodeProbeDetails>
+  ) => void;
   /** 标记本会话已发起全量测速（全量测速起跑时调；不可测节点徽标据此从「—」转「不支持测速」）。 */
   markSpeedTestAttempted: () => void;
   // issue 2 解锁检测显示态 actions：
@@ -328,7 +335,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   tailscalePeers: {},
   isPrivacyMode: false,
   privacyReady: false,
-  applyPrivacyFromEvent:value=>{privacyRevision++;set({isPrivacyMode:value,privacyReady:true});},
+  applyPrivacyFromEvent: (value) => {
+    privacyRevision++;
+    set({ isPrivacyMode: value, privacyReady: true });
+  },
   helperStatus: null,
   availableAppUpdate: null,
   availableCoreUpdate: null,
@@ -360,7 +370,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return {
         latencyMap: { ...state.latencyMap, ...results },
-        probeDetails: { ...state.probeDetails, ...Object.fromEntries(Object.entries(details).map(([id, detail]) => [id, { ...detail, exit: detail.exit ?? state.probeDetails[id]?.exit }])) },
+        probeDetails: {
+          ...state.probeDetails,
+          ...Object.fromEntries(
+            Object.entries(details).map(([id, detail]) => [
+              id,
+              {
+                ...state.probeDetails[id],
+                ...detail,
+                exit: detail.exit ?? state.probeDetails[id]?.exit,
+              },
+            ])
+          ),
+        },
         latencyTestedAt,
         speedTestNotInPool,
       };
@@ -373,7 +395,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await api.config.setPrivacyMode(value);
     } catch (error) {
-      console.error('Failed to sync privacy mode to main process:', error instanceof Error ? error.toString() : error);
+      console.error(
+        'Failed to sync privacy mode to main process:',
+        error instanceof Error ? error.toString() : error
+      );
     }
   },
 
@@ -413,7 +438,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       // 卡片错误会被下一次 refresh 的「健康即清」掩盖，故启停失败必须 toast 保证用户感知
       set({ proxyError: String(error) });
-
     } finally {
       set({ proxyPhase: 'idle', proxyBusy: false });
     }
@@ -423,14 +447,30 @@ export const useAppStore = create<AppState>((set, get) => ({
   refreshMeasurements: async () => {
     const gen = loadConfigGeneration;
     const readAt = Date.now();
-    const records = await api.server.measurements().catch(error => { console.warn('[Store] Measurement cache unavailable:', error); return null; });
-    if (gen !== loadConfigGeneration) return;
-    if (records) set(state => {
-      const latencyMap = { ...state.latencyMap }; const latencyTestedAt = { ...state.latencyTestedAt }; const probeDetails = { ...state.probeDetails };
-      for (const id of Object.keys(latencyMap)) if (!records[id] && (latencyTestedAt[id] ?? 0) <= readAt) { delete latencyMap[id]; delete latencyTestedAt[id]; delete probeDetails[id]; }
-      for (const [id, record] of Object.entries(records)) if (record.testedAt > (latencyTestedAt[id] ?? 0)) { latencyMap[id] = record.latency; latencyTestedAt[id] = record.testedAt; if (record.detail) probeDetails[id] = record.detail; }
-      return { latencyMap, latencyTestedAt, probeDetails };
+    const records = await api.server.measurements().catch((error) => {
+      console.warn('[Store] Measurement cache unavailable:', error);
+      return null;
     });
+    if (gen !== loadConfigGeneration) return;
+    if (records)
+      set((state) => {
+        const latencyMap = { ...state.latencyMap };
+        const latencyTestedAt = { ...state.latencyTestedAt };
+        const probeDetails = { ...state.probeDetails };
+        for (const id of Object.keys(latencyMap))
+          if (!records[id] && (latencyTestedAt[id] ?? 0) <= readAt) {
+            delete latencyMap[id];
+            delete latencyTestedAt[id];
+            delete probeDetails[id];
+          }
+        for (const [id, record] of Object.entries(records))
+          if (record.testedAt > (latencyTestedAt[id] ?? 0)) {
+            latencyMap[id] = record.latency;
+            latencyTestedAt[id] = record.testedAt;
+            if (record.detail) probeDetails[id] = record.detail;
+          }
+        return { latencyMap, latencyTestedAt, probeDetails };
+      });
   },
 
   loadConfig: async () => {
@@ -459,13 +499,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           config.proxyModeType = 'tun';
         }
 
-        const privacyAtRead=privacyRevision;
+        const privacyAtRead = privacyRevision;
         const isPrivacyMode = await api.config.getPrivacyMode();
         // isPrivacyMode 是主进程权威即时态、与 config 代际语义无耦合 → **无条件**回填，不随 config 代际护栏一起被
         // 作废。挂载期这是隐私态的唯一水合路径（silent-start autoPrivacyMode 空闲锁的 ENTER 事件同样无窗期丢失，
         // 见 index.ts:229-233/266-268），若被 replay / mutation 作废在飞 pull 时连带丢弃 → isPrivacyMode 恒留初值
         // false → 首开窗隐私遮罩不出现＝隐私锁旁路（#325 复审 High 1）。
-        if(privacyAtRead===privacyRevision)set({ isPrivacyMode, privacyReady: true });
+        if (privacyAtRead === privacyRevision) set({ isPrivacyMode, privacyReady: true });
         // 代际护栏：拉取期间发生了 mutation / applyConfigFromEvent（loadConfigGeneration 已变）→ 本 config 快照陈旧，
         // 丢弃不回填 store，交由推侧 push / mutation 触发的新一轮回填最新配置（防删节点后旧快照复活已删节点）。
         // 仅 config 与依赖 config.servers 的 TS 缓存 GC 受此护栏；isPrivacyMode 已在上方无条件回填。
@@ -476,7 +516,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         // 实时驱动 tailscaleLoginStates，无需 loadConfig 时整表 IPC 刷新（已剥离 refreshTailscaleLoginStates）。
         gcOrphanTailscaleLoginCache(config.servers);
       } catch (error) {
-        console.error('[Store] Exception loading config:', error instanceof Error ? error.toString() : error);
+        console.error(
+          '[Store] Exception loading config:',
+          error instanceof Error ? error.toString() : error
+        );
         set({ configError: error instanceof Error ? error : new Error(String(error)) });
       } finally {
         // 仅当本次 load 仍是最新代际（期间无 mutation 顶替）才清句柄：mutation 经 invalidateLoadConfig
@@ -509,7 +552,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       // 代际护栏：本地乐观 set 后作废在飞的旧 load，防其陈旧快照覆盖刚保存的配置。
       invalidateLoadConfig();
     } catch (error) {
-      console.error('[Store] Exception saving config:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception saving config:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error; // 调用点负责局部 toast，不再写全局 error
     }
   },
@@ -525,20 +571,35 @@ export const useAppStore = create<AppState>((set, get) => ({
       // 代际护栏：乐观 set 后作废在飞的旧 load，防其陈旧快照覆盖刚切换的代理模式。
       invalidateLoadConfig();
     } catch (error) {
-      console.error('[Store] Exception updating proxy mode:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception updating proxy mode:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error; // 调用点（原 proxy-control-card，已并入 connection-control-card）catch + toast + 本地 busy
     }
   },
 
   // §2 待应用差集：拉取入 store。失败静默保留旧值（差集是提示性 UI，拉失败不该清空误报「无待应用」）。
   refreshPendingChanges: async () => {
-    try {
-      const pc = await api.proxy.getPendingChanges();
-      const previous = get().pendingChanges;
-      if (pc.added.length !== previous.added.length || pc.modified.length !== previous.modified.length || pc.added.some((id, index) => id !== previous.added[index]) || pc.modified.some((id, index) => id !== previous.modified[index])) set({ pendingChanges: pc });
-    } catch {
-      /* 拉取失败保留旧值 */
-    }
+    if (pendingChangesInflight) return pendingChangesInflight;
+    pendingChangesInflight = (async () => {
+      try {
+        const pc = await api.proxy.getPendingChanges();
+        const previous = get().pendingChanges;
+        if (
+          pc.added.length !== previous.added.length ||
+          pc.modified.length !== previous.modified.length ||
+          pc.added.some((id, index) => id !== previous.added[index]) ||
+          pc.modified.some((id, index) => id !== previous.modified[index])
+        )
+          set({ pendingChanges: pc });
+      } catch {
+        /* 拉取失败保留旧值 */
+      }
+    })().finally(() => {
+      pendingChangesInflight = null;
+    });
+    return pendingChangesInflight;
   },
 
   // issue 2 解锁检测显示态（lastRunAt 承载「上次完成时刻」供冷却派生；beginUnlockCheck/setUnlockProgress 保留旧 lastRunAt）：
@@ -570,7 +631,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (snap.blockedReason) {
       // gating 短路（proxy-not-running / exit-invalid）→ idle，不打 lastRunAt（M-gate 毫秒响应，允许反复点，无冷却）。
       set({
-        unlock: { results: {}, running: false, checkedAt: null, egress: null, lastRunAt: null, blockedReason: snap.blockedReason },
+        unlock: {
+          results: {},
+          running: false,
+          checkedAt: null,
+          egress: null,
+          lastRunAt: null,
+          blockedReason: snap.blockedReason,
+        },
       });
     } else if (snap.notReady) {
       // 就绪门未过 → idle 但后端已置 lastRunAt（force 15s 下限生效）→ 打戳，冷却据此镜像。
@@ -607,30 +675,39 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Status Actions
   refreshConnectionStatus: async () => {
-    try {
-      const proxyStatus = await api.proxy.getStatus();
-      // 将 ProxyStatus 转换为 ConnectionStatus
-      const connectionStatus: ConnectionStatus = {
-        proxyCore: {
-          running: proxyStatus.running,
-          pid: proxyStatus.pid,
-          uptime: proxyStatus.uptime,
-          error: proxyStatus.error,
-        },
-        proxy: {
-          enabled: proxyStatus.running,
-          server: proxyStatus.currentServer?.name,
-        },
-        proxyModeType: get().config?.proxyModeType || 'tun',
-      };
-      set({ connectionStatus });
-      // F2：代理被观测到健康运行 ⇒ 上一次启停失败的 proxyError 已过时 ⇒ 清除（解决僵死）。
-      // 未运行时保留错误供用户查看，至下次 start/stop 入口清零（避免 2s 轮询把错误闪没）。
-      const healthy = connectionStatus.proxyCore.running && !connectionStatus.proxyCore.error;
-      if (healthy && get().proxyError) set({ proxyError: null });
-    } catch (error) {
-      console.error('Failed to refresh connection status:', error instanceof Error ? error.toString() : error);
-    }
+    if (connectionStatusInflight) return connectionStatusInflight;
+    connectionStatusInflight = (async () => {
+      try {
+        const proxyStatus = await api.proxy.getStatus();
+        // 将 ProxyStatus 转换为 ConnectionStatus
+        const connectionStatus: ConnectionStatus = {
+          proxyCore: {
+            running: proxyStatus.running,
+            pid: proxyStatus.pid,
+            uptime: proxyStatus.uptime,
+            error: proxyStatus.error,
+          },
+          proxy: {
+            enabled: proxyStatus.running,
+            server: proxyStatus.currentServer?.name,
+          },
+          proxyModeType: get().config?.proxyModeType || 'tun',
+        };
+        set({ connectionStatus });
+        // F2：代理被观测到健康运行 ⇒ 上一次启停失败的 proxyError 已过时 ⇒ 清除（解决僵死）。
+        // 未运行时保留错误供用户查看，至下次 start/stop 入口清零（避免 2s 轮询把错误闪没）。
+        const healthy = connectionStatus.proxyCore.running && !connectionStatus.proxyCore.error;
+        if (healthy && get().proxyError) set({ proxyError: null });
+      } catch (error) {
+        console.error(
+          'Failed to refresh connection status:',
+          error instanceof Error ? error.toString() : error
+        );
+      }
+    })().finally(() => {
+      connectionStatusInflight = null;
+    });
+    return connectionStatusInflight;
   },
 
   // 手动重探出口 IP（force+visible，绕 TTL）：可见流程「检测中…→新IP/检测超时/出口无效」，解锁刷新钮 + 状态栏
@@ -641,7 +718,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await api.ipInfo.get(true, true);
     } catch (error) {
-      console.error('Failed to reprobe exit IP:', error instanceof Error ? error.toString() : error);
+      console.error(
+        'Failed to reprobe exit IP:',
+        error instanceof Error ? error.toString() : error
+      );
     }
   },
 
@@ -766,7 +846,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const eff = get().config?.selectedServerId ?? null;
       return isDirectSelection(eff) ? null : eff;
     } catch (error) {
-      console.error('[Store] Exception deleting server:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception deleting server:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error; // 调用点 catch + toast
     }
   },
@@ -796,7 +879,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const eff = get().config?.selectedServerId ?? null;
       return { count, fallback: isDirectSelection(eff) ? null : eff };
     } catch (error) {
-      console.error('[Store] Exception batch-deleting servers:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception batch-deleting servers:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error; // 调用点 catch + toast
     }
   },
@@ -810,7 +896,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Reload config to get updated rules
       await get().loadConfig();
     } catch (error) {
-      console.error('[Store] Exception adding rule:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception adding rule:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error;
     }
   },
@@ -823,7 +912,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Reload config to get updated rules
       await get().loadConfig();
     } catch (error) {
-      console.error('[Store] Exception in updateCustomRule:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception in updateCustomRule:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error;
     }
   },
@@ -836,7 +928,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Reload config to get updated rules
       await get().loadConfig();
     } catch (error) {
-      console.error('[Store] Exception deleting rule:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Exception deleting rule:',
+        error instanceof Error ? error.toString() : error
+      );
       throw error; // 改 rethrow：原吞错使 delete-rule-dialog 失败也误弹「已删除」成功 toast
     }
   },
@@ -857,7 +952,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ config: { ...cfg, customRules: orderedIds.map((id) => byId.get(id)!) } });
     // 代际护栏：乐观重排 set 后作废在飞旧 load，防其陈旧快照把顺序回滚。
     invalidateLoadConfig();
-    try { await api.rules.reorder(orderedIds); } catch(error) { await get().loadConfig();throw error; }
+    try {
+      await api.rules.reorder(orderedIds);
+    } catch (error) {
+      await get().loadConfig();
+      throw error;
+    }
   },
 
   setConfigValue: async (key, value) => {
@@ -873,7 +973,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         await get().loadConfig();
       }
     } catch (error) {
-      console.error(`[Store] Failed to set config value for ${String(key)}:`, error instanceof Error ? error.toString() : error);
+      console.error(
+        `[Store] Failed to set config value for ${String(key)}:`,
+        error instanceof Error ? error.toString() : error
+      );
       // 原纯 console 静默：写盘失败用户无感知，UI 可能显新值但未持久化。补 toast 让用户知晓保存失败。
       throw error;
     }
@@ -885,7 +988,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const helperStatus = await api.helper.getStatus(force === true);
       set({ helperStatus });
     } catch (error) {
-      console.error('[Store] Failed to refresh helper status:', error instanceof Error ? error.toString() : error);
+      console.error(
+        '[Store] Failed to refresh helper status:',
+        error instanceof Error ? error.toString() : error
+      );
     }
   },
 

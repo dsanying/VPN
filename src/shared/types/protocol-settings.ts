@@ -83,7 +83,7 @@ export interface Hysteria2Settings {
   // 仅在一种情况下需要打开本项：服务端证书是 **Ed25519** —— Chrome 不声明支持该算法，拟态下握手直接失败
   // （上游 release note 明列）。代价是恢复可识别的 Hysteria 握手指纹，故 UI 默认关、并写明这是逃生门。
   // 另注：拟态会覆盖 idle_timeout(固定 30s)/max_concurrent_streams/initial_packet_size 与接收窗口初值——
-  // 这些 FlowZ 目前均未对 hy2 暴露，故无冲突；将来若暴露需在此处一并说明交互。
+  // 这些 暗影VPN 目前均未对 hy2 暴露，故无冲突；将来若暴露需在此处一并说明交互。
   disableChromeParrot?: boolean;
 }
 
@@ -200,9 +200,9 @@ export interface TailscaleSettings {
   exitNode?: string; // 出口节点 name/IP（选它当全局代理时填；空=仅通 tailnet 内网/accept_routes 段）
   exitNodeAllowLanAccess?: boolean; // 用 exit node 时本地 LAN 仍直连
   acceptRoutes?: boolean; // 接受其它节点广告的子网路由（访问 tailnet 内网段）
-  // 经此 Tailscale 节点路由的子网（CIDR）= WG allowedIPs 的等价物（FlowZ force-route 源）。
+  // 经此 Tailscale 节点路由的子网（CIDR）= WG allowedIPs 的等价物（暗影VPN force-route 源）。
   // 与 advertiseRoutes 不同：advertiseRoutes 是「本机对外广告」，routes 是「把这些段的流量送进此节点」。
-  // FlowZ userspace 下自动含 tailnet 段 100.64.0.0/10 + 这里填的 advertised 子网。需配 acceptRoutes 才真正接收。
+  // 暗影VPN userspace 下自动含 tailnet 段 100.64.0.0/10 + 这里填的 advertised 子网。需配 acceptRoutes 才真正接收。
   routes?: string[];
   controlUrl?: string; // 默认 controlplane.tailscale.com；Headscale 自建控制面填此
   hostname?: string; // 节点名（默认系统主机名）
@@ -220,11 +220,11 @@ export interface TailscaleSettings {
   acceptDefaultResolvers?: boolean; // 额外接受 tailnet 推送的默认 DNS 解析器（可选；resolveByName 开时才有意义）
 }
 
-// 自定义协议（raw-JSON 透传）：用户直接填一份 sing-box outbound/endpoint JSON，FlowZ 不解析语义、只注入 tag。
-// 供第三方内核协议（如 snell）使用——「内核即权威」：能否启用由 sing-box check probe / 启动 gate 判定，FlowZ 不维护
+// 自定义协议（raw-JSON 透传）：用户直接填一份 sing-box outbound/endpoint JSON，暗影VPN 不解析语义、只注入 tag。
+// 供第三方内核协议（如 snell）使用——「内核即权威」：能否启用由 sing-box check probe / 启动 gate 判定，暗影VPN 不维护
 // type 白名单。address/port 由 JSON 内部携带，不用 ServerConfig.address/port。
 export interface CustomSettings {
-  outbound: Record<string, unknown>; // 用户填的 outbound/endpoint 对象（须含字符串 type）；tag 由 FlowZ 生成期强制覆盖
+  outbound: Record<string, unknown>; // 用户填的 outbound/endpoint 对象（须含字符串 type）；tag 由 暗影VPN 生成期强制覆盖
   isEndpoint?: boolean; // 该 type 属 sing-box endpoints[]（如类 wireguard/tailscale 的第三方实现）而非 outbounds[]
   secretKeys?: string[]; // 该 JSON 里属密钥的键名（诊断报告脱敏用：redactDeep 据此叠加打码）。无值层启发式，未声明则仅靠通用密钥黑名单兜底（psk/password/uuid 等），建议填全自定义密钥键
 }

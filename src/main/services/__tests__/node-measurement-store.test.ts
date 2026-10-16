@@ -146,3 +146,36 @@ it('successful and unavailable results use the same six-hour background cadence'
   };
   expect(dueMeasurements([node], { example: local }, undefined, now)).toEqual([node]);
 });
+
+it('gateway geography shares node persistence and expiry, retains history only for the same IP', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'node-regions-'));
+  try {
+    const store = new NodeMeasurementStore(path.join(dir, 'node-measurements.json'));
+    const gateway = { ip: '8.8.8.8', countryCode: 'us', measuredAt: 1000, provider: 'test' };
+    const make = (
+      testedAt: number,
+      value: typeof gateway | { ip: string; measuredAt: number; provider: string }
+    ) => ({
+      fingerprint: measurementFingerprint(node),
+      latency: -1,
+      testedAt,
+      detail: { entry: { status: 'ok' as const, latencyMs: 10 }, gateway: value },
+    });
+    await store.save([node], undefined, { example: make(1000, gateway) });
+    await store.save([node], undefined, {
+      example: make(2000, { ip: gateway.ip, measuredAt: 0, provider: 'unavailable' }),
+    });
+    const record = (await store.get([node])).example;
+    expect(record.detail?.gateway).toEqual(gateway);
+    expect(dueMeasurements([node], { example: record }, undefined, 2000 + 6 * 60 * 60000)).toEqual([
+      node,
+    ]);
+    await store.save([node], undefined, {
+      example: make(3000, { ip: '1.1.1.1', measuredAt: 0, provider: 'unavailable' }),
+    });
+    expect((await store.get([node])).example.detail?.gateway?.countryCode).toBeUndefined();
+  } finally {
+    closeMeasurementDatabases(path.join(dir, 'measurements.sqlite'));
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});

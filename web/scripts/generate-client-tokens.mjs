@@ -7,9 +7,9 @@ const geometry = {
   'layout-log-viewer-height':'clamp(240px, 62vh, 720px)',
   'font-family-body':'"IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif',
   'font-family-code':'"IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
-  'font-size-xs':'14px','font-size-body':'16px','font-size-lg':'18px','font-size-title':'22px','font-size-metric':'32px',
+  'font-size-xs':'12px','font-size-body':'14px','font-size-lg':'16px','font-size-title':'20px','font-size-page-title':'24px','font-size-metric':'28px',
   'radius-xs':'4px','radius-md':'8px','radius-lg':'12px','radius-choice-inner':'var(--ds-radius-xs)',
-  'motion-fast':'120ms','control-height':'36px','layout-header-height':'60px','layout-content-max':'1600px',
+  'motion-fast':'120ms','control-height':'32px','layout-header-height':'60px','layout-content-max':'1600px',
   'layout-control-width':'320px','layout-query-control-width':'240px','layout-wide-control-width':'420px',
   'layout-scroll-region-max-height':'300px','layout-cell-max-height':'120px','layout-dialog-width':'720px',
 };
@@ -37,34 +37,38 @@ function readable(value,background,dark,minimum=6) {
   }
   throw new Error('Cannot produce readable theme color');
 }
+const target=new URL('../src/design/tokens.css',import.meta.url);
+const brand=readFileSync(target,'utf8').match(/--ds-color-brand:\s*(#[0-9a-fA-F]{6})\s*;/)?.[1] ?? '#1677ff';
 const themes={light:theme.defaultAlgorithm,dark:theme.darkAlgorithm};
 const dataSeeds=['#1677ff','#13c2c2','#52c41a','#eb2f96','#722ed1','#fa8c16','#f5222d','#faad14'];
 const blocks=[];
 for(const [mode,algorithm] of Object.entries(themes)) {
   const dark=mode==='dark';
-  const t=theme.getDesignToken({algorithm,token:{colorPrimary:dark?'#eeeeee':'#242424',colorSuccess:'#32ad75'}});
+  const t=theme.getDesignToken({algorithm,token:{colorPrimary:brand,colorSuccess:'#32ad75'}});
   const vars={
     ...geometry,
-    'color-canvas':t.colorBgLayout,
-    'color-surface':t.colorBgContainer,
+    ...(!dark ? {'color-brand': brand} : {}),
+    'color-canvas':dark?'#080808':'#f6f6f4',
+    'color-surface':dark?'#111111':'#ffffff',
     'color-surface-elevated':t.colorBgElevated,
     'color-surface-subtle':opaque(t.colorFillQuaternary,t.colorBgContainer),
     'color-surface-muted':opaque(t.colorFillTertiary,t.colorBgContainer),
-    'color-text':t.colorText,
-    'color-text-secondary':readable(t.colorTextSecondary,t.colorBgContainer,dark),
+    'color-text':dark?'#ffffff':'#000000',
+    'color-text-secondary':dark?'#ffffff':'#000000',
     'color-text-tertiary':readable(t.colorTextSecondary,t.colorBgContainer,dark),
     'color-text-disabled':readable(t.colorTextDisabled,t.colorBgContainer,dark,3),
     'color-border':t.colorBorderSecondary,
     'color-border-strong':t.colorBorder,
     'color-link':readable(t.colorInfoText,t.colorBgContainer,dark),
     'color-link-hover':readable(t.colorInfoTextHover,t.colorBgContainer,dark),
-    'color-primary':t.colorPrimary,
-    'color-primary-hover':t.colorPrimaryHover,
-    'color-primary-active':t.colorPrimaryActive,
-    'color-primary-surface':opaque(t.colorFillSecondary,t.colorBgContainer),
-    'color-primary-border':t.colorBorder,
-    'color-primary-foreground':dark?'#141414':'#ffffff',
-    'color-focus':t.colorPrimary,
+    'color-primary': 'color-mix(in srgb, var(--ds-color-brand) 94%, #000000)',
+    'color-primary-hover': 'color-mix(in srgb, var(--ds-color-brand) 86%, #000000)',
+    'color-primary-active': 'color-mix(in srgb, var(--ds-color-brand) 78%, #000000)',
+    'color-primary-surface':'color-mix(in srgb, var(--ds-color-brand) 12%, var(--ds-color-surface))',
+    'color-primary-border':'color-mix(in srgb, var(--ds-color-brand) 45%, var(--ds-color-surface))',
+    'color-primary-foreground':'#ffffff',
+    'color-primary-text':dark?'color-mix(in srgb, var(--ds-color-brand) 60%, #ffffff)':'color-mix(in srgb, var(--ds-color-brand) 85%, #000000)',
+    'color-focus':'var(--ds-color-primary)',
     'color-shadow':'#000000',
     'shadow-raised':t.boxShadowSecondary,
     'shadow-choice':t.boxShadowTertiary,
@@ -86,7 +90,6 @@ for(const [mode,algorithm] of Object.entries(themes)) {
 blocks.push(`[data-surface="inverse"] {\n${['link','info','success','warning','error'].map(role=>`  --ds-color-${role}: var(--ds-color-${role}-on-inverse);`).join('\n')}\n}`);
 const result=('/* Generated from Ant Design public theme algorithms by generate-client-tokens.mjs. */\n'+blocks.join('\n\n')+'\n')
   .split('\n').map(line=>line.trimEnd()).join('\n');
-const target=new URL('../src/design/tokens.css',import.meta.url);
 if(process.argv.includes('--check')) {
   if(readFileSync(target,'utf8')!==result)throw new Error('Generated client tokens are stale');
 }else writeFileSync(target,result);

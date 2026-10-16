@@ -23,10 +23,10 @@
   font-weight: 600;
 }
 .client-page-header h1 {
-  font-size: 24px;
+  font-size: var(--ds-font-size-page-title);
 }
 .client-section-header h2 {
-  font-size: 18px;
+  font-size: var(--ds-font-size-lg);
 }
 .client-page.client-page-contained {
   padding-block: 16px;
@@ -74,19 +74,27 @@
   outline-offset: 3px;
 }
 .client-atomic {
-  white-space: normal;
-  overflow-wrap: anywhere;
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow-x: hidden;
+  overflow-wrap: normal;
+  vertical-align: middle;
 }
 .client-atomic:has(> *) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .client-inline-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
 }
 .client-loading {
   display: flex;
@@ -96,15 +104,16 @@
   padding: 32px;
 }
 .client-information-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px 32px;
+  display: grid;
+  gap: var(--ds-space-16);
   margin: 0;
+  container-type: inline-size;
 }
 .client-information-grid > div {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ds-space-4);
   min-width: 0;
 }
 .client-information-grid dt {
@@ -242,3 +251,19 @@
 .client-page .ant-table-thead > tr > th {
   white-space: nowrap;
 }
+
+/* Current client design: compact text, independent atomic scroll and full details. */
+.client-information-grid dt,.client-information-grid dd,.client-information-grid .client-atomic { white-space:normal; overflow:visible; overflow-wrap:anywhere; }
+.client-information-full { grid-column:1/-1; }
+.client-table { min-width:0; font-variant-numeric:tabular-nums; }
+.client-table .ant-table-cell { text-align:left; white-space:nowrap; min-width:0; }
+.client-table .ant-table-cell>* { min-width:0; max-width:100%; }
+.client-table-action { overflow:visible; }
+.client-table .ant-table-cell .client-atomic { width:auto; max-width:100%; }
+.client-table .ant-table-cell-fix-right { background:var(--ds-color-surface); }
+.client-table-panel { display:flex; flex-direction:column; gap:var(--ds-space-16); }
+.client-table-panel>.client-section-header { margin:0; }
+* { scrollbar-width:thin; scrollbar-color:var(--ds-color-border-strong) transparent; }
+*::-webkit-scrollbar { width:var(--ds-space-2); height:var(--ds-space-2); }
+*::-webkit-scrollbar-track { background:transparent; }
+*::-webkit-scrollbar-thumb { background:var(--ds-color-border-strong); }

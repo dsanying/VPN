@@ -47,7 +47,7 @@ export function formatProxyMode(env: BugReportEnv): string {
 export function buildBugReportBody(env: BugReportEnv): string {
   return [
     '## 环境（自动采集，请保留）',
-    `- FlowZ 版本：${env.appVersion ?? ''}`,
+    `- 暗影VPN 版本：${env.appVersion ?? ''}`,
     `- 系统 + 架构：${formatSystemInfo(env)}`,
     `- sing-box 内核版本：${env.singBoxVersion ?? ''}`,
     `- 代理模式：${formatProxyMode(env)}`,

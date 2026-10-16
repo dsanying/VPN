@@ -1,3 +1,4 @@
+import {normalizeCountryCode} from '@shared/country';
 import type { ServerConfig } from '@shared/types';
 
 // Derived indexes live with their immutable source snapshot; no extra persisted copy can go stale.
@@ -9,7 +10,8 @@ export function indexedServer(servers: ServerConfig[] | undefined, id: string) {
   return index.get(id);
 }
 const regionNames = new Map<string, { names: Intl.DisplayNames; values: Map<string, string | undefined> }>();
-export function regionDisplayName(language: string, code: string) {
+export function regionDisplayName(language: string, value: string) {
+  const code=normalizeCountryCode(value);if(!code)return undefined;
   let cache = regionNames.get(language);
   if (!cache) { cache = { names: new Intl.DisplayNames([language], { type: 'region' }), values: new Map() }; regionNames.set(language, cache); }
   if (!cache.values.has(code)) cache.values.set(code, cache.names.of(code.toUpperCase()));

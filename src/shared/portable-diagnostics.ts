@@ -37,10 +37,21 @@ export class PortableDiagnostics {
     for (const server of config.servers)
       protocols[server.protocol] = (protocols[server.protocol] ?? 0) + 1;
     const content = buildDiagnosticReport({
+      logging: {
+        reportSchema: 2,
+        retained: entries.length,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        scope: 'bounded-portable-history',
+        limitations: [
+          'Android system logcat and native crash dumps are not included',
+          'Native configuration is intentionally not exposed to the renderer',
+        ],
+      },
+      recentEvents: redactLogText(entries.map((entry) => JSON.stringify(entry)).join('\n')),
       generatedAt: new Date().toISOString(),
       language: config.language,
       app: {
-        flowzVersion: version.appVersion,
+        shadowvpnVersion: version.appVersion,
         coreVersion: version.singBoxVersion,
         os: `${version.platform} ${version.arch} ${version.osVersion}`,
       },

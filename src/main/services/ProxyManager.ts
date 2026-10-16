@@ -426,7 +426,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   private lastLinkChangeFlushAt = 0;
   /**
    * issue #368：最近一次**成功刷新**时的网络指纹。事件流本身不是判据（周期性 RA / DHCP renew 是噪音，
-   * FlowZ 自己的路由操作是自触发），指纹对差才是。**成功才更新**——瞬态失败后指纹仍不同，下个事件会重试。
+   * 暗影VPN 自己的路由操作是自触发），指纹对差才是。**成功才更新**——瞬态失败后指纹仍不同，下个事件会重试。
    */
   private lastNetworkFingerprint: string | null = null;
   private automaticRegion: UserConfig['regionRouting'] | null = null;
@@ -588,9 +588,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   // listen_port。非空 → generateSingBoxConfig 向 inbounds/outbounds/route/dns 注入探测池，测速走主核（同核单会话，
   // 消除 WG/WARP 双会话超时）；分配失败/未 start → []（不注入，测速回退临时核 testServersViaProxy）。
   private probePoolPorts: number[] = [];
-  // 更新链路统一 inbound `update-in`（socks）的动态端口（每次 start 与探针同批分配）：FlowZ 应用更新检查/下载
+  // 更新链路统一 inbound `update-in`（socks）的动态端口（每次 start 与探针同批分配）：暗影VPN 应用更新检查/下载
   // + 规则资源下载 + 订阅流量 pin 到此口（核心链路待后续接入），route 头部钉死按 proxyMode 决策（global/smart→
-  // 经代理 userExitTag，off-mesh 回退 direct；direct→direct）。归属 100% 确定（只有 FlowZ 主动往此口发）→
+  // 经代理 userExitTag，off-mesh 回退 direct；direct→direct）。归属 100% 确定（只有 暗影VPN 主动往此口发）→
   // 天然不误伤其它进程。更新网络统一层 §4.3 / Phase 2。
   private updateInPort: number | null = null;
   private configPath: string;
@@ -624,7 +624,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   // （sing-box 以 O_APPEND 模式写，截断后从 offset 0 续写，不产生 sparse 空洞）
   private static readonly MAX_LOG_FILE_SIZE = 20 * 1024 * 1024; // 20MB
   // 逐进程内存自检阈值（issue #210 主进程 + #242 扩展到全进程）：健康检查（10s 周期）经 getAppMetrics 采样每个
-  // 进程，任一超此值记 warn 日志便于早期定位泄漏。仅观测告警，不强制干预——阈值取较宽松的 1GB/进程（FlowZ 单进程
+  // 进程，任一超此值记 warn 日志便于早期定位泄漏。仅观测告警，不强制干预——阈值取较宽松的 1GB/进程（暗影VPN 单进程
   // 常态远低于此，#242 的问题进程达 2GB），避免误报；命中后降频记录防刷屏（MEMORY_WARN_COOLDOWN_MS）。
   private static readonly RSS_WARN_THRESHOLD = 1024 * 1024 * 1024; // 1GB/进程
   private static readonly MEMORY_WARN_COOLDOWN_MS = 5 * 60 * 1000; // 5 分钟内不重复告警
@@ -785,6 +785,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 故 restart() 不再单独 catch-clear。ensureSystemProxyCleared 在非主动 stop 语境 stopping=false → 会真清；
    * fresh start 无 marker → no-op。
    */
+  private nodeAdapters?: {
+    prepare(config: UserConfig): Promise<boolean>;
+    project(config: UserConfig): UserConfig;
+    stop(): Promise<void>;
+  };
+  setNodeAdapters(adapter: NonNullable<ProxyManager['nodeAdapters']>): void {
+    this.nodeAdapters = adapter;
+  }
+
   async start(config: UserConfig, options: { interactive?: boolean } = {}): Promise<void> {
     config = prepareAutomaticTakeover(config);
     this.beginLifecycleOp();
@@ -809,6 +818,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       //   死进程挂 once('exit')（exit 早发过、永不再触发）→ 永挂 → UI 恒「启动中」（修「二次点击卡死」根因 A）。
       //   cleanup 在此只在「最终失败」执行，不影响 retry 成功路径的探针端口。② 清可能残留的系统代理（L-2′）。
       this.cleanup();
+      await this.nodeAdapters?.stop();
       await this.ensureSystemProxyCleared();
       throw e;
     } finally {
@@ -1005,6 +1015,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     const tunAddressPick = this.startTunAddressPreflight(config, isTunMode);
 
     // 检查是否选择了服务器
+    await this.nodeAdapters?.prepare(config);
     if (!config.selectedServerId) {
       throw new Error('No server selected');
     }
@@ -1314,7 +1325,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     // 出口路由托管：选中的全局出口 = TS System + 承载全隧道 → 在其内核接口装 exit 拆半默认路由
     // （sing-box 不为 exit_node 装,真机实证）。fire-and-forget：内部轮询等 TS 接口出现、绝不抛、不阻塞启动。
-    // 仅 TUN 模式有 System 内核接口；非 TUN（系统代理）下 System 节点已降级 gVisor、无 flowz-ts，托管纯属无用功
+    // 仅 TUN 模式有 System 内核接口；非 TUN（系统代理）下 System 节点已降级 gVisor、无 shadowvpn-ts，托管纯属无用功
     // （Windows 会每 15s 空转 spawn powershell 读 NONE）。停核时 clear() 已拆旧路由，故此处直接跳过即可。
     if (config.proxyModeType === 'tun') {
       void this.meshExitRoute.reconcile(config, !!config.enableIPv6);
@@ -1361,7 +1372,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       this.emit('api-client-ready');
 
       // H3 修复：sing-box 的 cache_file 持久化 selector 旧选择、重启后覆盖 config default。故启动后用管理 API 把
-      // selector 校正回 config.selectedServerId，让 FlowZ 配置成单一真值、压过缓存。**必须在 client 创建后调**
+      // selector 校正回 config.selectedServerId，让 暗影VPN 配置成单一真值、压过缓存。**必须在 client 创建后调**
       // （reassertSelectorSelection 的 `if(!client)break` 在 client=null 直接放弃不重试）——原在 client 前调用致首启
       // cache 与 config 不一致时「选 X 实际走上次出口」(出口混乱)。best-effort（不阻塞启动成功）。
       // 时序修（E）：flush 链到 reassert 完成后。reassert（≤3s，管理 API 慢时）若晚于独立的 scheduleConnectionFlush
@@ -1580,6 +1591,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   private async stopInner(opts?: { quitting?: boolean }): Promise<void> {
+    await this.nodeAdapters?.stop();
     await this.compatibilityCores.close();
     // 出口路由托管清理：趁内核接口还在先删 exit 拆半默认路由（best-effort、绝不抛）。幂等,若已无则 no-op。
     await this.meshExitRoute.clear();
@@ -2023,6 +2035,17 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       return;
     }
 
+    try {
+      if (await this.nodeAdapters?.prepare(newConfig)) {
+        await this.restart(newConfig);
+        return;
+      }
+    } catch (error) {
+      await this.ensureSystemProxyCleared();
+      await this.stop();
+      throw error;
+    }
+
     // bug#5：newConfig 与 currentConfig **逐字节全等**（无任何变化）→ 仅更新引用即返回，不进 planHotSwitch /
     // degraded 桥 / 重启。否则 C 的 started-对账在 config 未变时会走到 no-op 腿的 `if(customRuleFilesDegraded)
     // scheduleDebouncedRestart`：外化文件持续写失败（磁盘满/EIO）时每次 start 自触发重启→再写失败→无限重启循环
@@ -2171,8 +2194,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 注：曾有 Windows TUN 非 system 栈一律退回重启的 guard（`winTunBlocksHotSwitch`），依据是「未实测」。
    * 207 补测：wintun 下 gvisor/mixed/system 三栈各 3 次切换 × 持续打流均 21/21 零失败、无环路 → 与 Windows
    * 默认栈改 gvisor 同批删除（留着等于全体 Windows 用户换节点从零断流降级成重启核）。
-   * **该补测用的是裸 sing-box 最小配置**，没有 FlowZ 的 FakeIP、DNS 劫持、规则集、auto_detect_interface
-   * 交互、helper 提权路径 —— 本体回归见 docs/design/networking/flowz-win-tun-mtu-benchmark.md 的 0.5。
+   * **该补测用的是裸 sing-box 最小配置**，没有 暗影VPN 的 FakeIP、DNS 劫持、规则集、auto_detect_interface
+   * 交互、helper 提权路径 —— 本体回归见 docs/design/networking/shadowvpn-win-tun-mtu-benchmark.md 的 0.5。
    */
   private planHotSwitch(newConfig: UserConfig): {
     kind: 'none' | 'global' | 'rules' | 'both';
@@ -2260,7 +2283,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    *  - 规则切换：对称断连该规则自己的旧连接；
    *  - direct/国内/LAN/Tailscale force-route 段/新成员连接均不动（chains 不同时含某对的 selector+旧成员）。
    *
-   * 为何必须 FlowZ 侧显式关（实测坐实 v1.14.0-alpha.40/41，见上游 SagerNet/sing-box#4281）：sing-box selector 的
+   * 为何必须 暗影VPN 侧显式关（实测坐实 v1.14.0-alpha.40/41，见上游 SagerNet/sing-box#4281）：sing-box selector 的
    * interrupt_exist_connections 对 routed 连接 no-op——连接经 ConnectionHandler 路径直接 dial，不注册进 selector 的
    * interrupt group，SelectOutbound 触发的 Interrupt() 遍历空集。故存量连接不会被内核断，须 CloseConnection 逐条关。
    * interrupt_exist_connections 仍留配置（对 detour 型内部连接如 DoH 有效，切换后 DNS 立即走新成员），但不作断连承担者。
@@ -2431,7 +2454,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // 不应重启内核断流。不排除的话每次切语言都会 norm 翻转 → 去抖重启 sing-box（旧 APP_SET_LANGUAGE 路径不写 config、零断流）。
       language: null,
       // 图形兼容逃生门（硬件加速 / 窗口特效）纯 Electron 窗口·GPU 偏好，不影响 sing-box 生成 → 排除出 norm。
-      // 不排除的话：运行中拨这两个开关 → norm 翻转 → 去抖重启内核断流；而它们本就**需重启 FlowZ 才生效**，
+      // 不排除的话：运行中拨这两个开关 → norm 翻转 → 去抖重启内核断流；而它们本就**需重启 暗影VPN 才生效**，
       // 断用户流量换零收益（同 language / restartOnNodeChange 处置）。
       hardwareAcceleration: null,
       windowEffects: null,
@@ -3222,7 +3245,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * B5：现役核二进制指纹 `path|size|mtimeMs`。用于判「核换没换」——比再 spawn 一次 45MB 二进制便宜四个数量级。
    * 不用内容 hash：45MB 全量读盘本身就比一次 version spawn 贵，而 size+mtime 已能覆盖全部真实换核路径
    * （CoreUpdateService 写盘 / 随包重播种 / 路径改指），代价是理论上「同长度且强制保留 mtime 的原地改写」测不出——
-   * FlowZ 没有这样的写侧。stat 失败返 null（调用方按未命中处理）。
+   * 暗影VPN 没有这样的写侧。stat 失败返 null（调用方按未命中处理）。
    */
   private coreBinaryFingerprint(): string | null {
     try {
@@ -3509,6 +3532,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 生成 sing-box 配置（sing-box 1.12.x / 1.13.x 兼容格式）
    */
   generateSingBoxConfig(config: UserConfig, resolvedIps?: Record<string, string>): SingBoxConfig {
+    config = this.nodeAdapters?.project(config) ?? config;
     if (this.automaticRegion) config = { ...config, regionRouting: this.automaticRegion };
     // issue #147：race server 就绪(raceServerPort>0)才走 race 解析；否则（off/起失败/snapshot/preflight/诊断）
     // 强制 race off → getNodeResolverTag/buildDnsConfig 一致走单上游、不引用 dns-node-race（防 FATAL，快照零变化）。
@@ -3605,14 +3629,14 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
           enabled: true,
           path: cachePath,
           // R2（§14.4）：一次性 bump cache_id 命名空间——store_dns 把 P6 修复前的投毒 DNS 条目持久化（+ optimistic
-          // 续命），旧 cache.db 里的 face:b00c decoy 会跨核重启命中。新 cache_id='flowz-dns-v2' 令冷启动走新命名空间，
+          // 续命），旧 cache.db 里的 face:b00c decoy 会跨核重启命中。新 cache_id='shadowvpn-dns-v2' 令冷启动走新命名空间，
           // 旧投毒条目成不可达垃圾（bbolt 文件不缩，~2MB 可接受）。cache_id 对 store_dns bucket 的命名空间语义须真机
           // 实证（§14.7 W1）；若不生效降级为发版引导手动 rm cache.db。
           // **射程更正（#347）**：上述论断只对 store_dns bucket 成立，**对 store_fakeip bucket 不成立**——
           // fakeip 的地址↔域名映射与地址池计数器不随 cache_id 换命名空间失效，bump 它不清理任何陈旧假 IP 映射。
           // fakeip 侧的反查错配只能靠压客户端缓存时长收窄窗口（见 singbox-dns-builder 的 FAKEIP_REWRITE_TTL），
           // 或直接删 cache.db。别再据此注释推断「bump 一次就把 fakeip 也清干净了」。
-          cache_id: 'flowz-dns-v2',
+          cache_id: 'shadowvpn-dns-v2',
           store_fakeip: true,
           store_dns: true,
         },
@@ -4366,7 +4390,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       return;
     }
     const script = `#!/bin/bash
-# FlowZ 看护脚本（osascript 以 root 执行）；勿手改。
+# 暗影VPN 看护脚本（osascript 以 root 执行）；勿手改。
 SB="$1"; CFG="$2"; LOG="$3"; PIDFILE="$4"; STOPFLAG="$5"; PARENT="$6"; FWD="$7"
 if [ "$FWD" = "1" ]; then sysctl -w net.inet.ip.forwarding=1 >/dev/null 2>&1; sysctl -w net.inet6.ip6.forwarding=1 >/dev/null 2>&1; fi
 "$SB" run -c "$CFG" > "$LOG" 2>&1 &
@@ -4387,7 +4411,7 @@ rm -f "$STOPFLAG"
 
   /** Windows 提权看护脚本路径（UAC 提权的 PowerShell 以 -File 执行它来托管 sing-box）。 */
   private getWindowsWatchdogScriptPath(): string {
-    return path.join(getUserDataPath(), 'flowz-win-watchdog.ps1');
+    return path.join(getUserDataPath(), 'shadowvpn-win-watchdog.ps1');
   }
 
   /**
@@ -4521,7 +4545,7 @@ rm -f "$STOPFLAG"
     // B8：就绪窗内的观测腿改**零 spawn**。原先每轮走 `adapterPresenceProbe`（F2 之后是 netsh），而适配器要到
     //   +660–997ms 才出现，窗口前段每轮都真的起进程——`execFile` 的异步只是回调异步，`uv_spawn` 在 event loop
     //   线程上同步执行，CreateProcessW 多慢主线程就堵多久。真机实测这个窗口里一次 netsh 要 819ms（空载 50–80ms），
-    //   而同期 FlowZ 的首次就绪探测（一次 loopback connect，正常 <5ms）被拖到 2538–4036ms。
+    //   而同期 暗影VPN 的首次就绪探测（一次 loopback connect，正常 <5ms）被拖到 2538–4036ms。
     //   Node 枚举与 `Get-NetAdapter -Name` 同一个名字空间，只是**只产肯定结论**：故窗内只记 present、绝不记
     //   absent（看不见 ≠ 不存在）；absent 证据改由成功路径的 grace 硬闸、失败出口的补探提供（见下）。
     const observerDone: Promise<void> = observing
@@ -5135,7 +5159,7 @@ rm -f "$STOPFLAG"
 
         if (launchViaOsascript) {
           // macOS: osascript 一次授权 → 以 root 跑「看护脚本」托管 sing-box（停止/退出/崩溃回收无需再提权）。
-          // 路径单引号包裹以容忍空格（与原实现一样不处理路径内引号——FlowZ 路径不含单/双引号）。
+          // 路径单引号包裹以容忍空格（与原实现一样不处理路径内引号——暗影VPN 路径不含单/双引号）。
           const pidFile = getSingBoxPidPath();
           const startupLogFile = getSingBoxStartupLogPath();
           const stopFlag = this.getStopFlagPath();
@@ -5224,7 +5248,7 @@ rm -f "$STOPFLAG"
             const watchdog = this.getWindowsWatchdogScriptPath();
             // 外层 powershell（非提权）只负责发起 UAC：Start-Process -Verb RunAs 拉起提权 powershell
             // 执行看护脚本。参数经 -File 传递（不走 -Command 内联，避免多层转义）；-ArgumentList 不会
-            // 给含空格元素自动加引号 → 路径元素显式内嵌双引号（FlowZ 路径不含单/双引号）。
+            // 给含空格元素自动加引号 → 路径元素显式内嵌双引号（暗影VPN 路径不含单/双引号）。
             // 授权成功外层立即退 0（不 -Wait，看护脚本常驻）；取消 UAC 时 Start-Process 抛错 → 退 1，
             // 与旧实现的退出码协议一致（见下方 singboxProcess 'exit' 处理）。PID 文件由提权侧写出，
             // waitForPidFile 协议不变。
@@ -6147,7 +6171,7 @@ rm -f "$STOPFLAG"
    *  - 不抛 → 存在；
    *  - `ESRCH` → **确证不存在**（唯一可以判「没有」的情形）；
    *  - `EPERM` → **存在**。这不是模棱两可：内核先查到进程、再拒绝访问，才会给 EPERM。
-   *    helper 路径下核由 LocalSystem 起、FlowZ 非提权，**正是 EPERM 的常见产地**——判成「不存在」
+   *    helper 路径下核由 LocalSystem 起、暗影VPN 非提权，**正是 EPERM 的常见产地**——判成「不存在」
    *    会让每次 helper 起核都被自己这道检查判死。
    *  - 其余错误码 → 说不了 → **fail-open 判存在**。这道检查只为抓「helper 报成功但进程压根没起来」，
    *    抓不准时绝不能替代它下结论；真死了由就绪门（`waitForCoreReady` 的 dead 分支）兜住。
@@ -6659,7 +6683,7 @@ rm -f "$STOPFLAG"
   }
 
   /**
-   * 系统代理统一清理收口（public）：仅当系统代理确由 FlowZ 设置（marker 在 + 实查指向我们）才 disable，
+   * 系统代理统一清理收口（public）：仅当系统代理确由 暗影VPN 设置（marker 在 + 实查指向我们）才 disable，
    * 杜绝失败/崩溃/外部死亡后系统代理指向死端口致全网断，也不误清用户自配代理。
    * 调用方：① ProxyManager 内部终态（giveUp / 健康检查达上限 / handleProcessExit 信号死·崩溃 / 去抖重启 catch /
    * restart 的 start 腿失败）；② index.ts 'stopped'/'error' 监听器（外部死亡兜底）；③ IPC PROXY_STOP / 托盘 onStop
@@ -6675,7 +6699,7 @@ rm -f "$STOPFLAG"
     if (this.clearingSystemProxy) return; // 单飞：多路终态并发只清一次
     const mgr = this.systemProxyManager;
     if (!mgr) return;
-    // 仅当系统代理确由 FlowZ 设置（marker 在）才动手 → 杜绝误清用户自配代理
+    // 仅当系统代理确由 暗影VPN 设置（marker 在）才动手 → 杜绝误清用户自配代理
     const marker = SystemProxyBase.readMarker();
     if (!marker) return;
 
@@ -6695,7 +6719,7 @@ rm -f "$STOPFLAG"
       if (stillOurs) {
         // 系统代理仍指向我们的（已死的）端口 → disable：内部 restore 原始（已被 stripSelf 置 null → 简单关）+ 删 marker
         await mgr.disableProxy();
-        this.logToManager('info', '终态已清除系统代理（曾指向 FlowZ，避免死端口致全网断）');
+        this.logToManager('info', '终态已清除系统代理（曾指向 暗影VPN，避免死端口致全网断）');
       } else {
         // 已关 / 用户手改指向别处 → 仅清失真 marker；但若期间已被新一轮 enable 写了新 marker（host:port 变了）
         // 则保留，防误删新会话 marker 致其兜底全瞎（C1 的 marker 删除竞态防护）。
@@ -6713,7 +6737,7 @@ rm -f "$STOPFLAG"
   }
 
   /**
-   * TUN 进入后的残留系统代理提示：ensureSystemProxyCleared 已清掉 FlowZ 自己的(marker)；若系统代理仍开着，
+   * TUN 进入后的残留系统代理提示：ensureSystemProxyCleared 已清掉 暗影VPN 自己的(marker)；若系统代理仍开着，
    * 即为**无 marker 残留**——可能是别的代理软件(Clash/Stash 等共用 7890)或外部/企业代理，也可能是我们丢了 marker。
    * 因 7890 等是业内共用端口、无法据地址证明归属，**绝不自动清**(会误伤别的软件)→ 发一次性 advisory 交用户一键关。
    * best-effort：读状态失败/无残留则静默。
@@ -6729,7 +6753,7 @@ rm -f "$STOPFLAG"
   }
 
   /**
-   * 系统 DNS 统一还原收口（public）：仅当 DNS 确由 FlowZ 接管（marker 在）才还原，杜绝误改用户自配 DNS。
+   * 系统 DNS 统一还原收口（public）：仅当 DNS 确由 暗影VPN 接管（marker 在）才还原，杜绝误改用户自配 DNS。
    * 调用方：① ensureSystemProxyCleared 内（覆盖全部「核已死」终态点，免逐点加行）；② start() reconcile 的
    * 非 TUN 分支（systemProxy/manual 切换后还原残留）。门控镜像 ensureSystemProxyCleared：
    * stopping（重启 stop 腿跳过，由 start reconcile 重设/还原负责）+ 单飞 + marker。
@@ -6746,7 +6770,7 @@ rm -f "$STOPFLAG"
     this.stopDnsInterfaceWatcher();
     const mgr = this.systemDnsManager;
     if (!mgr) return;
-    // 仅当 DNS 确由 FlowZ 接管（marker 在）才动手 → 不误改用户自配/系统默认 DNS
+    // 仅当 DNS 确由 暗影VPN 接管（marker 在）才动手 → 不误改用户自配/系统默认 DNS
     if (!mgr.hasMarker()) return;
 
     this.clearingSystemDns = true;

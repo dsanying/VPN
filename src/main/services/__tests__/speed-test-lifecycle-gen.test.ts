@@ -11,7 +11,7 @@ const path = require('path');
 const fsSync = require('fs');
 const { EventEmitter } = require('events');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-lifecycle-gen-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-lifecycle-gen-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
@@ -245,5 +245,53 @@ it('each selected probe slot detects its own exit before reuse; missing region i
     expect(svc.getNodeMeasurement('geo-b')?.exit).toBeUndefined();
   } finally {
     trace.mockRestore();
+  }
+});
+
+it('emits the proxy result immediately and keeps its slot reserved until exit detection completes', async () => {
+  const svc = new SpeedTestService(
+    mockLog,
+    undefined,
+    () => probeK1(),
+    () => 0
+  );
+  svc.enableRegionDetection();
+  jest
+    .spyOn(
+      svc as unknown as { measureViaTunnel: () => Promise<{ latency: number }> },
+      'measureViaTunnel'
+    )
+    .mockResolvedValue({ latency: 42 });
+  let release!: (value: { ip: string; countryCode: string }) => void;
+  let entered!: () => void;
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const query = jest
+    .spyOn(require('../IpInfoService').IpInfoService.prototype, 'queryViaProxy')
+    .mockImplementationOnce(() => {
+      entered();
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    });
+  const result = jest.fn();
+  const update = jest.fn();
+  const off = svc.onNodeMeasurement(update);
+  try {
+    const task = svc.testAllServers([vless('fast-result')], result);
+    await started;
+    expect(result).toHaveBeenCalledWith('fast-result', 42);
+    expect(update).not.toHaveBeenCalled();
+    release({ ip: '192.0.2.1', countryCode: 'JP' });
+    await task;
+    expect(result).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(
+      'fast-result',
+      expect.objectContaining({ exit: expect.objectContaining({ countryCode: 'JP' }) })
+    );
+  } finally {
+    off();
+    query.mockRestore();
   }
 });

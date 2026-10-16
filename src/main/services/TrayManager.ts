@@ -40,7 +40,7 @@ const PROTOCOL_SHORT: Record<string, string> = {
  *
  * **一次性生成后永久写死，跨版本不得变更**——改了等于换 autosaveName，用户已拖好的位置会丢。
  * **仅 darwin 传**：Electron 文档明确警告 Windows 上未签名 exe 的 GUID 会与 exe 路径永久绑定，路径一变托盘
- * 创建即失败；FlowZ 无 Authenticode 签名且 portable 形态每版换文件名（见 update-install-script.ts 便携态注释）
+ * 创建即失败；暗影VPN 无 Authenticode 签名且 portable 形态每版换文件名（见 update-install-script.ts 便携态注释）
  * → win32 传 guid 会直接弄坏 portable 更新后的托盘。Linux 忽略此参数。
  */
 const MACOS_TRAY_GUID = 'ba2b1484-56c4-430d-a3a9-18e6cc3f45dd';
@@ -50,6 +50,7 @@ export type TrayIconState = 'idle' | 'connected' | 'connecting';
 export interface TrayMenuData {
   isProxyRunning: boolean;
   nodeRegions?: Record<string, string | undefined>;
+  nodeRegionSources?: Record<string, 'gateway' | 'exit' | undefined>;
   hasError?: boolean;
   servers: ServerConfig[];
   subscriptions?: SubscriptionConfig[];
@@ -101,8 +102,10 @@ export class TrayManager implements ITrayManager {
   private onManageServers?: () => void;
   private onSpeedTest?: () => void;
   private onLightweightMode?: () => void;
+  private onExportDiagnostics?: () => void;
 
   // 测速结果
+  private nodeRegionSources: Record<string, 'gateway' | 'exit' | undefined> = {};
   private nodeRegions: Record<string, string | undefined> = {};
   private speedTestResults: Map<string, number | null> = new Map();
   private isSpeedTesting: boolean = false;
@@ -137,6 +140,10 @@ export class TrayManager implements ITrayManager {
     this.onManageServers = callbacks?.onManageServers;
     this.onSpeedTest = callbacks?.onSpeedTest;
     this.onLightweightMode = callbacks?.onLightweightMode;
+  }
+
+  setDiagnosticExport(handler: () => void): void {
+    this.onExportDiagnostics = handler;
   }
 
   setMainWindow(window: BrowserWindow | null): void {
@@ -239,6 +246,7 @@ export class TrayManager implements ITrayManager {
     }
 
     if (data.nodeRegions) this.nodeRegions = data.nodeRegions;
+    if (data.nodeRegionSources) this.nodeRegionSources = data.nodeRegionSources;
     this.isProxyRunning = data.isProxyRunning;
     this.hasError = !!data.hasError;
     this.servers = data.servers;
@@ -275,7 +283,9 @@ export class TrayManager implements ITrayManager {
             ? ` [${latency}ms]`
             : ` [${mt('trayTimeout')}]`
           : '';
-      const suffix = `（${proto}）${latencyStr}`;
+      const regionSource =
+        this.nodeRegionSources[server.id] === 'gateway' ? ` · ${mt('gatewayRegion')}` : '';
+      const suffix = `（${proto}）${regionSource}${latencyStr}`;
       const label = `${nodeDisplayName(
         name,
         this.nodeRegions[server.id],
@@ -381,6 +391,9 @@ export class TrayManager implements ITrayManager {
         label: mt('trayOpenSettings'),
         click: () => this.handleOpenSettings(),
       },
+      ...(this.onExportDiagnostics
+        ? [{ label: mt('trayExportDiagnostics'), click: () => this.onExportDiagnostics?.() }]
+        : []),
       { type: 'separator' },
       {
         id: 'quit',
@@ -581,12 +594,14 @@ export class TrayManager implements ITrayManager {
     opts: {
       toast?: boolean;
       nodeRegions?: Record<string, string | undefined>;
+      nodeRegionSources?: Record<string, 'gateway' | 'exit' | undefined>;
       keepTestingState?: boolean;
       outcome?: SpeedTestOutcome;
       skipped?: number;
     } = {}
   ): void {
     if (opts.nodeRegions) this.nodeRegions = opts.nodeRegions;
+    if (opts.nodeRegionSources) this.nodeRegionSources = opts.nodeRegionSources;
     this.speedTestResults = new Map([...this.speedTestResults, ...results]);
     // 出口伴测（keepTestingState）合并单节点结果时不复位「测速中」态——否则在飞的全量测速托盘态被伴测提前熄灭。
     if (!opts.keepTestingState) this.isSpeedTesting = false;

@@ -69,7 +69,7 @@ export function buildTrayCallbacks(deps: TrayActionDeps) {
       const proxyManager = getProxyManager();
       try {
         // 用户主动停止：先清系统代理（stop() 前调，stopping 仍 false → 会真正清）。经 ensureSystemProxyCleared
-        // 的 marker + 指向门控，仅清 FlowZ 自己设置的，不 stomp 用户自配/TUN 模式（修 M4）。
+        // 的 marker + 指向门控，仅清 暗影VPN 自己设置的，不 stomp 用户自配/TUN 模式（修 M4）。
         if (proxyManager) {
           await proxyManager.ensureSystemProxyCleared().catch(() => {});
           await proxyManager.stop();

@@ -8,9 +8,9 @@
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
-const TS_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-ts-ep-'));
+const TS_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-ts-ep-'));
 jest.mock('../tailscale-state', () => ({
-  tailscaleStateDir: (id: string) => `${require('os').tmpdir()}/flowz-ts-ep-state/${id}`,
+  tailscaleStateDir: (id: string) => `${require('os').tmpdir()}/shadowvpn-ts-ep-state/${id}`,
 }));
 
 import {
@@ -28,7 +28,7 @@ import type { ServerConfig, UserConfig } from '../../../shared/types';
 afterAll(() => {
   try {
     fs.rmSync(TS_TMP, { recursive: true, force: true });
-    fs.rmSync(`${os.tmpdir()}/flowz-ts-ep-state`, { recursive: true, force: true });
+    fs.rmSync(`${os.tmpdir()}/shadowvpn-ts-ep-state`, { recursive: true, force: true });
   } catch {
     /* ignore */
   }
@@ -172,7 +172,7 @@ describe('buildWireGuardEndpoint', () => {
       'WGS'
     );
     expect(ep.system).toBe(true);
-    expect(ep.name).toBe('flowz-wg'); // sing-box 1.14 WG endpoint 内核接口名字段=`name`（非 interface_name）
+    expect(ep.name).toBe('shadowvpn-wg'); // sing-box 1.14 WG endpoint 内核接口名字段=`name`（非 interface_name）
     // system WG 全隧道也用裸 0/0（cryptokey 需要；预折半已证伪：sing-tun 落内核前把 0/1+128/1 合并回裸 0/0）→ 撞
     // en0 default EEXIST、被 setRoutes 善后删、停核不回填 → 断网，由 ProxyManager 的全局 default 安全网兜底。
     expect(ep.peers![0].allowed_ips).toEqual(['10.8.0.0/24', '0.0.0.0/0', '::/0']);
@@ -716,7 +716,7 @@ describe('buildProxyOutbound — 可选协议设置下发（B 组编辑项）', 
   /**
    * disable_chrome_parrot（sing-box 1.14）：上游默认 false = Chrome QUIC 指纹拟态**开启**。
    * 三态必须分清——「显式 false」与「缺省」都应**省略**该键而非下发 `false`：
-   * 省略即跟随上游默认，抗指纹白拿；写死 false 会在上游改默认/改语义时把 FlowZ 钉在旧行为上。
+   * 省略即跟随上游默认，抗指纹白拿；写死 false 会在上游改默认/改语义时把 暗影VPN 钉在旧行为上。
    * 只有显式 true（用户为 Ed25519 证书服务端开的逃生门）才下发。
    */
   it('hysteria2：disableChromeParrot=true → 下发 disable_chrome_parrot（Ed25519 证书逃生门）', () => {
@@ -921,7 +921,7 @@ describe('buildProxyOutbound — http(H2)/gRPC 传输生成', () => {
 
 // buildTailscaleEndpoint — P4a 新字段（advertise_tags / ssh_server / relay_server_port）。
 // schema 经 resources/linux/sing-box check（1.14-alpha.32）实证：
-//  advertise_tags=Listable[string]；ssh_server=badoption(bool|{enabled})，FlowZ 以 bool 下发；
+//  advertise_tags=Listable[string]；ssh_server=badoption(bool|{enabled})，暗影VPN 以 bool 下发；
 //  relay_server_port=int（唯一 relay_server_* 字段，无 relay_server 开关）。
 const tsServer = (over: Partial<ServerConfig> = {}): ServerConfig =>
   ({

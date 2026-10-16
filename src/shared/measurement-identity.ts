@@ -22,7 +22,15 @@ export function nodeMeasurementIdentity(node: ServerConfig, target?: string): st
     subscriptionId: _subscription,
     ...transport
   } = node;
-  return JSON.stringify(canonical({ transport, target }));
+  return JSON.stringify(
+    canonical({
+      transport,
+      target,
+      ...(node.protocol === 'enterprise'
+        ? { enterpriseRevision: node.updatedAt, enterpriseProbeVersion: 4 }
+        : {}),
+    })
+  );
 }
 export function subscriptionMeasurementIdentity(subscription: SubscriptionConfig): string {
   return JSON.stringify([subscription.url, DEFAULT_SUBSCRIPTION_USER_AGENT]);

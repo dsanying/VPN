@@ -12,11 +12,11 @@ import {
 } from '../update-install-script';
 
 describe('buildWindowsUpdateVbs', () => {
-  const tmp = 'C:\\Users\\u\\AppData\\Local\\Temp\\FlowZ-4.1.7-win-x64-portable.exe';
+  const tmp = 'C:\\Users\\u\\AppData\\Local\\Temp\\暗影VPN-4.1.7-win-x64-portable.exe';
 
   it('便携态（B 移入新名+删旧名）：写新版本名到原目录 + 删旧名(被锁则 rename 兜底) + 启新名 + 不静默 fallback', () => {
-    const oldExe = 'D:\\Apps\\FlowZ-4.1.5-win-x64-portable.exe';
-    const newExe = 'D:\\Apps\\FlowZ-4.1.7-win-x64-portable.exe';
+    const oldExe = 'D:\\Apps\\暗影VPN-4.1.5-win-x64-portable.exe';
+    const newExe = 'D:\\Apps\\暗影VPN-4.1.7-win-x64-portable.exe';
     const s = buildWindowsUpdateVbs({
       installerPath: tmp,
       portableTarget: oldExe,
@@ -24,8 +24,8 @@ describe('buildWindowsUpdateVbs', () => {
       fallbackMessage: 'UPD_FAIL_MSG',
     });
     // 变量赋值（双反斜杠转义）
-    expect(s).toContain('newExe = "D:\\\\Apps\\\\FlowZ-4.1.7-win-x64-portable.exe"');
-    expect(s).toContain('oldExe = "D:\\\\Apps\\\\FlowZ-4.1.5-win-x64-portable.exe"');
+    expect(s).toContain('newExe = "D:\\\\Apps\\\\暗影VPN-4.1.7-win-x64-portable.exe"');
+    expect(s).toContain('oldExe = "D:\\\\Apps\\\\暗影VPN-4.1.5-win-x64-portable.exe"');
     // 写新版本名文件到原目录（新名不撞锁）
     expect(s).toContain('fso.CopyFile src, newExe, True');
     // 旧名被 stub 锁 → DeleteFile 失败则 rename 到 .old；同名时跳过删旧
@@ -45,22 +45,22 @@ describe('buildWindowsUpdateVbs', () => {
     // 写新名失败 fallback：跑临时 src + MsgBox（含注入文案 + 单反斜杠原路径，非双写反斜杠）
     expect(s).toContain('WshShell.Run """" & src & """", 1, False');
     expect(s).toContain('MsgBox "UPD_FAIL_MSG"');
-    expect(s).toContain('"C:\\Users\\u\\AppData\\Local\\Temp\\FlowZ-4.1.7-win-x64-portable.exe"');
+    expect(s).toContain('"C:\\Users\\u\\AppData\\Local\\Temp\\暗影VPN-4.1.7-win-x64-portable.exe"');
     expect(s).toMatch(/\r\n/); // VBS 用 CRLF
   });
 
   it('便携态 portableNewPath 缺省 → 退化为覆盖同名（newExe == oldExe）', () => {
-    const target = 'D:\\Apps\\FlowZ.exe';
+    const target = 'D:\\Apps\\暗影VPN.exe';
     const s = buildWindowsUpdateVbs({ installerPath: tmp, portableTarget: target });
-    expect(s).toContain('newExe = "D:\\\\Apps\\\\FlowZ.exe"');
-    expect(s).toContain('oldExe = "D:\\\\Apps\\\\FlowZ.exe"');
+    expect(s).toContain('newExe = "D:\\\\Apps\\\\暗影VPN.exe"');
+    expect(s).toContain('oldExe = "D:\\\\Apps\\\\暗影VPN.exe"');
   });
 
   it('NSIS 态：跑下载的 setup 且带 --updated、无 CopyFile', () => {
     const s = buildWindowsUpdateVbs({ installerPath: tmp, portableTarget: null });
     // VBS 展开后为:  WshShell.Run "<setup 绝对路径>" --updated, 1, False
     expect(s).toContain(
-      'WshShell.Run """C:\\\\Users\\\\u\\\\AppData\\\\Local\\\\Temp\\\\FlowZ-4.1.7-win-x64-portable.exe"" --updated", 1, False'
+      'WshShell.Run """C:\\\\Users\\\\u\\\\AppData\\\\Local\\\\Temp\\\\暗影VPN-4.1.7-win-x64-portable.exe"" --updated", 1, False'
     );
     expect(s).not.toContain('fso.CopyFile');
   });
@@ -78,8 +78,8 @@ describe('buildWindowsUpdateVbs', () => {
   it('便携态不得带 --updated（无 NSIS 安装器，参数会被当文件名）', () => {
     const s = buildWindowsUpdateVbs({
       installerPath: tmp,
-      portableTarget: 'D:\\Apps\\FlowZ-4.1.5-win-x64-portable.exe',
-      portableNewPath: 'D:\\Apps\\FlowZ-4.1.7-win-x64-portable.exe',
+      portableTarget: 'D:\\Apps\\暗影VPN-4.1.5-win-x64-portable.exe',
+      portableNewPath: 'D:\\Apps\\暗影VPN-4.1.7-win-x64-portable.exe',
     });
     expect(s).not.toContain('--updated');
   });
@@ -106,18 +106,18 @@ describe('selectPortableStaleOld', () => {
   });
 
   it('无匹配（非 portable 的 .old / 缺前缀）→ 空数组', () => {
-    expect(selectPortableStaleOld(['a.exe', 'b.txt', 'c.old', 'FlowZ-x.exe'])).toEqual([]);
+    expect(selectPortableStaleOld(['a.exe', 'b.txt', 'c.old', '暗影VPN-x.exe'])).toEqual([]);
   });
 });
 
 describe('buildLinuxAppImageScript', () => {
   it('覆盖回原 AppImage + chmod + 重启；覆盖失败回退跑临时', () => {
     const s = buildLinuxAppImageScript({
-      installerPath: '/tmp/FlowZ-new.AppImage',
-      appImageTarget: '/home/u/Apps/FlowZ.AppImage',
+      installerPath: '/tmp/暗影VPN-new.AppImage',
+      appImageTarget: '/home/u/Apps/暗影VPN.AppImage',
     });
-    expect(s).toContain("NEW='/tmp/FlowZ-new.AppImage'");
-    expect(s).toContain("DEST='/home/u/Apps/FlowZ.AppImage'");
+    expect(s).toContain("NEW='/tmp/暗影VPN-new.AppImage'");
+    expect(s).toContain("DEST='/home/u/Apps/暗影VPN.AppImage'");
     expect(s).toContain('cp -f "$NEW" "$DEST"');
     expect(s).toContain('chmod +x "$DEST"');
     expect(s).toContain('nohup "$DEST"');
@@ -137,11 +137,11 @@ describe('buildLinuxAppImageScript', () => {
 describe('buildLinuxDebScript', () => {
   it('pkexec apt-get install 原位升级 + 删 deb + 重启；失败回退 xdg-open 下载目录', () => {
     const s = buildLinuxDebScript({
-      installerPath: '/tmp/FlowZ-4.1.8.deb',
-      exePath: '/opt/FlowZ/flowz',
+      installerPath: '/tmp/暗影VPN-4.1.8.deb',
+      exePath: '/opt/暗影VPN/shadow-vpn',
     });
-    expect(s).toContain("DEB='/tmp/FlowZ-4.1.8.deb'");
-    expect(s).toContain("EXE='/opt/FlowZ/flowz'");
+    expect(s).toContain("DEB='/tmp/暗影VPN-4.1.8.deb'");
+    expect(s).toContain("EXE='/opt/暗影VPN/shadow-vpn'");
     expect(s).toContain('pkexec apt-get install -y'); // apt 解依赖+版本升级（非 openPath→App Center）
     expect(s).toContain('Dpkg::Options::=--force-confold'); // 无 tty conffile 防阻断（Low-1）
     expect(s).toMatch(/pkexec apt-get install .*"\$DEB"/); // deb 路径作末参
@@ -160,8 +160,8 @@ describe('buildLinuxDebScript', () => {
 describe('buildMacUpdateScript', () => {
   it('有 .app 路径：mv 原子替换 + osascript 落盘脚本提权 + 删 DMG + 重启（brick 安全 H1/H2/M2）', () => {
     const s = buildMacUpdateScript({
-      dmgPath: '/tmp/FlowZ.dmg',
-      appBundlePath: '/Applications/FlowZ.app',
+      dmgPath: '/tmp/暗影VPN.dmg',
+      appBundlePath: '/Applications/暗影VPN.app',
     });
     expect(s).toContain('hdiutil attach');
     expect(s).toContain('ditto "$SRC" "$STAGE"');
@@ -183,8 +183,8 @@ describe('buildMacUpdateScript', () => {
   });
 
   it('无 .app 路径：回退原行为仅 open DMG', () => {
-    const s = buildMacUpdateScript({ dmgPath: '/tmp/FlowZ.dmg', appBundlePath: null });
-    expect(s).toContain("open '/tmp/FlowZ.dmg'");
+    const s = buildMacUpdateScript({ dmgPath: '/tmp/暗影VPN.dmg', appBundlePath: null });
+    expect(s).toContain("open '/tmp/暗影VPN.dmg'");
     expect(s).not.toContain('hdiutil');
     expect(s).not.toContain('ditto');
   });
@@ -192,14 +192,14 @@ describe('buildMacUpdateScript', () => {
 
 describe('macAppBundleFromExe', () => {
   it('标准路径 → .app 包', () => {
-    expect(macAppBundleFromExe('/Applications/FlowZ.app/Contents/MacOS/FlowZ')).toBe(
-      '/Applications/FlowZ.app'
+    expect(macAppBundleFromExe('/Applications/暗影VPN.app/Contents/MacOS/暗影VPN')).toBe(
+      '/Applications/暗影VPN.app'
     );
   });
 
   it('非 .app 布局 → null', () => {
-    expect(macAppBundleFromExe('/usr/local/bin/flowz')).toBeNull();
-    expect(macAppBundleFromExe('C:\\Apps\\FlowZ.exe')).toBeNull();
+    expect(macAppBundleFromExe('/usr/local/bin/shadow-vpn')).toBeNull();
+    expect(macAppBundleFromExe('C:\\Apps\\暗影VPN.exe')).toBeNull();
   });
 });
 

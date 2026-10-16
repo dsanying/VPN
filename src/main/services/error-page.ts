@@ -9,7 +9,7 @@
  */
 
 export interface FatalErrorPageText {
-  /** 标题（如「FlowZ 启动失败 / Failed to start」）。 */
+  /** 标题（如「暗影VPN 启动失败 / Failed to start」）。 */
   title: string;
   message: string;
   reloadLabel: string;
@@ -40,8 +40,8 @@ export function buildFatalErrorPageHtml(text: FatalErrorPageText): string {
   const reloadLabel = esc(text.reloadLabel);
   // 按钮接线：retryChannel 经 JSON.stringify 成安全 JS 字面量（主进程控制的常量，非用户输入）。
   const script = text.retryChannel
-    ? `<script>document.getElementById('flowz-reload').addEventListener('click',function(){try{window.electron.ipcRenderer.invoke(${JSON.stringify(text.retryChannel)});}catch(e){location.reload();}});</script>`
-    : `<script>document.getElementById('flowz-reload').addEventListener('click',function(){location.reload();});</script>`;
+    ? `<script>document.getElementById('shadowvpn-reload').addEventListener('click',function(){try{window.electron.ipcRenderer.invoke(${JSON.stringify(text.retryChannel)});}catch(e){location.reload();}});</script>`
+    : `<script>document.getElementById('shadowvpn-reload').addEventListener('click',function(){location.reload();});</script>`;
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>
 html,body{margin:0;height:100%}
 body{background:#1F252E;color:#E6EDF3;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;box-sizing:border-box}
@@ -50,7 +50,7 @@ h1{font-size:18px;font-weight:600;margin:0 0 12px}
 p{font-size:13px;line-height:1.6;color:#9DA7B3;margin:0 0 20px;word-break:break-word}
 button{font:inherit;font-size:13px;color:#fff;background:#2F81F7;border:0;border-radius:8px;padding:9px 20px;cursor:pointer}
 button:hover{background:#2b76e0}
-</style></head><body><div class="box"><h1>${title}</h1><p>${message}</p><button id="flowz-reload" type="button">${reloadLabel}</button></div>${script}</body></html>`;
+</style></head><body><div class="box"><h1>${title}</h1><p>${message}</p><button id="shadowvpn-reload" type="button">${reloadLabel}</button></div>${script}</body></html>`;
 }
 
 /** 生成可直接 loadURL 的 data: URL（HTML 经 encodeURIComponent，兼容任意字符）。 */

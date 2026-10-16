@@ -1,3 +1,5 @@
+import { redactLogText } from '../../shared/log-redact';
+import { traceOperation } from '../services/OperationContext';
 import { app, ipcMain, IpcMainInvokeEvent } from 'electron';
 import { ApiResponse } from '../../shared/types';
 import { IpcChannel } from '../../shared/ipc-channels';
@@ -48,14 +50,44 @@ export class IpcHandlerRegistry {
       args: TArgs
     ): Promise<ApiResponse<TResult>> => {
       try {
-        const result = await handler(event, args);
+        const result = await traceOperation(
+          channel,
+          (context, error) => {
+            // No request/response payloads: saved credentials and callbacks are private.
+            const readOnly = /:(?:get|read|is|has|stateExists|measurements)/i.test(channel);
+            if (readOnly && (context.phase === 'start' || context.phase === 'success')) return;
+            const level =
+              context.phase === 'failure'
+                ? 'error'
+                : context.phase === 'progress'
+                  ? 'warn'
+                  : readOnly
+                    ? 'debug'
+                    : 'info';
+            ipcLogger?.addLog(
+              level,
+              `operation=${channel}; phase=${context.phase}; traceId=${context.traceId}; durationMs=${context.durationMs ?? 0}${error instanceof Error ? `; ${error.message}` : ''}`,
+              'Operation',
+              error instanceof Error ? error.stack : undefined,
+              context
+            );
+          },
+          async () => handler(event, args),
+          (value) =>
+            !!value &&
+            typeof value === 'object' &&
+            (('success' in value && value.success === false) || ('error' in value && !!value.error))
+        );
 
         return {
           success: true,
           data: result,
         };
       } catch (error) {
-        console.error(`[IPC] Error handling channel "${channel}":`, error);
+        console.error(
+          `[IPC] Error handling channel "${channel}":`,
+          redactLogText(error instanceof Error ? error.message : String(error))
+        );
 
         const errorMessage = error instanceof Error ? error.message : String(error);
         const errorCode = (error as any)?.code;
@@ -70,7 +102,7 @@ export class IpcHandlerRegistry {
 
         // 记录详细错误堆栈：仅开发环境输出，生产环境不暴露堆栈
         if (isDevelopment && errorStack) {
-          console.error(`[IPC] Stack trace:`, errorStack);
+          console.error(`[IPC] Stack trace:`, redactLogText(errorStack));
         }
 
         return {

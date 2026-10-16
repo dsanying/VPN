@@ -40,7 +40,8 @@
       "unpublish": "unpublish",
       "update": "update",
       "upload": "upload",
-      "view": "view"
+      "view": "view",
+      "query": "query"
     },
     "brand": "DSVPN",
     "confirm": {
@@ -154,7 +155,8 @@
       "unselected": "not selected",
       "use": "use",
       "version": "version",
-      "xhttp": "XHTTP"
+      "xhttp": "XHTTP",
+      "customProtocol": "custom configuration"
     }
   },
   "components": {
@@ -300,7 +302,7 @@
     "nodeGroups": "node groups",
     "nodeList": "node list",
     "nodeSource": "node link or configuration",
-    "nodeSourceHint": "Paste a single sharing link or JSON/YAML to read its connection parameters. An address and port alone cannot determine them.",
+    "nodeSourceHint": "Paste a node link, configuration or enterprise VPN gateway. Type is detected automatically; credentials stay in the local encrypted database.",
     "nodeSourceInvalid": "cannot identify a single node; check the configuration",
     "notApplicable": "not applicable",
     "notInstalledPlatform": "this system does not require this helper",
@@ -313,6 +315,13 @@
     "pendingUpdates": "updates ready to apply",
     "preparingRegion": "preparing region rules…",
     "privateKey": "private key",
+    "regionUnknownHint": "Region is unknown. Detection looks up the public gateway IP and measures the proxy exit where supported.",
+    "exitRegion": "Proxy exit region",
+    "gatewayRegion": "Gateway region",
+    "gatewayRegionHint": "Gateway IP location does not represent the proxy exit.",
+    "regionHistory": "Historical observation awaiting automatic refresh",
+    "nodeDetectionHint": "Refresh entry latency, proxy availability and region together. Gateway and proxy exit regions are recorded separately.",
+    "regionPrivateHint": "The gateway currently resolves to a private address. Public IP databases cannot locate it; another gateway or proxy exit location is not substituted.",
     "proxyHint": "request latency through the node. google is the default and cloudflare the fallback; alternative targets show their hostname.",
     "proxyLatency": "proxy latency",
     "proxyResidual": "another system proxy may interfere with traffic capture. Check the system network settings.",
@@ -401,6 +410,34 @@
     "ws": "WebSocket",
     "xhttpMode": "XHTTP mode",
     "startupLoading": "Initializing client",
-    "startupFailed": "Client initialization failed. Please retry."
+    "startupFailed": "Client initialization failed. Please retry.",
+    "enterprise": {
+      "title": "Enterprise VPN",
+      "gatewayHint": "Enter the HTTPS VPN gateway. The client is detected without sending credentials.",
+      "invalidGateway": "Enter an HTTPS gateway without credentials or query parameters",
+      "unreachable": "Gateway unreachable or certificate validation failed",
+      "unrecognized": "Client type could not be confirmed",
+      "username": "Account",
+      "usernameHint": "Enter the account required by the gateway, or leave empty for other authentication. Stored encrypted on this device.",
+      "password": "Password",
+      "passwordHint": "Encrypted using system secure storage for subsequent connections. One-time codes are never saved.",
+      "savedPasswordHint": "Password saved. Leave empty to keep it. Changing gateway or account will not reuse it.",
+      "authentication": "Complete authentication",
+      "captcha": "Captcha",
+      "points": "{count} points selected",
+      "browserLogin": "Open authentication page",
+      "callback": "Authentication callback URL",
+      "code": "Verification code",
+      "selectionHint": "These choices come from the gateway and are reused after saving. Changed choices or temporary verification require input.",
+      "latencyUnsupported": "Unsupported",
+      "authenticationMethod": "Authentication method"
+    },
+    "enableProxy": "Enable proxy",
+    "disableProxy": "Disable proxy",
+    "defaultNode": "Default node",
+    "setDefaultNode": "Set default",
+    "proxySwitchHint": "Global proxy switch. Traffic follows the routing mode; explicit node rules in smart routing are independent of the default node.",
+    "enablingProxy": "Enabling proxy",
+    "disablingProxy": "Disabling proxy"
   }
 }

@@ -1,4 +1,10 @@
 export const IPC_CHANNELS = {
+  ENTERPRISE_GET: 'enterprise:get',
+  ENTERPRISE_DETECT: 'enterprise:detect',
+  ENTERPRISE_SAVE: 'enterprise:save',
+  ENTERPRISE_RESPOND: 'enterprise:respond',
+  EVENT_ENTERPRISE_CHANGED: 'event:enterpriseChanged',
+
   // 代理控制
   PROXY_START: 'proxy:start',
   PROXY_STOP: 'proxy:stop',
@@ -50,6 +56,7 @@ export const IPC_CHANNELS = {
   SUBSCRIPTION_DELETE: 'subscription:delete',
   SUBSCRIPTION_UPDATE_SERVERS: 'subscription:updateServers',
   SUBSCRIPTION_MEASUREMENTS: 'subscription:measurements',
+  EVENT_SUBSCRIPTION_PROBE_PROGRESS: 'event:subscriptionProbeProgress',
   EVENT_SUBSCRIPTION_MEASUREMENTS: 'event:subscriptionMeasurements',
   SUBSCRIPTION_CONNECTIVITY: 'subscription:connectivity',
   SUBSCRIPTION_PREVIEW: 'subscription:preview', // 新增订阅前预检：拉取+解析 URL 但不写 config，返回节点数或分类错误
@@ -119,7 +126,7 @@ export const IPC_CHANNELS = {
   CORE_UPDATE_APPLY_STAGED: 'core:applyStaged', // 用户点「立即应用」：停代理→换核→重启（唯一允许主动断流）
   CORE_UPDATE_ACK_VERSION_CHANGE: 'core:ackVersionChange', // banner 展示版本变更通知后 ack 清除 pendingChangeNotice（show→ack，弹一次非每启）
   CORE_RESET_FACTORY: 'core-update:reset-factory', // B6：把内核恢复为随 App 出厂的版本
-  APP_UNINSTALL_ALL: 'app:uninstall-all', // B6：完全卸载 FlowZ（提权 helper / 受保护目录内核 / 用户配置 / 应用本体）
+  APP_UNINSTALL_ALL: 'app:uninstall-all', // B6：完全卸载 暗影VPN（提权 helper / 受保护目录内核 / 用户配置 / 应用本体）
 
   // Shell 操作
   SYSTEM_VPN_SETTINGS: 'system:vpnSettings',
@@ -179,7 +186,7 @@ export const IPC_CHANNELS = {
   EVENT_TAILSCALE_STATUS: 'event:tailscaleStatus', // sing-box 1.14 管理 API 推送的 Tailscale 节点真实态（backendState/loggedIn/authURL/IP/过期）
   EVENT_TAILSCALE_STATE_CLEARED: 'event:tailscaleStateCleared', // 启动前属主归一删掉某节点 root 残留 state（登录态已失效）→ 渲染端清缓存，避免陈旧 loggedIn=true 与已清空 state 撕裂（payload={serverId}）
   EVENT_MESH_LOGIN_FALLBACK: 'event:meshLoginFallback', // 缺陷1 登录期出口让位：选中 TS 出口未就绪→默认路由让位直连(engaged=true)/就绪后切回(engaged=false)，渲染端据此提示（payload={engaged,serverName?}）
-  EVENT_SYSTEM_PROXY_RESIDUAL: 'event:systemProxyResidual', // TUN 启动后检测到无 marker 的系统代理残留（非 FlowZ 设的）→ 一次性提示
+  EVENT_SYSTEM_PROXY_RESIDUAL: 'event:systemProxyResidual', // TUN 启动后检测到无 marker 的系统代理残留（非 暗影VPN 设的）→ 一次性提示
 
   // 界面语言不再经此反向同步：改走 config.language 单一真值源（主进程直接读 config，见 ConfigManager）。
 

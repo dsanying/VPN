@@ -8,8 +8,8 @@
  *   · mixed   —— TCP 走 system 栈、UDP 走 gvisor 栈的【固定组合】（非自动择优）。
  * 三者默认均为 endpoint-independent NAT（gvisor 才可配该项）。来源：sing-box TUN inbound 文档。
  *
- * FlowZ 对 stack 与 mtu **都**引入 `auto` 默认档（仅活在存储/UI 层）：经 resolveTunStack / resolveTunMtu
- * 解析成【具体】值下发给核——FlowZ 始终显式 pin，绝不吃 sing-box 的编译期/平台默认（stack：编进 gvisor
+ * 暗影VPN 对 stack 与 mtu **都**引入 `auto` 默认档（仅活在存储/UI 层）：经 resolveTunStack / resolveTunMtu
+ * 解析成【具体】值下发给核——暗影VPN 始终显式 pin，绝不吃 sing-box 的编译期/平台默认（stack：编进 gvisor
  * 则默认漂成 mixed，否则只有 system；mtu：桌面 65535 / Android 9000 / Apple NE 4064）。默认由编译期与
  * 平台决定、会漂，产品语义不能随之漂。完整依据见 docs/design/tun-stack-option.md。
  *
@@ -27,7 +27,7 @@ export type ConcreteTunStack = 'system' | 'gvisor' | 'mixed';
  *   · macOS（darwin）→ gvisor —— Apple 严格接管场景强制 gvisor / system·mixed 不可用（sing-box TunnelVision 文档）
  *     + FlowZ 历史实证（3.3.18 稳定组合）+ DNS/NetworkExtension 约束；
  *   · Windows（win32）→ gvisor —— 207 实测（wintun）：新默认组合（gvisor/65535）相对旧默认（system/1350）
- *     **+133% 吞吐、CPU 减半**；热切换环路三栈补测均 21/21 零失败（**裸 sing-box 最小配置**，FlowZ 本体
+ *     **+133% 吞吐、CPU 减半**；热切换环路三栈补测均 21/21 零失败（**裸 sing-box 最小配置**，暗影VPN 本体
  *     回归见 benchmark 0.5），据此同批删除原「仅 system 放行」的 guard（见 ProxyManager.planHotSwitch）。
  *     注：1400B UDP 丢包的根因是 **MTU 1350**（1400+28 > 1350 需分片、system 栈不处理），不是栈本身——
  *     选 system 亦落 MTU 4064，实测 5/5 不丢；勿把它当成 gvisor 相对 system 的优势记；
@@ -47,7 +47,7 @@ export const PLATFORM_DEFAULT_STACK: Record<string, ConcreteTunStack> = {
  * 优化：Linux 的 GSO 要求 gvisor 且 `mtu < 49152`，macOS 的 multiPendingPackets 要求 gvisor `< 32768` /
  * system·mixed `<= 9000`——取值越界会静默关掉这些优化。
  *
- * 每格取值的独立依据（均非拍脑袋，实测机器见 docs/design/networking/flowz-win-tun-mtu-benchmark.md）：
+ * 每格取值的独立依据（均非拍脑袋，实测机器见 docs/design/networking/shadowvpn-win-tun-mtu-benchmark.md）：
  *   · **Windows gvisor 65535** —— 三平台中唯一没有 MTU 门槛型上游优化的平台（GSO 仅 Linux、
  *     multiPendingPackets 仅 Darwin），207 实测 65535 + gvisor = 845–919 Mbps 为最优档；
  *   · **macOS gvisor 9000** —— multiPendingPackets 要求 gvisor `< 32768`，9000 同时满足非 gvisor 的

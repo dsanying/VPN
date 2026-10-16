@@ -39,7 +39,7 @@ test('静置与切页不轮询状态，启停事件仍更新界面', async ({ pa
   await page.clock.install();
   const mock = await installDesktopMock(page);
   await page.goto('/#/nodes');
-  await expect(page.getByRole('button', { name: '连接代理', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '开启代理', exact: true })).toBeVisible();
   const counts = () => page.evaluate(() => (window as any).desktopTest.calls.filter((call: any) => ['proxy:getStatus', 'proxy:getPendingChanges', 'config:get'].includes(call.channel)).length);
   // 先完成启动快照及语言配置事件，再观察静置周期。
   await page.clock.runFor(1000);
@@ -60,10 +60,10 @@ test('静置与切页不轮询状态，启停事件仍更新界面', async ({ pa
   expect(await counts()).toBe(initial + 2);
   await page.clock.resume();
   await page.getByRole('link', { name: '节点', exact: true }).click();
-  await page.getByRole('button', { name: '连接代理', exact: true }).click();
-  await expect(page.getByRole('button', { name: '断开', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '断开', exact: true }).click();
-  await expect(page.getByRole('button', { name: '连接代理', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '开启代理', exact: true }).click();
+  await expect(page.getByRole('button', { name: '关闭代理', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '关闭代理', exact: true }).click();
+  await expect(page.getByRole('button', { name: '开启代理', exact: true })).toBeVisible();
   await mock.expectNoUnexpectedRequests();
 });
 

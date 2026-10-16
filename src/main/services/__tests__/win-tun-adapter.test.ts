@@ -30,7 +30,10 @@ import {
   type TunAdapterObservation,
 } from '../win-tun-adapter';
 import { powershellPath, system32 } from '../../utils/win-system32';
-import { resolveWinTunInterfaceName, FLOWZ_WIN_TUN_INTERFACE } from '../../../shared/tun-interface';
+import {
+  resolveWinTunInterfaceName,
+  SHADOWVPN_WIN_TUN_INTERFACE,
+} from '../../../shared/tun-interface';
 import type { UserConfig } from '../../../shared/types';
 
 function mkDeps(presence: boolean[]): {
@@ -53,7 +56,11 @@ function mkDeps(presence: boolean[]): {
 describe('waitForAdapterReleased', () => {
   it('网卡当即不存在 → 一次探测即放行（polls=1，零等待）', async () => {
     const { deps, sleeps } = mkDeps([false]);
-    const r = await waitForAdapterReleased('flowz-tun0', { timeoutMs: 8000, pollMs: 250 }, deps);
+    const r = await waitForAdapterReleased(
+      'shadowvpn-tun0',
+      { timeoutMs: 8000, pollMs: 250 },
+      deps
+    );
     expect(r.released).toBe(true);
     expect(r.polls).toBe(1);
     expect(sleeps).toHaveLength(0);
@@ -61,7 +68,11 @@ describe('waitForAdapterReleased', () => {
 
   it('网卡存在数轮后消失 → 早退（released，轮次/ sleep 对应）', async () => {
     const { deps, sleeps } = mkDeps([true, true, false]);
-    const r = await waitForAdapterReleased('flowz-tun0', { timeoutMs: 8000, pollMs: 250 }, deps);
+    const r = await waitForAdapterReleased(
+      'shadowvpn-tun0',
+      { timeoutMs: 8000, pollMs: 250 },
+      deps
+    );
     expect(r.released).toBe(true);
     expect(r.polls).toBe(3);
     expect(sleeps).toEqual([250, 250]); // 前两轮 true 后各 sleep 一次，第三轮 false 即退
@@ -69,7 +80,11 @@ describe('waitForAdapterReleased', () => {
 
   it('始终存在 → 超时未释放（released=false，放行交 retry 兜底）', async () => {
     const { deps } = mkDeps(Array(20).fill(true));
-    const r = await waitForAdapterReleased('flowz-tun0', { timeoutMs: 1000, pollMs: 250 }, deps);
+    const r = await waitForAdapterReleased(
+      'shadowvpn-tun0',
+      { timeoutMs: 1000, pollMs: 250 },
+      deps
+    );
     expect(r.released).toBe(false);
   });
 
@@ -111,7 +126,11 @@ function mkPresenceDeps(seq: Array<AdapterPresence | 'THROW'>): {
 describe('waitForAdapterPresent (issue #324 正向就绪门)', () => {
   it('网卡当即出现 → 一次探测早退（present，polls=1，零等待）', async () => {
     const { deps, sleeps, meta } = mkPresenceDeps(['present']);
-    const r = await waitForAdapterPresent('flowz-tun0', { timeoutMs: 8000, pollMs: 1000 }, deps);
+    const r = await waitForAdapterPresent(
+      'shadowvpn-tun0',
+      { timeoutMs: 8000, pollMs: 1000 },
+      deps
+    );
     expect(r.outcome).toBe('present');
     expect(r.polls).toBe(1);
     expect(sleeps).toHaveLength(0);
@@ -120,7 +139,11 @@ describe('waitForAdapterPresent (issue #324 正向就绪门)', () => {
 
   it('数轮 absent 后出现 → 早退 present（轮次/sleep 对应）', async () => {
     const { deps, sleeps } = mkPresenceDeps(['absent', 'absent', 'present']);
-    const r = await waitForAdapterPresent('flowz-tun0', { timeoutMs: 8000, pollMs: 1000 }, deps);
+    const r = await waitForAdapterPresent(
+      'shadowvpn-tun0',
+      { timeoutMs: 8000, pollMs: 1000 },
+      deps
+    );
     expect(r.outcome).toBe('present');
     expect(r.polls).toBe(3);
     expect(sleeps).toEqual([1000, 1000]); // 前两轮 absent 后各 sleep，第三轮 present 即退
@@ -128,26 +151,42 @@ describe('waitForAdapterPresent (issue #324 正向就绪门)', () => {
 
   it('始终 absent（探测可用）→ absent-timeout（可据此硬闸/判持续性）', async () => {
     const { deps } = mkPresenceDeps(Array(20).fill('absent'));
-    const r = await waitForAdapterPresent('flowz-tun0', { timeoutMs: 3000, pollMs: 1000 }, deps);
+    const r = await waitForAdapterPresent(
+      'shadowvpn-tun0',
+      { timeoutMs: 3000, pollMs: 1000 },
+      deps
+    );
     expect(r.outcome).toBe('absent-timeout');
   });
 
   it('始终 unknown（探测失败）→ unknown（fail-open，绝不据此判失败）', async () => {
     const { deps } = mkPresenceDeps(Array(20).fill('unknown'));
-    const r = await waitForAdapterPresent('flowz-tun0', { timeoutMs: 3000, pollMs: 1000 }, deps);
+    const r = await waitForAdapterPresent(
+      'shadowvpn-tun0',
+      { timeoutMs: 3000, pollMs: 1000 },
+      deps
+    );
     expect(r.outcome).toBe('unknown');
   });
 
   it('probe 抛错（PS 缺/被拦）全程 → unknown（fail-open，捕获 throw）', async () => {
     const { deps } = mkPresenceDeps(Array(20).fill('THROW'));
-    const r = await waitForAdapterPresent('flowz-tun0', { timeoutMs: 3000, pollMs: 1000 }, deps);
+    const r = await waitForAdapterPresent(
+      'shadowvpn-tun0',
+      { timeoutMs: 3000, pollMs: 1000 },
+      deps
+    );
     expect(r.outcome).toBe('unknown'); // throw 被捕获按 unknown 处理，非崩溃、非误判 absent-timeout
   });
 
   it('混入一次 clean absent → absent-timeout 压过零星 unknown（证明探测链路可用）', async () => {
     // 全程未 present；出现过 clean absent（PS 可用）+ 若干 unknown → 判 absent-timeout（可判持续性），非 fail-open。
     const { deps } = mkPresenceDeps(['unknown', 'absent', 'unknown', 'unknown']);
-    const r = await waitForAdapterPresent('flowz-tun0', { timeoutMs: 3000, pollMs: 1000 }, deps);
+    const r = await waitForAdapterPresent(
+      'shadowvpn-tun0',
+      { timeoutMs: 3000, pollMs: 1000 },
+      deps
+    );
     expect(r.outcome).toBe('absent-timeout');
   });
 
@@ -161,7 +200,7 @@ describe('waitForAdapterPresent (issue #324 正向就绪门)', () => {
   it('起始即被接管（isSuperseded=true）→ superseded，零探测（不 stopCore/不判存在）', async () => {
     const { deps, meta } = mkPresenceDeps(Array(20).fill('absent'));
     const r = await waitForAdapterPresent(
-      'flowz-tun0',
+      'shadowvpn-tun0',
       { timeoutMs: 8000, pollMs: 1000 },
       { ...deps, isSuperseded: () => true }
     );
@@ -174,7 +213,7 @@ describe('waitForAdapterPresent (issue #324 正向就绪门)', () => {
     let polls = 0;
     let superseded = false;
     const r = await waitForAdapterPresent(
-      'flowz-tun0',
+      'shadowvpn-tun0',
       { timeoutMs: 8000, pollMs: 1000 },
       {
         probe: deps.probe,
@@ -249,9 +288,9 @@ describe('isPersistentTunFailure (issue #324 终态判据 — 分类矩阵穷举
 describe('resolveWinTunInterfaceName', () => {
   const cfg = (over: Record<string, unknown>): UserConfig => over as unknown as UserConfig;
 
-  it('缺省 → FLOWZ_WIN_TUN_INTERFACE(flowz-tun0)', () => {
-    expect(resolveWinTunInterfaceName(cfg({}))).toBe(FLOWZ_WIN_TUN_INTERFACE);
-    expect(FLOWZ_WIN_TUN_INTERFACE).toBe('flowz-tun0');
+  it('缺省 → SHADOWVPN_WIN_TUN_INTERFACE(shadowvpn-tun0)', () => {
+    expect(resolveWinTunInterfaceName(cfg({}))).toBe(SHADOWVPN_WIN_TUN_INTERFACE);
+    expect(SHADOWVPN_WIN_TUN_INTERFACE).toBe('shadowvpn-tun0');
   });
 
   it('自定义 interfaceName 覆盖缺省', () => {
@@ -262,22 +301,22 @@ describe('resolveWinTunInterfaceName', () => {
 
   it('空白/空串自定义 → 回落缺省', () => {
     expect(resolveWinTunInterfaceName(cfg({ tunConfig: { interfaceName: '   ' } }))).toBe(
-      FLOWZ_WIN_TUN_INTERFACE
+      SHADOWVPN_WIN_TUN_INTERFACE
     );
   });
 
   it('非法字符/超长自定义 → 回落缺省（防内核 FATAL / Get-NetAdapter 匹配失效）', () => {
     for (const bad of ['bad name!', 'tun/0', '名字', 'a'.repeat(33), 'x;y']) {
       expect(resolveWinTunInterfaceName(cfg({ tunConfig: { interfaceName: bad } }))).toBe(
-        FLOWZ_WIN_TUN_INTERFACE
+        SHADOWVPN_WIN_TUN_INTERFACE
       );
     }
   });
 
   it('合法自定义（字母数字/连字符/下划线，≤32）→ 采用', () => {
-    expect(resolveWinTunInterfaceName(cfg({ tunConfig: { interfaceName: 'flowz_tun-1' } }))).toBe(
-      'flowz_tun-1'
-    );
+    expect(
+      resolveWinTunInterfaceName(cfg({ tunConfig: { interfaceName: 'shadowvpn_tun-1' } }))
+    ).toBe('shadowvpn_tun-1');
   });
 });
 
@@ -379,7 +418,7 @@ exit 0`;
 const SCRIPT_IP_WITH_ALIAS = `$ErrorActionPreference = 'SilentlyContinue'
 $Error.Clear()
 try {
-  $r = @(Get-NetIPAddress -IPAddress '172.19.0.1' -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceAlias -ne 'flowz-tun0' } | Select-Object -ExpandProperty IPAddress)
+  $r = @(Get-NetIPAddress -IPAddress '172.19.0.1' -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceAlias -ne 'shadowvpn-tun0' } | Select-Object -ExpandProperty IPAddress)
   if (@($Error | Where-Object { $_.CategoryInfo.Category -ne 'ObjectNotFound' }).Count -eq 0) {
     Write-Output 'PROBE_OK'
     foreach ($x in $r) { Write-Output $x }
@@ -402,15 +441,15 @@ describe('PowerShell 探测脚本形态（#324 真机契约）', () => {
 
   it('地址探测（带别名排除）生成的脚本逐字等于真机实证过的原文', async () => {
     const h = stubExecFile(null, okStdout());
-    await probeWinIpv4AddressUsage('172.19.0.1', 'flowz-tun0');
+    await probeWinIpv4AddressUsage('172.19.0.1', 'shadowvpn-tun0');
     expect(h.lastCommand()).toBe(SCRIPT_IP_WITH_ALIAS);
   });
 
   it('存在性探测不得回退 PowerShell（F2：真机 netsh 66–71ms vs PowerShell 713–1005ms）', async () => {
     // 原本这里断言的是「网卡探测脚本逐字等于真机原文」。F2 把这条腿整个换成了 netsh，脚本不复存在，
     // 故判据改为「spawn 的不是 powershell」——守的仍是同一件事：这条腿的外部进程契约没被人悄悄改回去。
-    const h = stubExecFile(null, netshStdout('flowz-tun0'));
-    await probeWinTunAdapterPresence('flowz-tun0');
+    const h = stubExecFile(null, netshStdout('shadowvpn-tun0'));
+    await probeWinTunAdapterPresence('shadowvpn-tun0');
     expect(h.lastBin()).not.toBe(powershellPath());
     expect(h.lastBin()).toBe(netshPath());
   });
@@ -424,7 +463,7 @@ describe('PowerShell 探测脚本形态（#324 真机契约）', () => {
    *
    * | 输入 | 旧判据（-EncodedCommand） | 新判据（单 argv 元素 + 校验器） | 差 |
    * |---|---|---|---|
-   * | `flowz-tun0`（合法） | 正常探测 | 正常探测 | 无 |
+   * | `shadowvpn-tun0`（合法） | 正常探测 | 正常探测 | 无 |
    * | 别名含 `'` | 调用方 `''` 转义后落单引号串 | 同左（转义逻辑未动） | 无 |
    * | 别名含 `"` / 空格 / 换行 | base64 后不经命令行解析 | `execFile` 不过 shell，仍是**一个** argv 元素，不经命令行解析 | 无 |
    * | 别名含 PowerShell 语法（`$(...)`） | **不拦**（编码只消命令行层，语法层照旧） | **不拦**（同左） | 无 |
@@ -524,8 +563,8 @@ describe('probeWinIpv4AddressUsage', () => {
 
   it('传入自家接口别名 → 命令里带 InterfaceAlias 排除（H1：自家残留不算冲突）', async () => {
     const h = stubExecFile(null, okStdout());
-    await probeWinIpv4AddressUsage('172.19.0.1', 'flowz-tun0');
-    expect(h.lastCommand()).toContain("$_.InterfaceAlias -ne 'flowz-tun0'");
+    await probeWinIpv4AddressUsage('172.19.0.1', 'shadowvpn-tun0');
+    expect(h.lastCommand()).toContain("$_.InterfaceAlias -ne 'shadowvpn-tun0'");
   });
 
   it('不传别名 → 查询管道里无 InterfaceAlias 过滤（保持最简查询）', async () => {
@@ -550,67 +589,67 @@ describe('probeWinIpv4AddressUsage', () => {
 describe('probeWinTunAdapterPresence（F2：netsh 契约）', () => {
   beforeEach(() => (execFile as unknown as jest.Mock).mockReset());
   // 本组验的是 **netsh 契约**（分隔线哨兵/列切分/三态），必须让 B3 快检恒不命中，否则判据会被短路吃掉。
-  // 不加这行的话：本机 Linux 无 `flowz-tun0` 恰好全绿，但在真跑着 FlowZ 的 Windows 开发机上（那里确实存在
+  // 不加这行的话：本机 Linux 无 `shadowvpn-tun0` 恰好全绿，但在真跑着 暗影VPN 的 Windows 开发机上（那里确实存在
   // 同名接口）这几条会集体短路成 present —— 一个只在特定机器上失效的门，比没有门更坏。
   beforeEach(() => mockIfaces(() => ({})));
 
   it('表里有本名 → present', async () => {
-    stubExecFile(null, netshStdout('flowz-tun0'));
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('present');
+    stubExecFile(null, netshStdout('shadowvpn-tun0'));
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('present');
   });
 
   it('表里无本名 → absent（据此可判「从未创建」→ 硬闸失败本腿）', async () => {
     // 真机上这正是「网卡不存在」的场景。absent 必须真的能产出，否则 waitForAdapterPresent 的 sawAbsent
     // 恒 false → outcome 恒 'unknown' → #324 硬闸永远 fail-open，就绪验证形同虚设。
     stubExecFile(null, netshStdout('以太网'));
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('absent');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('absent');
   });
 
   it('无表头分隔线 → unknown，绝不是 absent（不把「查不了」误判成「确实没有」）', async () => {
     stubExecFile(null, '');
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('unknown');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('unknown');
     // 有输出但不是那张表（被拦/换了形态）同样不作数
     stubExecFile(null, '拒绝访问。\n');
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('unknown');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('unknown');
   });
 
   it('netsh 失败/超时 → unknown（fail-open，绝不据此判终态失败）', async () => {
     stubExecFile(new Error('spawn ENOENT'), '');
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('unknown');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('unknown');
   });
 
   it('同前缀网卡名不误判（按列切分取全称，不做子串匹配）', async () => {
-    stubExecFile(null, netshStdout('flowz-tun00', 'flowz-tun0-old'));
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('unknown');
+    stubExecFile(null, netshStdout('shadowvpn-tun00', 'shadowvpn-tun0-old'));
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('unknown');
   });
 
   it('名字里带空格的**别的**网卡不误判成本名命中（「取最后一个空白 token」会栽在这里）', async () => {
-    // `VPN flowz-tun0` 的最后一个空白分隔 token 正好是 `flowz-tun0`；按 `\s{2,}` 切列则拿到全称，不命中。
-    stubExecFile(null, netshStdout('VPN flowz-tun0'));
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.not.toBe('present');
+    // `VPN shadowvpn-tun0` 的最后一个空白分隔 token 正好是 `shadowvpn-tun0`；按 `\s{2,}` 切列则拿到全称，不命中。
+    stubExecFile(null, netshStdout('VPN shadowvpn-tun0'));
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.not.toBe('present');
   });
 
   it('含糊（本名以子串出现但切不出干净字段）→ unknown 而非 absent', async () => {
     // 这是新判据的安全阀：对 #324 正向门，假 absent 会走到 absent-timeout → 硬闸 → 永久拒连，
     // 是最贵的误判方向；含糊时必须 fail-open。
-    stubExecFile(null, netshStdout('VPN flowz-tun0'));
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('unknown');
+    stubExecFile(null, netshStdout('VPN shadowvpn-tun0'));
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('unknown');
   });
 
   it('表头本地化/OEM 乱码不影响判定（哨兵与比对对象都是 ASCII）', async () => {
     // 中文 Windows 的 netsh 按 OEM codepage(936) 写 stdout，Node 按 utf8 解码必成乱码——真机实测形态。
     const garbled = `管理员状�?    状�?          类型             接口名称
 -------------------------------------------------------------------------
-已启�?           已连�?           专用               flowz-tun0
+已启�?           已连�?           专用               shadowvpn-tun0
 `;
     stubExecFile(null, garbled);
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('present');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('present');
   });
 
   it('spawn 的是 netsh 绝对路径，argv 形态固定，且带 timeout / windowsHide', async () => {
     // 变异守卫：删 `timeout: 4000` → 被拦住的 netsh 永不回调，起核卡死无兜底；bin 换裸名 → PATH 劫持面。
-    const h = stubExecFile(null, netshStdout('flowz-tun0'));
-    await probeWinTunAdapterPresence('flowz-tun0');
+    const h = stubExecFile(null, netshStdout('shadowvpn-tun0'));
+    await probeWinTunAdapterPresence('shadowvpn-tun0');
     expect(h.lastBin()).toBe(netshPath());
     expect(h.lastArgs()).toEqual(['interface', 'show', 'interface']);
     expect(h.lastOpts()).toMatchObject({ timeout: 4000, windowsHide: true });
@@ -618,11 +657,11 @@ describe('probeWinTunAdapterPresence（F2：netsh 契约）', () => {
 
   it('布尔版 probeWinTunAdapterPresent：absent/unknown 均塌成 false（#159 反向门 fail-open）', async () => {
     stubExecFile(null, netshStdout('以太网'));
-    await expect(probeWinTunAdapterPresent('flowz-tun0')).resolves.toBe(false);
+    await expect(probeWinTunAdapterPresent('shadowvpn-tun0')).resolves.toBe(false);
     stubExecFile(null, '');
-    await expect(probeWinTunAdapterPresent('flowz-tun0')).resolves.toBe(false);
-    stubExecFile(null, netshStdout('flowz-tun0'));
-    await expect(probeWinTunAdapterPresent('flowz-tun0')).resolves.toBe(true);
+    await expect(probeWinTunAdapterPresent('shadowvpn-tun0')).resolves.toBe(false);
+    stubExecFile(null, netshStdout('shadowvpn-tun0'));
+    await expect(probeWinTunAdapterPresent('shadowvpn-tun0')).resolves.toBe(true);
   });
 });
 
@@ -648,16 +687,16 @@ describe('nodeSeesInterface（B3 快检）', () => {
   >[string];
 
   it('枚举里有本名且带地址 → true', () => {
-    expect(nodeSeesInterface('flowz-tun0', { 'flowz-tun0': withAddr })).toBe(true);
+    expect(nodeSeesInterface('shadowvpn-tun0', { 'shadowvpn-tun0': withAddr })).toBe(true);
   });
 
   it('枚举里没有本名 → false（含义是「说不了」，由调用方回落 PowerShell）', () => {
-    expect(nodeSeesInterface('flowz-tun0', { 以太网: withAddr })).toBe(false);
+    expect(nodeSeesInterface('shadowvpn-tun0', { 以太网: withAddr })).toBe(false);
   });
 
   it('键在但无地址（空数组 / undefined）→ false：无地址不构成肯定结论', () => {
-    expect(nodeSeesInterface('flowz-tun0', { 'flowz-tun0': [] as never })).toBe(false);
-    expect(nodeSeesInterface('flowz-tun0', { 'flowz-tun0': undefined })).toBe(false);
+    expect(nodeSeesInterface('shadowvpn-tun0', { 'shadowvpn-tun0': [] as never })).toBe(false);
+    expect(nodeSeesInterface('shadowvpn-tun0', { 'shadowvpn-tun0': undefined })).toBe(false);
   });
 
   it('名字为空 → false（不拿空串去撞枚举）', () => {
@@ -668,7 +707,7 @@ describe('nodeSeesInterface（B3 快检）', () => {
     mockIfaces(() => {
       throw new Error('boom');
     });
-    expect(nodeSeesInterface('flowz-tun0')).toBe(false);
+    expect(nodeSeesInterface('shadowvpn-tun0')).toBe(false);
   });
 });
 
@@ -677,9 +716,9 @@ describe('probeWinTunAdapterPresence — B3 短路接线', () => {
 
   it('Node 看得见 → 直接 present，且**零 spawn**（省掉真机实测 ~70ms 的那次 netsh）', async () => {
     (execFile as unknown as jest.Mock).mockClear();
-    mockIfaces(() => ({ 'flowz-tun0': [{ address: '172.19.0.1' }] }));
+    mockIfaces(() => ({ 'shadowvpn-tun0': [{ address: '172.19.0.1' }] }));
 
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('present');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('present');
     expect(execFile as unknown as jest.Mock).not.toHaveBeenCalled();
   });
 
@@ -691,15 +730,15 @@ describe('probeWinTunAdapterPresence — B3 短路接线', () => {
         cb(null, netshStdout('以太网'))
     );
 
-    await expect(probeWinTunAdapterPresence('flowz-tun0')).resolves.toBe('absent');
+    await expect(probeWinTunAdapterPresence('shadowvpn-tun0')).resolves.toBe('absent');
     expect(execFile as unknown as jest.Mock).toHaveBeenCalled();
   });
 
   it('布尔版（#159 释放门）继承短路：Node 看见 → true 且零 spawn', async () => {
     (execFile as unknown as jest.Mock).mockClear();
-    mockIfaces(() => ({ 'flowz-tun0': [{ address: '172.19.0.1' }] }));
+    mockIfaces(() => ({ 'shadowvpn-tun0': [{ address: '172.19.0.1' }] }));
 
-    await expect(probeWinTunAdapterPresent('flowz-tun0')).resolves.toBe(true);
+    await expect(probeWinTunAdapterPresent('shadowvpn-tun0')).resolves.toBe(true);
     expect(execFile as unknown as jest.Mock).not.toHaveBeenCalled();
   });
 });

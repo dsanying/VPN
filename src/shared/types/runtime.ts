@@ -192,6 +192,10 @@ export interface SystemProxyStatus {
 }
 
 export interface LogEntry {
+  traceId?: string;
+  operation?: string;
+  phase?: 'start' | 'progress' | 'success' | 'failure';
+  durationMs?: number;
   id?: string;
   sessionId?: string;
   sequence?: number;

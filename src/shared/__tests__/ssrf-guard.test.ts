@@ -1,4 +1,4 @@
-import { isPrivateIp, isFlowzFakeIp, assertHostAllowed } from '../ssrf-guard';
+import { isPrivateIp, isShadowvpnFakeIp, assertHostAllowed } from '../ssrf-guard';
 import { FAKEIP_INET4_RANGE, FAKEIP_INET6_RANGE } from '../fakeip-filter';
 
 describe('isPrivateIp — IPv4', () => {
@@ -156,31 +156,31 @@ describe('assertHostAllowed — DNS rebinding 防护（注入 lookup）', () => 
   });
 });
 
-describe('isFlowzFakeIp — FlowZ FakeIP 假段（198.18.0.0/15 + 2001:2::/48）', () => {
+describe('isShadowvpnFakeIp — 暗影VPN FakeIP 假段（198.18.0.0/15 + 2001:2::/48）', () => {
   it('FakeIP v4（198.18/15）+ v6（2001:2::/48）→ true', () => {
-    expect(isFlowzFakeIp('198.18.0.1')).toBe(true);
-    expect(isFlowzFakeIp('198.19.255.255')).toBe(true);
-    expect(isFlowzFakeIp('2001:2::57')).toBe(true);
-    expect(isFlowzFakeIp('2001:2:0:ffff::1')).toBe(true); // /48 内（第 4 组任意值仍在段内）
+    expect(isShadowvpnFakeIp('198.18.0.1')).toBe(true);
+    expect(isShadowvpnFakeIp('198.19.255.255')).toBe(true);
+    expect(isShadowvpnFakeIp('2001:2::57')).toBe(true);
+    expect(isShadowvpnFakeIp('2001:2:0:ffff::1')).toBe(true); // /48 内（第 4 组任意值仍在段内）
   });
 
   it('FakeIP 段外（真内网 / 真 ULA / link-local / 公网）→ false（豁免不放过真内网）', () => {
-    expect(isFlowzFakeIp('198.17.0.1')).toBe(false); // 198.18/15 下界外
-    expect(isFlowzFakeIp('198.20.0.1')).toBe(false); // 上界外
-    expect(isFlowzFakeIp('2001:2:1::1')).toBe(false); // 超 2001:2::/48 上界（第 3 组非 0）
-    expect(isFlowzFakeIp('2001:1::1')).toBe(false); // 下界外
-    expect(isFlowzFakeIp('2001:db8::57')).toBe(false); // RFC 3849 文档段：已非 FlowZ 假段（Chromium LNA 判 local）
-    expect(isFlowzFakeIp('fc00::57')).toBe(false); // 真实 ULA（已不再是假段）
-    expect(isFlowzFakeIp('fd00::1')).toBe(false); // 真实 ULA（fd00::/8）
-    expect(isFlowzFakeIp('fe80::1')).toBe(false); // link-local
-    expect(isFlowzFakeIp('10.0.0.1')).toBe(false);
-    expect(isFlowzFakeIp('8.8.8.8')).toBe(false);
+    expect(isShadowvpnFakeIp('198.17.0.1')).toBe(false); // 198.18/15 下界外
+    expect(isShadowvpnFakeIp('198.20.0.1')).toBe(false); // 上界外
+    expect(isShadowvpnFakeIp('2001:2:1::1')).toBe(false); // 超 2001:2::/48 上界（第 3 组非 0）
+    expect(isShadowvpnFakeIp('2001:1::1')).toBe(false); // 下界外
+    expect(isShadowvpnFakeIp('2001:db8::57')).toBe(false); // RFC 3849 文档段：已非 暗影VPN 假段（Chromium LNA 判 local）
+    expect(isShadowvpnFakeIp('fc00::57')).toBe(false); // 真实 ULA（已不再是假段）
+    expect(isShadowvpnFakeIp('fd00::1')).toBe(false); // 真实 ULA（fd00::/8）
+    expect(isShadowvpnFakeIp('fe80::1')).toBe(false); // link-local
+    expect(isShadowvpnFakeIp('10.0.0.1')).toBe(false);
+    expect(isShadowvpnFakeIp('8.8.8.8')).toBe(false);
   });
 
-  // 不变量：isFlowzFakeIp 由 FAKEIP_INET*_RANGE 派生——改假段（含改回私网区间）识别自动跟随，守护 SSRF 豁免分支
+  // 不变量：isShadowvpnFakeIp 由 FAKEIP_INET*_RANGE 派生——改假段（含改回私网区间）识别自动跟随，守护 SSRF 豁免分支
   // 不因「假段改了、识别没同步」而静默失效（旧硬编码 0x2001/0x0db8 无此保证，是冗余豁免分支唯一仍生效的回归护栏）。
   it('由常量派生：识别段基址跟随 FAKEIP_INET*_RANGE，不漂移', () => {
-    expect(isFlowzFakeIp(FAKEIP_INET4_RANGE.split('/')[0])).toBe(true); // 段基址 198.18.0.0
-    expect(isFlowzFakeIp(FAKEIP_INET6_RANGE.replace(/\/\d+$/, '') + '1')).toBe(true); // 2001:2::1
+    expect(isShadowvpnFakeIp(FAKEIP_INET4_RANGE.split('/')[0])).toBe(true); // 段基址 198.18.0.0
+    expect(isShadowvpnFakeIp(FAKEIP_INET6_RANGE.replace(/\/\d+$/, '') + '1')).toBe(true); // 2001:2::1
   });
 });

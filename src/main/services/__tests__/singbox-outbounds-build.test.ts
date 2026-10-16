@@ -283,14 +283,14 @@ describe('buildOutbounds — endpoint + 门控', () => {
     );
     const ep = r.pendingEndpoints.find((e) => e.tag === 'WG-sys')!;
     expect(ep.system).toBe(true);
-    expect(ep.name).toBe('flowz-wg'); // 固定名供出口托管定位（sing-box 1.14 WG endpoint 字段=`name`）
+    expect(ep.name).toBe('shadowvpn-wg'); // 固定名供出口托管定位（sing-box 1.14 WG endpoint 字段=`name`）
     // system WG 全隧道用裸 0/0（cryptokey 需要；预折半已证伪：sing-tun 落内核前把 0/1+128/1 合并回裸 0/0）→ 撞 en0
     // default 的 EEXIST、被 setRoutes 善后删掉、停核 unsetRoutes 不回填 → 断网，由 ProxyManager 的「全局 default 存/
     // 停核补回」安全网兜底。
     expect(ep.peers![0].allowed_ips).toEqual(['10.8.0.0/24', '0.0.0.0/0', '::/0']);
   });
 
-  it('多个 System WG → 内核接口名唯一（首个 flowz-wg，其余 flowz-wg-N，防两张内核接口撞名致核 FATAL）', () => {
+  it('多个 System WG → 内核接口名唯一（首个 shadowvpn-wg，其余 shadowvpn-wg-N，防两张内核接口撞名致核 FATAL）', () => {
     const mkWg = (id: string, name: string): ServerConfig =>
       ({
         id,
@@ -315,8 +315,8 @@ describe('buildOutbounds — endpoint + 门控', () => {
     );
     const epA = r.pendingEndpoints.find((e) => e.tag === 'WG-A')!;
     const epB = r.pendingEndpoints.find((e) => e.tag === 'WG-B')!;
-    expect(epA.name).toBe('flowz-wg'); // 首个保留默认名（常见单节点不变）
-    expect(epB.name).toBe('flowz-wg-1'); // 次个唯一化
+    expect(epA.name).toBe('shadowvpn-wg'); // 首个保留默认名（常见单节点不变）
+    expect(epB.name).toBe('shadowvpn-wg-1'); // 次个唯一化
     expect(epA.name).not.toBe(epB.name);
   });
 
@@ -341,8 +341,8 @@ describe('buildOutbounds — endpoint + 门控', () => {
     const ep = r.pendingEndpoints.find((e) => e.tag === 'TS-sys')!;
     expect(ep.type).toBe('tailscale');
     expect(ep.system_interface).toBe(true);
-    expect(ep.system_interface_name).toBe('flowz-ts'); // 固定名供出口托管定位
-    expect(ep.exit_node).toBe('exit-node-1'); // exit_node 下发;出口拆半默认路由由 MeshExitRouteManager 装到 flowz-ts
+    expect(ep.system_interface_name).toBe('shadowvpn-ts'); // 固定名供出口托管定位
+    expect(ep.exit_node).toBe('exit-node-1'); // exit_node 下发;出口拆半默认路由由 MeshExitRouteManager 装到 shadowvpn-ts
   });
 
   it('Phase2 Tailscale 非 system(缺省) + on + exitNode → 下发 exit_node、无 system_interface', () => {

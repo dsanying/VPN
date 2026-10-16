@@ -12,7 +12,7 @@ import * as path from 'path';
 
 // generateRouteConfig 经 paths/ResourceManager 读 app.getPath('userData')；mock 到临时目录（运行时 .srs 不存在 →
 // isValidSrsFile 返 false → 本地 geo 跳过，不影响 rule-sel/ final 断言）。helper 测试不依赖 electron。
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-globalmode-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-globalmode-'));
 jest.mock('electron', () => ({ app: { getPath: () => TMP }, net: {} }));
 // ResourceManager.getResourcesBaseDir 生产分支取 process.resourcesPath（jest 下未定义）；指向 TMP 即可——
 // getLocalGeoRuleSets 只 string-join bundledPath，运行时 .srs 经 isValidSrsFile(TMP/rules/*) 判缺失而跳过，不读 bundled。
@@ -39,7 +39,7 @@ function makeSvc(): any {
   return new ProxyManager(
     undefined as any,
     undefined as any,
-    '/tmp/flowz-test-globalmode-cfg.json',
+    '/tmp/shadowvpn-test-globalmode-cfg.json',
     '/fake/sing-box'
   );
 }
@@ -113,7 +113,7 @@ describe('generateRouteConfig：global 不 emit 用户分流（端到端）', ()
     const directIpRules = (route.rules || []).filter(
       (r: any) => r.outbound === 'direct' && Array.isArray(r.ip_cidr)
     );
-    // LAN/私网直连兜底（防误伤内网/本地服务，与业内全局相比 FlowZ 作为 TUN 客户端保留）
+    // LAN/私网直连兜底（防误伤内网/本地服务，与业内全局相比 暗影VPN 作为 TUN 客户端保留）
     const hasPrivate = directIpRules.some((r: any) =>
       r.ip_cidr.some((c: string) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.)/.test(c))
     );

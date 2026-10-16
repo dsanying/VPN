@@ -3,7 +3,7 @@
  * `check` → 断言不 FATAL，证「Phase 2 含 update-in 的配置在真核里合法可启动」（config-snapshot 只验生成字节、
  * 验不到核接受性）。验证范围=配置合法性；TUN 实际接管 / DNS 死角 / DPI / 三平台仍需真机（本机不验系统网络）。
  *
- * 需 Linux 核：env `FLOWZ_TEST_SINGBOX` 指向核二进制；未设/不存在则整组 skip（CI 友好，不阻塞）。
+ * 需 Linux 核：env `SHADOWVPN_TEST_SINGBOX` 指向核二进制；未设/不存在则整组 skip（CI 友好，不阻塞）。
  */
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
@@ -26,7 +26,7 @@ jest.mock('electron', () => ({
 import { ProxyManager } from '../ProxyManager';
 import type { UserConfig, ServerConfig } from '../../../shared/types';
 
-const CORE = process.env.FLOWZ_TEST_SINGBOX;
+const CORE = process.env.SHADOWVPN_TEST_SINGBOX;
 const haveCore = !!CORE && fs.existsSync(CORE);
 const d = haveCore ? describe : describe.skip;
 
@@ -72,10 +72,10 @@ function cfg(over: Partial<UserConfig>): UserConfig {
   } as unknown as UserConfig;
 }
 
-d('update-in 配置真核 check（需 env FLOWZ_TEST_SINGBOX）', () => {
+d('update-in 配置真核 check（需 env SHADOWVPN_TEST_SINGBOX）', () => {
   let tmpDir: string;
   beforeAll(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-updatein-check-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-updatein-check-'));
   });
   afterAll(() => {
     try {

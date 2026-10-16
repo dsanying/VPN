@@ -28,8 +28,13 @@ export function registerSubscriptionHandlers(
 ): void {
   const measurements =
     typeof configManager.getConfigPath === 'function'
-      ? new SubscriptionMeasurementService(configManager, directPortProvider, (records) =>
-          ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_SUBSCRIPTION_MEASUREMENTS, records)
+      ? new SubscriptionMeasurementService(
+          configManager,
+          directPortProvider,
+          (records) =>
+            ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_SUBSCRIPTION_MEASUREMENTS, records),
+          (value) =>
+            ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_SUBSCRIPTION_PROBE_PROGRESS, value)
         )
       : undefined;
   subscriptionMeasurements.set(configManager, measurements);

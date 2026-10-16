@@ -15,7 +15,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-cronet-heal-test-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-cronet-heal-test-'));
 jest.mock('electron', () => ({
   app: {
     getPath: () => TMP,
@@ -76,7 +76,7 @@ describe('T2 诊断报告渲染 — cronet 状态 + 自愈计数', () => {
   function mkInput(over: Partial<DiagnosticReportInput['runtime']>): DiagnosticReportInput {
     return {
       generatedAt: '2026-06-21T00:00:00.000Z',
-      app: { flowzVersion: '9.9.9', coreVersion: '1.14.0', os: 'linux x64 6.0.0' },
+      app: { shadowvpnVersion: '9.9.9', coreVersion: '1.14.0', os: 'linux x64 6.0.0' },
       runtime: {
         proxyMode: 'rule',
         proxyModeType: 'tun',

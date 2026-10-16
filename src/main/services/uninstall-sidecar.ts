@@ -9,7 +9,7 @@
  *
  * 治本：**所有非 ASCII 路径走进程环境变量**（.vbs 设、cmd 子进程继承）——
  *  - `.vbs` 以 UTF-16 LE+BOM 落盘，`WshShell.Environment("PROCESS")` 设的值是 Unicode；
- *  - `.bat` 纯 ASCII（命令 + `%VAR%` + System32 绝对路径，全 ASCII），用 `%FLOWZ_*%` 引用，cmd 内置命令
+ *  - `.bat` 纯 ASCII（命令 + `%VAR%` + System32 绝对路径，全 ASCII），用 `%SHADOWVPN_*%` 引用，cmd 内置命令
  *    （rmdir/del/if exist）对环境变量的 Unicode 值按 Unicode 处理 → 中文路径正确。
  * .bat 不再出现任何非 ASCII 字面，彻底绕开 cmd 代码页与 .bat 文件编码问题。
  */
@@ -22,8 +22,8 @@ const vq = (s: string): string => s.replace(/"/g, '""');
 /**
  * 解析「卸载要清理的应用本体」exe/目录。
  *
- * 便携态陷阱：`app.getPath('exe')` 在 7z SFX 便携形态下是 **%TEMP%\FlowZ\FlowZ.exe**（SFX 解压副本、electron 子
- * 进程映像，stub 退出时本就自清），**不是**用户双击的原始 `Downloads\FlowZ.exe`。用户卸载后报「本体仍在」指的正是
+ * 便携态陷阱：`app.getPath('exe')` 在 7z SFX 便携形态下是 **%TEMP%\暗影VPN\暗影VPN.exe**（SFX 解压副本、electron 子
+ * 进程映像，stub 退出时本就自清），**不是**用户双击的原始 `Downloads\暗影VPN.exe`。用户卸载后报「本体仍在」指的正是
  * 那个原始 exe——它在 `PORTABLE_EXECUTABLE_FILE`（同据 paths.ts 用 `PORTABLE_EXECUTABLE_DIR` 定位 userData=原始
  * 目录\data、UpdateService 用 `PORTABLE_EXECUTABLE_FILE` 作自更新覆盖目标）。故便携态优先取这两个 env；NSIS 安装态
  * 无此 env → 回落 `app.getPath('exe')`（即真实安装 exe）。win32 路径语义，故用 path.win32.dirname（跨平台测试一致）。
@@ -38,13 +38,13 @@ export function resolveUninstallBody(
 }
 
 export interface UninstallSidecarOpts {
-  flowzPid: number;
+  shadowvpnPid: number;
   userData: string;
   exeDir: string;
   exePath: string;
   /** 有 NSIS 卸载器时其路径；portable（无卸载器）为 null。 */
   uninstaller: string | null;
-  /** portable 删本体方式：true=移出 exe 后 rmdir 整个安装目录（目录名含 flowz 的专属目录）；false=只移出 exe 自身。 */
+  /** portable 删本体方式：true=移出 exe 后 rmdir 整个安装目录（目录名含 shadow-vpn 的专属目录）；false=只移出 exe 自身。 */
   portableRmdir: boolean;
   /** portable 本体移出目标（%TEMP% 下的一次性文件名）：move 本体到此（同卷=rename，运行中亦可）。 */
   bodyTmpPath: string;
@@ -66,51 +66,51 @@ export function buildUninstallSidecar(opts: UninstallSidecarOpts): { bat: string
       : 'del';
 
   // ── .bat：纯 ASCII，PID 轮询本进程退出（60×~1s 上限）→ 删 userData → 删本体 → 删 .vbs → 自删。
-  // 所有路径走 %FLOWZ_*% 环境变量（.vbs 设 Unicode 值），.bat 内零非 ASCII 字面。
+  // 所有路径走 %SHADOWVPN_*% 环境变量（.vbs 设 Unicode 值），.bat 内零非 ASCII 字面。
   const batLines: string[] = [
     '@echo off',
-    `set "FLOWZ_PID=${opts.flowzPid}"`,
+    `set "SHADOWVPN_PID=${opts.shadowvpnPid}"`,
     'set "WAIT=0"',
     ':wait',
-    `"${opts.sys.tasklist}" /fi "PID eq %FLOWZ_PID%" 2>nul | "${opts.sys.find}" "%FLOWZ_PID%" >nul || goto clean`,
+    `"${opts.sys.tasklist}" /fi "PID eq %SHADOWVPN_PID%" 2>nul | "${opts.sys.find}" "%SHADOWVPN_PID%" >nul || goto clean`,
     'set /a WAIT+=1',
     'if %WAIT% GEQ 60 goto clean',
     `"${opts.sys.ping}" 127.0.0.1 -n 2 >nul`,
     'goto wait',
     ':clean',
-    'rmdir /s /q "%FLOWZ_USERDATA%"',
+    'rmdir /s /q "%SHADOWVPN_USERDATA%"',
   ];
   if (bodyMode === 'uninstaller') {
-    batLines.push('if exist "%FLOWZ_UNINSTALLER%" "%FLOWZ_UNINSTALLER%" /S');
+    batLines.push('if exist "%SHADOWVPN_UNINSTALLER%" "%SHADOWVPN_UNINSTALLER%" /S');
   } else {
     // portable 本体（exe）= 便携 stub launcher 自身映像，进程存活期被锁：del 删不掉（实测 30×1s 重试仍残留，
     // stub 清 %TEMP% 期间持锁）。但映像以 FILE_SHARE_DELETE 打开 → **改名/移动可行**：move 等价 rename，同卷=纯
     // 元数据操作、运行中亦成（与 portable 自更新覆盖同机制，已真机验证）。故 move 本体到 %TEMP%：原位置（Downloads）
     // 即净，%TEMP% 残留随系统清理。跨卷 move 退化为复制+删源 → 删源撞运行锁失败、本体留原位 → 由退出前 Electron
     // dialog 提示手动删兜底（仅跨卷时弹，见 helper-handlers）。move 失败不阻断后续删 .vbs + 自删。
-    batLines.push('move /y "%FLOWZ_EXE%" "%FLOWZ_BODYTMP%" >nul 2>nul');
+    batLines.push('move /y "%SHADOWVPN_EXE%" "%SHADOWVPN_BODYTMP%" >nul 2>nul');
     if (bodyMode === 'rmdir') {
       // 专属安装目录：exe 已移出 + userData(data\) 已删 → 删剩余目录（已无被锁文件）。
-      batLines.push('rmdir /s /q "%FLOWZ_EXEDIR%"');
+      batLines.push('rmdir /s /q "%SHADOWVPN_EXEDIR%"');
     }
   }
-  batLines.push('del /f /q "%FLOWZ_VBS%"', 'del "%~f0"', '');
+  batLines.push('del /f /q "%SHADOWVPN_VBS%"', 'del "%~f0"', '');
 
   // ── .vbs：设进程环境变量（含非 ASCII 路径，UTF-16 落盘后值为 Unicode）+ 隐藏启动 cmd /c bat。
   const vbsLines: string[] = [
     'Set s = CreateObject("WScript.Shell")',
     'Set e = s.Environment("PROCESS")',
-    `e("FLOWZ_USERDATA") = "${vq(opts.userData)}"`,
-    `e("FLOWZ_VBS") = "${vq(opts.vbsPath)}"`,
+    `e("SHADOWVPN_USERDATA") = "${vq(opts.userData)}"`,
+    `e("SHADOWVPN_VBS") = "${vq(opts.vbsPath)}"`,
   ];
   if (bodyMode === 'uninstaller') {
-    vbsLines.push(`e("FLOWZ_UNINSTALLER") = "${vq(opts.uninstaller as string)}"`);
+    vbsLines.push(`e("SHADOWVPN_UNINSTALLER") = "${vq(opts.uninstaller as string)}"`);
   } else {
     // portable 两态都 move exe → %TEMP%；rmdir 态额外删剩余安装目录。
-    vbsLines.push(`e("FLOWZ_EXE") = "${vq(opts.exePath)}"`);
-    vbsLines.push(`e("FLOWZ_BODYTMP") = "${vq(opts.bodyTmpPath)}"`);
+    vbsLines.push(`e("SHADOWVPN_EXE") = "${vq(opts.exePath)}"`);
+    vbsLines.push(`e("SHADOWVPN_BODYTMP") = "${vq(opts.bodyTmpPath)}"`);
     if (bodyMode === 'rmdir') {
-      vbsLines.push(`e("FLOWZ_EXEDIR") = "${vq(opts.exeDir)}"`);
+      vbsLines.push(`e("SHADOWVPN_EXEDIR") = "${vq(opts.exeDir)}"`);
     }
   }
   // cmd / batPath 也可能含非 ASCII（batPath 在 %TEMP%\<用户名>）→ 但 .vbs 是 UTF-16，内联字面正确；

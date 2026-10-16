@@ -2,10 +2,10 @@
  * TUN「连入来源排除」纯逻辑：本机作服务端被 off-subnet 私网连入时（如经 ZeroTier→路由器 DNAT），
  * 回包目的地落在本机直连子网之外 → 被 TUN 捕获 → 用户态栈误当新连接重拨 → 连接断（且重连仍断）。
  *
- * 第一性原理（承 docs/design/flowz-tun-lan-exclusion-scenarios.md 的 spike 复查）：
+ * 第一性原理（承 docs/design/shadowvpn-tun-lan-exclusion-scenarios.md 的 spike 复查）：
  *  - 这**不是**「排除本机自己所在子网」——sing-tun 的策略路由（Linux suppress_prefixlength / darwin 最长前缀）
  *    本就把本机直连子网留在物理网卡、不进 TUN。真正会断的是**off-subnet 的连入来源**（本机路由不到、
- *    只能靠默认路由的地址）。FlowZ 无法自动探测「谁会从哪个 off-subnet 私网段连进来」→ 只能由用户显式声明。
+ *    只能靠默认路由的地址）。暗影VPN 无法自动探测「谁会从哪个 off-subnet 私网段连进来」→ 只能由用户显式声明。
  *  - 声明的网段追加进 sing-box 的 `route_exclude_address`（内核层就不把该段交给 TUN），使回包走物理网卡。
  *  - ⚠️ **双向语义**：排除一个段会让该段的出/入两个方向都绕过 TUN——不仅是"回包"。故声明的段也不再能经
  *    代理/自定义规则出网（对私网连入源通常正是想要直连，影响有限，但须知晓；见 UI tooltip + 设计 §9）。

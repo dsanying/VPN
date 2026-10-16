@@ -426,7 +426,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     const helperDst = path.join(SUPPORT_DIR, path.win32.basename(exe));
     // BinaryPathName(ImagePath)：各含空格路径用**真双引号**包裹，经 New-Service 单一字符串直达 Win32 CreateService。
     // 不可用 `sc.exe create binPath= "\"..\""`：PS 原样把 `\"` 传给 sc → 服务启动经 CommandLineToArgvW 时 `\"`
-    // 退化为字面引号 → 含空格安装路径（默认 C:\Program Files\FlowZ）下 argv 碎裂、flag 值带字面引号 → 服务侧
+    // 退化为字面引号 → 含空格安装路径（默认 C:\Program Files\暗影VPN）下 argv 碎裂、flag 值带字面引号 → 服务侧
     // singboxBin/confDir/supportDir 全污染（isLockedSingbox/cfgAllowed/tokenValue 全失效）。
     // 注：binPath 指向 ProgramData 外置副本（$helperDst，无空格）；--singbox 仍可能含空格（app 安装目录）→ 仍需真双引号。
     const binPath = `"${helperDst}" --singbox "${singboxPath}" --confdir "${confDir}" --support "${SUPPORT_DIR}"`;

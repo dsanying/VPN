@@ -11,18 +11,18 @@ test('节点协议、地区、实测状态筛选及选择器共用测量结果',
  const mock=await setup(page);const list=page.getByRole('region',{name:'节点列表'});
  await expect(list.getByText('当前可用',{exact:true})).toBeVisible();await expect(list.getByText('当前不可用',{exact:true})).toBeVisible();
  await page.getByRole('combobox',{name:'协议',exact:true}).click();await page.getByText('VMESS',{exact:true}).last().click();await expect(list.getByRole('listitem')).toHaveCount(1);await expect(list.getByText('美国示例',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'重置',exact:true}).click();await page.getByRole('combobox',{name:'地区',exact:true}).click();await page.getByText('日本',{exact:true}).last().click();await expect(list.getByRole('listitem')).toHaveCount(1);await expect(list.getByText('日本示例',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'重置',exact:true}).click();await page.getByRole('combobox',{name:'状态',exact:true}).click();await page.getByText('当前不可用',{exact:true}).last().click();await expect(list.getByRole('listitem')).toHaveCount(1);
- await page.getByRole('combobox',{name:'节点',exact:true}).click();await page.getByRole('menuitemcheckbox',{name:/^示例订阅一 right$/}).click();await expect(page.getByRole('menuitemcheckbox',{name:/日本示例 当前可用/})).toBeVisible();await mock.expectNoUnexpectedRequests();
+ await page.keyboard.press('Escape');await page.getByRole('combobox',{name:'协议',exact:true}).locator('xpath=ancestor::*[contains(@class,"ant-select")][1]').hover();await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'协议',exact:true})}).locator('.ant-select-clear').click();await page.getByRole('combobox',{name:'地区',exact:true}).click();await page.getByText('日本',{exact:true}).last().click();await expect(list.getByRole('listitem')).toHaveCount(1);await expect(list.getByText('日本示例',{exact:true})).toBeVisible();
+ await page.keyboard.press('Escape');await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'地区',exact:true})}).hover();await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'地区',exact:true})}).locator('.ant-select-clear').click();await page.getByRole('combobox',{name:'状态',exact:true}).click();await page.getByText('当前不可用',{exact:true}).last().click();await expect(list.getByRole('listitem')).toHaveCount(1);
+ await page.keyboard.press('Escape');await page.getByRole('combobox',{name:'节点',exact:true}).click();await page.getByRole('menuitemcheckbox',{name:/^示例订阅一 right$/}).click();await expect(page.getByRole('menuitemcheckbox',{name:/日本示例 当前可用/})).toBeVisible();await mock.expectNoUnexpectedRequests();
 });
-test('窄窗口筛选栏可横向滚动到重置按钮，完整控件均可操作',async({page})=>{
+test('窄窗口筛选条件换行，完整控件均可操作',async({page})=>{
  await page.setViewportSize({width:320,height:720});await setup(page);
- const filters=page.locator('.vpn-nodes-page__filters').last();
- await expect(filters).toHaveAttribute('tabindex','0');
- expect(await filters.evaluate(el=>el.scrollWidth>el.clientWidth)).toBe(true);
- await filters.evaluate(el=>{el.scrollLeft=el.scrollWidth;});
- const reset=filters.getByRole('button',{name:'重置',exact:true});
- await expect(reset).toBeInViewport();await reset.click();
+ for(const form of await page.locator('.client-query').all()) {
+  const size=await form.evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth}));
+  expect(size.scroll).toBeLessThanOrEqual(size.width+1);
+ }
+ await expect(page.getByRole('combobox',{name:'状态',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'重置',exact:true})).toHaveCount(0);
 });
 test('节点组管理集中展示元数据、双路径连通性与同步操作',async({page})=>{
  const mock=await setup(page);
@@ -39,9 +39,9 @@ test('节点组管理集中展示元数据、双路径连通性与同步操作',
   const size=await table.getByText(text,{exact:true}).evaluate(el=>({visible:el.clientWidth,content:el.scrollWidth}));expect(size.content).toBeLessThanOrEqual(size.visible+1);
  }
  await table.getByRole('button',{name:'同步',exact:true}).first().click();expect(await page.evaluate(()=>(window as any).desktopTest.calls.filter((call:any)=>call.channel==='subscription:updateServers').length)).toBe(1);
- await table.getByRole('button',{name:'查看',exact:true}).last().click();
+ await table.getByRole('row').filter({hasText:'示例订阅二'}).getByRole('button',{name:'查看',exact:true}).click();
  await expect(page.getByRole('region',{name:'节点列表'}).getByRole('listitem')).toHaveCount(1);
- await expect(page.getByRole('combobox',{name:'来源',exact:true}).locator('..').getByText('示例订阅二',{exact:true})).toBeVisible();
+ await expect(page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'来源',exact:true})}).getByText('示例订阅二',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'管理',exact:true}).click();
  await expect(page.getByRole('table').getByText('可访问 · HTTP 200',{exact:true})).toBeVisible();
  expect(await page.evaluate(()=>(window as any).desktopTest.calls.filter((c:any)=>c.channel==='subscription:connectivity').length)).toBe(1);
@@ -79,7 +79,7 @@ test('节点组在地区图标前，选用后列表、选择器与底栏保留�
  const identity=list.getByRole('listitem').first().locator('.ds-node-identity');
  await expect(identity).toHaveText('示例订阅一 /日本示例');
  expect(await identity.evaluate(el=>Array.from(el.children).map(child=>child.getAttribute('role')==='img'?'region':child.textContent))).toEqual(['示例订阅一 /','region','日本示例']);
- await list.getByRole('listitem').nth(1).getByRole('button',{name:'选用',exact:true}).click();
+ await list.getByRole('listitem').nth(1).getByRole('button',{name:'设为默认',exact:true}).click();
  await expect(page.locator('.ant-cascader .ds-node-identity')).toHaveText('示例订阅二 /美国示例');
  await expect(page.locator('footer .ds-node-identity')).toHaveText('示例订阅二 /美国示例');
  const switches=await page.evaluate(()=>(window as any).desktopTest.calls.filter((call:any)=>call.channel==='server:switch'));

@@ -33,7 +33,7 @@ describe('stripAnsi', () => {
 describe('extractLastFatal', () => {
   it('从混着看护脚本自述行的日志里挑出 FATAL', () => {
     const text = [
-      'FlowZ watchdog starting...',
+      '暗影VPN watchdog starting...',
       '22:08:55 [watchdog] sing-box started, PID 5704',
       '22:08:56 [watchdog] sing-box exited by itself',
       REAL_FATAL,

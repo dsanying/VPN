@@ -18,7 +18,8 @@ import type { LogManager } from '../../services/LogManager';
 export function registerServerHandlers(
   protocolParser: ProtocolParser,
   configManager: ConfigManager,
-  logManager?: LogManager
+  logManager?: LogManager,
+  removeEnterprise?: (id: string) => Promise<void>
 ): void {
   // WARP 待注销队列（删除带 warpDevice 凭据的节点 → 入队；成功注册后机会式 drain）。
   // 进程内单例：与 startup-tasks 启动 drain 共用同一实例，使串行链（opChain）覆盖全部触发点、杜绝跨实例并发写。
@@ -27,6 +28,8 @@ export function registerServerHandlers(
   // 删除单个服务器后的「非配置副作用」（Tailscale state 清理 + WARP 远端注销入队），单删 / 批删共用。
   // 抽出复用，保证批量删除不丢这两项副作用（否则 CF 端留孤儿设备、Tailscale 登录目录残留）。
   const runServerRemovalSideEffects = async (removed: ServerConfig): Promise<void> => {
+    if (removed.protocol === 'enterprise' && removed.enterpriseSettings)
+      await removeEnterprise?.(removed.enterpriseSettings.profileId);
     // Tailscale 节点 → 清其持久 state 目录 <userData>/tailscale/<id>（best-effort，不阻断删除）。
     if (removed?.protocol?.toLowerCase() === 'tailscale') {
       await fs.rm(tailscaleStateDir(removed.id), { recursive: true, force: true }).catch(() => {});
@@ -103,7 +106,7 @@ export function registerServerHandlers(
     }
   );
 
-  // D4/F-1（flowz-node-change-restart）：删除**恒双播** event:configChanged（renderer 差集刷新）+ MAIN_EVENTS.CONFIG_CHANGED
+  // D4/F-1（shadowvpn-node-change-restart）：删除**恒双播** event:configChanged（renderer 差集刷新）+ MAIN_EVENTS.CONFIG_CHANGED
   //   （主进程 switchMode）。重启与否**单一真值**归 switchMode.canSkipRestartForAddedUnreferenced（refOld∪refNext 含 detour
   //   闭包 + endpoint 保守集）：删被引用节点（含 detour 前置/未选中 endpoint）恒重启、删纯未引用节点 canSkip③ defer 不重启。
   //   原 handler 用 `wasSelected‖ruleTargeted` 残缺复刻判据、漏 detour/endpoint → 删它们不重启、活流量继续经已删节点（缺口）。

@@ -523,3 +523,33 @@ it.each(['smart', 'global', 'direct'] as const)(
     expect(buildRouteConfig(config, idMap([]), deps([])).find_process).toBe(true);
   }
 );
+
+it.each(['smart', 'global'])(
+  'keeps enterprise gateway underlay direct in %s mode after SOCKS projection',
+  (mode) => {
+    const node = {
+      id: 'enterprise-fixture',
+      name: 'Enterprise fixture',
+      protocol: 'socks',
+      address: '127.0.0.1',
+      port: 19000,
+      enterpriseSettings: {
+        profileId: 'enterprise-fixture',
+        gateway: 'https://vpn.example.com/',
+        client: 'anyconnect',
+      },
+    } as ServerConfig;
+    const route = buildRouteConfig(
+      cfg([node], { proxyMode: mode as UserConfig['proxyMode'], selectedServerId: node.id }),
+      new Map([[node.id, node.name]]),
+      deps([])
+    );
+    const processIndex = route.rules.findIndex((r) => r.process_name?.includes('openconnect'));
+    expect(processIndex).toBeGreaterThanOrEqual(0);
+    expect(route.rules[processIndex]).toMatchObject({ action: 'route', outbound: 'direct' });
+    expect(processIndex).toBeLessThan(route.rules.findIndex((r) => r.action === 'hijack-dns'));
+    expect(
+      route.rules.some((r) => r.domain?.includes('vpn.example.com') && r.outbound === 'direct')
+    ).toBe(true);
+  }
+);

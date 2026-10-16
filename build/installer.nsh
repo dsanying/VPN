@@ -1,4 +1,4 @@
-; FlowZ 自定义 NSIS 卸载钩子（U4）：真卸载时清理「外置到 ProgramData 的提权 helper 服务」。
+; 暗影VPN 自定义 NSIS 卸载钩子（U4）：真卸载时清理「外置到 ProgramData 的提权 helper 服务」。
 ;
 ; 背景：helper.exe 在安装期被复制外置到 C:\ProgramData\ShadowVPN\com.dsanying.shadowvpn.helper.exe，并注册为 LocalSystem 服务
 ; ShadowVPNHelper（binPath 指向外置副本，与 app 安装目录解耦——见 WindowsServiceHelper.buildInstallScript / U1）。
@@ -32,7 +32,7 @@
 
 !macro customUnInstall
   ${ifNot} ${isUpdated}
-    !insertmacro SelectLang $R8 "Checking FlowZ privileged helper service..." "检查 FlowZ 提权 helper 服务..." "檢查 FlowZ 提權 helper 服務..."
+    !insertmacro SelectLang $R8 "Checking 暗影VPN privileged helper service..." "检查 暗影VPN 提权 helper 服务..." "檢查 暗影VPN 提權 helper 服務..."
     DetailPrint "$R8"
     ; System32 绝对路径调系统命令（$SYSDIR=System32），不依赖 PATH——规避部分设备 PATH 缺失 System32
     ; 致命令未找到（与 src/main 的 win-system32 硬化同根）。nsExec 经 CreateProcess（搜索序含 System32）本较稳，
@@ -58,14 +58,14 @@
     ${EndIf}
 
     ; U6：真卸载清理用户数据（config/订阅/rule-resources/rules/logs/core_update/core-backup/core-version）。
-    ; 背景：deleteAppDataOnUninstall:false + 旧钩子只清 ProgramData → 整个 %APPDATA%\flowz 无人删，
+    ; 背景：deleteAppDataOnUninstall:false + 旧钩子只清 ProgramData → 整个 %APPDATA%\shadow-vpn 无人删，
     ; 用户数据与「更新下载的内核（core_update）+ 核备份（core-backup）」全残留（控制面板卸载不净）。
-    ; $APPDATA\ShadowVPN-FlowZ = app.getPath('userData')（Windows appName 小写 flowz）；roaming 属当前用户，
+    ; $APPDATA\ShadowVPN = app.getPath('userData')（Windows appName 小写 shadow-vpn）；roaming 属当前用户，
     ; perMachine:false 卸载器以普通用户身份即可删，无需 UAC（与上面 ProgramData/服务清理的提权路径解耦）。
     ; 仅真卸载执行（位于 ${ifNot} ${isUpdated} 块内）——app 更新走 isUpdated 分支、不会误删用户数据。
     !insertmacro SelectLang $R8 "Cleaning up user data" "清理用户数据" "清理使用者資料"
-    DetailPrint "$R8 $APPDATA\ShadowVPN-FlowZ ..."
-    RMDir /r "$APPDATA\ShadowVPN-FlowZ"
+    DetailPrint "$R8 $APPDATA\ShadowVPN ..."
+    RMDir /r "$APPDATA\ShadowVPN"
   ${endif}
 !macroend
 
@@ -97,7 +97,7 @@
 ; 在页面 Leave（用户点「升级」后），此时父实例 mutex 已持有 → 子实例直接 CreateMutex
 ; 会撞 ERROR_ALREADY_EXISTS 被 Abort（且父窗口已销毁，FindWindow 前台化也无效，
 ; 表现为「点了升级后再无任何窗口」）。
-; 解法：relaunch 带 /flowz-wait-pid=<父PID>；子实例的 preInit（installer.nsi:56，
+; 解法：relaunch 带 /shadowvpn-wait-pid=<父PID>；子实例的 preInit（installer.nsi:56，
 ; **早于** :73 的 mutex 检查）里 WaitForSingleObject 等父进程退出（典型 <200ms，
 ; 上限 10s 兜底）→ 走到 mutex 检查时父 mutex 已回收 → 干净拿到。等的是「父句柄
 ; signaled」这个事实，非猜测时长；全程安装器自身代码，无 cmd/ping 外部进程链。
@@ -114,10 +114,10 @@
 ; → makensis warning 6001「not referenced or never set」→ electron-builder `warning treated as error`
 ; → 打包失败。（preInit 用 $R0-$R2 通用寄存器、不碰这些 Var，两单元都插入亦无碍。）
 !ifndef BUILD_UNINSTALLER
-  Var flowzExistingDir   ; 已装 per-user 安装目录（"" = 未装 / 不启用 maintenance）
-  Var flowzExistingVer   ; 已装版本号（仅 header 展示用）
-  Var flowzRadioUpgrade  ; 「升级」单选控件句柄
-  Var flowzRadioRemove   ; 「卸载」单选控件句柄
+  Var svpnExistingDir   ; 已装 per-user 安装目录（"" = 未装 / 不启用 maintenance）
+  Var svpnExistingVer   ; 已装版本号（仅 header 展示用）
+  Var svpnRadioUpgrade  ; 「升级」单选控件句柄
+  Var svpnRadioRemove   ; 「卸载」单选控件句柄
 !endif
 
 ; 子实例侧：等待父安装器实例退出，规避 ALLOW_ONLY_ONE mutex 竞态。
@@ -128,7 +128,7 @@
   Push $R2
   ${GetParameters} $R0
   ClearErrors
-  ${GetOptions} $R0 "/flowz-wait-pid=" $R1
+  ${GetOptions} $R0 "/shadowvpn-wait-pid=" $R1
   ${IfNot} ${Errors}
   ${AndIf} $R1 != ""
     ; OpenProcess(SYNCHRONIZE=0x00100000=1048576, bInheritHandle=0, pid) → handle（i 接，0=失败）
@@ -147,17 +147,17 @@
 ; 检测本机已安装（在 initMultiUser + SetRegView 64 之后展开，installer.nsi:80）。
 ; 自读注册表，不依赖模板内部变量（$perUserInstallationFolder 等非稳定 API）。
 !macro customInit
-  ReadRegStr $flowzExistingDir HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
-  ReadRegStr $flowzExistingVer HKCU "${UNINSTALL_REGISTRY_KEY}" DisplayVersion
+  ReadRegStr $svpnExistingDir HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ReadRegStr $svpnExistingVer HKCU "${UNINSTALL_REGISTRY_KEY}" DisplayVersion
   ; 闸门 1：存在 per-machine（HKLM）安装（历史 /allusers 装出）→ 不启用，回默认流程，不恶化现状
   ReadRegStr $R0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
   ${If} $R0 != ""
-    StrCpy $flowzExistingDir ""
+    StrCpy $svpnExistingDir ""
   ${EndIf}
   ; 闸门 2：注册表残留但主程序已不存在 → 当首装（避免对已删安装弹升级/卸载）
-  ${If} $flowzExistingDir != ""
-    ${IfNot} ${FileExists} "$flowzExistingDir\${APP_EXECUTABLE_FILENAME}"
-      StrCpy $flowzExistingDir ""
+  ${If} $svpnExistingDir != ""
+    ${IfNot} ${FileExists} "$svpnExistingDir\${APP_EXECUTABLE_FILENAME}"
+      StrCpy $svpnExistingDir ""
     ${EndIf}
   ${EndIf}
 !macroend
@@ -165,54 +165,54 @@
 ; 已安装时的首页「升级 / 卸载」。原生 Page custom（非 MUI_PAGE_CUSTOMFUNCTION define
 ; 机制）→ 与目录页的 skipPageIfUpdated PRE 槽零冲突。插在页序列第一位（assistedInstaller.nsh:9）。
 !macro customWelcomePage
-  Page custom flowzMaintenancePre flowzMaintenanceLeave
+  Page custom svpnMaintenancePre svpnMaintenanceLeave
 
-  Function flowzMaintenancePre
+  Function svpnMaintenancePre
     ${If} ${isUpdated}             ; 内置更新器 / 我们自己的升级 relaunch：不介入
       Abort
     ${EndIf}
-    ${If} $flowzExistingDir == ""  ; 未安装（或被闸门置空）：首装流程零改变
+    ${If} $svpnExistingDir == ""  ; 未安装（或被闸门置空）：首装流程零改变
       Abort
     ${EndIf}
 
-    ; 文案经 SelectLang 运行时按 $LANGUAGE 选（见文件顶部宏注释）；运行时变量（$flowzExistingVer/
-    ; $flowzExistingDir）拼在选出的字符串外，译文内只含编译期 define ${VERSION}。$R8/$R9 中转即弃。
-    !insertmacro SelectLang $R8 "FlowZ is already installed" "检测到已安装 FlowZ" "偵測到已安裝 FlowZ"
+    ; 文案经 SelectLang 运行时按 $LANGUAGE 选（见文件顶部宏注释）；运行时变量（$svpnExistingVer/
+    ; $svpnExistingDir）拼在选出的字符串外，译文内只含编译期 define ${VERSION}。$R8/$R9 中转即弃。
+    !insertmacro SelectLang $R8 "暗影VPN is already installed" "检测到已安装 暗影VPN" "偵測到已安裝 暗影VPN"
     !insertmacro SelectLang $R9 "Choose an operation" "请选择操作" "請選擇操作"
     !insertmacro MUI_HEADER_TEXT "$R8" "$R9"
     nsDialogs::Create 1018
     Pop $0
     !insertmacro SelectLang $R8 "Existing installation:" "已安装位置：" "安裝位置："
-    ${NSD_CreateLabel} 0u 0u 300u 20u "$R8 $flowzExistingDir ($flowzExistingVer)"
+    ${NSD_CreateLabel} 0u 0u 300u 20u "$R8 $svpnExistingDir ($svpnExistingVer)"
     Pop $0
     !insertmacro SelectLang $R8 "Upgrade to ${VERSION} (keeps settings and taskbar pin)" "升级到 ${VERSION}（保留设置与任务栏固定）" "升級至 ${VERSION}（保留設定與工作列釘選）"
     ${NSD_CreateRadioButton} 10u 34u 285u 12u "$R8"
-    Pop $flowzRadioUpgrade
-    !insertmacro SelectLang $R8 "Uninstall FlowZ" "卸载 FlowZ" "解除安裝 FlowZ"
+    Pop $svpnRadioUpgrade
+    !insertmacro SelectLang $R8 "Uninstall 暗影VPN" "卸载 暗影VPN" "解除安裝 暗影VPN"
     ${NSD_CreateRadioButton} 10u 52u 285u 12u "$R8"
-    Pop $flowzRadioRemove
-    ${NSD_Check} $flowzRadioUpgrade   ; 默认选「升级」
+    Pop $svpnRadioRemove
+    ${NSD_Check} $svpnRadioUpgrade   ; 默认选「升级」
     nsDialogs::Show
   FunctionEnd
 
-  Function flowzMaintenanceLeave
-    ${NSD_GetState} $flowzRadioRemove $0
+  Function svpnMaintenanceLeave
+    ${NSD_GetState} $svpnRadioRemove $0
     ${If} $0 == ${BST_CHECKED}
       ; —— 卸载：启动已装卸载器。不传 --updated//S → 真卸载 GUI（走下方 customUnInstall
       ;    的 ${ifNot} ${isUpdated} 清理块）。Uninstall.exe 的 un.onInit 无 mutex 检查
       ;    （uninstaller.nsh），无竞态。
       ReadRegStr $R0 HKCU "${UNINSTALL_REGISTRY_KEY}" UninstallString
       ${If} $R0 != ""
-        Exec '$R0'                  ; 值形如 "<dir>\Uninstall FlowZ.exe" /currentuser（已含引号）
+        Exec '$R0'                  ; 值形如 "<dir>\Uninstall 暗影VPN.exe" /currentuser（已含引号）
       ${EndIf}
       SetErrorLevel 0
       Quit
     ${EndIf}
     ; —— 升级：以内置更新器同款参数重启自身。--updated → 跳目录页(锁死目录)+keep-shortcuts
     ;    (保 pin)+旧卸载器跳过 customUnInstall；/currentuser → 跳「为谁安装」页；
-    ;    /flowz-wait-pid → 子实例 preInit 等本进程退出后再抢 mutex。
+    ;    /shadowvpn-wait-pid → 子实例 preInit 等本进程退出后再抢 mutex。
     System::Call 'kernel32::GetCurrentProcessId() i .r0'
-    Exec '"$EXEPATH" /currentuser --updated /flowz-wait-pid=$0'
+    Exec '"$EXEPATH" /currentuser --updated /shadowvpn-wait-pid=$0'
     SetErrorLevel 0
     Quit
   FunctionEnd

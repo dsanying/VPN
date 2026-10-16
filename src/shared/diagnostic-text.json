@@ -160,8 +160,8 @@
     "en": "## singbox_startup.log (recent{0})"
   },
   {
-    "zh": "## flowz-win-watchdog.log（近期 · Windows UAC 看护脚本自述）",
-    "en": "## flowz-win-watchdog.log (recent · Windows UAC watchdog output)"
+    "zh": "## shadowvpn-win-watchdog.log（近期 · Windows UAC 看护脚本自述）",
+    "en": "## shadowvpn-win-watchdog.log (recent · Windows UAC watchdog output)"
   },
   {
     "zh": "## 进程内存",

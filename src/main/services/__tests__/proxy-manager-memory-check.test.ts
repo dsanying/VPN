@@ -8,7 +8,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-mem-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-mem-'));
 
 // mock 前缀允许被 jest.mock 工厂引用；测试内 mockReturnValue 控制每个 case 的进程指标。
 const mockGetAppMetrics = jest.fn();
@@ -87,7 +87,7 @@ describe('逐进程内存自检 checkMemoryUsage（#210 + #242）', () => {
   it('某子进程 > 阈值 → 记 warn，且日志含该进程 type/pid（定位是哪个）', () => {
     mockGetAppMetrics.mockReturnValue([
       proc('Browser', 100, 300 * KB),
-      proc('Utility', 374035, overKb, 'flowz-stats'), // #242 场景：utility 子进程暴涨
+      proc('Utility', 374035, overKb, 'shadowvpn-stats'), // #242 场景：utility 子进程暴涨
     ]);
     const svc = makeSvc();
     const logSpy = jest.spyOn(svc as any, 'logToManager').mockImplementation(() => {});
@@ -98,7 +98,7 @@ describe('逐进程内存自检 checkMemoryUsage（#210 + #242）', () => {
     const msg = String(logSpy.mock.calls[0][1]);
     expect(msg).toContain('Utility');
     expect(msg).toContain('374035');
-    expect(msg).toContain('flowz-stats');
+    expect(msg).toContain('shadowvpn-stats');
     logSpy.mockRestore();
   });
 

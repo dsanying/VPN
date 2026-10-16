@@ -1,3 +1,4 @@
+import { ENTERPRISE_NAMES } from '@shared/enterprise-vpn';
 import { NodeAvailability } from '@/components/vpn/NodeAvailability';
 import { NodeIdentity } from '@/components/vpn/NodeIdentity';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,7 @@ export function NodeList({ nodes, selected, testing, ...actions }: NodeListProps
           <div className="vpn-node-list__identity">
             <NodeIdentity nodeId={node.id} name={node.name} className="vpn-node-list__name" />
             <Stack direction="row" wrap gap="control" align="center">
-              <MetadataTag>{node.protocol.toUpperCase()}</MetadataTag><NodeAvailability nodeId={node.id}/>
+              <MetadataTag>{node.enterpriseSettings ? ENTERPRISE_NAMES[node.enterpriseSettings.client] : node.protocol.toUpperCase()}</MetadataTag><NodeAvailability nodeId={node.id}/>
             </Stack>
           </div>
           <dl className="vpn-node-list__metrics">

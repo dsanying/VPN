@@ -15,7 +15,7 @@ const path = require('path');
 const fsSync = require('fs');
 const { EventEmitter } = require('events');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-tslogin-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-tslogin-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },

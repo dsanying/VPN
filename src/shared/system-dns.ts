@@ -8,7 +8,7 @@ import { CONTROLLED_TUN_DNS_IP, isBootstrapDirectDnsIp } from './dns';
 import { dedupe } from './collections';
 
 /**
- * 系统 DNS marker：记录「DNS 由 FlowZ 接管」+ 接管前每个网络服务/接口的原始 DNS（[] = DHCP/自动）。
+ * 系统 DNS marker：记录「DNS 由 暗影VPN 接管」+ 接管前每个网络服务/接口的原始 DNS（[] = DHCP/自动）。
  * 与系统代理 marker 不同：DNS 还原需精确恢复原值，故 original 也落 marker（崩溃/强杀后下次启动据此精确还原）。
  */
 export interface SystemDnsMarker {
@@ -217,10 +217,10 @@ export function resolvectlLinkValues(stdout: string, iface: string): string[] {
 }
 
 /**
- * 从 `os.networkInterfaces()` 里按**地址**认出 FlowZ 自己的 TUN 接口。
+ * 从 `os.networkInterfaces()` 里按**地址**认出 暗影VPN 自己的 TUN 接口。
  *
  * 不按名字认（`tun0` / `utun*`）：Linux 上 `tun0` 可能属于 OpenVPN、WireGuard 或另一个代理客户端，
- * 认错就是把别人的链路 DNS 改掉——这是不可接受的越权，而按地址认是唯一的确定判据（该地址由 FlowZ
+ * 认错就是把别人的链路 DNS 改掉——这是不可接受的越权，而按地址认是唯一的确定判据（该地址由 暗影VPN
  * 自己下发给内核）。地址缺省/找不到 → null，调用方 fail-closed 不接管。
  *
  * @param ifaces `os.networkInterfaces()` 的返回值

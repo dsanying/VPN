@@ -7,11 +7,11 @@ import { contextBridge, ipcRenderer, IpcRendererEvent, webFrame } from 'electron
 import type { RendererHeapSample } from '../shared/process-metrics';
 
 /**
- * OS 偏好语言（有序）：主进程经 webPreferences.additionalArguments 注入 `--flowz-sys-langs=<JSON>`。
+ * OS 偏好语言（有序）：主进程经 webPreferences.additionalArguments 注入 `--shadowvpn-sys-langs=<JSON>`。
  * 同步可读、无 IPC 时序问题，供 i18n 初始化「自动跟随系统」用（app.getLocale 恒返 en、不可用）。
  */
 function readSystemLanguages(): string[] {
-  const PREFIX = '--flowz-sys-langs=';
+  const PREFIX = '--shadowvpn-sys-langs=';
   const arg = process.argv.find((a) => a.startsWith(PREFIX));
   if (!arg) return [];
   try {
@@ -23,11 +23,11 @@ function readSystemLanguages(): string[] {
 }
 
 /**
- * 界面语言「选择」（config.language 单一真值源）：主进程建窗时经 additionalArguments 注入 `--flowz-lang-choice=<值>`。
+ * 界面语言「选择」（config.language 单一真值源）：主进程建窗时经 additionalArguments 注入 `--shadowvpn-lang-choice=<值>`。
  * 同步可读、无 IPC 时序问题，供 i18n 初始化直接用（取代旧的 localStorage['app-language'] 作真值源）。空串=未注入/存量缺键。
  */
 function readLanguageChoice(): string {
-  const PREFIX = '--flowz-lang-choice=';
+  const PREFIX = '--shadowvpn-lang-choice=';
   const arg = process.argv.find((a) => a.startsWith(PREFIX));
   return arg ? arg.slice(PREFIX.length) : '';
 }

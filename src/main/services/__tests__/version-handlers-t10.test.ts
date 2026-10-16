@@ -159,7 +159,7 @@ describe('T10 VersionInfo 完整结构', () => {
     expect(result.appName).toBe('暗影VPN');
     expect(result.repositoryUrl).toBe('https://github.com/dsanying/VPN');
     // 保留上游 MIT 署名
-    expect(result.copyright).toContain('FlowZ');
+    expect(result.copyright).toContain('暗影VPN');
     expect(result.copyright).toContain('MIT');
   });
 

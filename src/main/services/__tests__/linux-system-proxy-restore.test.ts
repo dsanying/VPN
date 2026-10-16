@@ -18,11 +18,11 @@ jest.mock('child_process', () => ({
 
 jest.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/flowz-test-restore',
-    getName: () => 'FlowZ',
+    getPath: () => '/tmp/shadowvpn-test-restore',
+    getName: () => '暗影VPN',
     getVersion: () => '9.9.9',
     isPackaged: false,
-    getAppPath: () => '/tmp/flowz-test-restore',
+    getAppPath: () => '/tmp/shadowvpn-test-restore',
   },
   net: {},
 }));
@@ -144,7 +144,7 @@ describe('LinuxSystemProxy 跨平台一致性（R6 High/Medium）+ 注入收口�
       // capture-three（#2）：原快照仅 http → 不把 http 值扇出到未设的 https/socks（防假 socks）
       expect(hasCall(calls, 'org.gnome.system.proxy.https', 'host', '1.2.3.4')).toBe(false);
       expect(hasCall(calls, 'org.gnome.system.proxy.socks', 'host', '1.2.3.4')).toBe(false);
-      // Low-1 收口：原本未设的 https/socks 被显式清空（host=''），撤销 enable 期写入的 FlowZ 死端口残留
+      // Low-1 收口：原本未设的 https/socks 被显式清空（host=''），撤销 enable 期写入的 暗影VPN 死端口残留
       expect(hasCall(calls, 'org.gnome.system.proxy.https', 'host', '')).toBe(true);
       expect(hasCall(calls, 'org.gnome.system.proxy.socks', 'host', '')).toBe(true);
       expect(hasCall(calls, 'mode', 'none')).toBe(false);

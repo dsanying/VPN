@@ -40,7 +40,8 @@
       "unpublish": "下线",
       "update": "更新",
       "upload": "上传",
-      "view": "查看"
+      "view": "查看",
+      "query": "查询"
     },
     "brand": "暗影VPN",
     "confirm": {
@@ -154,7 +155,8 @@
       "unselected": "未选择",
       "use": "选用",
       "version": "版本",
-      "xhttp": "XHTTP"
+      "xhttp": "XHTTP",
+      "customProtocol": "自定义配置"
     }
   },
   "components": {
@@ -300,7 +302,7 @@
     "nodeGroups": "节点组",
     "nodeList": "节点列表",
     "nodeSource": "节点链接或配置",
-    "nodeSourceHint": "粘贴单条分享链接或 JSON/YAML，读取连接参数；只填地址与端口无法识别。",
+    "nodeSourceHint": "粘贴节点链接、配置内容或企业 VPN 网关地址，自动识别类型；账密仅保存在本机加密数据库。",
     "nodeSourceInvalid": "无法识别单个节点，请检查配置内容",
     "notApplicable": "不适用",
     "notInstalledPlatform": "当前系统不需要此助手",
@@ -313,6 +315,13 @@
     "pendingUpdates": "有待生效的更新",
     "preparingRegion": "准备地区规则…",
     "privateKey": "私钥",
+    "regionUnknownHint": "尚未获取到地区信息；检测会自动查询公网网关 IP 的地区，并在支持时识别代理出口地区。",
+    "exitRegion": "代理出口地区",
+    "gatewayRegion": "网关地区",
+    "gatewayRegionHint": "网关 IP 的归属地区，不代表代理出口地区。",
+    "regionHistory": "历史记录，正在等待自动刷新",
+    "nodeDetectionHint": "同时更新入口延迟、代理可用性和地区信息；企业网关地区与代理出口地区分别记录。",
+    "regionPrivateHint": "网关当前解析为内网地址，无法通过公网 IP 数据库判断地区；不会借用公网网关或代理出口的地区。",
     "proxyHint": "经节点请求检测目标的延迟。默认 Google，备用 Cloudflare；备用或自定义目标会显示域名。",
     "proxyLatency": "代理延迟",
     "proxyResidual": "检测到其他系统代理，可能影响TUN，请检查系统网络设置。",
@@ -401,6 +410,34 @@
     "ws": "WebSocket",
     "xhttpMode": "XHTTP 模式",
     "startupLoading": "正在初始化客户端",
-    "startupFailed": "客户端初始化失败，请重试。"
+    "startupFailed": "客户端初始化失败，请重试。",
+    "enterprise": {
+      "title": "企业 VPN",
+      "gatewayHint": "输入企业 VPN 的 HTTPS 地址，自动识别客户端类型。识别过程不会发送账密。",
+      "invalidGateway": "请输入 HTTPS 网关地址，不包含账密或查询参数",
+      "unreachable": "无法访问网关或证书验证失败",
+      "unrecognized": "无法确认客户端类型",
+      "username": "账号",
+      "usernameHint": "按网关要求填写；无账号认证时留空。账号保存在本机加密数据库。",
+      "password": "密码",
+      "passwordHint": "按网关要求填写。使用系统安全存储加密保存，后续连接无需重复输入。验证码与动态口令不会保存。",
+      "savedPasswordHint": "已保存密码，留空继续使用；修改网关或账号后原密码不会复用。",
+      "authentication": "完成认证",
+      "captcha": "验证码",
+      "points": "已选择 {count} 个点",
+      "browserLogin": "打开认证页面",
+      "callback": "认证回调地址",
+      "code": "验证码",
+      "selectionHint": "登录选项由网关提供，保存后连接时自动使用；网关变更或额外验证码会重新提示。",
+      "latencyUnsupported": "不适配",
+      "authenticationMethod": "认证方式"
+    },
+    "enableProxy": "开启代理",
+    "disableProxy": "关闭代理",
+    "defaultNode": "默认节点",
+    "setDefaultNode": "设为默认",
+    "proxySwitchHint": "全局代理开关。开启后按分流方式处理流量；智能分流中的指定节点规则不受默认节点选择影响。",
+    "enablingProxy": "正在开启代理",
+    "disablingProxy": "正在关闭代理"
   }
 }

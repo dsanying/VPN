@@ -33,6 +33,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import {
+  createContext,
   useContext,
   useEffect,
   useRef,
@@ -45,6 +46,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { RouteCrumbsContext, buildTablePagination } from './utilities';
 import './client.css';
+import { orderRows, fittedColumnWidth } from './tableModel';
 
 type ContainerProps = Omit<HTMLAttributes<HTMLDivElement>, 'title'> & { children?: ReactNode };
 export function Stack({
@@ -84,8 +86,8 @@ export const ContentStack = ({ className = '', ...props }: ContainerProps) => (
     gap="block"
   />
 );
-export const PageStack = ({ className = '', ...props }: ContainerProps) => (
-  <Stack {...props} className={`client-page-stack ${className}`} direction="column" gap="page" />
+export const PageStack = ({ className = '', gap = 'page', ...props }: ContainerProps & {gap?: 'control' | 'block' | 'page'}) => (
+  <Stack {...props} className={`client-page-stack ${className}`} direction="column" gap={gap} />
 );
 export function ResponsiveActions({
   justify = 'end',
@@ -201,13 +203,14 @@ export function FormGrid({
     </div>
   );
 }
+const NaturalValueContext = createContext(false);
 export function AtomicValue({
   text,
   children,
   ...props
 }: HTMLAttributes<HTMLSpanElement> & { text?: ReactNode }) {
   return (
-    <span {...props} className={`client-atomic ${props.className ?? ''}`}>
+    <span {...props} data-client-overflow={useContext(NaturalValueContext) ? undefined : "x"} className={`client-atomic ${props.className ?? ''}`}>
       {children ?? text}
     </span>
   );
@@ -231,7 +234,12 @@ export function StatusTag({
 export function IconButton({ label, ...props }: ButtonProps & { label: string }) {
   const [hintOpen, setHintOpen] = useState(false);
   return (
-    <Tooltip title={label} open={hintOpen} onOpenChange={setHintOpen} classNames={{ root: 'client-action-hint' }}>
+    <Tooltip
+      title={label}
+      open={hintOpen}
+      onOpenChange={setHintOpen}
+      classNames={{ root: 'client-action-hint' }}
+    >
       <Button
         {...props}
         aria-label={label}
@@ -361,20 +369,38 @@ export interface InformationField {
   key: Key;
   label: ReactNode;
   value: ReactNode;
+  span?: 'full';
 }
 export function InformationFieldGrid({
   items,
 }: {
   items: InformationField[];
-  compact?: boolean;
-  fit?: string;
 }) {
+  const owner = useRef<HTMLDListElement>(null);
+  const [count, setCount] = useState(1);
+  useEffect(() => {
+    const element = owner.current;
+    if (!element) return;
+    const resize = () =>
+      setCount(Math.max(1, Math.min(4, Math.floor((element.clientWidth + 16) / 256))));
+    const observer = new ResizeObserver(resize);
+    observer.observe(element);
+    resize();
+    return () => observer.disconnect();
+  }, []);
   return (
-    <dl className="client-information-grid">
+    <dl
+      ref={owner}
+      className="client-information-grid"
+      style={{ gridTemplateColumns: `repeat(${count},minmax(0,1fr))` }}
+    >
       {items.map((item) => (
-        <div key={item.key}>
+        <div
+          key={item.key}
+          className={item.span === 'full' ? 'client-information-full' : undefined}
+        >
           <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
+          <dd><NaturalValueContext.Provider value>{item.value}</NaturalValueContext.Provider></dd>
         </div>
       ))}
     </dl>
@@ -421,11 +447,13 @@ export function TablePanel({
 export function Table<T extends object>({
   sortable,
   order: _order,
+  orderBy,
   columns,
   onRow,
   ...props
 }: TableProps<T> & {
-  order?: string;
+  order?: 'given';
+  orderBy?: (row: T) => unknown;
   sortable?: {
     handleLabel: string;
     onMove: (record: T, from: number, to: number) => Promise<void> | void;
@@ -433,7 +461,56 @@ export function Table<T extends object>({
 }) {
   const moving = useRef(false);
   const source = useRef<number | undefined>(undefined);
-  const rows = props.dataSource ?? [];
+  const {i18n}=useTranslation();
+  const frame = useRef<HTMLDivElement>(null);
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const identity = (row: T) =>
+    typeof props.rowKey === 'function'
+      ? String(props.rowKey(row))
+      : String((row as Record<string, unknown>)[String(props.rowKey ?? 'key')] ?? '');
+  const rows = orderBy
+    ? orderRows(props.dataSource ?? [], orderBy, identity, 'ascend', i18n.language)
+    : (props.dataSource ?? []);
+  useEffect(() => {
+    const owner = frame.current;
+    if (!owner) return;
+    let scheduled = 0;
+    const measure = () => {
+      scheduled = 0;
+      const next: Record<string, number> = {};
+      for (const head of owner.querySelectorAll<HTMLElement>('th[data-client-column]')) {
+        const key = head.dataset.clientColumn!;
+        if (head.classList.contains('client-table-action')) continue;
+        const range = document.createRange();
+        range.selectNodeContents(head);
+        const title = range.getBoundingClientRect().width;
+        let content = 0;
+        for (const cell of owner.querySelectorAll<HTMLElement>('td[data-client-column]')) {
+          if (cell.dataset.clientColumn !== key) continue;
+          for (const child of cell.children) {
+            const text = document.createRange();
+            text.selectNodeContents(child);
+            content = Math.max(content, text.getBoundingClientRect().width);
+          }
+        }
+        next[key] = fittedColumnWidth(title, content, head.dataset.clientPrimary === 'true');
+      }
+      setWidths((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next));
+    };
+    const schedule = () => {
+      if (!scheduled) scheduled = requestAnimationFrame(measure);
+    };
+    const sizes = new ResizeObserver(schedule);
+    sizes.observe(owner);
+    const changes = new MutationObserver(schedule);
+    changes.observe(owner, { childList: true, subtree: true, characterData: true });
+    schedule();
+    return () => {
+      sizes.disconnect();
+      changes.disconnect();
+      cancelAnimationFrame(scheduled);
+    };
+  }, [columns, props.dataSource]);
   const move = async (from: number, to: number) => {
     if (!sortable || moving.current || from === to || to < 0 || to >= rows.length) return;
     moving.current = true;
@@ -484,35 +561,70 @@ export function Table<T extends object>({
         },
       ]
     : [];
+  const adapted = (columns ?? []).map((column) => {
+    const key = String(column.key ?? ('dataIndex' in column ? column.dataIndex : ''));
+    const action = ['action', 'actions'].includes(key);
+    return {
+      ...column,
+      align: 'left' as const,
+      ...(action ? { fixed: 'right' as const } : {}),
+      width: widths[key] ?? column.width ?? 200,
+      onHeaderCell: () => ({
+        'data-client-column': key,
+        'data-client-primary': column.width === undefined ? 'true' : undefined,
+        className: action ? 'client-table-action' : undefined,
+      }),
+      onCell: () => ({
+        'data-client-column': key,
+        className: action ? 'client-table-action' : undefined,
+      }),
+      render: (value: unknown, record: T, index: number) => {
+        const rendered = column.render?.(value, record, index) ?? (value as ReactNode);
+        return typeof rendered === 'string' || typeof rendered === 'number' ? (
+          <AtomicValue text={rendered} />
+        ) : (
+          rendered
+        );
+      },
+    };
+  });
+  const minimum = [...handle, ...adapted].reduce(
+    (sum, column) => sum + Number(column.width ?? 200),
+    0
+  );
   return (
-    <AntTable<T>
-      {...props}
-      pagination={props.pagination === false ? false : buildTablePagination(props.pagination)}
-      columns={[...handle, ...(columns ?? [])]}
-      scroll={{ x: 'max-content', ...props.scroll }}
-      onRow={(record, index) => ({
-        ...onRow?.(record, index),
-        'data-client-row': rows.indexOf(record),
-        ...(sortable
-          ? {
-              tabIndex: 0,
-              onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key === ' ' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-                  event.preventDefault();
-                  if (event.key === ' ')
-                    source.current =
-                      source.current === undefined ? rows.indexOf(record) : undefined;
-                  else if (source.current !== undefined) {
-                    const index = rows.indexOf(record);
-                    void move(index, index + (event.key === 'ArrowUp' ? -1 : 1));
+    <div ref={frame} className="client-table">
+      <AntTable<T>
+        {...props}
+        dataSource={rows}
+        tableLayout="fixed"
+        pagination={props.pagination === false ? false : buildTablePagination(props.pagination)}
+        columns={[...handle, ...adapted]}
+        scroll={{ ...props.scroll, x: minimum }}
+        onRow={(record, index) => ({
+          ...onRow?.(record, index),
+          'data-client-row': rows.indexOf(record),
+          ...(sortable
+            ? {
+                tabIndex: 0,
+                onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === ' ' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    if (event.key === ' ')
+                      source.current =
+                        source.current === undefined ? rows.indexOf(record) : undefined;
+                    else if (source.current !== undefined) {
+                      const index = rows.indexOf(record);
+                      void move(index, index + (event.key === 'ArrowUp' ? -1 : 1));
+                    }
                   }
-                }
-              },
-            }
-          : {}),
-      })}
-    />
+                },
+              }
+            : {}),
+        })}
+      />
+    </div>
   );
 }
 export function DrawerForm<T extends object>({
@@ -538,15 +650,10 @@ export function DrawerForm<T extends object>({
   const form = provided ?? local;
   const [busy, setBusy] = useState(false);
   const { t } = useTranslation();
-  const initial = useRef(initialValues);
-  useEffect(() => { initial.current = initialValues; }, [initialValues]);
-  useEffect(() => {
-    if (open) {
-      form.resetFields();
-      if (initial.current)
-        form.setFieldsValue(initial.current as Parameters<FormInstance<T>['setFieldsValue']>[0]);
-    }
-  }, [open, form]);
+  const [dirty, setDirty] = useState(!initialValues || Object.keys(initialValues).length === 0);
+  const baseline = useRef(initialValues);
+  const changed = () =>
+    setDirty(JSON.stringify(form.getFieldsValue(true)) !== JSON.stringify(baseline.current ?? {}));
   const close = () => {
     if (!busy) onOpenChange?.(false);
   };
@@ -555,7 +662,7 @@ export function DrawerForm<T extends object>({
       title={title}
       open={open}
       onClose={close}
-      maskClosable={!busy}
+      mask={{closable: !busy}}
       keyboard={!busy}
       size={Math.min(560, typeof window === 'undefined' ? 560 : window.innerWidth)}
       destroyOnHidden
@@ -563,16 +670,18 @@ export function DrawerForm<T extends object>({
         submitter ? (
           <ResponsiveActions>
             <Button disabled={busy} icon={<CloseOutlined aria-hidden />} onClick={close}>
-              {t('common.actions.cancel')}
+              {t(dirty ? 'common.actions.cancel' : 'common.actions.close')}
             </Button>
-            <Button
-              type="primary"
-              loading={busy}
-              icon={<SaveOutlined aria-hidden />}
-              onClick={() => form.submit()}
-            >
-              {t('common.actions.save')}
-            </Button>
+            {dirty ? (
+              <Button
+                type="primary"
+                loading={busy}
+                icon={<SaveOutlined aria-hidden />}
+                onClick={() => form.submit()}
+              >
+                {t('common.actions.save')}
+              </Button>
+            ) : null}
           </ResponsiveActions>
         ) : undefined
       }
@@ -581,6 +690,8 @@ export function DrawerForm<T extends object>({
         form={form}
         layout="vertical"
         initialValues={initialValues}
+        clearOnDestroy
+        onValuesChange={changed}
         onFinish={async (values) => {
           setBusy(true);
           try {
@@ -590,6 +701,14 @@ export function DrawerForm<T extends object>({
           }
         }}
       >
+        <FormMount
+          form={form}
+          initialValues={initialValues}
+          onInitialized={() => {
+            baseline.current = form.getFieldsValue(true);
+            setDirty(!initialValues || Object.keys(initialValues).length === 0);
+          }}
+        />
         {children}
       </Form>
     </Drawer>
@@ -608,4 +727,25 @@ export function SidebarMenu({
       inlineCollapsed={compact ?? props.inlineCollapsed}
     />
   );
+}
+
+/** Mounted inside Form: StrictMode clearOnDestroy replays cannot empty saved values. */
+function FormMount<T extends object>({
+  form,
+  initialValues,
+  onInitialized,
+}: {
+  form: FormInstance<T>;
+  initialValues?: Partial<T>;
+  onInitialized: () => void;
+}) {
+  const seed = useRef(initialValues);
+  const ready = useRef(onInitialized);
+  useEffect(() => {
+    form.resetFields();
+    if (seed.current)
+      form.setFieldsValue(seed.current as Parameters<FormInstance<T>['setFieldsValue']>[0]);
+    ready.current();
+  }, [form]);
+  return null;
 }

@@ -326,3 +326,14 @@ it('malformed hopping ranges fail closed instead of probing the base port', asyn
   expect(result).toEqual({ status: 'failed', reason: 'ENTRY_INVALID_ENDPOINT' });
   expect(probe).not.toHaveBeenCalled();
 });
+
+it('shares the successful resolved gateway IP with the measurement pipeline', async () => {
+  const onAddress = jest.fn();
+  await probeNodeEntry({ ...node, address: 'example.com' }, false, {
+    resolve: async () => [{ address: '8.8.8.8' }, { address: '2001:4860:4860::8888' }],
+    onAddress,
+    boundProbe: async (ip) =>
+      ip.includes(':') ? { status: 'ok', latencyMs: 2 } : { status: 'failed' },
+  });
+  expect(onAddress).toHaveBeenLastCalledWith('2001:4860:4860::8888');
+});

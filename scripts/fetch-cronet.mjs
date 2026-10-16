@@ -5,7 +5,7 @@
  *
  * 用法：node scripts/fetch-cronet.mjs [--force]
  *
- * ⚠️ macOS 不在此脚本范围：cronet 在 mac 上不走动态库。FlowZ 的 mac-arm64 sing-box 二进制已把 cronet
+ * ⚠️ macOS 不在此脚本范围：cronet 在 mac 上不走动态库。暗影VPN 的 mac-arm64 sing-box 二进制已把 cronet
  *   静态编入（CGO，实测二进制内含 cronet 符号、无 dlopen libcronet.dylib），naive 开箱即用、无需任何
  *   外部库。mac-x64 二进制未编入 cronet → naive 暂不可用（需重编带 naive 的 x64 核心）。详见 README。
  *
@@ -167,7 +167,7 @@ for (const t of pending) {
   }
   mkdirSync(absDir, { recursive: true });
   const url = `${MODULE_BASE}/${t.mod}/@v/${CRONET_VERSION}.zip`;
-  const work = mkdtempSync(join(tmpdir(), 'flowz-cronet-'));
+  const work = mkdtempSync(join(tmpdir(), 'shadowvpn-cronet-'));
   const tmpDest = `${dest}.tmp`;
   try {
     const archive = join(work, `${t.mod}.zip`);

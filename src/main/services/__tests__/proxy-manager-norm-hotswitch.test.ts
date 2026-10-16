@@ -22,7 +22,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-norm-test-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-norm-test-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
@@ -192,7 +192,7 @@ describe('ProxyManager.configGenerationNorm', () => {
     expect(svc.configGenerationNorm(a)).toBe(svc.configGenerationNorm(b));
   });
 
-  it('拨图形兼容逃生门 hardwareAcceleration/windowEffects → norm 等价（纯窗口/GPU 偏好，且本就需重启 FlowZ 才生效，绝不应重启内核断流）', () => {
+  it('拨图形兼容逃生门 hardwareAcceleration/windowEffects → norm 等价（纯窗口/GPU 偏好，且本就需重启 暗影VPN 才生效，绝不应重启内核断流）', () => {
     const svc = makeSvc();
     const base = makeConfig();
     const on = { ...base, hardwareAcceleration: true, windowEffects: true } as UserConfig;

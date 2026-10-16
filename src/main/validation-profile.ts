@@ -4,7 +4,7 @@ import * as path from 'path';
 export function resolveUserDataPath(appData: string, arguments_: readonly string[]): string {
   const prefixes = arguments_.filter((argument) => argument.startsWith('--validation-profile='));
   if (prefixes.length > 1) throw new Error('Only one validation profile is allowed');
-  if (!prefixes.length) return path.join(appData, 'ShadowVPN-FlowZ');
+  if (!prefixes.length) return path.join(appData, 'ShadowVPN');
   const profile = prefixes[0].slice('--validation-profile='.length);
   const resolved = path.resolve(profile);
   if (!path.isAbsolute(profile) || resolved === path.parse(resolved).root)

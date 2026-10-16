@@ -111,7 +111,7 @@ src/shared/build-info.ts
 # ── 误落到 repo 根的本地文件（Obsidian 临时画布 / daily note / 误编译 helper 产物）──
 /Untitled.canvas
 /2026-06-13.md
-/helper/flowzhelper
+/helper/shadowvpn-helper-mac
 
 # Linux 提权 helper 构建产物
 resources/linux/shadowvpn-helper-linux
@@ -153,3 +153,23 @@ android/app/src/main/assets/licenses/
 /dist-native-candidate/
 
 /android/app/src/main/assets/headless/
+
+# Enterprise engine generated pinned source and binaries
+/enterprise-runtime/.upstream/
+resources/*/enterprise-runtime*
+resources/**/openconnect-auth
+
+# Local-only development records: not part of the open-source repository.
+# Verification reports, measurement data, license provenance notes and
+# implementation logs live outside Git; only specs and technical docs ship.
+/docs/验证报告.md
+/docs/验证数据/
+/docs/资源占用实测-*.md
+/docs/诊断/
+/docs/历史来源/
+/docs/规范/前端实现替换记录.md
+/docs/后端修复.md
+/docs/依赖升级.md
+/docs/前端改造.md
+/docs/维护手册.md
+/NOTICE.md

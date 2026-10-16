@@ -13,7 +13,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-remote-scrub-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-remote-scrub-'));
 
 jest.mock('electron', () => ({
   app: {

@@ -40,8 +40,8 @@ func TestSelfUninstallCmdLine(t *testing.T) {
 
 // 服务名/路径含空格时仍正确包裹（虽默认无空格，验证不退化）。
 func TestSelfUninstallCmdLineSpacedPath(t *testing.T) {
-	cl := selfUninstallCmdLine("ShadowVPNHelper", `C:\Program Data\FlowZ`)
-	if !strings.Contains(cl, `rmdir /s /q "C:\Program Data\FlowZ"`) {
+	cl := selfUninstallCmdLine("ShadowVPNHelper", `C:\ProgramData\ShadowVPN`)
+	if !strings.Contains(cl, `rmdir /s /q "C:\ProgramData\ShadowVPN"`) {
 		t.Fatalf("含空格路径未用真双引号包裹: %q", cl)
 	}
 	if strings.Contains(cl, `\"`) {
@@ -68,13 +68,13 @@ func TestIsSafeSupportDir(t *testing.T) {
 		want bool
 	}{
 		{`C:\ProgramData\ShadowVPN`, true},
-		{`C:\Program Data\FlowZ`, true}, // 空格允许
+		{`C:\ProgramData\ShadowVPN`, true}, // 空格允许
 		{``, false},
 		{`C:\evil & calc`, false}, // &
 		{`C:\x"y`, false},         // 引号
 		{`C:\a|b`, false},         // 管道
 		{`D:/path`, true},         // 正斜杠允许
-		{`C:\应用\FlowZ`, true},   // 中文 Unicode 允许
+		{`C:\应用\ShadowVPN`, true},   // 中文 Unicode 允许
 	}
 	for _, c := range cases {
 		if got := isSafeSupportDir(c.in); got != c.want {

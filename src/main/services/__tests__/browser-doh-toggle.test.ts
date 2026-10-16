@@ -18,7 +18,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-doh-toggle-test-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-doh-toggle-test-'));
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getAppPath: () => TMP, isPackaged: false },
   net: {},

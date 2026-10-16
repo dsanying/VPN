@@ -20,7 +20,7 @@ describe('ResourceManager.resolveDashboardServeDir', () => {
   let rm: ResourceManager;
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-dash-test-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-dash-test-'));
     rm = new ResourceManager();
   });
 

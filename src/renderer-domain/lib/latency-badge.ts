@@ -7,7 +7,7 @@
  * 优先级（结构性不可用压过一切旧值——旧延迟属于上一个有效期，保留显示即误导）：
  *   出口无效(exit-invalid) > 未登录(not-logged-in) > 超时/数值(-1/值) > 不可测(na) > 未测(untested)
  *
- * 数据源边界（见设计 flowz-exit-probe-rtt-latency §9.4）：
+ * 数据源边界（见设计 shadowvpn-exit-probe-rtt-latency §9.4）：
  *  - exit-invalid 仅对**选中出口 + running** 有语义（proxyBlocked 由主进程直判，仅选中节点有值）；
  *  - not-logged-in 仅交互式 TS（无 authKey；authKey 形态=静态凭据，等同 WG，不进登录态）；
  *  - 「未授权」(NeedsMachineAuth) 渲染端不可区分（backendState 不入 store）→ 折叠进「未登录」（拍板 P3）；

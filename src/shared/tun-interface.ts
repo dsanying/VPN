@@ -10,11 +10,11 @@
  */
 import type { UserConfig } from './types';
 
-/** FlowZ 专属 Windows TUN 接口名（缺省）。与外部 sing-box 默认 tun0 / 其它 VPN 网卡区分。 */
-export const FLOWZ_WIN_TUN_INTERFACE = 'flowz-tun0';
+/** 暗影VPN 专属 Windows TUN 接口名（缺省）。与外部 sing-box 默认 tun0 / 其它 VPN 网卡区分。 */
+export const SHADOWVPN_WIN_TUN_INTERFACE = 'shadowvpn-tun0';
 
 /**
- * 解析 Windows TUN 接口名：尊重用户自定义 `tunConfig.interfaceName`（去空白后非空才用），否则回落 FlowZ 专属名。
+ * 解析 Windows TUN 接口名：尊重用户自定义 `tunConfig.interfaceName`（去空白后非空才用），否则回落 暗影VPN 专属名。
  * buildInbounds（下发 interface_name）与 ProxyManager（适配器释放门控）共用，保证两侧锚定同一名字。
  */
 export function resolveWinTunInterfaceName(config: UserConfig): string {
@@ -22,5 +22,5 @@ export function resolveWinTunInterfaceName(config: UserConfig): string {
   // 校验自定义名：仅字母数字/连字符/下划线、长度 1–32（Windows 接口名约束）。非法 → 回落缺省：脏名既可能令 sing-box
   // check/启动 FATAL，也会使 Get-NetAdapter -Name 永远匹配不到 → 释放门控对真实滞留网卡失效。校验后下发与门控同名、安全。
   if (custom && /^[A-Za-z0-9_-]{1,32}$/.test(custom)) return custom;
-  return FLOWZ_WIN_TUN_INTERFACE;
+  return SHADOWVPN_WIN_TUN_INTERFACE;
 }

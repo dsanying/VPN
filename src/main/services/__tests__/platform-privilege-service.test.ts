@@ -18,7 +18,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-priv-test-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-priv-test-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
@@ -241,12 +241,12 @@ describe('PlatformPrivilegeService.generateWatchdogScript', () => {
     expect(script).toContain('net.inet.ip.forwarding');
   });
 
-  it('win32 → PowerShell .ps1：isWindows=true + 路径 flowz-win-watchdog.ps1 + 脚本含 param/Start-Process/Stop-Process', () => {
+  it('win32 → PowerShell .ps1：isWindows=true + 路径 shadowvpn-win-watchdog.ps1 + 脚本含 param/Start-Process/Stop-Process', () => {
     setPlatform('win32');
     const svc = makeSvc(true);
     const result = svc.generateWatchdogScript();
     expect(result.isWindows).toBe(true);
-    expect(result.path).toBe(path.join(TMP, 'flowz-win-watchdog.ps1'));
+    expect(result.path).toBe(path.join(TMP, 'shadowvpn-win-watchdog.ps1'));
     expect(fsSync.existsSync(result.path)).toBe(true);
     const script = fsSync.readFileSync(result.path, 'utf8');
     // Mandatory 参数声明
@@ -294,7 +294,9 @@ describe('windowsWatchdogScriptText — 核 stderr 落盘与文件分工', () =>
     expect(script).toMatch(/param\([\s\S]*\$WatchdogLog[\s\S]*\)/);
     expect(script).toMatch(/function Log[\s\S]*Out-File -FilePath \$WatchdogLog/);
     // 起始行也落看护日志，不能再写 $LogFile
-    expect(script).toMatch(/'FlowZ watchdog starting\.\.\.' \| Out-File -FilePath \$WatchdogLog/);
+    expect(script).toMatch(
+      /'ShadowVPN watchdog starting\.\.\.' \| Out-File -FilePath \$WatchdogLog/
+    );
     expect(script).not.toMatch(/Out-File -FilePath \$LogFile/);
   });
 

@@ -26,3 +26,16 @@ it('shares the six-hour boundary with maintenance for successes and failures', (
     expect(nodeAvailability(latency, now - NODE_MEASUREMENT_FRESH_MS, now)).toBe('stale');
   }
 });
+
+test('enterprise forwarding evidence has the same six-hour freshness, without inventing latency', () => {
+  expect(
+    nodeAvailability(-1, 1000, 1000, false, 'enterprise-target-unsupported', 'available')
+  ).toBe('available');
+  expect(nodeAvailability(-1, 1000, 1000, false, 'enterprise-target-unsupported', 'unknown')).toBe(
+    'unknown'
+  );
+  expect(
+    nodeAvailability(-1, 1000, 1000 + NODE_MEASUREMENT_FRESH_MS, false, undefined, 'available')
+  ).toBe('stale');
+  expect(nodeAvailability(-1, 1000, 1000, true, undefined, 'available')).toBe('untested');
+});

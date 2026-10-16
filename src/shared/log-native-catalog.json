@@ -2,18 +2,18 @@
   {
     "id": "native.d8cd9928bc1e",
     "parts": [
-      "FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version"
+      "ShadowVPN 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：shadow-vpn --version"
     ],
-    "zh": "FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version",
-    "en": "FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version"
+    "zh": "暗影VPN 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：shadow-vpn --version",
+    "en": "ShadowVPN is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: shadow-vpn --version"
   },
   {
     "id": "native.5fbcb161de65",
     "parts": [
-      "FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version"
+      "ShadowVPN is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: shadow-vpn --version"
     ],
-    "zh": "FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version",
-    "en": "FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version"
+    "zh": "暗影VPN 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：shadow-vpn --version",
+    "en": "ShadowVPN is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: shadow-vpn --version"
   },
   {
     "id": "native.a5ddf79f9db4",
@@ -53,17 +53,17 @@
   },
   {
     "id": "native.f3a8bd509c9f",
-    "parts": ["FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换："],
-    "zh": "FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：",
-    "en": "FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
+    "parts": ["ShadowVPN 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换："],
+    "zh": "暗影VPN 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：",
+    "en": "ShadowVPN auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
   },
   {
     "id": "native.d7f4e7db2a81",
     "parts": [
-      "FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
+      "ShadowVPN auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
     ],
-    "zh": "FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：",
-    "en": "FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
+    "zh": "暗影VPN 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：",
+    "en": "ShadowVPN auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:"
   },
   {
     "id": "native.339e9e3c18d8",
@@ -79,15 +79,15 @@
   },
   {
     "id": "native.960c36437b9e",
-    "parts": ["即将更新 FlowZ（deb 版）"],
-    "zh": "即将更新 FlowZ（deb 版）",
-    "en": "About to update FlowZ (deb build)"
+    "parts": ["即将更新 ShadowVPN（deb 版）"],
+    "zh": "即将更新 暗影VPN（deb 版）",
+    "en": "About to update ShadowVPN (deb build)"
   },
   {
     "id": "native.588ad853e154",
-    "parts": ["About to update FlowZ (deb build)"],
-    "zh": "即将更新 FlowZ（deb 版）",
-    "en": "About to update FlowZ (deb build)"
+    "parts": ["About to update ShadowVPN (deb build)"],
+    "zh": "即将更新 暗影VPN（deb 版）",
+    "en": "About to update ShadowVPN (deb build)"
   },
   {
     "id": "native.266bdafc2b3b",
@@ -131,27 +131,27 @@
   },
   {
     "id": "native.2dca169e16d9",
-    "parts": ["FlowZ 代理出错"],
-    "zh": "FlowZ 代理出错",
-    "en": "FlowZ Proxy Error"
+    "parts": ["ShadowVPN 代理出错"],
+    "zh": "暗影VPN 代理出错",
+    "en": "ShadowVPN Proxy Error"
   },
   {
     "id": "native.17dc8a2a193b",
-    "parts": ["FlowZ Proxy Error"],
-    "zh": "FlowZ 代理出错",
-    "en": "FlowZ Proxy Error"
+    "parts": ["ShadowVPN Proxy Error"],
+    "zh": "暗影VPN 代理出错",
+    "en": "ShadowVPN Proxy Error"
   },
   {
     "id": "native.042b2ede5e3b",
     "parts": ["代理已停止，请打开应用查看详情"],
     "zh": "代理已停止，请打开应用查看详情",
-    "en": "The proxy has stopped. Open FlowZ for details."
+    "en": "The proxy has stopped. Open ShadowVPN for details."
   },
   {
     "id": "native.81b503e33c66",
-    "parts": ["The proxy has stopped. Open FlowZ for details."],
+    "parts": ["The proxy has stopped. Open ShadowVPN for details."],
     "zh": "代理已停止，请打开应用查看详情",
-    "en": "The proxy has stopped. Open FlowZ for details."
+    "en": "The proxy has stopped. Open ShadowVPN for details."
   },
   {
     "id": "native.0cb6d8de42f0",
@@ -181,15 +181,15 @@
   },
   {
     "id": "native.64ee9cc759f3",
-    "parts": ["FlowZ 提权助手被关闭"],
-    "zh": "FlowZ 提权助手被关闭",
-    "en": "FlowZ helper disabled"
+    "parts": ["ShadowVPN 提权助手被关闭"],
+    "zh": "暗影VPN 提权助手被关闭",
+    "en": "ShadowVPN helper disabled"
   },
   {
     "id": "native.2dff2aeb3629",
-    "parts": ["FlowZ helper disabled"],
-    "zh": "FlowZ 提权助手被关闭",
-    "en": "FlowZ helper disabled"
+    "parts": ["ShadowVPN helper disabled"],
+    "zh": "暗影VPN 提权助手被关闭",
+    "en": "ShadowVPN helper disabled"
   },
   {
     "id": "native.c37c79a35192",
@@ -229,31 +229,31 @@
   },
   {
     "id": "native.17905b16f1b4",
-    "parts": ["FlowZ 用户数据已清除。"],
-    "zh": "FlowZ 用户数据已清除。",
-    "en": "FlowZ user data has been removed."
+    "parts": ["ShadowVPN 用户数据已清除。"],
+    "zh": "暗影VPN 用户数据已清除。",
+    "en": "ShadowVPN user data has been removed."
   },
   {
     "id": "native.daea6ffcd0fc",
-    "parts": ["FlowZ user data has been removed."],
-    "zh": "FlowZ 用户数据已清除。",
-    "en": "FlowZ user data has been removed."
+    "parts": ["ShadowVPN user data has been removed."],
+    "zh": "暗影VPN 用户数据已清除。",
+    "en": "ShadowVPN user data has been removed."
   },
   {
     "id": "native.039145d8efba",
     "parts": [
-      "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径："
+      "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove shadow-vpn（或 sudo dpkg -r shadow-vpn）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径："
     ],
-    "zh": "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：",
-    "en": "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
+    "zh": "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove shadow-vpn（或 sudo dpkg -r shadow-vpn）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：",
+    "en": "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove shadow-vpn (or sudo dpkg -r shadow-vpn)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
   },
   {
     "id": "native.7466193df92f",
     "parts": [
-      "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
+      "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove shadow-vpn (or sudo dpkg -r shadow-vpn)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
     ],
-    "zh": "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：",
-    "en": "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
+    "zh": "应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove shadow-vpn（或 sudo dpkg -r shadow-vpn）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：",
+    "en": "The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove shadow-vpn (or sudo dpkg -r shadow-vpn)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:"
   },
   {
     "id": "native.de32e20193ad",
@@ -621,39 +621,39 @@
   },
   {
     "id": "native.0d0107586021",
-    "parts": ["FlowZ - 未连接"],
-    "zh": "FlowZ - 未连接",
-    "en": "FlowZ - Disconnected"
+    "parts": ["ShadowVPN - 未连接"],
+    "zh": "暗影VPN - 未连接",
+    "en": "ShadowVPN - Disconnected"
   },
   {
     "id": "native.77931c6dcf0b",
-    "parts": ["FlowZ - Disconnected"],
-    "zh": "FlowZ - 未连接",
-    "en": "FlowZ - Disconnected"
+    "parts": ["ShadowVPN - Disconnected"],
+    "zh": "暗影VPN - 未连接",
+    "en": "ShadowVPN - Disconnected"
   },
   {
     "id": "native.eeead25d779a",
-    "parts": ["FlowZ - 连接中..."],
-    "zh": "FlowZ - 连接中...",
-    "en": "FlowZ - Connecting..."
+    "parts": ["ShadowVPN - 连接中..."],
+    "zh": "暗影VPN - 连接中...",
+    "en": "ShadowVPN - Connecting..."
   },
   {
     "id": "native.f90a6fd733ea",
-    "parts": ["FlowZ - Connecting..."],
-    "zh": "FlowZ - 连接中...",
-    "en": "FlowZ - Connecting..."
+    "parts": ["ShadowVPN - Connecting..."],
+    "zh": "暗影VPN - 连接中...",
+    "en": "ShadowVPN - Connecting..."
   },
   {
     "id": "native.c89f25d0a47f",
-    "parts": ["FlowZ - 已连接"],
-    "zh": "FlowZ - 已连接",
-    "en": "FlowZ - Connected"
+    "parts": ["ShadowVPN - 已连接"],
+    "zh": "暗影VPN - 已连接",
+    "en": "ShadowVPN - Connected"
   },
   {
     "id": "native.473d7a38e0ca",
-    "parts": ["FlowZ - Connected"],
-    "zh": "FlowZ - 已连接",
-    "en": "FlowZ - Connected"
+    "parts": ["ShadowVPN - Connected"],
+    "zh": "暗影VPN - 已连接",
+    "en": "ShadowVPN - Connected"
   },
   {
     "id": "native.6e86570183c3",
@@ -914,18 +914,18 @@
   {
     "id": "native.1433296e3ade",
     "parts": [
-      "请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。"
+      "请在「系统设置 > 通用 > 登录项与扩展」重新打开 ShadowVPN 的「允许在后台」开关，然后回到 ShadowVPN 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。"
     ],
-    "zh": "请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。",
-    "en": "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
+    "zh": "请在「系统设置 > 通用 > 登录项与扩展」重新打开 暗影VPN 的「允许在后台」开关，然后回到 暗影VPN 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。",
+    "en": "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for ShadowVPN, then return to ShadowVPN and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
   },
   {
     "id": "native.ee79410be857",
     "parts": [
-      "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
+      "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for ShadowVPN, then return to ShadowVPN and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
     ],
-    "zh": "请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。",
-    "en": "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
+    "zh": "请在「系统设置 > 通用 > 登录项与扩展」重新打开 暗影VPN 的「允许在后台」开关，然后回到 暗影VPN 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。",
+    "en": "Open System Settings → General → Login Items & Extensions and turn the \"Allow in Background\" toggle back on for ShadowVPN, then return to ShadowVPN and start again (no authorization needed then).\n\"Start this session\" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended."
   },
   {
     "id": "native.e22e913ea07b",

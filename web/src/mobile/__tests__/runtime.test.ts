@@ -48,9 +48,12 @@ test('boot initializes missing observations; page reads do not sync subscription
   const savedIp = new Promise<void>((resolve) => {
     settled = resolve;
   });
+  let settledWebsites!: () => void;
+  const savedWebsites = new Promise<void>(resolve => { settledWebsites = resolve; });
   f.facts.writeState.mockImplementation(async ({ name, content }) => {
     f.documents.set(name, content);
     if (name === 'ip-info') settled();
+    if (name === 'website-measurements') settledWebsites();
     return { revision: 'fixture-revision' };
   });
   const runtime = await createMobileRuntime(f.native);
@@ -60,14 +63,18 @@ test('boot initializes missing observations; page reads do not sync subscription
   await runtime.transport.invoke(C.SERVER_MEASUREMENTS);
   await runtime.transport.invoke(C.SUBSCRIPTION_MEASUREMENTS);
   expect(f.facts.measureNode).not.toHaveBeenCalled();
-  await savedIp;
-  await runtime.transport.invoke(C.UNLOCK_RUN);
+  await Promise.all([savedIp, savedWebsites]);
   expect(f.facts.requestText).toHaveBeenCalledTimes(1 + SERVICE_IDS.length);
+  // Let the committed startup measurement finish publication and release its single-flight slot.
+  await new Promise<void>(resolve => setImmediate(resolve));
+  // A manual refresh is a new measurement after startup has committed; do not depend on scheduling overlap.
+  await runtime.transport.invoke(C.UNLOCK_RUN);
+  expect(f.facts.requestText).toHaveBeenCalledTimes(1 + 2 * SERVICE_IDS.length);
   expect(f.facts.requestText).toHaveBeenCalledWith(
     expect.objectContaining({ route: 'direct', url: 'https://cloudflare.com/cdn-cgi/trace' })
   );
   await runtime.transport.invoke(C.IP_INFO_GET, { peek: true });
-  expect(f.facts.requestText).toHaveBeenCalledTimes(1 + SERVICE_IDS.length);
+  expect(f.facts.requestText).toHaveBeenCalledTimes(1 + 2 * SERVICE_IDS.length);
   expect(await runtime.transport.invoke<any>(C.VERSION_GET_INFO)).toEqual({
     success: true,
     data: { appVersion: 'fixture' },

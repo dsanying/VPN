@@ -32,6 +32,12 @@ export function clearSingboxDashboardCache(): void {
 // sing-box 官方面板内窗口单例（dashboard #55）：再次「打开面板」时聚焦复用而非重复开窗；closed 时置 null。
 let dashboardWindow: BrowserWindow | null = null;
 
+/** 本应用专属目录判定（安装目录/便携目录名含品牌标识），避免误删混放目录。 */
+function isOurInstallDir(dir: string): boolean {
+  const name = path.basename(dir).toLowerCase();
+  return name.includes('shadowvpn') || name.includes('shadow-vpn') || name.includes('暗影');
+}
+
 export function registerHelperHandlers(
   helperManager: IPrivilegedHelper,
   proxyManager: IProxyManager
@@ -81,7 +87,7 @@ export function registerHelperHandlers(
       const serverId = crypto.randomUUID();
       const bareUrl = info.apiUrl.replace(/^https?:\/\//, '');
       // 面板语言：优先用渲染端传入的 UI 语言（i18n.language），映射到面板合法码（源码实证 xl=[en/zh-Hans/zh-Hant/fa/ru]），preload 首开写入。
-      // app.getLocale() 仅作兜底——它返回 Electron app bundle locale（FlowZ.app 未声明 zh → 恒 en），与 FlowZ UI 实际语言脱钩，
+      // app.getLocale() 仅作兜底——它返回 Electron app bundle locale（暗影VPN.app 未声明 zh → 恒 en），与 暗影VPN UI 实际语言脱钩，
       // 单用它会让中文 UI 的内窗口面板仍显英文。映射逻辑同面板 El()，前缀匹配可正确处理 zh-CN/zh-TW/fa-IR 等。
       const dashLang = mapElectronLocaleToDashboardLang(locale || app.getLocale());
       const serverPayload = JSON.stringify({
@@ -111,7 +117,7 @@ export function registerHelperHandlers(
           contextIsolation: false,
           nodeIntegration: false,
           sandbox: false,
-          additionalArguments: [`--flowz-dashboard-server=${serverPayload}`],
+          additionalArguments: [`--shadowvpn-dashboard-server=${serverPayload}`],
         },
       });
       if (process.platform !== 'darwin') dashboardWindow.setMenu(null);
@@ -158,7 +164,7 @@ export function registerHelperHandlers(
     }
   );
 
-  // 完全卸载 FlowZ：清 helper + 受保护目录（root，弹一次密码框）+ 用户配置 + 应用本体（移废纸篓），然后退出。
+  // 完全卸载 暗影VPN：清 helper + 受保护目录（root，弹一次密码框）+ 用户配置 + 应用本体（移废纸篓），然后退出。
   registerIpcHandler<void, { ok: boolean; error?: string }>(
     IPC_CHANNELS.APP_UNINSTALL_ALL,
     async () => {
@@ -208,8 +214,8 @@ export function registerHelperHandlers(
             }
           } else if (process.platform === 'linux') {
             // Linux 删应用本体（原仅删 userData、漏删本体 → 卸载后应用仍在）。官方 target 仅 AppImage + deb：
-            //   AppImage → $APPIMAGE 是原始 .AppImage（exe 是 /tmp FUSE 挂载点、非文件本身）；deb → /opt/FlowZ root 拥有、app 无写权。
-            // 能安全删的目标（AppImage 原文件 / 用户可写的 flowz 专属目录）**只移废纸篓**——刻意不 rmSync 强删：
+            //   AppImage → $APPIMAGE 是原始 .AppImage（exe 是 /tmp FUSE 挂载点、非文件本身）；deb → /opt/暗影VPN root 拥有、app 无写权。
+            // 能安全删的目标（AppImage 原文件 / 用户可写的本应用专属目录）**只移废纸篓**——刻意不 rmSync 强删：
             //   无废纸篓后端（精简 WM）时 trashItem reject，若回退 rm -rf 整个父目录会永久误删用户混放文件，无回收网。
             // 删不掉（deb root 无权 / 无 trash 后端 / 边缘形态）→ 弹原生 dialog 引导手动移除，附**实际路径** + deb 包管理器命令
             //   （数据已清；toast 会随 app 退出丢失，故用阻塞 dialog，不静默假装成功）。
@@ -220,10 +226,10 @@ export function registerHelperHandlers(
               if (appImage && fs.existsSync(appImage)) {
                 target = appImage;
               } else if (
-                /flowz/i.test(path.basename(exeDir)) &&
+                /shadowvpn|暗影/i.test(path.basename(exeDir)) &&
                 exeDir.startsWith(os.homedir() + path.sep)
               ) {
-                // exe 父目录是「家目录下」的 flowz 专属目录（AppImage extract / 手动解压）且可写才程序删。
+                // exe 父目录是「家目录下」的本应用专属目录（AppImage extract / 手动解压）且可写才程序删。
                 // **限定家目录**：deb 装的 /opt·/usr 即使被 sudo 跑/改权限弄成可写也绝不程序删——那会绕过 dpkg
                 // 致包库不一致 + /usr 下 .desktop 悬空，故系统目录一律 target=null 走 dialog 引导经 apt 卸载。
                 try {
@@ -258,7 +264,7 @@ export function registerHelperHandlers(
             }
           }
         } else {
-          // 分离 sidecar .bat：精确轮询本进程 PID 退出（不受同名 FlowZ.exe 残留干扰）→ 删 userData → 静默唤起 NSIS
+          // 分离 sidecar .bat：精确轮询本进程 PID 退出（不受同名 暗影VPN.exe 残留干扰）→ 删 userData → 静默唤起 NSIS
           // 卸载器（无则 rmdir 安装目录）→ 自删。进程内删不掉的根因：app 持有 userData 句柄 + exe 自身被占用；
           // 必须 quit 让出占用后再由独立进程清。PID 轮询 + 60s 上限，避免 imagename 误判同名进程导致无限卡死。
           // 卸载器 /S 静默（用户已在应用内确认完全卸载）；helper 已在第 1 步零提权卸掉 → customUnInstall 钩子 sc query
@@ -269,40 +275,48 @@ export function registerHelperHandlers(
             // 回落真实 exe）。userData 已由 paths.ts 重定向到 PORTABLE_EXECUTABLE_DIR\data（原始目录），无需在此修正。
             const { exePath, exeDir } = resolveUninstallBody(process.env, app.getPath('exe'));
             const userData = app.getPath('userData');
-            const flowzPid = process.pid;
+            const shadowvpnPid = process.pid;
             // 定位 NSIS 卸载器（存在=installed，null=portable）。
             // 便携态（有 PORTABLE_EXECUTABLE_FILE）一律 null：便携无 NSIS 卸载器，且 exeDir 此时是用户可控目录（如
-            // Downloads）——若在此扫 `Uninstall FlowZ*.exe`，恰有同名混放文件会被误判 installed 并静默 /S 执行该任意 exe
+            // Downloads）——若在此扫 `Uninstall 暗影VPN*.exe`，恰有同名混放文件会被误判 installed 并静默 /S 执行该任意 exe
             // （安全/误删面）。故仅 NSIS 安装态（无 PORTABLE_* env、exeDir=受控安装目录）才探测卸载器。
             let uninstaller: string | null = null;
             if (!process.env.PORTABLE_EXECUTABLE_FILE) {
-              const defaultUn = path.join(exeDir, 'Uninstall FlowZ.exe');
+              const defaultUn = path.join(exeDir, 'Uninstall 暗影VPN.exe');
               if (fs.existsSync(defaultUn)) {
                 uninstaller = defaultUn;
               } else {
-                const hit = fs.readdirSync(exeDir).find((f) => /^Uninstall FlowZ.*\.exe$/i.test(f));
+                const hit = fs
+                  .readdirSync(exeDir)
+                  .find((f) => /^Uninstall 暗影VPN.*\.exe$/i.test(f));
                 if (hit) uninstaller = path.join(exeDir, hit);
               }
             }
             const stamp = Date.now();
-            const batPath = path.join(os.tmpdir(), `flowz-uninstall-${flowzPid}-${stamp}.bat`);
-            const vbsPath = path.join(os.tmpdir(), `flowz-uninstall-${flowzPid}-${stamp}.vbs`);
+            const batPath = path.join(
+              os.tmpdir(),
+              `shadowvpn-uninstall-${shadowvpnPid}-${stamp}.bat`
+            );
+            const vbsPath = path.join(
+              os.tmpdir(),
+              `shadowvpn-uninstall-${shadowvpnPid}-${stamp}.vbs`
+            );
             // portable 本体移出目标（%TEMP% 下一次性文件）：sidecar move 本体到此（同卷=rename，运行中亦可）。
             const bodyTmpPath = path.join(
               os.tmpdir(),
-              `flowz-uninstall-body-${flowzPid}-${stamp}.exe`
+              `shadowvpn-uninstall-body-${shadowvpnPid}-${stamp}.exe`
             );
             // 非 ASCII 路径（中文用户名的 userData/exeDir/uninstaller）全走 .vbs 设的进程环境变量（.vbs UTF-16 → 值
             // 为 Unicode），.bat 纯 ASCII 用 %VAR%；batPath 内联进 .vbs 的 .Run 行（同靠 .vbs UTF-16 保 Unicode，非 env）
             // ——绕开 cmd 代码页 + .vbs/.bat 编码坑（见 uninstall-sidecar）。
             const { bat, vbs } = buildUninstallSidecar({
-              flowzPid,
+              shadowvpnPid,
               userData,
               exeDir,
               exePath,
               uninstaller,
-              // portable 无卸载器：目录名含 flowz（专属目录）才 rmdir 整目录，否则只移出 exe 自身（避免误删 D:\Tools\ 等非专属目录）。
-              portableRmdir: exeDir.toLowerCase().includes('flowz'),
+              // portable 无卸载器：目录名含本应用名（专属目录）才 rmdir 整目录，否则只移出 exe 自身（避免误删 D:\Tools\ 等非专属目录）。
+              portableRmdir: isOurInstallDir(exeDir),
               bodyTmpPath,
               batPath,
               vbsPath,
@@ -332,7 +346,7 @@ export function registerHelperHandlers(
               path.parse(exePath).root.toLowerCase() !== path.parse(bodyTmpPath).root.toLowerCase()
             ) {
               const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
-              const bodyTarget = exeDir.toLowerCase().includes('flowz') ? exeDir : exePath;
+              const bodyTarget = isOurInstallDir(exeDir) ? exeDir : exePath;
               const opts = {
                 type: 'info' as const,
                 title: mt('uninstallManualTitle'),

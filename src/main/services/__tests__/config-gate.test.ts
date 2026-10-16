@@ -19,7 +19,7 @@ import * as os from 'os';
 import * as fsSync from 'fs';
 import * as path from 'path';
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-gate-test-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-gate-test-'));
 jest.mock('electron', () => ({
   app: {
     getPath: () => TMP,

@@ -24,7 +24,7 @@ test('build uses UI mode and preserves literal arguments',t=>{
  assert.deepEqual(JSON.parse(result.stdout),{arguments:['build','--outDir','.playwright/app','--base','/client path/'],ui:'1'});
 });
 test('browser selection and full-matrix environment reach Playwright',t=>{
- assert.deepEqual(JSON.parse(invoke(t,'ui').stdout).arguments,['test','--project=chromium']);
+ assert.deepEqual(JSON.parse(invoke(t,'ui').stdout).arguments,['test']);
  const full=JSON.parse(invoke(t,'ui-full',['--project=firefox']).stdout);
  assert.equal(full.full,'1');assert.deepEqual(full.arguments,['test','--project=firefox']);
 });

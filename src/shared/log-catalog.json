@@ -2284,8 +2284,8 @@
   },
   {
     "id": "log.82a54341e832",
-    "parts": ["终态已清除系统代理（曾指向 FlowZ，避免死端口致全网断）"],
-    "zh": "终态已清除系统代理（曾指向 FlowZ，避免死端口致全网断）",
+    "parts": ["终态已清除系统代理（曾指向 ShadowVPN，避免死端口致全网断）"],
+    "zh": "终态已清除系统代理（曾指向 暗影VPN，避免死端口致全网断）",
     "en": "Terminal failure: removed this application's system proxy to prevent a dead proxy port"
   },
   {
@@ -2297,19 +2297,19 @@
   {
     "id": "log.1571d0fa5065",
     "parts": [
-      "系统代理仍指向 FlowZ 自身(",
+      "系统代理仍指向 ShadowVPN 自身(",
       ")但清理未净——非外部残留，跳过提示，下个终态点重试清理"
     ],
-    "zh": "系统代理仍指向 FlowZ 自身({0})但清理未净——非外部残留，跳过提示，下个终态点重试清理",
+    "zh": "系统代理仍指向 暗影VPN 自身({0})但清理未净——非外部残留，跳过提示，下个终态点重试清理",
     "en": "System proxy still points to this application ({0}); cleanup incomplete, retrying on next terminal state"
   },
   {
     "id": "log.93692cee83f8",
     "parts": [
-      "TUN 模式下检测到非 FlowZ 设置的系统代理仍开启(",
+      "TUN 模式下检测到非 ShadowVPN 设置的系统代理仍开启(",
       ")，已提示用户（不自动清，避免误伤其它代理软件）"
     ],
-    "zh": "TUN 模式下检测到非 FlowZ 设置的系统代理仍开启({0})，已提示用户（不自动清，避免误伤其它代理软件）",
+    "zh": "TUN 模式下检测到非 暗影VPN 设置的系统代理仍开启({0})，已提示用户（不自动清，避免误伤其它代理软件）",
     "en": "External system proxy still enabled in TUN mode ({0}); notifying user without changing other proxy software"
   },
   {
