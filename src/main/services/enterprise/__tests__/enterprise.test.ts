@@ -108,7 +108,7 @@ describe('application-owned local encryption', () => {
       const encrypted = codec.encrypt('fictional-password');
       expect(new LocalSecretCodec(file).decrypt(encrypted)).toBe('fictional-password');
       expect(readFileSync(file)).toHaveLength(32);
-      expect(statSync(file).mode & 0o777).toBe(0o600);
+      if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600);
       const altered = Buffer.from(encrypted);
       altered[altered.length - 1] ^= 1;
       expect(() => codec.decrypt(altered)).toThrow();
