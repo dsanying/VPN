@@ -98,5 +98,5 @@ it('产品名随中文和英文切换', () => {
   setMainLanguage('zh-CN');
   expect(mt('productName')).toBe('暗影VPN');
   setMainLanguage('en-US');
-  expect(mt('productName')).toBe('DSVPN');
+  expect(mt('productName')).toBe('ShadowVPN');
 });

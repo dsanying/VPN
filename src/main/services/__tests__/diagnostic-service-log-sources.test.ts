@@ -234,7 +234,7 @@ describe('Localized diagnostic evidence', () => {
         'Authorization: Bearer fake-secret\nhttps://example.com/fake-path-secret?token=fake-query-secret'
       );
     const report = await service.buildReport();
-    expect(report).toContain('# Shadow VPN diagnostic report');
+    expect(report).toContain('# ShadowVPN diagnostic report');
     expect(report).toContain('## Logging evidence');
     expect(report).toContain('test-session');
     expect(report).toContain('"flushComplete": true');

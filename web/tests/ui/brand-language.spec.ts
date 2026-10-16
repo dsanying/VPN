@@ -1,7 +1,7 @@
 import { expect, test } from './console-guard';
 import { installDesktopMock } from './desktop-mock';
 
-for (const [language, brand] of [['zh-CN', '暗影VPN'], ['en-US', 'DSVPN']]) {
+for (const [language, brand] of [['zh-CN', '暗影VPN'], ['en-US', 'ShadowVPN']]) {
   test(`产品名跟随语言 ${language}`, async ({ page }) => {
     await page.addInitScript(lang => localStorage.setItem('shadowvpn-lang', lang), language);
     const mock = await installDesktopMock(page);

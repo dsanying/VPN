@@ -20,7 +20,7 @@ export function exportDiagnosticReport(service: DiagnosticService): Promise<Expo
     const report = await service.buildReport();
     const english = getMainLanguage().startsWith('en');
     const result = await dialog.showSaveDialog({
-      title: english ? 'Export Shadow VPN diagnostics' : '导出暗影VPN诊断报告',
+      title: english ? 'Export ShadowVPN diagnostics' : '导出暗影VPN诊断报告',
       defaultPath: `shadowvpn-diagnostic-${formatDeviceDate(new Date())}.md`,
       filters: [{ name: 'Markdown', extensions: ['md'] }],
     });
