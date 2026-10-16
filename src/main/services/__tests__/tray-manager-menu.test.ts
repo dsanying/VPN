@@ -2,7 +2,7 @@
  * TrayManager 菜单映射回归（#75）。
  *
  * 守护「托盘状态头 / 启停开关 / 图标」三者恒与 isProxyRunning 一致」——即同一次渲染内不可能出现
- * 「状态头=已连接 而 开关=开启代理」这种自相矛盾（截图里的现象其实是托盘整体停在断开态、未随
+ * 「状态头=已连接 而 开关=连接代理」这种自相矛盾（截图里的现象其实是托盘整体停在断开态、未随
  * 代理 started 刷新；根因修复在 index.ts on('started') 补刷，本测守住菜单映射这一半）。
  *
  * 仅依赖 electron / ResourceManager mock；不拉主进程 bootstrap。
@@ -66,7 +66,7 @@ const baseData = (isProxyRunning: boolean): TrayMenuData => ({
 /** 从最近一次模板里取「状态头」label 与「启停开关」label。 */
 function readMenu(): { status: string; toggle: string } {
   const status = String(lastTemplate[0]?.label ?? '');
-  const toggleItem = lastTemplate.find((i) => i?.label === '开启代理' || i?.label === '关闭代理');
+  const toggleItem = lastTemplate.find((i) => i?.label === '连接代理' || i?.label === '断开代理');
   return { status, toggle: String(toggleItem?.label ?? '') };
 }
 
@@ -86,24 +86,24 @@ beforeEach(() => {
 });
 
 describe('TrayManager 菜单状态映射 (#75)', () => {
-  it('代理运行中 → 状态头「已连接」且开关「关闭代理」', () => {
+  it('代理运行中 → 状态头「已连接」且开关「断开代理」', () => {
     const tm = makeTray();
     tm.updateFullTrayMenu(baseData(true));
 
     const { status, toggle } = readMenu();
     expect(status).toBe('已连接');
-    expect(toggle).toBe('关闭代理');
+    expect(toggle).toBe('断开代理');
     // 状态头带圆点图标（connected）
     expect(lastTemplate[0]?.icon).toBe(imgStub);
   });
 
-  it('代理已停止 → 状态头「已断开」且开关「开启代理」', () => {
+  it('代理已停止 → 状态头「已断开」且开关「连接代理」', () => {
     const tm = makeTray();
     tm.updateFullTrayMenu(baseData(false));
 
     const { status, toggle } = readMenu();
     expect(status).toBe('已断开');
-    expect(toggle).toBe('开启代理');
+    expect(toggle).toBe('连接代理');
   });
 
   it('hasError → 状态头「连接异常」（开关仍按运行态）', () => {
@@ -112,20 +112,20 @@ describe('TrayManager 菜单状态映射 (#75)', () => {
     expect(readMenu().status).toBe('连接异常');
   });
 
-  it('不变量：状态头与开关恒一致，绝不出现「已连接 + 开启代理」', () => {
+  it('不变量：状态头与开关恒一致，绝不出现「已连接 + 连接代理」', () => {
     const tm = makeTray();
     for (const running of [true, false, true, false]) {
       tm.updateFullTrayMenu(baseData(running));
       const { status, toggle } = readMenu();
-      if (status === '已连接') expect(toggle).toBe('关闭代理');
-      if (status === '已断开') expect(toggle).toBe('开启代理');
+      if (status === '已连接') expect(toggle).toBe('断开代理');
+      if (status === '已断开') expect(toggle).toBe('连接代理');
     }
   });
 
   it('updateTrayMenu(true) 简化入口也渲染连接态', () => {
     const tm = makeTray();
     tm.updateTrayMenu(true);
-    expect(readMenu()).toEqual({ status: '已连接', toggle: '关闭代理' });
+    expect(readMenu()).toEqual({ status: '已连接', toggle: '断开代理' });
   });
 
   it('updateTrayIcon(connected) 取彩色图标并 setImage', () => {
@@ -192,7 +192,7 @@ it('Dock 与托盘共用当前功能，Dock 不重复系统退出项', () => {
   expect(labels).toEqual(
     expect.arrayContaining([
       '打开暗影VPN',
-      '开启代理',
+      '连接代理',
       '选择节点',
       '分流方式',
       '打开设置',
@@ -201,7 +201,7 @@ it('Dock 与托盘共用当前功能，Dock 不重复系统退出项', () => {
   );
   expect(labels).not.toEqual(expect.arrayContaining(['进入轻量模式']));
   expect(labels).not.toContain('检查更新');
-  expect(lastTemplate.find((item) => item.label === '开启代理').enabled).toBe(false);
+  expect(lastTemplate.find((item) => item.label === '连接代理').enabled).toBe(false);
   expect(lastTemplate.find((item) => item.label === '全部测速').enabled).toBe(false);
 });
 
@@ -226,7 +226,7 @@ it('仅显示实际节点来源；选用节点后可以连接', () => {
   ).toBe(false);
   lastTemplate.find((item) => item.label === '管理节点组').click();
   expect(onManageServers).toHaveBeenCalledTimes(1);
-  const connect = lastTemplate.find((item) => item.label === '开启代理');
+  const connect = lastTemplate.find((item) => item.label === '连接代理');
   expect(connect.enabled).toBe(true);
   connect.click();
   expect(onStartProxy).toHaveBeenCalledTimes(1);

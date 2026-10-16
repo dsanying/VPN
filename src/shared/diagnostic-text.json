@@ -1,7 +1,7 @@
 [
   {
     "zh": "# 暗影VPN 诊断报告",
-    "en": "# Shadow VPN diagnostic report"
+    "en": "# ShadowVPN diagnostic report"
   },
   {
     "zh": "> 本报告用于排障，可附到 GitHub issue。**密钥与节点身份已脱敏**（uuid/密码/私钥/订阅 token 已打码；",
