@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as fsSync from 'fs';
 import { createHash } from 'crypto';
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-deb-confirm-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-deb-confirm-'));
 
 jest.mock('electron', () => ({
   app: {
@@ -58,18 +58,18 @@ afterAll(() => {
 describe('UpdateService deb 更新一次授权说明框', () => {
   describe('isDebUpdateForm 门控（仅 linux + 非 AppImage 运行 + .deb 资产）', () => {
     it('linux + .deb + 无 APPIMAGE → true', () => {
-      expect(isDebForm(new UpdateService(log), '/x/FlowZ.deb')).toBe(true);
+      expect(isDebForm(new UpdateService(log), '/x/暗影VPN.deb')).toBe(true);
     });
     it('linux + .AppImage → false', () => {
-      expect(isDebForm(new UpdateService(log), '/x/FlowZ.AppImage')).toBe(false);
+      expect(isDebForm(new UpdateService(log), '/x/暗影VPN.AppImage')).toBe(false);
     });
     it('linux + .deb 但 APPIMAGE 运行态 → false（跨形态守卫，杜绝 AppImage 用户被 system-wide 装 deb）', () => {
-      process.env.APPIMAGE = '/run/FlowZ.AppImage';
-      expect(isDebForm(new UpdateService(log), '/x/FlowZ.deb')).toBe(false);
+      process.env.APPIMAGE = '/run/暗影VPN.AppImage';
+      expect(isDebForm(new UpdateService(log), '/x/暗影VPN.deb')).toBe(false);
     });
     it('win32 + .deb → false（Linux 专属）', () => {
       setPlatform('win32');
-      expect(isDebForm(new UpdateService(log), '/x/FlowZ.deb')).toBe(false);
+      expect(isDebForm(new UpdateService(log), '/x/暗影VPN.deb')).toBe(false);
     });
   });
 
@@ -86,7 +86,7 @@ describe('UpdateService deb 更新一次授权说明框', () => {
 
   describe('installUpdate deb 取消 = 真 no-op（弹框在停代理之前）', () => {
     it('deb + 取消 → 返回 false、弹框一次、cleanupCallback 零调用（代理未停）', async () => {
-      const deb = path.join(TMP, 'FlowZ-x.deb');
+      const deb = path.join(TMP, '暗影VPN-x.deb');
       fsSync.writeFileSync(deb, 'dummy');
       (dialog.showMessageBox as jest.Mock).mockResolvedValue({ response: 1 });
       const svc = new UpdateService(log);

@@ -151,7 +151,7 @@ function actionHint(reason: OsDnsFlushFailureReason, platform: NodeJS.Platform):
   if (reason === 'permission-denied') {
     return platform === 'linux'
       ? '（授权规则可能未安装：重新启动一次 TUN 模式会重装 polkit 规则）'
-      : '（可尝试重新授权 FlowZ 的系统权限）';
+      : '（可尝试重新授权 暗影VPN 的系统权限）';
   }
   if (reason === 'command-missing') {
     return platform === 'linux' ? '（本机无 systemd-resolved，属结构性不支持）' : '';
@@ -203,7 +203,7 @@ export const LINK_CHANGE_FLUSH_FAIL_STREAK_LIMIT = 3;
  * link-change 腿是否应停止尝试（issue #368 复审 High）。
  *
  * 不停会怎样：失败**不推进指纹基线**（这是对的，否则一次失败 = 永久漏刷），于是**下一个纯噪音事件**——
- * RA 刷新 lifetime、DHCP renew、FlowZ 自己的路由操作，正是指纹机制要过滤掉的那些——都会因「基线为空」
+ * RA 刷新 lifetime、DHCP renew、暗影VPN 自己的路由操作，正是指纹机制要过滤掉的那些——都会因「基线为空」
  * 再 spawn 一次必然失败的命令并记一条 warn。稳态节奏 = max(限频间隔, 事件间隔)，会话级永续。
  * **这是「把缓存寿命钉在限频间隔上」那个被打回的病灶换了形态**：钉住的东西从刷缓存变成了 spawn + 日志。
  * 典型输入：Linux 上 resolvectl 二进制在、但 systemd-resolved 未启用/被 mask（部分发行版默认、容器、WSL），

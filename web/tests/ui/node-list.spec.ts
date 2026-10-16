@@ -24,7 +24,7 @@ test('完整节点列表没有分页，筛选排序后末项仍可选用', async
   await page.locator('.ant-select-item-option').filter({ hasText: /^名称$/ }).click();
   await expect(items.first()).toContainText('Fixture 000');
   await items.last().scrollIntoViewIfNeeded();
-  await items.last().getByRole('button', { name: '选用', exact: true }).click();
+  await items.last().getByRole('button', { name: '设为默认', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as any).desktopTest.getConfig().selectedServerId)).toBe('fixture-80');
   await expect(items.last().getByRole('button', { name: '当前', exact: true })).toBeDisabled();
   const search = page.getByRole('searchbox', { name: '搜索', exact: true });

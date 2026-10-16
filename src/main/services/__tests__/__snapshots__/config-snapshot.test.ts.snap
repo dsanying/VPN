@@ -176,7 +176,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -767,7 +767,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -1300,7 +1300,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -1820,7 +1820,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -1839,7 +1839,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "172.19.0.1/16",
         ],
         "auto_route": true,
-        "interface_name": "flowz-tun0",
+        "interface_name": "shadowvpn-tun0",
         "mtu": 65535,
         "route_exclude_address": [
           "10.0.0.0/8",
@@ -2362,7 +2362,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -2864,7 +2864,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -3373,7 +3373,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -3875,7 +3875,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -4341,7 +4341,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -4880,7 +4880,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -5418,7 +5418,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -5437,7 +5437,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "172.19.0.1/16",
         ],
         "auto_route": true,
-        "interface_name": "flowz-tun0",
+        "interface_name": "shadowvpn-tun0",
         "mtu": 65535,
         "route_exclude_address": [
           "10.0.0.0/8",
@@ -5997,7 +5997,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     ],
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -6494,7 +6494,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -6973,7 +6973,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -7474,7 +7474,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -7911,7 +7911,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -8428,7 +8428,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -8964,7 +8964,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -9499,7 +9499,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -10023,7 +10023,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -10566,7 +10566,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -11081,7 +11081,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -11102,7 +11102,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "outbounds": [
       {
-        "client_version": "SSH-2.0-FlowZ",
+        "client_version": "SSH-2.0-暗影VPN",
         "domain_resolver": {
           "server": "dns-bootstrap",
           "strategy": "prefer_ipv4",
@@ -11599,7 +11599,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -12108,7 +12108,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -12623,7 +12623,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -13051,7 +13051,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -13576,7 +13576,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -14132,7 +14132,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -14667,7 +14667,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -15203,7 +15203,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -15705,7 +15705,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -16171,7 +16171,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -16629,7 +16629,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -17066,7 +17066,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -17712,7 +17712,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -18235,7 +18235,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -18771,7 +18771,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,
@@ -19280,7 +19280,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
     },
     "experimental": {
       "cache_file": {
-        "cache_id": "flowz-dns-v2",
+        "cache_id": "shadowvpn-dns-v2",
         "enabled": true,
         "path": "/fake/userData/cache.db",
         "store_dns": true,

@@ -52,6 +52,22 @@ export class PortableLogRepository {
       level: entry.level,
       message: redactLogText(entry.message).slice(0, 8192),
       source: redactLogText(entry.source).slice(0, 128),
+      ...(typeof entry.traceId === 'string' && /^[a-f0-9]{32}$/.test(entry.traceId)
+        ? { traceId: entry.traceId }
+        : {}),
+      ...(typeof entry.operation === 'string'
+        ? { operation: redactLogText(entry.operation).slice(0, 128) }
+        : {}),
+      ...(['start', 'progress', 'success', 'failure'].includes(entry.phase ?? '')
+        ? { phase: entry.phase }
+        : {}),
+      ...(Number.isFinite(entry.durationMs) && entry.durationMs! >= 0
+        ? { durationMs: entry.durationMs }
+        : {}),
+      ...(typeof entry.sessionId === 'string' ? { sessionId: entry.sessionId.slice(0, 128) } : {}),
+      ...(Number.isSafeInteger(entry.sequence) && entry.sequence! >= 0
+        ? { sequence: entry.sequence }
+        : {}),
       ...(typeof entry.id === 'string' ? { id: entry.id.slice(0, 128) } : {}),
       ...(typeof entry.stack === 'string'
         ? { stack: redactLogText(entry.stack).slice(0, 8192) }

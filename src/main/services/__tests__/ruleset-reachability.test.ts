@@ -17,7 +17,7 @@ function makeSvc(): any {
   return new ProxyManager(
     undefined as any,
     undefined as any,
-    '/tmp/flowz-test-cfg.json',
+    '/tmp/shadowvpn-test-cfg.json',
     '/fake/sing-box'
   );
 }

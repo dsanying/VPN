@@ -1,4 +1,6 @@
 import {
+  nodeRegionCode,
+  nodeRegionEvidence,
   nodeDisplayName,
   nodeDisplayIdentity,
   nodeGroupName,
@@ -48,4 +50,34 @@ it('resolves duplicate names by node membership and follows orphan and mesh grou
     text: '订阅一 / 🇯🇵 同名',
   });
   expect(a.name).toBe('同名');
+});
+
+it('shares enterprise and ordinary node identity without inferring geography from names', () => {
+  const node = {
+    id: 'enterprise',
+    name: 'Example corporate gateway',
+    protocol: 'enterprise',
+  } as ServerConfig;
+  const labels = { manual: '自建节点', mesh: '组网' };
+  const detail = {
+    exit: { ip: '192.0.2.1', countryCode: ' sg ', measuredAt: 1, provider: 'test' },
+  };
+  expect(nodeRegionCode(detail)).toBe('sg');
+  expect(nodeDisplayName(node.name, nodeRegionCode(detail), nodeGroupName(node, [], labels))).toBe(
+    '自建节点 / 🇸🇬 Example corporate gateway'
+  );
+  expect(nodeRegionCode()).toBeUndefined();
+  expect(nodeRegionCode({ exit: { ...detail.exit, countryCode: 'invalid' } })).toBeUndefined();
+  expect(nodeDisplayName('日本 gateway.example.com', nodeRegionCode(), '自建节点')).toBe(
+    '自建节点 / 🌐 日本 gateway.example.com'
+  );
+});
+
+it('keeps gateway and exit evidence distinct with measured exit precedence', () => {
+  const gateway = { ip: '192.0.2.1', countryCode: 'CN', measuredAt: 1, provider: 'test' };
+  const exit = { ip: '192.0.2.2', countryCode: 'SG', measuredAt: 2, provider: 'test' };
+  expect(nodeRegionEvidence({ gateway })).toEqual({ source: 'gateway', observation: gateway });
+  expect(nodeRegionCode({ gateway })).toBe('cn');
+  expect(nodeRegionEvidence({ gateway, exit })).toEqual({ source: 'exit', observation: exit });
+  expect(nodeRegionCode({ gateway, exit })).toBe('sg');
 });

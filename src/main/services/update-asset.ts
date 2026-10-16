@@ -4,7 +4,7 @@
  * 与 singbox-asset.findSuitableSingboxAsset 同模式：UpdateService.findSuitableAsset 仅注入 process.*。
  *
  * #72：每平台都有「loose（无安装器，单文件原位跑）」与「installed（经安装器/包管理器）」两形态，
- * 必须按**当前运行形态**选对应包，否则错配（如便携被发 NSIS setup → 装出多余副本「凭空多一个 flowz」）。
+ * 必须按**当前运行形态**选对应包，否则错配（如便携被发 NSIS setup → 装出多余副本「凭空多一个 shadow-vpn」）。
  *   - Windows：portable.exe(loose) / nsis setup.exe(installed)
  *   - Linux：  AppImage(loose) / .deb(installed)
  *   - macOS：  只有 DMG（.app 始终 loose），不分形态。

@@ -62,7 +62,7 @@ test('应用分流不显示常用服务或手工进程入口，旧预设记录�
   await expect(page.getByText('常用服务', { exact: true })).toHaveCount(0);
   await expect(page.getByText('自定义应用', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('dialog').getByText('进程名', { exact: true })).toHaveCount(0);
-  await page.getByRole('dialog').getByRole('button', { name: /取消$/ }).click();
+  await page.getByRole('dialog').locator('.ant-drawer-footer').getByRole('button', { name: '关闭',exact:true }).click();
   await page.evaluate(() => { const h = (window as any).desktopTest; const c = h.getConfig(); c.customAppPresets = [{ id: 'old-service', name: 'Legacy service', emoji: '', geositeTags: ['example'] }]; h.emit('event:configChanged', { newValue: c }); });
   await expect(page.getByText('Legacy service', { exact: true })).toHaveCount(0);
   await mock.expectNoUnexpectedRequests();

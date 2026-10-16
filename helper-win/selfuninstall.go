@@ -23,7 +23,7 @@ func selfUninstallCmdLine(serviceName, supportDir string) string {
 	// 纵深防御：本旁路以 SYSTEM 执行 cmd /c。supportDir 当前为安装期固定常量（非可达输入），但若未来
 	// --support 变可达，须防 cmd 元字符（" & | < > % ^）注入即提权。校验不过则用安全占位（rmdir 落空，不注入）。
 	if !isSafeSupportDir(supportDir) {
-		supportDir = `C:\FlowZ\safe-placeholder-nonexistent`
+		supportDir = `C:\ShadowVPN\safe-placeholder-nonexistent`
 	}
 	rmdir := `rmdir /s /q "` + supportDir + `"`
 	// 顺序：等 helper 退出解锁 exe → 停服务 → 删服务 → 再等一拍让 SCM 反映 → 删目录（含 exe 自身）→ 兜底再删一次。

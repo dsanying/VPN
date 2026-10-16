@@ -291,7 +291,7 @@ final class NativeClientPrimitives implements AutoCloseable {
                 JSObject result = new JSObject(); result.put("appVersion", info.versionName); result.put("appName", "暗影VPN");
                 result.put("singBoxVersion", Libbox.version()); result.put("platform", "android");
                 result.put("arch", Build.SUPPORTED_ABIS[0]); result.put("osVersion", Build.VERSION.RELEASE);
-                result.put("buildDate", ""); result.put("copyright", "Based on FlowZ © dododook; MIT License");
+                result.put("buildDate", ""); result.put("copyright", "Based on 暗影VPN © dododook; MIT License");
                 result.put("repositoryUrl", "https://github.com/dsanying/VPN"); call.resolve(result);
             } catch (Exception error) { call.reject("无法读取版本信息", "VERSION_READ_FAILED"); }
         });

@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { useState } from 'react';
+import { StrictMode, useState } from 'react';
 import { App, Button, ConfigProvider, Form, Input } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { useThemeStore } from '../../src/stores/useThemeStore';
@@ -74,6 +74,7 @@ function Fixture() {
           <output aria-label="move indices">{lastMove}</output>
           <Table
             rowKey="id"
+            order="given"
             dataSource={rows}
             columns={[{ title: '名称', dataIndex: 'name', key: 'name' }]}
             sortable={{
@@ -116,4 +117,4 @@ useThemeStore
   .getState()
   .setPreference(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 void i18n.changeLanguage('zh-CN');
-createRoot(document.getElementById('root')!).render(<Fixture />);
+createRoot(document.getElementById('root')!).render(<StrictMode><Fixture /></StrictMode>);

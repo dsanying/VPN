@@ -317,7 +317,7 @@ export interface SingBoxEndpoint {
   // 1.14 新增（P4a，sing-box check 实证 alpha.32）：
   //  advertise_tags = Listable[string]（ACL 标签，向 tailnet 广告本机标签；按标签授权场景）。
   //  ssh_server = badoption（bool 或 {enabled:bool}，唯一合法键 enabled）：节点跑 Tailscale SSH（tailnet:22，ACL 控权）。
-  //               FlowZ 以 bool 下发（最简形式，等价 {enabled:true}）。
+  //               暗影VPN 以 bool 下发（最简形式，等价 {enabled:true}）。
   //  relay_server_port = int（作 peer relay 收入站中继的监听端口；唯一的 relay_server_* 字段，无 relay_server 开关）。
   advertise_tags?: string[];
   ssh_server?: boolean;

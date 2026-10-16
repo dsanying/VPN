@@ -4,7 +4,7 @@
  * **为什么需要拦**：浏览器自带 DoH 时，域名解析直接以 HTTPS 打向 DoH 提供商，**不经系统 UDP 53**，
  * 于是绕开 sing-box 的 `hijack-dns` → 绕开 FakeIP 与 DNS 分流。后果是域名级分流（geosite）退化成
  * IP 级、国内外判别失准，且查询内容不再受隧道约束。拦掉它们（发 RST 而非静默丢包）能让浏览器
- * 立即回退到系统 UDP 53，重新进入 FlowZ 的 DNS 体系。
+ * 立即回退到系统 UDP 53，重新进入 暗影VPN 的 DNS 体系。
  *
  * **为什么必须可编辑，而不是内置固定表**：这本质是**黑名单，做不到完备**。Chrome/Firefox 可选的
  * DoH 提供商远不止下面五个（NextDNS / AdGuard / Mullvad / DNS.SB / ControlD…），Firefox 还允许

@@ -19,7 +19,7 @@ jest.mock('../../utils/paths', () => ({
 import { tailscaleStateDir, tailscaleStateExists } from '../tailscale-state';
 
 beforeEach(() => {
-  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-ts-state-'));
+  tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-ts-state-'));
 });
 
 afterEach(() => {

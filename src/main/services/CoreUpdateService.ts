@@ -77,7 +77,7 @@ export interface CoreAutoStatus {
 }
 
 /**
- * 兼容版本带「地板」= 随 App 出厂的内核版本带（编码 major*1000+minor，1.13.13→1013）。出厂内核必经 FlowZ
+ * 兼容版本带「地板」= 随 App 出厂的内核版本带（编码 major*1000+minor，1.13.13→1013）。出厂内核必经 暗影VPN
  * 配置生成器验证，故其版本带即官方背书的兼容下限，**从出厂内核动态推导、不再独立硬编码**（去掉了 manifest 的
  * compatibleCeiling 字段，消除「两字段手动同步」隐患）。有效兼容上限 = max(地板, 当前实跑带, verifiedCeiling)，
  * 见 checkUpdate；跨越有效上限默认不自动更新。
@@ -480,7 +480,7 @@ export class CoreUpdateService {
         await this.copyFileElevatedWindows(path.join(sourceDir, file), path.join(targetDir, file));
       }
     } else {
-      // M2：非 Windows 原子落位——先把全部文件复制到同目录临时名（.flowz-new），全部成功后逐个原子 rename
+      // M2：非 Windows 原子落位——先把全部文件复制到同目录临时名（.shadowvpn-new），全部成功后逐个原子 rename
       // 就位。复制阶段任一失败（磁盘满等）→ 删临时文件、抛错，现役核心目录完全未动（杜绝「新核心 + 旧/坏
       // libcronet」半替换混搭——原逐文件直接覆盖在中途失败时会留下此混搭，而 restoreBackup 仅回滚主二进制救不回）。
       const stagedRenames: Array<{ tmp: string; dest: string }> = [];
@@ -488,7 +488,7 @@ export class CoreUpdateService {
         for (const file of files) {
           this.logManager.addLog('info', `正在复制: ${file}`, 'CoreUpdateService');
           const dest = path.join(targetDir, file);
-          const tmp = `${dest}.flowz-new`;
+          const tmp = `${dest}.shadowvpn-new`;
           await this.copyFileWithRetry(path.join(sourceDir, file), tmp);
           stagedRenames.push({ tmp, dest });
         }
@@ -588,7 +588,7 @@ export class CoreUpdateService {
    *  调用方须先经 helperSupportsInstallCore(st) 确认 helper 支持 install-core。replaceManualCore / rollbackCore / restoreBackup 共用。 */
   private async installSingleCoreViaHelper(src: string): Promise<void> {
     if (!this.helperManager) throw new Error('helper 不可用');
-    const tmpDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'flowz-core-'));
+    const tmpDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'shadowvpn-core-'));
     try {
       fs.copyFileSync(src, path.join(tmpDir, 'sing-box'));
       fs.chmodSync(path.join(tmpDir, 'sing-box'), 0o755);
@@ -1513,7 +1513,7 @@ export class CoreUpdateService {
     try {
       const actual = createHash('sha256').update(fs.readFileSync(bundlePath)).digest('hex');
       if (actual === pin) return null;
-      return `随包出厂内核与官方指纹不符（期望 ${pin.slice(0, 12)}…，实得 ${actual.slice(0, 12)}…）。安装目录内的内核可能已被替换，已拒绝重置；请重新安装 FlowZ。`;
+      return `随包出厂内核与官方指纹不符（期望 ${pin.slice(0, 12)}…，实得 ${actual.slice(0, 12)}…）。安装目录内的内核可能已被替换，已拒绝重置；请重新安装 暗影VPN。`;
     } catch (e) {
       return `无法读取随包出厂内核以校验完整性：${e}`;
     }
@@ -1607,7 +1607,7 @@ export class CoreUpdateService {
       return { ok: true, version, versionLine };
     }
 
-    const tmpCfg = path.join(app.getPath('temp'), `flowz-preflight-${Date.now()}.json`);
+    const tmpCfg = path.join(app.getPath('temp'), `shadowvpn-preflight-${Date.now()}.json`);
     try {
       fs.writeFileSync(tmpCfg, cfgJson, 'utf-8');
       const execFileAsync = require('util').promisify(require('child_process').execFile);

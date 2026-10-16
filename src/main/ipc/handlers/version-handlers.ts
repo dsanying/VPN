@@ -47,7 +47,7 @@ export function registerVersionHandlers(coreUpdateService?: CoreUpdateService): 
         buildCommit: BUILD_COMMIT,
         buildDirty: BUILD_DIRTY,
         singBoxVersion: currentSingBoxVersion,
-        copyright: 'Based on FlowZ © dododook; MIT License',
+        copyright: 'Based on 暗影VPN © dododook; MIT License',
         repositoryUrl: 'https://github.com/dsanying/VPN',
         platform: process.platform,
         arch: process.arch,

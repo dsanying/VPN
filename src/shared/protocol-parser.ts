@@ -138,6 +138,11 @@ export class ProtocolParser implements IProtocolParser {
 
       const protocol = protocolStr as Protocol;
 
+      // hysteria:// 与 wireguard:///wg:// 是分享链接形态：前者经 mihomo 兼容引擎执行（与 Clash
+      // type=hysteria 同路径），后者映射原生 wireguardSettings。
+      if (protocolStr === 'hysteria') return this.parseHysteria1(urlObj);
+      if (protocolStr === 'wireguard' || protocolStr === 'wg') return this.parseWireguard(urlObj);
+
       if (protocol === 'vless') {
         return this.parseVless(urlObj);
       } else if (protocol === 'trojan') {
@@ -1064,6 +1069,11 @@ export class ProtocolParser implements IProtocolParser {
       config.compatibilitySettings.outbound.type === 'ssr'
     )
       return this.generateSsrUrl(config);
+    if (
+      config.compatibilitySettings?.engine === 'mihomo' &&
+      config.compatibilitySettings.outbound.type === 'hysteria'
+    )
+      return this.generateHysteria1Url(config);
     const protocol = config.protocol?.toLowerCase();
 
     if (protocol === 'vless') {
@@ -1088,8 +1098,174 @@ export class ProtocolParser implements IProtocolParser {
       return this.generateSocksUrl(config);
     } else if (protocol === 'http') {
       return this.generateHttpUrl(config);
+    } else if (protocol === 'wireguard') {
+      return this.generateWireguardUrl(config);
     }
     throw new Error(`不支持的协议: ${config.protocol}`);
+  }
+
+  private generateHysteria1Url(config: ServerConfig): string {
+    const raw = config.compatibilitySettings!.outbound;
+    if (typeof raw['auth-str'] !== 'string' || !raw['auth-str'])
+      throw new Error('Hysteria 节点缺少 auth-str，无法导出分享链接');
+    const params = new URLSearchParams();
+    params.set('auth', raw['auth-str']);
+    if (typeof raw.sni === 'string' && raw.sni) params.set('peer', raw.sni);
+    if (raw['skip-cert-verify'] === true) params.set('insecure', '1');
+    for (const [field, param] of [
+      ['up', 'upmbps'],
+      ['down', 'downmbps'],
+      ['obfs', 'obfs'],
+      ['protocol', 'protocol'],
+      ['ports', 'mport'],
+      ['ca-str', 'ca-str'],
+      ['fingerprint', 'fingerprint'],
+    ] as const) {
+      const value = raw[field];
+      if (value !== undefined && value !== '' && value !== null) params.set(param, String(value));
+    }
+    if (Array.isArray(raw.alpn) && raw.alpn.length) params.set('alpn', raw.alpn.join(','));
+    return `hysteria://${config.address}:${config.port}?${params}#${this.encodeShareName(config)}`;
+  }
+
+  private generateWireguardUrl(config: ServerConfig): string {
+    const wg = config.wireguardSettings;
+    if (!wg?.privateKey || !wg.peerPublicKey || !wg.localAddress?.length)
+      throw new Error('WireGuard 节点缺少私钥、对端公钥或本地地址');
+    // 分享链接无法表达 allowInternet/alwaysRouteSubnets/reverseMesh/WARP 设备凭据，拒绝有损导出。
+    if (
+      wg.allowInternet === false ||
+      wg.alwaysRouteSubnets === false ||
+      wg.reverseMesh ||
+      wg.warpDevice
+    )
+      throw new Error('WireGuard 分享链接不支持该节点的组网/WARP 语义，请导出完整配置');
+    const params = new URLSearchParams();
+    params.set('publickey', wg.peerPublicKey);
+    params.set('address', wg.localAddress.join(','));
+    if (wg.preSharedKey) params.set('presharedkey', wg.preSharedKey);
+    if (wg.allowedIPs?.length) params.set('allowedips', wg.allowedIPs.join(','));
+    if (wg.reserved?.length) params.set('reserved', wg.reserved.join(','));
+    if (wg.mtu !== undefined) params.set('mtu', String(wg.mtu));
+    if (wg.persistentKeepalive !== undefined)
+      params.set('keepalive', String(wg.persistentKeepalive));
+    return `wireguard://${encodeURIComponent(wg.privateKey)}@${config.address}:${config.port}?${params}#${this.encodeShareName(config)}`;
+  }
+
+  /**
+   * Hysteria v1 分享链接（v2rayN/NekoBox 形态）：
+   * hysteria://host:port?auth=<str>&peer=<sni>&insecure=1&upmbps=<>&downmbps=<>&alpn=<csv>&obfs=<>&protocol=<udp>&mport=<ranges>#name
+   * mihomo 原生 type=hysteria 出站直传，与 Clash 订阅 hysteria 类型同路径。
+   */
+  private parseHysteria1(url: URL): ServerConfig {
+    const { address, port, params, name } = this.parseBase(url, 443);
+    const auth = params.get('auth');
+    if (!auth) throw new Error('Hysteria URL 缺少 auth');
+    const outbound: Record<string, unknown> = {
+      name,
+      type: 'hysteria',
+      server: address,
+      port,
+      'auth-str': auth,
+    };
+    const sni = params.get('peer') ?? params.get('sni');
+    if (sni) outbound.sni = sni;
+    const insecure = params.get('insecure');
+    if (insecure === '1' || insecure === 'true') outbound['skip-cert-verify'] = true;
+    for (const [param, field] of [
+      ['upmbps', 'up'],
+      ['downmbps', 'down'],
+      ['obfs', 'obfs'],
+      ['protocol', 'protocol'],
+      ['mport', 'ports'],
+      ['ca-str', 'ca-str'],
+      ['fingerprint', 'fingerprint'],
+      ['alpn', 'alpn'],
+    ] as const) {
+      const value = params.get(param);
+      if (!value) continue;
+      if (param === 'alpn')
+        outbound[field] = value
+          .split(',')
+          .map((v) => v.trim())
+          .filter(Boolean);
+      else if (param === 'upmbps' || param === 'downmbps') {
+        const mbps = Number(value);
+        if (!Number.isFinite(mbps) || mbps < 0) throw new Error(`Hysteria ${param} 无效`);
+        outbound[field] = mbps;
+      } else outbound[field] = value;
+    }
+    return {
+      id: randomUUID(),
+      name,
+      protocol: 'custom',
+      address,
+      port,
+      compatibilitySettings: { engine: 'mihomo', outbound },
+    };
+  }
+
+  /**
+   * WireGuard 分享链接（wireguard:///wg://，订阅生态通行形态）：
+   * wireguard://<privateKey>@host:port?publickey=<peer>&address=<csv>&presharedkey=<>&mtu=<>&reserved=<csv>&keepalive=<>&allowedips=<csv>#name
+   */
+  private parseWireguard(url: URL): ServerConfig {
+    const { address, port, params, name } = this.parseBase(url, 51820);
+    const privateKey = decodeURIComponent(url.username || '');
+    const peerPublicKey = params.get('publickey');
+    if (!privateKey || !peerPublicKey) throw new Error('WireGuard URL 缺少私钥或对端公钥');
+    const localAddress = (params.get('address') || '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+    if (!localAddress.length) throw new Error('WireGuard URL 缺少 address 本地隧道地址');
+    const reservedParam = params.get('reserved');
+    const mtuParam = params.get('mtu');
+    const keepaliveParam = params.get('keepalive');
+    const allowed = params.get('allowedips');
+    const reserved = reservedParam
+      ?.split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map((v) => Number(v));
+    if (
+      reserved &&
+      (reserved.length !== 3 || reserved.some((v) => !Number.isInteger(v) || v < 0 || v > 255))
+    )
+      throw new Error('WireGuard reserved 须为三个 0-255 字节');
+    const mtu = mtuParam !== null ? Number(mtuParam) : undefined;
+    if (mtuParam !== null && (!Number.isInteger(mtu) || mtu! < 576 || mtu! > 65535))
+      throw new Error('WireGuard mtu 无效');
+    const keepalive = keepaliveParam !== null ? Number(keepaliveParam) : undefined;
+    if (
+      keepaliveParam !== null &&
+      (!Number.isInteger(keepalive) || keepalive! < 0 || keepalive! > 65535)
+    )
+      throw new Error('WireGuard keepalive 无效');
+    return {
+      id: randomUUID(),
+      name,
+      protocol: 'wireguard',
+      address,
+      port,
+      wireguardSettings: {
+        privateKey,
+        localAddress,
+        peerPublicKey,
+        ...(params.get('presharedkey') ? { preSharedKey: params.get('presharedkey')! } : {}),
+        ...(allowed
+          ? {
+              allowedIPs: allowed
+                .split(',')
+                .map((v) => v.trim())
+                .filter(Boolean),
+            }
+          : {}),
+        ...(reserved ? { reserved } : {}),
+        ...(mtu !== undefined ? { mtu } : {}),
+        ...(keepalive !== undefined ? { persistentKeepalive: keepalive } : {}),
+      },
+    };
   }
 
   /** SSR's established URL-safe Base64 sharing format; native fields execute in mihomo. */

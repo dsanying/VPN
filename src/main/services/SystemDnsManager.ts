@@ -49,7 +49,7 @@ const DNS_CMD_TIMEOUT_MS = 8000;
 /** setDns 的可选入参（平台按需取用；不认识的字段一律忽略）。 */
 export interface SetDnsOptions {
   /**
-   * 本次 TUN 的 IPv4 地址（可带 CIDR）。Linux 用它**按地址**认出 FlowZ 自己的 TUN 链路——按名字认会误伤
+   * 本次 TUN 的 IPv4 地址（可带 CIDR）。Linux 用它**按地址**认出 暗影VPN 自己的 TUN 链路——按名字认会误伤
    * OpenVPN/WireGuard 等同样叫 `tun0` 的链路。缺省 → Linux fail-closed 不接管。
    */
   tunInet4Address?: string | null;
@@ -68,7 +68,7 @@ export interface ISystemDnsManager {
   reconcileDns(): Promise<void>;
   /** 同步还原（关机/退出等紧急场景，读 marker 跨会话还原）。 */
   restoreDnsSync(): void;
-  /** 是否存在「DNS 由 FlowZ 接管」marker（终态清理门控用）。 */
+  /** 是否存在「DNS 由 暗影VPN 接管」marker（终态清理门控用）。 */
   hasMarker(): boolean;
   /**
    * 方案B：读「接管前的内网 LAN 解析器 IP」（私网 IPv4），供 generateDnsConfig 把内网/captive 域名重定向到它
@@ -532,7 +532,7 @@ export class WindowsSystemDns extends SystemDnsBase {
 
   // ── 收口（2026-06-17，真机实证）：Windows 不接管系统 DNS（与 Linux 同口径） ──
   // 根因：① sing-box TUN `strict_route`(WFP) 已在路由层把所有 :53(含 DHCP/系统分配 DNS)强制逼进 TUN → 被 hijack，
-  //   不需要也不应再改系统 DNS 设置项；② `netsh set dnsservers` 需管理员，FlowZ GUI 非提权 → 真机每次 ACCESS DENIED
+  //   不需要也不应再改系统 DNS 设置项；② `netsh set dnsservers` 需管理员，暗影VPN GUI 非提权 → 真机每次 ACCESS DENIED
   //   失败，且 set 前已写 marker → 失败后 marker 卡死 → 每次启动反复「还原 netsh 失败、保留 marker」刷错误日志。
   // 故 setDns/restoreDns/sync 收敛为 no-op（READ 机制保留供方案B）。详见 docs/design/dns-ipv6-takeover.md §A。
   async setDns(): Promise<void> {
@@ -551,7 +551,7 @@ export class WindowsSystemDns extends SystemDnsBase {
 }
 
 /**
- * Linux：经 systemd-resolved 接管 **FlowZ 自己那条 TUN 链路** 的 DNS（P2）。
+ * Linux：经 systemd-resolved 接管 **暗影VPN 自己那条 TUN 链路** 的 DNS（P2）。
  *
  * 为什么需要（不是「auto_route 已经处理了」）：Linux 上的 DNS 劫持全靠 auto_route 装的一条 ip rule
  * `from 0.0.0.0 iif lo lookup 2022`，它的匹配条件是「源地址未确定」——**一旦发起方显式 bind 接口或源地址，

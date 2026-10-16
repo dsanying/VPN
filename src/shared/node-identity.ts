@@ -1,6 +1,21 @@
 import { normalizeCountryCode } from './country';
 import type { ServerConfig, SubscriptionConfig } from './types';
 import { groupServersBySubscription } from './server-grouping';
+import type { NodeProbeDetails } from './speed-test';
+
+/** Exit evidence has priority; gateway location is separately labelled and never masquerades as exit. */
+export function nodeRegionEvidence(detail?: Pick<NodeProbeDetails, 'exit' | 'gateway'>) {
+  if (normalizeCountryCode(detail?.exit?.countryCode))
+    return { source: 'exit' as const, observation: detail!.exit! };
+  if (normalizeCountryCode(detail?.gateway?.countryCode))
+    return { source: 'gateway' as const, observation: detail!.gateway! };
+  return undefined;
+}
+export function nodeRegionCode(
+  detail?: Pick<NodeProbeDetails, 'exit' | 'gateway'>
+): string | undefined {
+  return normalizeCountryCode(nodeRegionEvidence(detail)?.observation.countryCode) ?? undefined;
+}
 
 /** Display identity only: never mutate stored names, routing tags or subscription data. */
 export function nodeRegionSymbol(countryCode: unknown): string {

@@ -10,7 +10,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-lan-exclude-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-lan-exclude-'));
 
 jest.mock('electron', () => ({
   app: {

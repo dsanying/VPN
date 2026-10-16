@@ -67,14 +67,14 @@ export function isPrivateIp(ip: string): boolean {
 }
 
 /**
- * 是否 FlowZ FakeIP 假地址（FAKEIP_INET4_RANGE=198.18.0.0/15 / FAKEIP_INET6_RANGE=2001:2::/48）。
+ * 是否 暗影VPN FakeIP 假地址（FAKEIP_INET4_RANGE=198.18.0.0/15 / FAKEIP_INET6_RANGE=2001:2::/48）。
  * TUN+FakeIP 下系统 DNS 解析公网订阅域名会返回假 IP；它不是真内网——核连接时按域名反查真实解析。
  * **由 fakeip-filter 常量派生（单一真值）**：裸 IP 视为 /32(v4)·/128(v6) 与假段做家族感知交集，改 FAKEIP_INET*_RANGE
  * 本判定自动跟随、不漂移（旧版手抄 0x2001/0x0db8 是双真值——改回私网段忘同步即静默撞墙）。
  * 现两段均在私网空间外、isPrivateIp 本就不拦 → SSRF 豁免对其为冗余兜底；保留是为「未来改回私网假段」时让豁免真实生效
- * （那时 isFlowzFakeIp 经常量自动认出该段、exemptFakeIp 正确放行经代理订阅，避免旧 fc00::/18 被 fc00::/7 误拒的撞墙复发）。
+ * （那时 isShadowvpnFakeIp 经常量自动认出该段、exemptFakeIp 正确放行经代理订阅，避免旧 fc00::/18 被 fc00::/7 误拒的撞墙复发）。
  */
-export function isFlowzFakeIp(ip: string): boolean {
+export function isShadowvpnFakeIp(ip: string): boolean {
   const h = ip.replace(/^\[|\]$/g, '').toLowerCase();
   if (!isIP(h)) return false; // 仅字面 IP（CIDR/主机名 → false）
   // 裸 IP → /32·/128 主机与假段家族感知交集；跨族恒不相交由 cidrsOverlap 保证
@@ -131,7 +131,7 @@ export type DnsLookupAll = (host: string) => Promise<Array<{ address: string }>>
 export async function assertHostAllowed(
   urlObj: URL,
   lookup: DnsLookupAll,
-  // 仅「经代理（proxied socks session）」时豁免 FlowZ FakeIP：经代理出口是远程节点、本机内网不可达，系统 DNS
+  // 仅「经代理（proxied socks session）」时豁免 暗影VPN FakeIP：经代理出口是远程节点、本机内网不可达，系统 DNS
   // 把公网域名解析成 FakeIP（核分配、连接时按域名反查真实）可安全豁免；直连/字面 IP 不豁免（防本机内网 SSRF）。
   exemptFakeIp = false
 ): Promise<void> {
@@ -161,7 +161,7 @@ export async function assertHostAllowed(
   }
   for (const r of resolved) {
     // 仅经代理时豁免 FakeIP（核按域名 socks5h 重解析真实，本机内网不可达）；直连不豁免（域名真实解析内网仍须拦）。
-    if (exemptFakeIp && isFlowzFakeIp(r.address)) continue;
+    if (exemptFakeIp && isShadowvpnFakeIp(r.address)) continue;
     if (isPrivateIp(r.address)) {
       throw new Error(
         `订阅地址解析到本机/内网/link-local，已拒绝: ${urlObj.hostname} → ${r.address}`

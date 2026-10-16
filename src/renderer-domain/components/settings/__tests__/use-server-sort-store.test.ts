@@ -41,7 +41,7 @@ describe('排序偏好持久化（loadServerSortPref / saveServerSortPref）', (
 
   it('读回已持久化偏好（跨重启记忆）', () => {
     (global as any).localStorage = makeLocalStorageMock({
-      'flowz.serverSort': JSON.stringify({ sortKey: 'protocol', sortOrder: 'desc' }),
+      'shadow-vpn.serverSort': JSON.stringify({ sortKey: 'protocol', sortOrder: 'desc' }),
     });
     expect(loadServerSortPref()).toEqual({ sortKey: 'protocol', sortOrder: 'desc' });
   });
@@ -53,13 +53,13 @@ describe('排序偏好持久化（loadServerSortPref / saveServerSortPref）', (
   });
 
   it('损坏 JSON → 回落默认', () => {
-    (global as any).localStorage = makeLocalStorageMock({ 'flowz.serverSort': '{bad json' });
+    (global as any).localStorage = makeLocalStorageMock({ 'shadow-vpn.serverSort': '{bad json' });
     expect(loadServerSortPref().sortKey).toBe('name');
   });
 
   it('非法字段值 → 回落默认', () => {
     (global as any).localStorage = makeLocalStorageMock({
-      'flowz.serverSort': JSON.stringify({ sortKey: 'bogus', sortOrder: 'sideways' }),
+      'shadow-vpn.serverSort': JSON.stringify({ sortKey: 'bogus', sortOrder: 'sideways' }),
     });
     expect(loadServerSortPref().sortKey).toBe('name');
   });
@@ -77,7 +77,7 @@ describe('useServerSortStore setter', () => {
     useServerSortStore.getState().setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
     expect(useServerSortStore.getState().sortKey).toBe('latency');
     expect(useServerSortStore.getState().sortOrder).toBe('desc');
-    expect(JSON.parse(mock._store['flowz.serverSort'])).toEqual({
+    expect(JSON.parse(mock._store['shadow-vpn.serverSort'])).toEqual({
       sortKey: 'latency',
       sortOrder: 'desc',
     });

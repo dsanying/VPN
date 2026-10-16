@@ -13,7 +13,7 @@ import { resolveUpdateProxyTarget } from '../../shared/update-proxy';
  * 复用 SubscriptionService 的 getDirectSession/getProxiedSession 成熟模式（懒加载 + 端口变化重设——
  * update-in 端口每次核启动重新分配，故必须按端口比对重 pin）。
  * Phase 1b 已删 default session 的 http 入站 pin；renderer 外部图片（图标库/自定义图标/国旗）亦经
- * flowz-icon:// 协议下沉本类 update-in，default session 至此无 FlowZ 外部请求消费者（WarpService 走 node
+ * shadowvpn-icon:// 协议下沉本类 update-in，default session 至此无 暗影VPN 外部请求消费者（WarpService 走 node
  * https 自成一路），回归 Electron 默认跟随系统代理。
  */
 export class UpdateNetwork {
@@ -24,7 +24,7 @@ export class UpdateNetwork {
   /** 强制直连会话（绕开 default session 的代理 pin）。 */
   private async getDirectSession(): Promise<Session> {
     if (this.directSession) return this.directSession;
-    const s = session.fromPartition('flowz-update-direct');
+    const s = session.fromPartition('shadowvpn-update-direct');
     await s.setProxy({ mode: 'direct' });
     this.directSession = s;
     return s;
@@ -33,7 +33,7 @@ export class UpdateNetwork {
   /** 经代理会话：pin 到本机 socks 入站（update-in 端口）。端口变化重设；loopback 隐式 bypass。 */
   private async getProxiedSession(port: number): Promise<Session> {
     if (this.proxiedSession && this.proxiedPort === port) return this.proxiedSession;
-    const s = this.proxiedSession ?? session.fromPartition('flowz-update-proxied');
+    const s = this.proxiedSession ?? session.fromPartition('shadowvpn-update-proxied');
     await s.setProxy({ proxyRules: `socks5://127.0.0.1:${port}` });
     this.proxiedSession = s;
     this.proxiedPort = port;

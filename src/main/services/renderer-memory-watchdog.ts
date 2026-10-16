@@ -13,12 +13,12 @@ import type { ProcessMetricLike } from '../../shared/process-metrics';
 
 /**
  * 默认阈值 1536 MB = 1.5 GB。远超正常渲染工作集（~250 MB），是「防 2GB」的兜底红线而非日常门——高阈值确保
- * 只在真正失控时触发，隐藏态回收对用户透明。可经 FLOWZ_RENDERER_RSS_LIMIT_MB 覆盖（测试降阈值触发两分支）。
+ * 只在真正失控时触发，隐藏态回收对用户透明。可经 SHADOWVPN_RENDERER_RSS_LIMIT_MB 覆盖（测试降阈值触发两分支）。
  */
 export const DEFAULT_RENDERER_RSS_LIMIT_MB = 1536;
 
 /**
- * 解析 FLOWZ_RENDERER_RSS_LIMIT_MB 环境覆盖。非正整数（NaN / 空 / 0 / 负 / 小数 / 非数字）一律回退默认——
+ * 解析 SHADOWVPN_RENDERER_RSS_LIMIT_MB 环境覆盖。非正整数（NaN / 空 / 0 / 负 / 小数 / 非数字）一律回退默认——
  * 防御：绝不让污染的环境变量把阈值降到 0（每轮误触发回收）或抬成 NaN（永不触发、兜底失效）。
  */
 export function parseRendererRssLimitMb(env: string | undefined): number {

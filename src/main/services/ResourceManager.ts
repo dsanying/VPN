@@ -157,7 +157,7 @@ export class ResourceManager {
   /**
    * 获取随包内置的 Linux 提权 helper 二进制路径（与 sing-box 同目录，安装期的**复制源**）。
    * 生产：<resources>/linux/shadowvpn-helper-linux；开发：resources/linux[-${arch}]/shadowvpn-helper-linux。仅 Linux 有意义。
-   * 安装时由 LinuxServiceHelper 复制到 /opt/FlowZ/shadowvpn-helper 并注册为 systemd system service。
+   * 安装时由 LinuxServiceHelper 复制到 /opt/暗影VPN/shadowvpn-helper 并注册为 systemd system service。
    */
   getLinuxHelperPath(): string {
     return path.join(this.getPlatformResourceDir(), 'shadowvpn-helper-linux');
@@ -393,7 +393,7 @@ export class ResourceManager {
       if (force && deps?.installCore) {
         try {
           const os = require('os') as typeof import('os');
-          const seedDir = path.join(os.tmpdir(), 'flowz-core-reseed');
+          const seedDir = path.join(os.tmpdir(), 'shadowvpn-core-reseed');
           await fs.mkdir(seedDir, { recursive: true });
           await fs.copyFile(this.getBundledSingBoxPath(), path.join(seedDir, 'sing-box'));
           const r = await deps.installCore(seedDir);
@@ -420,7 +420,7 @@ export class ResourceManager {
       let seedDir: string | null = null;
       try {
         const os = require('os') as typeof import('os');
-        seedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'flowz-core-reseed-'));
+        seedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'shadowvpn-core-reseed-'));
         const seedBin = path.join(seedDir, 'sing-box');
         await fs.copyFile(this.getBundledSingBoxPath(), seedBin);
         await fs.chmod(seedBin, 0o755);

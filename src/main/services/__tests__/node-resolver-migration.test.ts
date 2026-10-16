@@ -12,7 +12,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-node-resolver-test-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-node-resolver-test-'));
 jest.mock('electron', () => ({
   app: {
     getPath: () => TMP,
@@ -76,7 +76,7 @@ const baseDns = (over: Record<string, unknown> = {}) =>
 describe('A. migrateNodeResolver（经 loadConfig）', () => {
   let dir: string;
   beforeAll(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-node-resolver-migrate-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-node-resolver-migrate-'));
   });
   const write = (config: UserConfig): string => {
     const p = path.join(dir, `cfg-${Math.random().toString(36).slice(2)}.json`);

@@ -209,7 +209,7 @@ export class SubscriptionService {
 
     // H1+H2：初始 URL + 每跳 Location 都过 SSRF guard，收口到 safeRedirectFetch（首跳 + 逐跳复检防 redirect
     // 跳到内网的 SSRF 绕过）。先 parse 校验协议（保留订阅特有「订阅地址协议不支持」文案 + 脱敏），再交 helper。
-    // 仅实际走 proxied（viaProxiedSession）才豁免 FlowZ FakeIP（系统 DNS 把公网域名解析成假 IP、经核反查真实、
+    // 仅实际走 proxied（viaProxiedSession）才豁免 暗影VPN FakeIP（系统 DNS 把公网域名解析成假 IP、经核反查真实、
     // 本机内网不可达）；直连/端口回退不豁免，防域名真实解析到本机内网的 SSRF。helper 的安全拒绝（含「重定向
     // 次数超过上限」「本机/内网」）按原文案冒泡给 UI。
     parse(url); // 初始 URL 协议校验（http/https）

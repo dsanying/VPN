@@ -71,7 +71,7 @@ function readMarkerFile(): SystemDnsMarker | null {
 }
 
 beforeEach(() => {
-  tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-dns-reconcile-'));
+  tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-dns-reconcile-'));
 });
 afterEach(() => {
   fs.rmSync(tmpUserData, { recursive: true, force: true });

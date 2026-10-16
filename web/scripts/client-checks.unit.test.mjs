@@ -20,3 +20,12 @@ test('first failure stops dependent work and missing exit status never becomes s
  assert.throws(()=>runChecks([],()=>0),/No client checks/);
  assert.throws(()=>runChecks(checks.slice(0,1),()=>null),/failed/);
 });
+
+test('affected checks follow input dependencies and unknown/shared changes keep the full quick gate',()=>{
+ assert.deepEqual(selectChecks(['--affected'],['docs/notes.md']),[]);
+ const local=selectChecks(['--affected'],['web/src/pages/Example/index.tsx']);
+ assert.ok(local.some(check=>check.id==='query-contract'));assert.ok(local.some(check=>check.id==='types'));
+ assert.ok(!local.some(check=>check.id==='dependency-builds'));
+ assert.deepEqual(selectChecks(['--affected'],['web/scripts/client-checks.mjs']),checks.filter(check=>check.phase==='static'));
+ assert.deepEqual(selectChecks(['--affected']),checks.filter(check=>check.phase==='static'));
+});

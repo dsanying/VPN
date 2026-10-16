@@ -9,7 +9,7 @@ import {
   useTailscaleLoginCacheStore,
 } from '../use-tailscale-login-cache-store';
 
-const KEY = 'flowz.tailscaleLoginCache';
+const KEY = 'shadow-vpn.tailscaleLoginCache';
 
 function makeLocalStorageMock(seed: Record<string, string> = {}) {
   const store: Record<string, string> = { ...seed };

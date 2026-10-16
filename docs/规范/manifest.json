@@ -19,6 +19,31 @@
       "cwd": "web"
     },
     {
+      "id": "expanded",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-expanded.mjs",
+        "--project",
+        ".",
+        "--source",
+        "src",
+        "--source",
+        "update-popup"
+      ],
+      "cwd": "web"
+    },
+    {
+      "id": "query-contract",
+      "phase": "static",
+      "command": [
+        "node",
+        "scripts/check-query-contract.mjs",
+        "."
+      ],
+      "cwd": "web"
+    },
+    {
       "id": "tokens",
       "phase": "static",
       "command": [
@@ -67,11 +92,9 @@
         "--project",
         ".",
         "--source",
-        "src/pages",
+        "src",
         "--source",
-        "src/components/vpn",
-        "--source",
-        "src/utils"
+        "update-popup"
       ],
       "cwd": "web"
     },
@@ -160,7 +183,6 @@
     }
   ],
   "nativeGate": "scripts/check-client-platforms.mjs --release",
-  "sourceAudit": "docs/规范/前端实现替换记录.md",
   "browserMatrix": {
     "widths": [
       320,

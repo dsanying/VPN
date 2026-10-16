@@ -848,9 +848,9 @@ if [ ! -x "$COREDIR/sing-box" ]; then
   xattr -cr "$COREDIR" 2>/dev/null || true
   codesign --force --sign - "$COREDIR/sing-box" 2>/dev/null || true
 fi
-cat > "$PLIST" <<'FLOWZ_PLIST_EOF'
+cat > "$PLIST" <<'SHADOWVPN_PLIST_EOF'
 ${plist}
-FLOWZ_PLIST_EOF
+SHADOWVPN_PLIST_EOF
 chown root:wheel "$PLIST"; chmod 644 "$PLIST"
 # launchctl enable 清的是 launchd override 层（/var/db/com.apple.xpc.launchd/disabled.*.plist），
 # **不是** BTM 层（「登录项与扩展」开关，存 /var/db/com.apple.backgroundtaskmanagement/）。

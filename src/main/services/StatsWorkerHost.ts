@@ -135,7 +135,7 @@ export class StatsWorkerHost implements StatsHost {
   private spawn(): void {
     if (this.disposed) return;
     try {
-      const w = utilityProcess.fork(this.opts.workerPath, [], { serviceName: 'flowz-stats' });
+      const w = utilityProcess.fork(this.opts.workerPath, [], { serviceName: 'shadowvpn-stats' });
       this.worker = w;
       w.on('message', (msg: WorkerToHostMessage) => this.onWorkerMessage(msg));
       w.on('exit', (code: number) => this.onWorkerExit(code));

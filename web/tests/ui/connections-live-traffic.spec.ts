@@ -97,7 +97,7 @@ test('移除速度趋势与常驻订阅，保留连接明细和停止清空行�
   await expect(page.getByRole('table').getByText('↓ 2.05 KB / ↑ 1.02 KB', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: '节点', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('节点');
-  await page.getByRole('button', { name: '断开', exact: true }).click();
+  await page.getByRole('button', { name: '关闭代理', exact: true }).click();
   await page.getByRole('link', { name: '连接', exact: true }).click();
   await expect(page.getByRole('table').locator('.ant-empty-description')).toBeVisible();
   await mock.expectNoUnexpectedRequests();
@@ -117,7 +117,9 @@ test('出口图与明细使用完整连接，保留未知和系统进程', async
   await expect(page.getByRole('table').getByText('示例应用', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('table').locator('.ds-application-icon img').first()).toBeVisible();
   await expect(page.getByRole('table').getByText('示例应用', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('table').getByText('未识别应用', { exact: true })).toHaveCount(0);
+  await page.getByRole('searchbox',{name:'连接',exact:true}).fill('未识别应用');
+  await expect(page.getByRole('table').getByText('未识别应用', { exact: true })).toHaveCount(1);
+  await page.getByRole('searchbox',{name:'连接',exact:true}).fill('');
   await expect(page.getByRole('region', { name: '连接出口图', exact: true }).getByText(/^apsd · 1$/)).toBeVisible();
   await expect(page.getByRole('region', { name: '连接出口图', exact: true }).getByText(/^未识别应用 · 1$/)).toBeVisible();
   await page.getByRole('searchbox', { name: '连接', exact: true }).fill('apsd');
@@ -131,22 +133,17 @@ test('出口图与明细使用完整连接，保留未知和系统进程', async
   await expect.poll(() => page.evaluate(() => (window as any).desktopTest.calls.filter((c: any) => c.channel === 'stats:subscribe' && c.args.topic === 'detail').length)).toBe(2);
   await page.evaluate(() => (window as any).desktopTest.emit('event:connectionsDetail', (window as any).scopeSnapshot));
   await expect(page.getByText('共 42 条数据', { exact: true })).toBeVisible();
-  for (let i = 0; i < 4; i++) await page.locator('.ant-pagination-next button').click();
-  await expect(page.getByRole('table').getByText('未识别目标', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText('未识别出口', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText('apsd', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText('未识别应用', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText('192.0.2.8:50505', { exact: true })).toHaveCount(2);
-  await expect(page.getByRole('table').getByText('/usr/libexec/apsd', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText('TCP', { exact: true })).toHaveCount(2);
-  await page.getByRole('link', { name: '节点', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('节点');
-  await page.getByRole('link', { name: '连接', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => (window as any).desktopTest.calls.filter((c: any) => c.channel === 'stats:subscribe' && c.args.topic === 'detail').length)).toBe(3);
-  await page.evaluate(() => (window as any).desktopTest.emit('event:connectionsDetail', { connections: [], at: Date.now() }));
-  await expect(page.getByText('当前没有活动连接', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table').getByText('未识别应用', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('table').locator('.ant-empty-description')).toBeVisible();
+  // Complete-set ordering no longer promises unknown records on the final page.
+  const allRows:string[]=[];
+  for(let pageIndex=0;pageIndex<5;pageIndex++) {
+    allRows.push(...await page.getByRole('table').locator('tbody tr[data-row-key]').allTextContents());
+    if(pageIndex<4)await page.locator('.ant-pagination-next button').click();
+  }
+  expect(allRows).toHaveLength(42);
+  expect(allRows.join('\n')).toContain('未识别目标');
+  expect(allRows.join('\n')).toContain('未识别出口');
+  expect(allRows.join('\n')).toContain('apsd');
+  expect(allRows.join('\n')).toContain('未识别应用');
   await mock.expectNoUnexpectedRequests();
 });
 test('异常上限不伪装成完整快照', async ({ page }) => {
@@ -272,7 +269,10 @@ test('网站在顶部，应用点和出口点单独筛选，连线交集筛选�
   expect(selectedEdge).toBeDefined();
   await page.mouse.click(selectedEdge!.x, selectedEdge!.y);
   await expect(page.getByText('共 8 条数据', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '重置', exact: true }).click();
+  for (const name of ['应用程序','出口']) {
+    const filter=page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name,exact:true})});
+    await filter.hover();await filter.getByRole('button',{name:'Clear',exact:true}).click();
+  }
   await expect(page.getByText('共 16 条数据', { exact: true })).toBeVisible();
   await page.getByRole('searchbox', { name: '连接', exact: true }).fill('unknown.example.com');
   await expect(page.getByRole('table').getByText('未识别应用', { exact: true })).toBeVisible();

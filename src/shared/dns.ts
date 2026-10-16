@@ -32,7 +32,7 @@ export const BOOTSTRAP_DIRECT_DNS_IPS: readonly string[] = [
 ];
 
 /**
- * TUN 模式下 FlowZ 强制接管的「受控系统 DNS IP」。on-link 的 LAN/ISP DNS 不进 TUN → hijack-dns 看不到，
+ * TUN 模式下 暗影VPN 强制接管的「受控系统 DNS IP」。on-link 的 LAN/ISP DNS 不进 TUN → hijack-dns 看不到，
  * 故 TUN 启动时把系统 DNS 改为此 IP，使其经 TUN 默认路由被 hijack（真进 sing-box → FakeIP/远程解析）。
  * 选择三要求：① 非 on-link（经 TUN 默认路由）② 不在 BOOTSTRAP_DIRECT_DNS_IPS（否则被直连规则放行、逃逸 hijack）
  * ③ 真实可路由（崩溃未还原也降级为真 DNS、不断网）。8.8.8.8 三者皆满足；223.5.5.5 因②不可用。

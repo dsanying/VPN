@@ -77,11 +77,11 @@ describe('LinuxServiceHelper', () => {
       expect(s).toContain('systemctl enable --now shadowvpn-helper.service');
       // 第一性不变量
       expect(s).not.toContain('setcap'); // 能力挂进程 ambient，不 setcap 二进制
-      expect(s).not.toContain('/opt/FlowZ'); // 避开 electron-builder deb 应用目录
+      expect(s).not.toContain('/opt/暗影VPN'); // 避开 electron-builder deb 应用目录
       expect(s.toLowerCase()).not.toContain('token'); // SO_PEERCRED 鉴权，无 token
     });
 
-    it('uninstall：disable --now + 删受管安装根/状态/运行目录（对称、不碰 /opt/FlowZ）', () => {
+    it('uninstall：disable --now + 删受管安装根/状态/运行目录（对称、不碰 /opt/暗影VPN）', () => {
       const s = helper.buildUninstallScript();
       expect(s).toContain('systemctl disable --now shadowvpn-helper.service');
       expect(s).toContain('/etc/systemd/system/shadowvpn-helper.service');
@@ -89,7 +89,7 @@ describe('LinuxServiceHelper', () => {
       expect(s).toContain('/var/lib/shadowvpn');
       expect(s).toContain('/run/shadowvpn');
       expect(s).toContain('systemctl daemon-reload');
-      expect(s).not.toContain('/opt/FlowZ');
+      expect(s).not.toContain('/opt/暗影VPN');
     });
   });
 
@@ -111,7 +111,7 @@ describe('LinuxServiceHelper', () => {
     });
 
     it('route*/restoreDefaultRoute 为 no-op（Linux 不需要）', async () => {
-      await expect(helper.routeAdd('flowz-tun', ['10.0.0.0/8'])).resolves.toEqual({
+      await expect(helper.routeAdd('shadowvpn-tun', ['10.0.0.0/8'])).resolves.toEqual({
         ok: false,
         error: 'unsupported',
       });
@@ -127,7 +127,7 @@ describe('LinuxServiceHelper', () => {
       const os = require('os');
       const fsSync = require('fs');
       const pathMod = require('path');
-      const dir = fsSync.mkdtempSync(pathMod.join(os.tmpdir(), 'flowz-installcore-'));
+      const dir = fsSync.mkdtempSync(pathMod.join(os.tmpdir(), 'shadowvpn-installcore-'));
       fsSync.writeFileSync(pathMod.join(dir, 'sing-box'), 'CORE-BYTES');
       const helper = new LinuxServiceHelper();
       const sent: string[][] = [];

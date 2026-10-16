@@ -7,7 +7,7 @@ import * as os from 'os';
 import * as fsSync from 'fs';
 import * as path from 'path';
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-orphan-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-orphan-'));
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
   BrowserWindow: class {},

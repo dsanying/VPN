@@ -2,7 +2,7 @@
  * Xray / v2ray JSON 配置 → ServerConfig 解析（纯模块，刻意不 import electron，可直接 jest 单测）。
  *
  * 与 sing-box JSON 的差异：xray outbound 用 `protocol` + `settings`（vnext/servers）+ `streamSettings`，
- * 而 sing-box 用扁平 `type` + 同级字段。本模块只覆盖 FlowZ 已建模的主流协议；其余协议跳过并报告
+ * 而 sing-box 用扁平 `type` + 同级字段。本模块只覆盖 暗影VPN 已建模的主流协议；其余协议跳过并报告
  * （不透传 custom：custom 落点是 sing-box outbound schema，xray schema 不兼容）。
  *
  * 逐 outbound try/catch，单条失败不影响其它（对齐 ClashSubscriptionParser.parseClashProxies）。

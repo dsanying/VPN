@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 交叉编译 FlowZ 提权 helper（Go）：macOS（helper/ + helper-rpc/，JSON-RPC 标准库，两 mac 架构）+ Windows（helper-win/，winio+x-sys，amd64）
+# 交叉编译 暗影VPN 提权 helper（Go）：macOS（helper/ + helper-rpc/，JSON-RPC 标准库，两 mac 架构）+ Windows（helper-win/，winio+x-sys，amd64）
 # + Linux（helper-linux/ + helper-rpc/，JSON-RPC 标准库，宿主架构）。
 # 产物随 electron-builder extraResources（resources/mac-${arch} → mac；resources/win；resources/linux → linux）打进 app 包。
 set -euo pipefail

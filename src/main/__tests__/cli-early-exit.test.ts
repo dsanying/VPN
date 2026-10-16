@@ -47,7 +47,7 @@ describe('resolveCliEarlyExit', () => {
 describe('cliHelpText', () => {
   it('含版本 + 用法 + flag 说明', () => {
     const t = cliHelpText('4.1.7');
-    expect(t).toContain('FlowZ 4.1.7');
+    expect(t).toContain('暗影VPN 4.1.7');
     expect(t).toContain('Usage:');
     expect(t).toContain('--version');
     expect(t).toContain('--help');
@@ -124,7 +124,7 @@ describe('runCliEarlyExit（IO 注入编排）', () => {
   it('version：stdout 写版本 + exit(0)，返 true，不碰 stderr/语言', () => {
     const { io, calls } = baseIo({ argv: ['-V'] });
     expect(runCliEarlyExit(io)).toBe(true);
-    expect(calls.writeStdout).toHaveBeenCalledWith('FlowZ 9.9.9\n');
+    expect(calls.writeStdout).toHaveBeenCalledWith('暗影VPN 9.9.9\n');
     expect(calls.exit).toHaveBeenCalledWith(0);
     expect(calls.writeStderr).not.toHaveBeenCalled();
     expect(calls.setLanguage).not.toHaveBeenCalled();

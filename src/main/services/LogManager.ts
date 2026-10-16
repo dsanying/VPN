@@ -1,3 +1,4 @@
+import { currentOperation, type OperationContext } from './OperationContext';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
@@ -42,6 +43,7 @@ export class LogManager extends EventEmitter implements ILogManager {
   private writeErrors = 0;
   private memoryEvicted = 0;
   private uiDropped = 0;
+  private rendererDropped = 0;
   private sequence = 0;
   private readonly sessionId = randomUUID();
   private readonly sessionStartedAt = new Date().toISOString();
@@ -68,12 +70,20 @@ export class LogManager extends EventEmitter implements ILogManager {
     return this.currentLogLevel;
   }
 
-  addLog(level: LogLevel, message: string, source: string, stack?: string): void {
-    if (this.logLevelPriority[level] < this.logLevelPriority[this.currentLogLevel]) return;
+  addLog(
+    level: LogLevel,
+    message: string,
+    source: string,
+    stack?: string,
+    context?: OperationContext
+  ): void {
+    // The display threshold must never erase diagnostic evidence from disk.
+    const visible = this.logLevelPriority[level] >= this.logLevelPriority[this.currentLogLevel];
     const safeMessage = redactLogText(message);
     const sequence = ++this.sequence;
     const event = identifyLogMessage(safeMessage);
     const entry: LogEntry = {
+      ...(context ?? currentOperation()),
       id: `${this.sessionId}:${sequence}`,
       sessionId: this.sessionId,
       sequence,
@@ -104,7 +114,7 @@ export class LogManager extends EventEmitter implements ILogManager {
       this.logs.shift();
       this.memoryEvicted++;
     }
-    this.emit('log', entry);
+    if (visible) this.emit('log', entry);
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
@@ -124,12 +134,16 @@ export class LogManager extends EventEmitter implements ILogManager {
   getDroppedDueToBackpressure(): number {
     return this.droppedDueToBackpressure;
   }
+  recordRendererDrop(): void {
+    this.rendererDropped++;
+  }
   recordUiDrop(count: number): void {
     this.uiDropped += count;
   }
   getDiagnostics() {
     return {
       format: 'jsonl-v1',
+      persistenceLevel: 'debug',
       sessionId: this.sessionId,
       sessionStartedAt: this.sessionStartedAt,
       accepted: this.sequence,
@@ -140,6 +154,7 @@ export class LogManager extends EventEmitter implements ILogManager {
       droppedWrites: this.droppedDueToBackpressure,
       criticalDropped: this.criticalDropped,
       uiDropped: this.uiDropped,
+      rendererDropped: this.rendererDropped,
       writeErrors: this.writeErrors,
       lastWriteError: this.lastWriteError,
       level: this.currentLogLevel,
@@ -148,7 +163,10 @@ export class LogManager extends EventEmitter implements ILogManager {
     };
   }
   getLogs(limit?: number): LogEntry[] {
-    return limit && limit > 0 ? this.logs.slice(-limit) : [...this.logs];
+    const visible = this.logs.filter(
+      (entry) => this.logLevelPriority[entry.level] >= this.logLevelPriority[this.currentLogLevel]
+    );
+    return limit && limit > 0 ? visible.slice(-limit) : visible;
   }
 
   async clearLogs(): Promise<void> {
@@ -177,7 +195,7 @@ export class LogManager extends EventEmitter implements ILogManager {
     await fs.appendFile(
       this.logFilePath,
       JSON.stringify({ schema: 1, pid: process.pid, ...entry }) + '\n',
-      'utf-8'
+      { encoding: 'utf-8', mode: 0o600 }
     );
   }
   private async rotateLogIfNeeded(): Promise<void> {

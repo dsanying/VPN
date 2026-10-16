@@ -99,6 +99,34 @@ export class SpeedTestService {
     string,
     { target?: string; reason?: string; exit?: NodeProbeDetails['exit'] }
   >();
+  private readonly measurementListeners = new Set<
+    (
+      id: string,
+      value: { target?: string; reason?: string; exit?: NodeProbeDetails['exit'] }
+    ) => void
+  >();
+  onNodeMeasurement(
+    listener: (
+      id: string,
+      value: { target?: string; reason?: string; exit?: NodeProbeDetails['exit'] }
+    ) => void
+  ): () => void {
+    this.measurementListeners.add(listener);
+    return () => {
+      this.measurementListeners.delete(listener);
+    };
+  }
+  private publishMeasurement(id: string): void {
+    const value = this.nodeMeasurements.get(id);
+    if (!value) return;
+    for (const listener of this.measurementListeners) {
+      try {
+        listener(id, value);
+      } catch {
+        /* A detached view cannot change a completed probe. */
+      }
+    }
+  }
   private regionDetection = false;
   enableRegionDetection(): void {
     this.regionDetection = true;
@@ -590,6 +618,9 @@ export class SpeedTestService {
           if (runCtx) runCtx.outcome = 'interrupted';
           return;
         }
+        this.nodeMeasurements.set(u.server.id, { ...this.measuredTargets.get(port) });
+        results.set(u.server.id, latency);
+        if (latency !== null) report(u.server.id, latency);
         const exit =
           latency !== null && this.regionDetection ? await this.detectExit(port) : undefined;
         if (this.regionDetection && this.getCoreGeneration() !== gen0) {
@@ -597,7 +628,7 @@ export class SpeedTestService {
           return;
         }
         this.nodeMeasurements.set(u.server.id, { ...this.measuredTargets.get(port), exit });
-        results.set(u.server.id, latency);
+        this.publishMeasurement(u.server.id);
         if (latency === null) {
           noteNodeFail(reason ?? 'unknown', u.server, u.tag); // ③ 记失败模式
           report(u.server.id, latency);
@@ -614,7 +645,6 @@ export class SpeedTestService {
           }
           return;
         }
-        report(u.server.id, latency);
       });
       resolvedIpProbes.push(...(await Promise.all(resolvedIpProbePromises)));
     } catch (error) {
@@ -798,6 +828,9 @@ export class SpeedTestService {
           runCtx.outcome = 'interrupted';
           return;
         }
+        this.nodeMeasurements.set(node.id, { ...this.measuredTargets.get(port) });
+        results.set(node.id, latency);
+        if (latency !== null) report(node.id, latency);
         const exit =
           latency !== null && this.regionDetection ? await this.detectExit(port) : undefined;
         if (this.regionDetection && this.getCoreGeneration() !== gen0) {
@@ -805,7 +838,7 @@ export class SpeedTestService {
           return;
         }
         this.nodeMeasurements.set(node.id, { ...this.measuredTargets.get(port), exit });
-        results.set(node.id, latency);
+        this.publishMeasurement(node.id);
         if (latency === null) {
           noteNodeFail(reason ?? 'unknown', node, tag);
           report(node.id, null);
@@ -823,7 +856,6 @@ export class SpeedTestService {
           }
           return;
         }
-        report(node.id, latency);
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

@@ -1,7 +1,7 @@
 /**
  * TUN 接口 IPv4 地址的冲突避让（issue #324）。
  *
- * 背景：FlowZ 的 TUN 地址长期硬编码 `172.19.0.1`（Windows /16、macOS /30），起核前不做任何冲突检测。
+ * 背景：暗影VPN 的 TUN 地址长期硬编码 `172.19.0.1`（Windows /16、macOS /30），起核前不做任何冲突检测。
  * #324 报告者机器上有一张残留的 TAP-Windows 适配器（Disconnected）被人工配了 `172.19.0.1/29`，Windows
  * 要求单播地址在同一 network compartment 内唯一，sing-box 给自家虚拟网卡配同一地址时
  * `CreateUnicastIpAddressEntry` 返回 ERROR_OBJECT_ALREADY_EXISTS → TUN inbound 起不来 → 进程 FATAL 自杀

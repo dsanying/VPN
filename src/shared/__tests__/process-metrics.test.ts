@@ -43,12 +43,12 @@ describe('summarizeProcessMetrics', () => {
   it('cpu 四舍五入整数；label 取 name 优先、其次 serviceName、都无则省略', () => {
     // 优先级坐实自本机 xvfb 探针实测 getAppMetrics() 真实字段（非猜测）：Electron utilityProcess.fork
     // 传入的自定义 serviceName 选项最终落在 `.name`，而 `.serviceName` 恒是 Chromium 通用接口名
-    // （如 FlowZ 实际 stats worker 的 name='flowz-stats' / serviceName='node.mojom.NodeService'）——
+    // （如 暗影VPN 实际 stats worker 的 name='shadowvpn-stats' / serviceName='node.mojom.NodeService'）——
     // 对所有 Electron 自 fork 的 utilityProcess 都是这个泛型值，分不出具体是哪一个，故不能优先取它。
     const s = summarizeProcessMetrics([
       proc('Utility', 1, 10 * MB_IN_KB, {
         cpu: 53.7,
-        name: 'flowz-stats',
+        name: 'shadowvpn-stats',
         serviceName: 'node.mojom.NodeService',
       }),
       proc('Utility', 2, 10 * MB_IN_KB, { serviceName: 'network.mojom.NetworkService' }),
@@ -56,7 +56,7 @@ describe('summarizeProcessMetrics', () => {
     ]);
     const byPid = Object.fromEntries(s.rows.map((r) => [r.pid, r]));
     expect(byPid[1].cpuPercent).toBe(54);
-    expect(byPid[1].label).toBe('flowz-stats'); // name 优先（FlowZ 自己 fork 的 worker，有辨识度）
+    expect(byPid[1].label).toBe('shadowvpn-stats'); // name 优先（暗影VPN 自己 fork 的 worker，有辨识度）
     expect(byPid[2].label).toBe('network.mojom.NetworkService'); // 无 name → serviceName 兜底
     expect(byPid[3].label).toBeUndefined(); // 都无
   });

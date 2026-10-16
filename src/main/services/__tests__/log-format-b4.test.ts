@@ -62,7 +62,7 @@ describe('Structured application log persistence', () => {
     ]);
     expect(appendCalls.map((line) => JSON.parse(line).sequence)).toEqual([1, 2, 3, 4, 5, 6]);
   });
-  it('filters before assigning sequence and protects credentials before every sink', async () => {
+  it('display filters preserve durable sequence and protect credentials before every sink', async () => {
     manager.addLog('debug', 'filtered', 'Example');
     manager.addLog(
       'error',
@@ -72,7 +72,9 @@ describe('Structured application log persistence', () => {
     );
     await manager.flush();
     expect(manager.getLogs()).toHaveLength(1);
-    expect(manager.getLogs()[0].sequence).toBe(1);
+    expect(manager.getLogs()[0].sequence).toBe(2);
+    expect(appendCalls.map((line) => JSON.parse(line).sequence)).toEqual([1, 2]);
+    expect(JSON.parse(appendCalls[0]).message).toBe('filtered');
     expect(JSON.stringify(manager.getLogs())).not.toMatch(/fake-secret|fake-authorization/);
     expect(appendCalls[0]).not.toMatch(/fake-secret|fake-authorization/);
   });

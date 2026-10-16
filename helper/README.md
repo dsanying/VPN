@@ -1,4 +1,4 @@
-# FlowZ macOS 提权 helper
+# ShadowVPN macOS 提权 helper
 
 **简体中文** · [English](README.en.md)
 

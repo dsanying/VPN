@@ -2,7 +2,7 @@
  * sing-box 启动失败 FATAL 行的解析与分类（issue #324）。
  *
  * 背景：sing-box 启动失败的 FATAL 只写 stderr，**永不进 config 里 `log.output` 指定的文件**（`log/export.go`
- * 的包级 std logger 在 init() 固定绑 os.Stderr，cmd_run.go 的 run() 出错走它）。FlowZ 把这条 stderr 重定向到
+ * 的包级 std logger 在 init() 固定绑 os.Stderr，cmd_run.go 的 run() 出错走它）。暗影VPN 把这条 stderr 重定向到
  * `singbox_startup.log`（helper 路径 / macOS wrapper / Windows UAC 看护三写侧，见 utils/paths.ts），但在
  * #324 之前只有诊断报告导出时才读它——启动失败路径完全不读，用户看到的永远是「TUN 初始化未完成」这类
  * 按适配器存在性反推的文案。#324 的真因（TUN 地址被占用）因此在文件里躺了三天，靠人肉传日志才定位。

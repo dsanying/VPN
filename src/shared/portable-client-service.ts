@@ -29,6 +29,7 @@ export interface PortableClientPorts {
   version(): Promise<unknown>;
   logs(): Promise<LogEntry[]>;
   clearLogs(): Promise<void>;
+  recordOperation?(entry: LogEntry): Promise<void>;
   /** Native operations are explicitly supplied; unavailable commands never fabricate success. */
   commands?: ReadonlyMap<string, (args: unknown) => Promise<unknown>>;
 }
@@ -89,11 +90,39 @@ export class PortableClientService {
     }
   }
   async invoke(channel: string, args?: unknown): Promise<ApiResponse<unknown>> {
+    const traceId = globalThis.crypto?.randomUUID?.().replace(/-/g, '');
+    const started = performance.now();
+    const readOnly = /:(?:get|read|is|has|stateExists|measurements)/i.test(channel);
+    const record = async (phase: 'start' | 'success' | 'failure', message = '') => {
+      if (readOnly && phase !== 'failure') return;
+      try {
+        await this.ports.recordOperation?.({
+          timestamp: new Date().toISOString(),
+          level: phase === 'failure' ? 'error' : 'info',
+          source: 'Operation',
+          message: `operation=${channel}; phase=${phase}; ${message}`,
+          traceId,
+          operation: channel,
+          phase,
+          durationMs: Math.round(performance.now() - started),
+        });
+      } catch {
+        /* A log sink failure must not change the result of committed work. */
+      }
+    };
+    await record('start');
     try {
       await this.initialize();
       if (this.closed) throw new Error('Client service is closed');
-      return { success: true, data: await this.dispatch(channel, args) };
+      const data = await this.dispatch(channel, args);
+      const failed =
+        !!data &&
+        typeof data === 'object' &&
+        (('success' in data && data.success === false) || ('error' in data && !!data.error));
+      await record(failed ? 'failure' : 'success');
+      return { success: true, data };
     } catch (error) {
+      await record('failure', error instanceof Error ? error.message : 'Operation failed');
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Operation failed',
@@ -108,6 +137,8 @@ export class PortableClientService {
     const { config, operations, core, subscriptions, links } = this.ports;
     const input = (args ?? {}) as Record<string, unknown>;
     switch (channel) {
+      case C.ENTERPRISE_GET:
+        return { profiles: [], session: { state: 'idle' }, supported: false };
       case C.CONFIG_GET:
         return config.read();
       case C.CONFIG_SAVE:

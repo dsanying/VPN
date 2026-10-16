@@ -6,7 +6,7 @@ import { CoreUpdateStateStore } from '../core-update-state-store';
 const log = { addLog: () => {} } as any;
 
 function makeStore() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-cstore-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-cstore-'));
   return { store: new CoreUpdateStateStore(log, dir), dir };
 }
 

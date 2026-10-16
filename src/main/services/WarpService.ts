@@ -1,6 +1,6 @@
 /**
  * Cloudflare WARP 设备注册（主进程）。匿名注册一台设备 → 产出一份 WireGuard 配置草稿，
- * 渲染端用它填充 WG 表单、用户确认后按普通 WireGuard 节点保存（FlowZ WG endpoint 已支持 reserved）。
+ * 渲染端用它填充 WG 表单、用户确认后按普通 WireGuard 节点保存（暗影VPN WG endpoint 已支持 reserved）。
  *
  * 关键约束（research 实测）：Cloudflare WAF 校验 TLS 指纹——必须 **TLS1.2-only + HTTP/1.1 + okhttp UA**，
  * 否则返 1020/403。故此处刻意用 node https（可钉 TLS 版本）而非 Electron net.fetch（会协商 TLS1.3/h2）。

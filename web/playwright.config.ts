@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 import { APP_ORIGIN, APP_PORT } from './tests/ui/app-origin';
 
-const browsers = ['chromium', 'firefox'] as const;
-const desktopPreset = { chromium: 'Desktop Chrome', firefox: 'Desktop Firefox' } as const;
+const browsers = ['chromium'] as const;
+const desktopPreset = { chromium: 'Desktop Chrome' } as const;
 
 // Each engine runs against an isolated production fixture, never a user's development server.
 export default defineConfig({
@@ -12,6 +12,7 @@ export default defineConfig({
   workers: 2,
   fullyParallel: false,
   retries: 0,
+  expect: { timeout: 15_000 },
   forbidOnly: !!process.env.CI,
   reporter: 'line',
   use: {

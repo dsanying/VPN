@@ -49,10 +49,10 @@ export function buildProxyOutbound(
   const tlsProtocols = ['trojan', 'anytls', 'hysteria2', 'tuic'];
 
   // 自定义协议（raw-JSON 透传）：原样下发用户的 outbound 对象，仅【强制覆盖 tag】（防撞/防注入），
-  // 语义与能否启用由 sing-box check（启动 gate / 表单 probe）判定，FlowZ 不解析 type。
+  // 语义与能否启用由 sing-box check（启动 gate / 表单 probe）判定，暗影VPN 不解析 type。
   if (protocol === 'custom') {
-    // 强制覆盖 tag、剥离 detour：内层 detour 会绕过 FlowZ 的代理链环检测（仅走 server.detour）且 sing-box check
-    // 测不出 detour 环 → 运行时拨号死循环。FlowZ 经 detour 字段统一管理链路，自定义透传不携带内层 detour。
+    // 强制覆盖 tag、剥离 detour：内层 detour 会绕过 暗影VPN 的代理链环检测（仅走 server.detour）且 sing-box check
+    // 测不出 detour 环 → 运行时拨号死循环。暗影VPN 经 detour 字段统一管理链路，自定义透传不携带内层 detour。
     const { detour: _drop, ...userOutbound } = (server.customSettings?.outbound || {}) as Record<
       string,
       unknown
@@ -141,7 +141,7 @@ export function buildProxyOutbound(
 
     // 关闭 Chrome QUIC 指纹拟态（sing-box 1.14 disable_chrome_parrot，默认 false=拟态开启）。
     // **仅在用户显式开启时下发 true**，缺省/false 一律省略——省略即上游默认，抗指纹能力白拿，
-    // 且未来上游若改默认或改语义，FlowZ 不会因为写死了一个 false 而把自己钉在旧行为上。
+    // 且未来上游若改默认或改语义，暗影VPN 不会因为写死了一个 false 而把自己钉在旧行为上。
     // 存在的唯一理由是逃生门：拟态照搬 Chrome 的 QUIC 参数，而 Chrome 不声明支持 Ed25519 →
     // 服务端用 Ed25519 证书的 hy2 节点会直接握手失败（上游 release note 明列）。那种场景下用户
     // 除了关掉拟态没有别的自救手段，症状还是「连不上」这种最难自查的形态。
@@ -254,7 +254,7 @@ export function buildProxyOutbound(
 
     // HTTP/3：naive 经 quic:true 走 h3(QUIC/UDP) 拨号传输，对应服务端 `--listen=quic://`。
     // 注意这只改变"拨号传输"：naive 仍只过 TCP（HTTP CONNECT）、不能中继客户端 UDP（除非
-    // udp_over_tcp，FlowZ 不下发）。客户端 QUIC 若走到 naive，由 blockQuic（udp443 reject 逼回退 TCP）
+    // udp_over_tcp，暗影VPN 不下发）。客户端 QUIC 若走到 naive，由 blockQuic（udp443 reject 逼回退 TCP）
     // 或 sing-box 出站层（"UDP is not supported by outbound"）处理；该拨号本身受 fwmark 保护、
     // 绕过 route 规则，不被 reject 误杀（已实测）。
     if (server.naiveSettings?.useHttp3) {

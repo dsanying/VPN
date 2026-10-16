@@ -101,7 +101,7 @@ export const SINGBOX_SUPPORTED_TYPES = new Set([
   'ssh',
 ]);
 
-/** sing-box transport.type → ServerConfig.network 可承载的传输（其余 sing-box 不支持/FlowZ 无落点，整节点跳过）。 */
+/** sing-box transport.type → ServerConfig.network 可承载的传输（其余 sing-box 不支持/暗影VPN 无落点，整节点跳过）。 */
 const SINGBOX_SUPPORTED_TRANSPORTS = new Set(['ws', 'grpc', 'http', 'httpupgrade']);
 /** sing-box 非代理内部 outbound type（本地导入忽略，不作节点、不透传 custom）。 */
 export const SINGBOX_INTERNAL_TYPES = new Set(['direct', 'block', 'dns', 'selector', 'urltest']);

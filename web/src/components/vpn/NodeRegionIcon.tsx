@@ -1,19 +1,29 @@
 import './ApplicationIdentity.css';
+import { regionDisplayName } from './nodeDisplayCache';
 import { nodeRegionSymbol } from '@shared/node-identity';
 import { GlobalOutlined } from '@ant-design/icons';
 import { countryCodeToFlagAsset } from '../../../../src/renderer-domain/components/settings/flag-assets';
 import { useNodeRegion } from './useNodeRegion';
 import { Tooltip } from 'antd';
+import { observationIsFresh } from '@shared/background-refresh';
+import { useMeasurementClock } from './useMeasurementClock';
+import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/utils/dateTime';
 
 /** Shared flag asset cache and unknown-region fallback for lists and selectors. */
 export function NodeRegionIcon({ nodeId }: { nodeId: string }) {
-  const { code, name, exit } = useNodeRegion(nodeId);
-  const icon = <RegionIcon code={code} name={name} />;
-  if (!exit) return icon;
-  const metadata = [exit.provider, name, exit.ip, formatDateTime(exit.measuredAt)]
-    .filter(Boolean)
-    .join(' · ');
+  const { t, i18n } = useTranslation();
+  const time = useMeasurementClock();
+  const { code, name, evidence, detail } = useNodeRegion(nodeId);
+  if (!evidence) return <RegionIcon code={code} name={name} help={t(detail?.gateway?.reason === 'non-public-address' ? 'vpn.regionPrivateHint' : 'vpn.regionUnknownHint')} />;
+  const describe = (source: 'exit' | 'gateway', value: NonNullable<typeof detail>['exit']) => value && [
+    t(source === 'exit' ? 'vpn.exitRegion' : 'vpn.gatewayRegion'),
+    value.countryCode ? regionDisplayName(i18n.language, value.countryCode) : t('common.vocab.unidentified'),
+    value.ip, value.provider, formatDateTime(value.measuredAt),
+    !observationIsFresh(value.measuredAt, time) ? t('vpn.regionHistory') : undefined,
+  ].filter(Boolean).join(' · ');
+  const metadata = [describe('exit', detail?.exit), describe('gateway', detail?.gateway),
+    evidence.source === 'gateway' ? t('vpn.gatewayRegionHint') : undefined].filter(Boolean).join('；');
   return <RegionIcon code={code} name={name} help={metadata} />;
 }
 

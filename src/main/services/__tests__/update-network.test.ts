@@ -17,20 +17,20 @@ function makeSession() {
 describe('UpdateNetwork', () => {
   beforeEach(() => mockFromPartition.mockReset());
 
-  it('sessionFor(false) → flowz-update-direct partition + mode:direct', async () => {
+  it('sessionFor(false) → shadowvpn-update-direct partition + mode:direct', async () => {
     const direct = makeSession();
     mockFromPartition.mockReturnValue(direct);
     const s = await new UpdateNetwork().sessionFor(false, 0);
-    expect(mockFromPartition).toHaveBeenCalledWith('flowz-update-direct');
+    expect(mockFromPartition).toHaveBeenCalledWith('shadowvpn-update-direct');
     expect(direct.setProxy).toHaveBeenCalledWith({ mode: 'direct' });
     expect(s).toBe(direct);
   });
 
-  it('sessionFor(true, port) → flowz-update-proxied partition + socks5 pin', async () => {
+  it('sessionFor(true, port) → shadowvpn-update-proxied partition + socks5 pin', async () => {
     const proxied = makeSession();
     mockFromPartition.mockReturnValue(proxied);
     await new UpdateNetwork().sessionFor(true, 52330);
-    expect(mockFromPartition).toHaveBeenCalledWith('flowz-update-proxied');
+    expect(mockFromPartition).toHaveBeenCalledWith('shadowvpn-update-proxied');
     expect(proxied.setProxy).toHaveBeenCalledWith({ proxyRules: 'socks5://127.0.0.1:52330' });
   });
 
@@ -53,7 +53,7 @@ describe('UpdateNetwork', () => {
     };
     const direct = makeSession();
     mockFromPartition.mockImplementation((name: string) =>
-      name === 'flowz-update-proxied' ? proxied : direct
+      name === 'shadowvpn-update-proxied' ? proxied : direct
     );
     const s = await new UpdateNetwork().sessionForOrDirect(true, 52330);
     expect(s).toBe(direct); // 回落 direct，绝不 undefined
@@ -75,7 +75,7 @@ describe('UpdateNetwork.resolveSessionForMainUpdate（类2 viaProxy/port 决策�
     const proxied = makeSession();
     const direct = makeSession();
     mockFromPartition.mockImplementation((name: string) =>
-      name === 'flowz-update-proxied' ? proxied : direct
+      name === 'shadowvpn-update-proxied' ? proxied : direct
     );
     const un = new UpdateNetwork();
     un.setMainUpdateProviders({

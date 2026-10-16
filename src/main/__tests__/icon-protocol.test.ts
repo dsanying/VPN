@@ -1,6 +1,6 @@
 /**
  * icon-protocol 单测（node env）：mock electron protocol（捕获 handler）+ session.fetch + node dns。
- * 覆盖 M2：flowz-icon:// 首跳 + 逐跳 redirect SSRF guard；协议限制；URL 解码往返。
+ * 覆盖 M2：shadowvpn-icon:// 首跳 + 逐跳 redirect SSRF guard；协议限制；URL 解码往返。
  * proxyRunning=false → viaProxy 恒 false（direct），不读取配置或保留跨请求配置缓存。
  */
 let capturedHandler: ((req: { url: string }) => Promise<Response>) | null = null;
@@ -30,7 +30,7 @@ function makeResp(opts: { status?: number; location?: string }): Response {
   } as unknown as Response;
 }
 
-describe('icon-protocol flowz-icon://', () => {
+describe('icon-protocol shadowvpn-icon://', () => {
   let mockFetch: jest.Mock;
 
   beforeEach(() => {
@@ -57,7 +57,7 @@ describe('icon-protocol flowz-icon://', () => {
 
   it('还原后非 http(s) 协议 → 400，不发起 fetch', async () => {
     const r = await capturedHandler!({
-      url: `flowz-icon://i/${encodeURIComponent('ftp://x/y')}`,
+      url: `shadowvpn-icon://i/${encodeURIComponent('ftp://x/y')}`,
     });
     expect(r.status).toBe(400);
     expect(mockFetch).not.toHaveBeenCalled();

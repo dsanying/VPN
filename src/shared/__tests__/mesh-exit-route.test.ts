@@ -30,10 +30,10 @@ const cfg = (servers: ServerConfig[], selectedId: string): UserConfig =>
   ({ servers, selectedServerId: selectedId }) as unknown as UserConfig;
 
 describe('planMeshExitRoute（不依赖全局选中：exit-capable TS 即装，可能被路由规则指向）', () => {
-  it('TS System + 全隧道 → 装 flowz-ts 单条 ifscope default(v4)（选中与否无关）', () => {
+  it('TS System + 全隧道 → 装 shadowvpn-ts 单条 ifscope default(v4)（选中与否无关）', () => {
     const ts = tsNode({});
     expect(planMeshExitRoute(cfg([ts], 'ts1'), false)).toEqual({
-      iface: 'flowz-ts',
+      iface: 'shadowvpn-ts',
       cidrs: ['0.0.0.0/0'],
     });
   });
@@ -47,7 +47,7 @@ describe('planMeshExitRoute（不依赖全局选中：exit-capable TS 即装，�
     const ts = tsNode({});
     const other = { id: 'x', name: 'x', protocol: 'vless' } as unknown as ServerConfig;
     expect(planMeshExitRoute(cfg([ts, other], 'x'), false)).toEqual({
-      iface: 'flowz-ts',
+      iface: 'shadowvpn-ts',
       cidrs: ['0.0.0.0/0'],
     });
   });
@@ -58,7 +58,7 @@ describe('planMeshExitRoute（不依赖全局选中：exit-capable TS 即装，�
 
   it('[P0b] TS 有 exit_node 但存量 allowInternet=false → 仍装（allowInternet 谓词层已忽略，由 exit_node 派生）', () => {
     expect(planMeshExitRoute(cfg([tsNode({ allowInternet: false })], 'ts1'), false)).toEqual({
-      iface: 'flowz-ts',
+      iface: 'shadowvpn-ts',
       cidrs: ['0.0.0.0/0'],
     });
   });
@@ -73,7 +73,7 @@ describe('planMeshExitRoute（不依赖全局选中：exit-capable TS 即装，�
     ).toBeNull();
   });
 
-  it('WG System + 全隧道 → null(sing-box 按 allowed_ips 自装,FlowZ 不重复;本函数只管 TS)', () => {
+  it('WG System + 全隧道 → null(sing-box 按 allowed_ips 自装,暗影VPN 不重复;本函数只管 TS)', () => {
     expect(planMeshExitRoute(cfg([wgNode({})], 'wg1'), false)).toBeNull();
   });
 

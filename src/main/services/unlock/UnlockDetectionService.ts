@@ -34,7 +34,7 @@ import {
   type UnlockResponse,
 } from './unlock-http';
 
-const PARTITION = 'flowz-unlock';
+const PARTITION = 'shadowvpn-unlock';
 /** force 硬下限（绕 TTL 但仍防手点连发触发对端限频）。 */
 const FORCE_MIN_MS = 15_000;
 /**

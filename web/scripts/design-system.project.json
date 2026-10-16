@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "sharedUi": "src/components/client",
+  "sources": ["src/pages", "src/components/vpn", "src/layouts", "update-popup"],
+  "collections": {
+    "node": {"model": "../src/shared/types.ts", "fields": ["subscriptionId", "protocol", "region", "availability"], "derived": ["region", "availability"]},
+    "log": {"model": "../src/shared/types/runtime.ts", "fields": ["level", "source"], "derived": []}
+  },
+  "tables": [
+    {"source": "src/pages/ConnectionsPage/index.tsx", "reason": "完整实时连接集合按可见目标自然顺序分页；图表点选只改变筛选，不改变采集"},
+    {"source": "src/pages/RulesPage/index.tsx", "reason": "规则配置按实际命中优先顺序，禁止名称排序改变行为"},
+    {"source": "src/pages/NodesPage/NodeGroupTable.tsx", "reason": "完整节点组目录按可见名称自然顺序分页"}
+  ]
+}

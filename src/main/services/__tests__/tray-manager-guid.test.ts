@@ -5,7 +5,7 @@
  * 菜单栏位置存进本 app 的 preferences domain；不传则位置不跨启动保留（electron#47838），每次更新后图标回到默认位。
  *
  * win32 必须**不**传 —— Electron 文档明示未签名 exe 的 GUID 与 exe 路径永久绑定，路径变则托盘创建失败；
- * FlowZ 无 Authenticode 签名且 portable 形态每版换文件名 → 传了会弄坏 portable 更新后的托盘。这条是本次改动
+ * 暗影VPN 无 Authenticode 签名且 portable 形态每版换文件名 → 传了会弄坏 portable 更新后的托盘。这条是本次改动
  * 最危险的逃逸面（传错了在 Linux/mac 上一切正常、只在 Windows portable 真机炸），故单独钉死。
  */
 const trayCtorArgs: unknown[][] = [];
@@ -36,7 +36,7 @@ jest.mock('electron', () => ({
 // loadTrayIcon 经 ResourceManager 取图标路径（真实实现依赖打包态的 app 路径，测试态拿不到）。
 // 给一个不存在的路径 → 走 createDefaultTrayIcon 分支，与本测关注的 guid 分派无关。
 jest.mock('../ResourceManager', () => ({
-  resourceManager: { getTrayIconPath: () => '/nonexistent/flowz-tray-icon.png' },
+  resourceManager: { getTrayIconPath: () => '/nonexistent/shadowvpn-tray-icon.png' },
 }));
 
 import { TrayManager } from '../TrayManager';

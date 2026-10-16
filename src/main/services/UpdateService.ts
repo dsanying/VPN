@@ -805,7 +805,7 @@ export class UpdateService {
         nodeIntegration: false,
         sandbox: false,
         // 当前界面语言注入 preload：弹窗页据此设 <html lang/dir>（fa=rtl），修 lang 写死 zh-CN。
-        additionalArguments: [`--flowz-popup-lang=${getMainLanguage()}`],
+        additionalArguments: [`--shadowvpn-popup-lang=${getMainLanguage()}`],
       },
     });
     if (process.platform !== 'darwin') win.setMenu(null);

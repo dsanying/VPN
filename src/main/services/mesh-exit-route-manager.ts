@@ -4,15 +4,15 @@
  * 背景（真机实证）：sing-box 的 tailscale system_interface 只往内核接口装 tailnet/accept 子网路由，**不为
  * exit_node 装出口 0/0 路由** → 绑接口 dialer 拨公网 `network unreachable`。手动补一条 **ifscope `default`（0/0）**
  * 即通 → tsnet 在内核接口模式会把 0/0 转发给 exit peer。ifscope 作用域不进全局表竞争 → 与全局 default/主 TUN 共存，
- * 无需折半（折半只为压全局表里的 default，ifscope 用不上）；FlowZ 经 helper `route add -ifscope` 只加不删，不删全局 default。
+ * 无需折半（折半只为压全局表里的 default，ifscope 用不上）；暗影VPN 经 helper `route add -ifscope` 只加不删，不删全局 default。
  *
  * 本管理器在「选中的全局出口 = TS System + 承载全隧道」时，于其内核接口装单条 ifscope default；停核/切节点/切模式时清理。
  * 决策见 shared/mesh-exit-route.planMeshExitRoute（纯函数）。
  *
  * 平台：
  *  - macOS：内核 utun 名动态（用户实证），按 tailnet IP 反查接口名 → helper(root) `route -ifscope`。
- *  - Linux：固定名 flowz-ts → app 自身 `ip route`（已有 CAP_NET_ADMIN），独立表 + oif 规则、不碰 main 表。
- *  - **Windows：禁 System，本管理器 no-op**。Windows 上 tsnet 会给 flowz-ts 自装 exit 0/0 metric=0、抢直连/
+ *  - Linux：固定名 shadowvpn-ts → app 自身 `ip route`（已有 CAP_NET_ADMIN），独立表 + oif 规则、不碰 main 表。
+ *  - **Windows：禁 System，本管理器 no-op**。Windows 上 tsnet 会给 shadowvpn-ts 自装 exit 0/0 metric=0、抢直连/
  *    bootstrap DNS 致全网瘫，且无 ifscope 作用域；曾用周期降权 metric 兜底，但脆弱、有 0–15s 滞后窗口。故 Windows
  *    直接禁 System（ProxyManager.systemInterfaceAvailable 在 win32 恒 false → mesh 节点强制 gVisor），从源头消除：
  *    gVisor userspace 栈不建内核接口、不装 0/0、出口经 tsnet 内部转发不依赖 OS 路由。
@@ -29,7 +29,7 @@ const execFileAsync = promisify(execFile);
 type LogFn = (level: 'info' | 'warn' | 'error', message: string) => void;
 
 interface InstalledRoute {
-  iface: string; // 实际装路由的接口名（macOS=反查到的 utunN；Win/Linux=flowz-ts）
+  iface: string; // 实际装路由的接口名（macOS=反查到的 utunN；Win/Linux=shadowvpn-ts）
   cidrs: string[];
 }
 
@@ -89,14 +89,14 @@ export class MeshExitRouteManager {
   }
 
   private async reconcileOnce(config: UserConfig, enableIPv6: boolean): Promise<void> {
-    // 禁 System 的平台（Windows，meshSystemSupportedOnPlatform）：mesh 节点强制 gVisor、无 flowz-ts 内核接口 →
+    // 禁 System 的平台（Windows，meshSystemSupportedOnPlatform）：mesh 节点强制 gVisor、无 shadowvpn-ts 内核接口 →
     // 无出口路由可托管，no-op。
     if (!meshSystemSupportedOnPlatform(process.platform)) return;
     try {
       const plan = planMeshExitRoute(config, enableIPv6);
       const desiredKey = plan ? plan.cidrs.join(',') : '';
       const currentKey = this.installed ? this.installed.cidrs.join(',') : '';
-      // 注:macOS 接口名动态,desired.iface 是逻辑名(flowz-ts);实际接口在 apply 内反查。仅以 cidrs 判变更。
+      // 注:macOS 接口名动态,desired.iface 是逻辑名(shadowvpn-ts);实际接口在 apply 内反查。仅以 cidrs 判变更。
       if (desiredKey === currentKey && !!plan === !!this.installed) return;
       await this.clear();
       if (plan) await this.apply(plan);

@@ -13,7 +13,7 @@ const path = require('path');
 const fsSync = require('fs');
 const { EventEmitter } = require('events');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-launchpath-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-launchpath-'));
 const FAKE_CORE = path.join(TMP, 'sing-box');
 fsSync.writeFileSync(FAKE_CORE, '#!/bin/sh\n');
 

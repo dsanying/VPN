@@ -1,4 +1,4 @@
-# FlowZ macOS privilege helper
+# ShadowVPN macOS privilege helper
 
 [简体中文](README.md) · **English**
 

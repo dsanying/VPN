@@ -25,7 +25,7 @@ function getPortableDataPath(): string | null {
     let appDir = path.dirname(exePath);
 
     if (process.platform === 'darwin') {
-      // FlowZ.app/Contents/MacOS/FlowZ -> FlowZ.app/Contents/MacOS -> FlowZ.app/Contents -> FlowZ.app -> Parent
+      // 暗影VPN.app/Contents/MacOS/暗影VPN -> 暗影VPN.app/Contents/MacOS -> 暗影VPN.app/Contents -> 暗影VPN.app -> Parent
       appDir = path.join(appDir, '../../..');
     }
 
@@ -50,7 +50,7 @@ function getPortableDataPath(): string | null {
  *     macOS 常规用户不在 /etc/passwd（走 Open Directory），退回 /Users/<user> 系统约定。
  *
  * 覆盖范围：sudo 系提权（HOME 保留 或 SUDO_USER 存在）。pkexec 整 app 提权不在范围——其设 HOME=/root、
- * 不设 SUDO_USER（仅 PKEXEC_UID），两条均 miss → 回落默认；FlowZ 的 pkexec 仅用于 helper 脚本而非整 app
+ * 不设 SUDO_USER（仅 PKEXEC_UID），两条均 miss → 回落默认；暗影VPN 的 pkexec 仅用于 helper 脚本而非整 app
  * 提权，故现实影响小（与改动前行为一致，非回归）。
  */
 function resolveElevatedRealHome(): string | null {
@@ -101,7 +101,7 @@ function lookupHomeFromPasswd(username: string): string | null {
 function resolveElevatedUserDataPath(): string | null {
   const realHome = resolveElevatedRealHome();
   if (!realHome) return null;
-  const appName = app.getName() || 'FlowZ';
+  const appName = app.getName() || '暗影VPN';
   return process.platform === 'darwin'
     ? path.join(realHome, 'Library/Application Support', appName)
     : path.join(realHome, '.config', appName);
@@ -206,14 +206,14 @@ export function getSingBoxStartupLogPath(): string {
 }
 
 /**
- * Windows UAC 看护脚本自身的日志（`flowz-win-watchdog.log`）。与 singbox_startup.log **必须分文件**：
+ * Windows UAC 看护脚本自身的日志（`shadowvpn-win-watchdog.log`）。与 singbox_startup.log **必须分文件**：
  * Start-Process 的 -RedirectStandardError 会独占打开目标文件（Windows 真机实测：重定向期间 PowerShell
  * `Out-File -Append` 报「文件正由另一进程使用」），两者同文件会让看护脚本自述行全部写失败。
  * 看护脚本自述行（"sing-box exited by itself" / "Stopflag detected" / "Parent process gone"）是区分
  * 「核自杀 vs 被外部杀」的判据，与核 stderr 同等重要，故各写各的、诊断报告两段都收。
  */
 export function getWindowsWatchdogLogPath(): string {
-  return path.join(getUserDataPath(), 'flowz-win-watchdog.log');
+  return path.join(getUserDataPath(), 'shadowvpn-win-watchdog.log');
 }
 
 export function getCachePath(): string {

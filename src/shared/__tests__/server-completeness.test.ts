@@ -22,6 +22,13 @@ const requiredByProtocol: Record<Protocol, Partial<ServerConfig>> = {
       localAddress: ['10.0.0.2/32'],
     } as any,
   },
+  enterprise: {
+    enterpriseSettings: {
+      profileId: 'fictional',
+      gateway: 'https://example.com/',
+      client: 'anyconnect',
+    },
+  },
   tailscale: {}, // 账号制：无硬必填项（auth_key 可选）；无 address/port
   custom: { customSettings: { outbound: { type: 'snell' } } as any }, // raw-JSON：须含 type 的 outbound 对象
 };

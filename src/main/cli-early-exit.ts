@@ -1,8 +1,8 @@
 /**
  * CLI / 非 GUI 早退（纯函数判定 + IO 注入编排，便于单测；实际副作用由 index.ts 注入的 io 执行）。
  *
- * 背景：FlowZ 是 Electron GUI app，main 进程默认走 `whenReady → createWindow` 路径。在无显示服务环境
- * （SSH / CI / headless / `flowz -V` 查版本）启动时，Electron GUI 平台（Ozone/X11）初始化失败
+ * 背景：暗影VPN 是 Electron GUI app，main 进程默认走 `whenReady → createWindow` 路径。在无显示服务环境
+ * （SSH / CI / headless / `shadow-vpn -V` 查版本）启动时，Electron GUI 平台（Ozone/X11）初始化失败
  * （"Missing X server or $DISPLAY" / "platform failed to initialize"），且 native 层清理不净 → 进程卡死、
  * 用户 Ctrl-C 后 segfault(core dumped)。CLI 查询（-V/-h）本不需要 GUI。
  *
@@ -40,8 +40,8 @@ export function resolveCliEarlyExit(
 /** -h/--help 的用法文本（CLI 通用英文，与 i18n 无关——CLI 帮助按惯例英文）。version 由调用方拼 app.getVersion()。 */
 export function cliHelpText(version: string): string {
   return (
-    `FlowZ ${version}\n\n` +
-    `Usage: flowz [options]\n` +
+    `暗影VPN ${version}\n\n` +
+    `Usage: shadow-vpn [options]\n` +
     `  -V, --version   Show version and exit\n` +
     `  -h, --help      Show this help and exit\n`
   );
@@ -104,7 +104,7 @@ export function runCliEarlyExit(io: CliEarlyExitIo): boolean {
   const kind = resolveCliEarlyExit(io.argv, io.env, io.platform);
   switch (kind) {
     case 'version':
-      io.writeStdout(`FlowZ ${io.getVersion()}\n`);
+      io.writeStdout(`暗影VPN ${io.getVersion()}\n`);
       io.exit(0);
       return true;
     case 'help':

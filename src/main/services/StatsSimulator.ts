@@ -4,7 +4,7 @@
  * 背景：#242 renderer RSS 数天涨到 2GB，但泄漏机制在应用层之下、本机不一定能稳定复现。本模块**制造**复现：
  * 构造一个假连接池，用**真实的** aggregateConnections 聚合后，经与 StatsWorkerHost 相同的 isUiActive 门控把
  * stats/aggregate/detail 三通道灌给渲染端——绕过内核/流量/TUN，以可调速率把 reporter 数天暴露压缩到小时级，供 CDP heap
- * 三连拍定位滞留层。**dev-only 工具、零业务行为变更**：仅 FLOWZ_STATS_SIM 存在时替换真实 stats worker。
+ * 三连拍定位滞留层。**dev-only 工具、零业务行为变更**：仅 SHADOWVPN_STATS_SIM 存在时替换真实 stats worker。
  *
  * 语义刻意与代理生命周期解耦（dev 工具）：构造即启动 ticker；stop()/resubscribe() 只记日志、不停 ticker
  * （代理起停不该打断定证跑批）；仅 dispose()（app 退出）才停并 clearInterval。对外面实现 StatsHost，与
@@ -19,7 +19,7 @@ import type {
 import { aggregateConnections } from './connections-aggregate';
 import type { StatsHost, StatsWorkerHostOptions } from './StatsWorkerHost';
 
-/** 合成器参数（FLOWZ_STATS_SIM=intervalMs,connCount,churnPerFrame 解析而来）。 */
+/** 合成器参数（SHADOWVPN_STATS_SIM=intervalMs,connCount,churnPerFrame 解析而来）。 */
 export interface StatsSimConfig {
   /** tick 间隔（ms）：每 tick 一次聚合 + 一次 stats。 */
   intervalMs: number;
@@ -74,7 +74,7 @@ const FAKE_HOSTS: readonly string[] = [
 const FAKE_OUTBOUNDS: readonly string[] = ['proxy-a', 'proxy-b', 'proxy-c', 'direct', 'block'];
 
 /**
- * 解析 FLOWZ_STATS_SIM=intervalMs,connCount,churnPerFrame。防御式：任一字段非法（非正整数/缺失）→ 该字段
+ * 解析 SHADOWVPN_STATS_SIM=intervalMs,connCount,churnPerFrame。防御式：任一字段非法（非正整数/缺失）→ 该字段
  * 回退缺省并 warn（不因一个字段拖垮整体）。纯函数，供单测。
  */
 export function parseStatsSimConfig(
@@ -100,7 +100,7 @@ export function parseStatsSimConfig(
 
   if (bad.length > 0) {
     warn?.(
-      `FLOWZ_STATS_SIM 解析非法字段 [${bad.join(', ')}]（原值 "${raw ?? ''}"），已回退缺省 ` +
+      `SHADOWVPN_STATS_SIM 解析非法字段 [${bad.join(', ')}]（原值 "${raw ?? ''}"），已回退缺省 ` +
         `${d.intervalMs},${d.connCount},${d.churnPerFrame}`
     );
   }
@@ -128,7 +128,7 @@ export class StatsSimulator implements StatsHost {
   /**
    * @param opts 与 StatsWorkerHost 同形（复用 index.ts 装配的 onStats/onAggregate/onDetail/isUiActive/log）；workerPath/
    *   getEndpoint 对合成器无意义，刻意忽略。
-   * @param rawConfig FLOWZ_STATS_SIM 原始串（构造内解析 + 打激活/防御 banner）。
+   * @param rawConfig SHADOWVPN_STATS_SIM 原始串（构造内解析 + 打激活/防御 banner）。
    */
   constructor(opts: StatsWorkerHostOptions, rawConfig: string | undefined) {
     this.onStats = opts.onStats;
@@ -142,7 +142,7 @@ export class StatsSimulator implements StatsHost {
 
     this.log?.(
       'warn',
-      `stats 模拟器激活（FLOWZ_STATS_SIM=${rawConfig ?? ''} → intervalMs=${this.config.intervalMs}, ` +
+      `stats 模拟器激活（SHADOWVPN_STATS_SIM=${rawConfig ?? ''} → intervalMs=${this.config.intervalMs}, ` +
         `connCount=${this.config.connCount}, churnPerFrame=${this.churnPerFrame}），仅用于泄漏定证`
     );
 

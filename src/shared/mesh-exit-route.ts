@@ -8,19 +8,19 @@ import {
 // 出口默认路由：单条 ifscope `default`（0/0），装在 System 内核接口上、作用域限定该接口（UGScIg）→ 绑该接口的
 // dialer 走它出网，与主 TUN / 全局 default 共存（真机实证：sing-box 的 WG ifscope `default` 与全局 default 同表共存）。
 // **无需折半**：折半（0/1+128/1）当初只为在「全局表」里压过全局 default 而不删它；ifscope 是接口作用域、不进全局表
-// 竞争，单条 0/0 即可。FlowZ 经 helper `route add -ifscope`（只加不删）装它，不会像 sing-box WG 路径那样删全局 default。
+// 竞争，单条 0/0 即可。暗影VPN 经 helper `route add -ifscope`（只加不删）装它，不会像 sing-box WG 路径那样删全局 default。
 export const EXIT_DEFAULT_V4 = ['0.0.0.0/0'];
 export const EXIT_DEFAULT_V6 = ['::/0'];
 
 export interface MeshExitRoutePlan {
-  /** 内核接口名（flowz-ts）。 */
+  /** 内核接口名（shadowvpn-ts）。 */
   iface: string;
   /** 要装的出口路由（单条 ifscope default，按 enableIPv6 含/不含 v6）。 */
   cidrs: string[];
 }
 
 /**
- * 出口托管决策（纯函数）：当前选中的全局出口节点是否需要 FlowZ 自装出口路由、装到哪张内核接口。
+ * 出口托管决策（纯函数）：当前选中的全局出口节点是否需要 暗影VPN 自装出口路由、装到哪张内核接口。
  *
  * 仅 **TS System + 承载全隧道（exit_node 设了）** 需要——真机实证：sing-box 的 tailscale system_interface
  * 只往内核接口装 tailnet/accept 子网，**不为 exit_node 装出口 0/0 路由**，故绑接口 dialer 拨公网 unreachable；
@@ -32,7 +32,7 @@ export interface MeshExitRoutePlan {
  *
  * 返回 null 的情形：
  *  - 无 TS 节点 / TS 是 gVisor（tsnet 栈内处理 exit，无需 OS 路由）/ TS 无 exit_node（不承载全隧道）。
- *  - WG/WARP 由 sing-box 按 allowed_ips 自装接口作用域路由 → FlowZ 不重复装（本函数只管 TS）。
+ *  - WG/WARP 由 sing-box 按 allowed_ips 自装接口作用域路由 → 暗影VPN 不重复装（本函数只管 TS）。
  */
 export function planMeshExitRoute(
   config: UserConfig,

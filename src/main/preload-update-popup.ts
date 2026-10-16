@@ -9,9 +9,9 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
 import type { UpdatePopupState, UpdatePopupAction } from '../shared/types/update';
 
-// 界面语言注入（主进程 additionalArguments `--flowz-popup-lang=<code>`）：据此设 <html lang/dir>，
+// 界面语言注入（主进程 additionalArguments `--shadowvpn-popup-lang=<code>`）：据此设 <html lang/dir>，
 // 修弹窗页 lang 写死 zh-CN（fa 需 rtl）。DOMContentLoaded 后设，覆盖 HTML 静态 lang 属性。
-const LANG_PREFIX = '--flowz-popup-lang=';
+const LANG_PREFIX = '--shadowvpn-popup-lang=';
 const langArg = process.argv.find((a) => a.startsWith(LANG_PREFIX));
 if (langArg) {
   const code = langArg.slice(LANG_PREFIX.length);
@@ -41,7 +41,7 @@ ipcRenderer.on(
     for (const callback of subscribers) callback(state);
   }
 );
-contextBridge.exposeInMainWorld('flowzUpdatePopup', {
+contextBridge.exposeInMainWorld('shadowvpnUpdatePopup', {
   onState(callback: (state: UpdatePopupState) => void): () => void {
     subscribers.add(callback);
     if (latestState) callback(latestState);

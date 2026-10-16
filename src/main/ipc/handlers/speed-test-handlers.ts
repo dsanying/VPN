@@ -116,7 +116,14 @@ export function registerSpeedTestHandlers(
           for (const sub of before.subscriptions ?? []) requestedLinks.set(sub.id, forcedAll);
         for (const [id, time] of groups) requestedLinks.set(id, time);
         const links = getSubscriptionMeasurements(deps.configManager);
-        await links?.refresh(!all, requestedLinks);
+        // Independent link checks must not delay node measurements.
+        const linkTask = links?.refresh(!all, requestedLinks).catch((error) => {
+          deps.logManager.addLog(
+            'warn',
+            `Subscription measurements failed: ${String(error)}`,
+            'Subscription'
+          );
+        });
         const config = await deps.configManager.loadConfig();
         const store = getNodeMeasurementStore(deps.configManager);
         await store?.save(config.servers, DEFAULT_SPEED_TEST_URL, {});
@@ -128,7 +135,8 @@ export function registerSpeedTestHandlers(
         );
         const nodes = config.servers.filter(
           (node) =>
-            isSpeedTestable(node, { mainCorePool: !!deps.isTunActive?.() }) &&
+            (node.protocol === 'enterprise' ||
+              isSpeedTestable(node, { mainCorePool: !!deps.isTunActive?.() })) &&
             (((forcedAll !== undefined ||
               requestedNodes.has(node.id) ||
               (node.subscriptionId && groups.has(node.subscriptionId))) &&
@@ -143,6 +151,7 @@ export function registerSpeedTestHandlers(
               due.has(node.id))
         );
         if (nodes.length) await runSpeedTest(deps, { serverIds: nodes.map((node) => node.id) });
+        await linkTask;
       }
     })()
       .catch((error) =>
@@ -177,7 +186,7 @@ export function registerSpeedTestHandlers(
   registerIpcHandler<{ serverIds?: string[] }, SpeedTestInvokeResult>(
     IPC_CHANNELS.SERVER_SPEED_TEST,
     async (_event: IpcMainInvokeEvent, args?: { serverIds?: string[] }) => {
-      const runResult = await runSpeedTest(deps, { serverIds: args?.serverIds });
+      const runResult = await runSpeedTest(deps, { serverIds: args?.serverIds, interactive: true });
       const results: Record<string, number> = {};
       for (const [id, latency] of runResult.results.entries()) {
         results[id] = latency === null ? -1 : latency;

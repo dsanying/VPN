@@ -316,9 +316,9 @@ func beginStopLocked() int {
 	return pid
 }
 
-// route-add/route-del 安全约束：仅允许 FlowZ 自己的内核接口名 + macOS 动态 utunN，杜绝任意接口注入。
+// route-add/route-del 安全约束：仅允许 本应用内核接口名 + macOS 动态 utunN，杜绝任意接口注入。
 func ifaceAllowed(s string) bool {
-	if s == "flowz-ts" || s == "flowz-wg" {
+	if s == "shadowvpn-ts" || s == "shadowvpn-wg" {
 		return true
 	}
 	if !strings.HasPrefix(s, "utun") {
@@ -496,7 +496,7 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 		}
 	case "route-add", "route-del":
 		// proto v7：出口托管在 System 内核接口上装/清 ifscope 拆半默认路由（sing-box 不为 TS exit_node 装、
-		// 真机实证）。约束：iface 白名单（flowz-ts/flowz-wg/utunN）+ net.ParseCIDR 校验，杜绝注入。
+		// 真机实证）。约束：iface 白名单（shadowvpn-ts/shadowvpn-wg/utunN）+ net.ParseCIDR 校验，杜绝注入。
 		// ifscope 作用域到该接口 → 只服务绑该接口的 dialer，不抢主表默认路由（与主 TUN 共存）。幂等 best-effort，
 		// add 忽略 file-exists、delete 忽略 not-in-table；最终由 app 侧 netstat 校验。
 		iface := strings.TrimSpace(args.Next())

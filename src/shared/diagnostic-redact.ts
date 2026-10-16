@@ -1,3 +1,4 @@
+import { redactLogValue } from './log-redact';
 import { formatDeviceDateTime } from './device-time';
 import { diagnosticText } from './diagnostic-text';
 /**
@@ -289,11 +290,13 @@ export interface CoreProcessReport {
 export interface DiagnosticReportInput {
   language?: string;
   logging?: unknown;
+  evidence?: unknown;
+  logArchive?: { name: string; content?: string; [key: string]: unknown }[];
   previousAppLogTail?: string;
   recentEvents?: string;
   generatedAt: string; // ISO
   app: {
-    flowzVersion: string;
+    shadowvpnVersion: string;
     coreVersion: string;
     os: string; // e.g. "win32 x64 10.0.22631"
     electron?: string;
@@ -381,7 +384,7 @@ export interface DiagnosticReportInput {
   /** 本段内容的来源与元信息（写侧路径描述 + 文件大小/最后写入时刻）；缺省则段标题只写文件名。 */
   startupLogSource?: string;
   /**
-   * Windows UAC 看护脚本自身的日志（`flowz-win-watchdog.log`）尾部。与核 stderr 分文件（Start-Process 的
+   * Windows UAC 看护脚本自身的日志（`shadowvpn-win-watchdog.log`）尾部。与核 stderr 分文件（Start-Process 的
    * 重定向独占目标文件）。它记的是「谁停的核」——`sing-box exited by itself` / `Stopflag detected` /
    * `Parent process gone`，是区分「核自杀」与「被外部杀」的判据，和 FATAL 文本互补。
    * 仅 Windows UAC 路径有内容；其它平台/路径不提供，不出该段。
@@ -455,7 +458,7 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
       input.language ?? 'zh-CN'
     )
   );
-  lines.push(diagnosticText(6, [app.flowzVersion], input.language ?? 'zh-CN'));
+  lines.push(diagnosticText(6, [app.shadowvpnVersion], input.language ?? 'zh-CN'));
   lines.push(diagnosticText(7, [app.coreVersion], input.language ?? 'zh-CN'));
   lines.push(diagnosticText(8, [app.os], input.language ?? 'zh-CN'));
   if (app.electron) lines.push(`- Electron：${app.electron}`);
@@ -610,6 +613,30 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): string {
     }
   }
 
+  if (input.evidence)
+    lines.push(
+      input.language?.startsWith('en') ? '## Diagnostic coverage' : '## 诊断覆盖与当前事实',
+      '',
+      fence('json', JSON.stringify(redactLogValue(redactDeep(input.evidence)), null, 2)),
+      ''
+    );
+  if (input.logArchive) {
+    lines.push(
+      input.language?.startsWith('en') ? '## Persistent log archive' : '## 持久日志与覆盖范围',
+      '',
+      fence(
+        'json',
+        JSON.stringify(
+          input.logArchive.map(({ content: _content, ...metadata }) => metadata),
+          null,
+          2
+        )
+      ),
+      ''
+    );
+    for (const file of input.logArchive)
+      if (file.content) lines.push(`### ${file.name}`, '', fence('jsonl', file.content), '');
+  }
   if (input.logging)
     lines.push(
       input.language?.startsWith('en') ? '## Logging evidence' : '## 日志证据',

@@ -119,7 +119,7 @@ it('入口检测使用 16 个并发，80 个 4 秒超时不会退化成逐个或
       maxActive = Math.max(active, maxActive);
       await new Promise((resolve) => setTimeout(resolve, 4000));
       active--;
-      return { status: 'timeout' };
+      return { status: 'timeout' as const };
     };
     const start = Date.now();
     const run = runSpeedTest(deps);
@@ -171,7 +171,11 @@ it.each([false, true])(
     const probe = jest.fn(async () => ({ status: 'unsupported' as const }));
     deps.entryProbe = probe;
     await runSpeedTest(deps);
-    expect(probe).toHaveBeenCalledWith(expect.objectContaining({ id: 'n1' }), !active, {});
+    expect(probe).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'n1' }),
+      !active,
+      expect.objectContaining({ onAddress: expect.any(Function) })
+    );
   }
 );
 
@@ -232,4 +236,103 @@ it('all entry points broadcast the full task lifetime, including local failures'
     active: true,
   });
   expect(progress.at(-1)).toEqual({ active: false });
+});
+
+test('enterprise measurements dispatch authentication separately and publish truthful entry/proxy details', async () => {
+  const node = { ...(makeServer('enterprise') as object), protocol: 'enterprise' };
+  const { deps, send, speedTestService } = makeDeps([node]);
+  deps.entryProbe = jest.fn(async () => ({ status: 'ok' as const, latencyMs: 23 }));
+  deps.enterpriseProbe = jest.fn(async () => ({
+    availability: 'available' as const,
+    proxyReason: 'enterprise-target-unsupported',
+  }));
+  const spy = jest.spyOn(speedTestService, 'testAllServers');
+  const result = await runSpeedTest(deps, { interactive: true });
+  expect(spy.mock.calls[0][0]).toEqual([]);
+  expect(deps.enterpriseProbe).toHaveBeenCalledWith(node, true);
+  expect(result.results.get('enterprise')).toBe(null);
+  expect(result.details?.enterprise).toEqual({
+    entry: { status: 'ok' as const, latencyMs: 23 },
+    availability: 'available' as const,
+    proxyReason: 'enterprise-target-unsupported',
+  });
+  expect(resultSends(send)).toEqual([{ serverId: 'enterprise', latency: -1 }]);
+});
+test('an unreachable entry never attempts enterprise authentication', async () => {
+  const { deps } = makeDeps([{ ...(makeServer('enterprise') as object), protocol: 'enterprise' }]);
+  deps.entryProbe = jest.fn(async () => ({ status: 'timeout' as const }));
+  deps.enterpriseProbe = jest.fn();
+  const result = await runSpeedTest(deps);
+  expect(deps.enterpriseProbe).not.toHaveBeenCalled();
+  expect(result.details?.enterprise.availability).toBe('failed');
+});
+
+it('bundles enterprise gateway region with entry, availability and the shared broadcast', async () => {
+  const node = { ...(makeServer('corporate') as object), protocol: 'enterprise' };
+  const { deps, send } = makeDeps([node]);
+  deps.entryProbe = async (_node, _direct, options) => {
+    options?.onAddress?.('8.8.8.8');
+    return { status: 'ok', latencyMs: 10 };
+  };
+  deps.enterpriseProbe = jest.fn(async () => ({
+    availability: 'failed' as const,
+    proxyReason: 'enterprise-auth-failed',
+  }));
+  const gateway = { ip: '8.8.8.8', countryCode: 'us', measuredAt: 123, provider: 'test' };
+  deps.regionLookup = jest.fn(async () => gateway);
+  const result = await runSpeedTest(deps);
+  expect(result.details?.corporate).toEqual({
+    entry: { status: 'ok', latencyMs: 10 },
+    availability: 'failed' as const,
+    proxyReason: 'enterprise-auth-failed',
+    gateway,
+  });
+  expect(deps.regionLookup).toHaveBeenCalledWith('8.8.8.8');
+  expect(send).toHaveBeenCalledWith(IPC_CHANNELS.EVENT_SPEED_TEST_DETAILS, {
+    serverId: 'corporate',
+    detail: result.details?.corporate,
+  });
+  expect(result.results.get('corporate')).toBeNull();
+});
+
+it('publishes entry and enterprise availability before a slow region query finishes', async () => {
+  const node = { ...(makeServer('enterprise') as object), protocol: 'enterprise' };
+  const { deps, send } = makeDeps([node]);
+  let finishRegion!: () => void;
+  let regionStarted!: () => void;
+  const began = new Promise<void>((resolve) => {
+    regionStarted = resolve;
+  });
+  deps.entryProbe = async (_node, _direct, options) => {
+    options?.onAddress?.('203.0.113.10');
+    return { status: 'ok', latencyMs: 7 };
+  };
+  deps.regionLookup = async () => {
+    regionStarted();
+    await new Promise<void>((resolve) => {
+      finishRegion = resolve;
+    });
+    return { ip: '203.0.113.10', countryCode: 'US', measuredAt: Date.now(), provider: 'fixture' };
+  };
+  deps.enterpriseProbe = async () => ({ availability: 'available' });
+  let finished = false;
+  const run = runSpeedTest(deps).then((value) => {
+    finished = true;
+    return value;
+  });
+  await began;
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(finished).toBe(false);
+  expect(send).toHaveBeenCalledWith(
+    IPC_CHANNELS.EVENT_SPEED_TEST_DETAILS,
+    expect.objectContaining({ detail: { entry: { status: 'ok', latencyMs: 7 } } })
+  );
+  expect(send).toHaveBeenCalledWith(
+    IPC_CHANNELS.EVENT_SPEED_TEST_DETAILS,
+    expect.objectContaining({ detail: expect.objectContaining({ availability: 'available' }) })
+  );
+  expect(resultSends(send)).toContainEqual({ serverId: 'enterprise', latency: -1 });
+  finishRegion();
+  expect((await run).details?.enterprise.gateway?.countryCode).toBe('US');
 });

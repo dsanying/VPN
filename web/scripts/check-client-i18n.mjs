@@ -1,3 +1,4 @@
+import {literalTranslationKeys as readLiteralKeys} from './translation-keys.mjs';
 // SPDX-License-Identifier: MIT
 import fs from 'node:fs';
 import path from 'node:path';
@@ -41,6 +42,7 @@ export function inspectCatalogs(catalogs, used) {
  for(const key of used) for(const locale of locales) if(!Object.hasOwn(catalogs[locale],key)) errors.push(`${locale}: missing used key ${key}`);
  return errors;
 }
+export const literalTranslationKeys = node => readLiteralKeys(ts,node);
 function main() {
  const filenames=['zh-CN','en-US'];
  const catalogs=Object.fromEntries(filenames.map(locale=>[locale,flatten(JSON.parse(fs.readFileSync(path.join(root,'src/i18n/locales',locale+'.json'),'utf8')))]));
@@ -49,7 +51,7 @@ function main() {
   const source=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true);
   function visit(node) {
    if(ts.isStringLiteralLike(node) && (Object.hasOwn(catalogs['zh-CN'],node.text) || Object.hasOwn(catalogs['en-US'],node.text))) used.add(node.text);
-   if(ts.isCallExpression(node) && /^(t|tFragment)$/.test(node.expression.getText(source).split('.').at(-1)) && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) used.add(node.arguments[0].text);
+   if(ts.isCallExpression(node) && /^(t|tFragment)$/.test(node.expression.getText(source).split('.').at(-1)) && node.arguments[0]) for(const key of literalTranslationKeys(node.arguments[0])) used.add(key);
    ts.forEachChild(node,visit);
   }
   visit(source);

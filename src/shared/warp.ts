@@ -1,7 +1,7 @@
 /**
  * Cloudflare WARP 设备注册协议（纯逻辑，无网络）——供主进程 WarpService 调用、单测覆盖。
  * WARP 即 WireGuard：匿名注册一个设备 → 拿到一份 WG 配置（对端公钥/端点/分配 IP/client_id），
- * FlowZ 直接作为普通 WireGuard endpoint 节点使用（已支持 reserved）。网络发送/TLS 指纹在 WarpService。
+ * 暗影VPN 直接作为普通 WireGuard endpoint 节点使用（已支持 reserved）。网络发送/TLS 指纹在 WarpService。
  *
  * 版本串说明：Cloudflare 按客户端发版滚动 API 版本，path 段(version)与 CF-Client-Version 必须配对，
  * 旧串会被服务端拒（如 wgcf 钉死的 v0a1922 自 2025-08 起注册返 500）。故做成常量、可被 WarpService 覆盖重试。
@@ -120,7 +120,7 @@ export interface WarpWireGuardDraft {
   warpDevice: { deviceId: string; token: string };
 }
 
-/** WARP 注册响应里 FlowZ 关心的子集。 */
+/** WARP 注册响应里 暗影VPN 关心的子集。 */
 export interface WarpRegisterResult {
   /** 对端（WARP relay）地址：endpoint host。 */
   address: string;

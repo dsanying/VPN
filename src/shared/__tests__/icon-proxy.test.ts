@@ -5,7 +5,7 @@
 import { ICON_PROXY_SCHEME, iconProxySrc } from '../icon-proxy';
 
 describe('iconProxySrc', () => {
-  it('https URL 包成 flowz-icon:// 代理 URL', () => {
+  it('https URL 包成 shadowvpn-icon:// 代理 URL', () => {
     const out = iconProxySrc('https://cdn.jsdelivr.net/gh/Koolson/Qure/x.png');
     expect(out).toBe(
       `${ICON_PROXY_SCHEME}://i/${encodeURIComponent('https://cdn.jsdelivr.net/gh/Koolson/Qure/x.png')}`

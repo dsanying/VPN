@@ -14,7 +14,7 @@ import * as os from 'os';
 import * as fsSync from 'fs';
 import * as path from 'path';
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-coreguard-test-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-coreguard-test-'));
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
   dialog: {},

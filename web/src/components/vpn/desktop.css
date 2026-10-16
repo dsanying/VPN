@@ -1,7 +1,10 @@
 .ds-desktop-titlebar { height: var(--ds-space-40); padding-inline: var(--ds-space-16); display: flex; align-items: center; justify-content: center; color: var(--ds-color-text); background: var(--ds-color-surface); -webkit-app-region: drag; }
 .ds-desktop-titlebar button { -webkit-app-region: no-drag; }
 .ds-desktop-titlebar[data-platform="darwin"] { padding-inline-start: calc(var(--ds-space-40) * 2); }
-.ds-desktop-status { display: flex; align-items: center; gap: var(--ds-space-8); padding: var(--ds-space-8) var(--ds-space-16); background: var(--ds-color-surface); border-block-start: 1px solid var(--ds-color-border); }
+.ds-desktop-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ds-space-8); padding: var(--ds-space-8) var(--ds-space-16); background: var(--ds-color-surface); border-block-start: 1px solid var(--ds-color-border); }
+.ds-desktop-status__progress { margin-inline-start: auto; display: inline-flex; align-items: center; gap: var(--ds-space-8); min-width: 0; }
+.ds-desktop-status__meter { width: 100px; height: var(--ds-space-4); flex: none; border-radius: var(--ds-radius-md); background: var(--ds-color-surface-muted); overflow: hidden; }
+.ds-desktop-status__meter > span { display: block; height: 100%; background: var(--ds-color-primary); transition: width 120ms linear; }
 .ds-vpn-state { display: flex; flex-direction: column; gap: var(--ds-space-16); }
 .ds-vpn-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ds-space-8); }
 .ds-vpn-fields { display: flex; flex-direction: column; gap: var(--ds-space-16); }

@@ -4,7 +4,7 @@
  */
 import { loadNodeSortByLatency, useNodeSortStore } from '../use-node-sort-store';
 
-const KEY = 'flowz.nodeSortByLatency';
+const KEY = 'shadow-vpn.nodeSortByLatency';
 
 function makeLocalStorageMock(seed: Record<string, string> = {}) {
   const store: Record<string, string> = { ...seed };

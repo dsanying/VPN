@@ -7,7 +7,7 @@
  * （上游 `experimental/deprecated/constants.go` 的 `OptionImplicitDefaultHTTPClient`：
  * DeprecatedVersion "1.14.0" / ScheduledVersion "1.16.0"）。移除后
  * `httpclient.Manager.DefaultTransport()` 拿不到回落工厂即返回 nil，消费点直接报错——
- * 对 dashboard 是 `create dashboard http client` → api service 起不来。FlowZ 新装默认
+ * 对 dashboard 是 `create dashboard http client` → api service 起不来。暗影VPN 新装默认
  * `singboxDashboard: true`（ConfigManager 种子），故影响面是全量新装用户。
  *
  * 核里**只有两个**消费点索取那个默认 transport（1.14.0-alpha.45 源码全仓 `DefaultTransport()`

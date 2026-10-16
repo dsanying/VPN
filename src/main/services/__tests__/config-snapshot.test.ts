@@ -580,7 +580,7 @@ describe('generateSingBoxConfig — characterization 快照（抽取前锁基线
                 privateKeyPassphrase: 'pp',
                 hostKey: ['ssh-ed25519 AAA'],
                 hostKeyAlgorithms: ['ssh-ed25519'],
-                clientVersion: 'SSH-2.0-FlowZ',
+                clientVersion: 'SSH-2.0-暗影VPN',
               },
             } as unknown as Partial<ServerConfig>),
           ],

@@ -5,13 +5,13 @@ import * as path from 'path';
  * #72 loose 形态原位更新（无安装器，需显式覆盖单文件）：
  * - Windows 便携：覆盖回原便携 exe（`PORTABLE_EXECUTABLE_FILE`）再从原位启动。
  * - Linux AppImage：覆盖回原 `$APPIMAGE` 文件 + chmod+x 再启动。
- * - macOS .app：自动挂载 DMG → 暂存 → 原子替换 `/Applications/FlowZ.app`（带备份回滚）→ 重启。
+ * - macOS .app：自动挂载 DMG → 暂存 → 原子替换 `/Applications/暗影VPN.app`（带备份回滚）→ 重启。
  * 失败一律回退原行为（跑临时副本 / open DMG），绝不留破损件。
  *
  * 「只换单个产物文件、不碰用户数据」不变量（loose 形态原位更新安全的根据）：
  *   配置/已更新内核/规则都在**独立的 data 目录**，不在产物文件里——
  *   · Windows 便携：`<exe 同级>\data\`（config + core_update + rules）
- *   · Linux AppImage：`~/.config/FlowZ`（XDG userData）
+ *   · Linux AppImage：`~/.config/暗影VPN`（XDG userData）
  *   · macOS：`~/Library/Application Support/ShadowVPN`
  *   故覆盖 exe / AppImage / .app 单个产物 → data 原样保留 → 用户配置与已更新内核零丢失。
  *   installed 形态（NSIS / dpkg）由安装器自身原位升级，亦不动各自 data 目录。
@@ -64,7 +64,7 @@ export function buildWindowsUpdateVbs(opts: {
     const newExe = vbsPath(opts.portableNewPath || opts.portableTarget);
     const msg = vbsStr(
       opts.fallbackMessage ||
-        'FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:'
+        '暗影VPN auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:'
     );
     // MsgBox 显示用单反斜杠原路径（src 变量是双写反斜杠、给文件操作"容忍"用，直接展示/粘贴资源管理器不友好）。
     const srcDisplay = vbsStr(opts.installerPath);
@@ -103,7 +103,7 @@ export function buildWindowsUpdateVbs(opts: {
       // 写新名失败（极罕见：原目录只读）→ 不静默：跑临时新版 + 明确提示用户手动替换
       '  Err.Clear',
       '  WshShell.Run """" & src & """", 1, False',
-      `  MsgBox "${msg}" & vbCrLf & "${srcDisplay}", 48, "FlowZ"`,
+      `  MsgBox "${msg}" & vbCrLf & "${srcDisplay}", 48, "暗影VPN"`,
       'End If',
       'On Error Goto 0',
       'fso.DeleteFile WScript.ScriptFullName, True',
@@ -124,7 +124,7 @@ export function buildWindowsUpdateVbs(opts: {
   // 附带行为变化两条：
   // ① 激活 skipPageIfUpdated → 更新时跳过欢迎/目录页（已装机不再问安装目录，杜绝装出第二个目录）。
   // ② $keepShortcuts=true 后 addStartMenuLink/addDesktopLink（installer.nsh:189-243）不再无条件重建快捷方式
-  //    → 用户手动删掉的桌面/开始菜单快捷方式，更新后不再被重建（FlowZ createDesktopShortcut:true 非 "always"、
+  //    → 用户手动删掉的桌面/开始菜单快捷方式，更新后不再被重建（暗影VPN createDesktopShortcut:true 非 "always"、
   //    无 RECREATE define）。此为 electron-updater 生态标准语义，算改进。注意上文第 6 环描述的「安装段重建
   //    快捷方式」是**修复前**的行为，勿与此处混读。
   // 与 electron-updater 官方行为一致（NsisUpdater.ts 恒传 ["--updated"]）。
@@ -139,7 +139,7 @@ export function buildWindowsUpdateVbs(opts: {
 
 /**
  * Linux AppImage 原位更新脚本：覆盖回原 `$APPIMAGE` 文件 + chmod+x + 重启；失败退回跑临时新版。
- * 只换 AppImage 一个文件，`~/.config/FlowZ`（config/core_update/rules）不动 → 用户数据零丢失。
+ * 只换 AppImage 一个文件，`~/.config/暗影VPN`（config/core_update/rules）不动 → 用户数据零丢失。
  * deb 安装态不走此函数（installUpdate 仍 openPath(.deb) 交 dpkg 原位升级）。
  */
 export function buildLinuxAppImageScript(opts: {
@@ -153,7 +153,7 @@ export function buildLinuxAppImageScript(opts: {
     'sleep 2',
     `NEW=${src}`,
     `DEST=${dst}`,
-    // 只覆盖 AppImage 这一个文件；~/.config/FlowZ 不动 → 配置 + 已更新内核零丢失。
+    // 只覆盖 AppImage 这一个文件；~/.config/暗影VPN 不动 → 配置 + 已更新内核零丢失。
     'if cp -f "$NEW" "$DEST" 2>/dev/null; then',
     '  chmod +x "$DEST" 2>/dev/null',
     '  rm -f "$NEW" 2>/dev/null',
@@ -171,7 +171,7 @@ export function buildLinuxAppImageScript(opts: {
  * Linux deb 安装态原位升级脚本：`pkexec apt-get install` 原位升级（apt 比较版本 + 解依赖 + 同包名升级，dpkg 同
  * 路径覆盖）+ 重启新版。取代旧 `shell.openPath(.deb)`——Ubuntu 24.04+ 默认 .deb 处理器是 App Center，对本地 .deb
  * 只按【包名】判「已安装」、不比较版本、不提供升级流程（已装即显示 Installed 灰按钮，deb 用户无法 app 内升级）。
- * data 在 `~/.config/FlowZ` 独立于产物 → 升级零丢失。提权用 pkexec（PolicyKit GUI 授权框，Ubuntu 标准；app 已
+ * data 在 `~/.config/暗影VPN` 独立于产物 → 升级零丢失。提权用 pkexec（PolicyKit GUI 授权框，Ubuntu 标准；app 已
  * 退出，框独立弹出）；用户取消/失败 → 回退 `xdg-open` 下载目录让用户手动处理（不回退 openPath→App Center 死路）。
  *
  * 信任边界：调用方 UpdateService 在下载完成及调用安装前，均按官方 GitHub release API 的
@@ -298,7 +298,7 @@ export function buildMacUpdateScript(opts: {
   ].join('\n');
 }
 
-/** 从可执行路径推导 .app 包路径（/Applications/FlowZ.app/Contents/MacOS/FlowZ → /Applications/FlowZ.app）；不匹配返回 null。 */
+/** 从可执行路径推导 .app 包路径（/Applications/暗影VPN.app/Contents/MacOS/暗影VPN → /Applications/暗影VPN.app）；不匹配返回 null。 */
 export function macAppBundleFromExe(exePath: string): string | null {
   const m = exePath.match(/^(.*\.app)\/Contents\/MacOS\/[^/]+$/);
   return m ? m[1] : null;

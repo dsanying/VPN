@@ -53,8 +53,8 @@ export const TAILNET_ULA_V6 = 'fd7a:115c:a1e0::/48';
 // System 模式内核接口固定名（下发 sing-box system_interface_name）。出口托管 MeshExitRouteManager
 // 按此名在内核接口装/清 exit 拆半默认路由 + 精确定位（见 mesh-exit-route.ts）。WG 端点名选项待证，
 // 取不到则按隧道 IP 反查（uncertainties #1）。
-export const TS_SYSTEM_INTERFACE_NAME = 'flowz-ts';
-export const WG_SYSTEM_INTERFACE_NAME = 'flowz-wg';
+export const TS_SYSTEM_INTERFACE_NAME = 'shadowvpn-ts';
+export const WG_SYSTEM_INTERFACE_NAME = 'shadowvpn-wg';
 
 /**
  * 该 endpoint 节点应被「强制路由到自身 tag」的具体 CIDR（userspace；优先于 bypass-LAN、独立于全局选中）。
@@ -257,7 +257,7 @@ export function meshUsesSystemInterface(server: ServerConfig): boolean {
 
 /**
  * 平台是否支持组网 System 内核接口模式（reverseMesh）。**Windows 禁 System**：Windows 上 sing-box 的 tsnet 给
- * flowz-ts 自装 exit 0/0 metric=0、抢直连/bootstrap DNS 致全网瘫，且无 macOS 的 ifscope 作用域可隔离 → System
+ * shadowvpn-ts 自装 exit 0/0 metric=0、抢直连/bootstrap DNS 致全网瘫，且无 macOS 的 ifscope 作用域可隔离 → System
  * 不可靠；故 Windows 一律强制 gVisor（userspace 栈零提权、不建内核接口、出口经 tsnet 内部转发不依赖 OS 路由）。
  * macOS/Linux 支持 System。接受 process.platform / window.electron.platform 取值，是「Windows 禁 System」的**单一
  * 真值谓词**——ProxyManager.systemInterfaceAvailable、start-retry 预算、UI AccessModeField、MeshExitRouteManager
@@ -287,6 +287,7 @@ export interface SpeedTestCaps {
 export function isSpeedTestable(server: ServerConfig, caps?: SpeedTestCaps): boolean {
   if (server.subscriptionId && isSubscriptionNotice(server.name)) return false;
   const p = server.protocol?.toLowerCase();
+  if (p === 'enterprise') return false; // Enterprise gateways may restrict public Internet; never auto-login for benchmarks.
   if (p === 'tailscale') {
     return (
       caps?.mainCorePool === true &&

@@ -3,7 +3,7 @@ import { WEBSITE_CATALOG } from './website-catalog';
  * 解锁检测 —— main/renderer 共用类型 SoT（单一真值）。
  *
  * 为何在 shared：main 侧检测引擎与 renderer 侧展示共用同一套状态枚举/结果结构，双份定义必漂移
- * （见 flowz-unlock-detection.md §2.2）。renderer 的 `unlock-service-config.ts` re-export 本文件的
+ * （见 shadowvpn-unlock-detection.md §2.2）。renderer 的 `unlock-service-config.ts` re-export 本文件的
  * `UnlockStatus/UnlockResult`，不另定义。
  */
 

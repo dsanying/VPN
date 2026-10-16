@@ -96,7 +96,7 @@ export function buildInbounds(
   // 关键修复：必须启用流量嗅探（sniff），否则 sing-box 无法从 TLS ClientHello 中
   // 提取域名（SNI），导致路由引擎只看到 IP 地址，无法匹配 geosite 规则正确分流。
   // 症状：Instagram 消息中心无网络、WhatsApp 二维码无法扫码等 WebSocket 类应用异常。
-  // NekoBox 等 sing-box 客户端默认开启 sniff，FlowZ 之前遗漏了。
+  // NekoBox 等 sing-box 客户端默认开启 sniff，暗影VPN 之前遗漏了。
   //
   // sing-box 1.14：sniff/sniff_override_destination inbound 级字段已移除。嗅出域名用于路由匹配由路由层
   // push {action:'sniff'} 承担（详见 generateRouteConfig 嗅探规则段）；sniff_override_destination 无替代。
@@ -144,7 +144,7 @@ export function buildInbounds(
     });
   }
 
-  // 更新链路统一 inbound（socks，Phase 2）：FlowZ 应用更新检查/下载（UpdateService）+ 规则资源下载
+  // 更新链路统一 inbound（socks，Phase 2）：暗影VPN 应用更新检查/下载（UpdateService）+ 规则资源下载
   // （RuleResourceManager）+ 订阅（SubscriptionService）流量 pin 到此口（核心链路待后续接入），route 头部钉死按 proxyMode 决策
   // （不限 domain：归属 100% 确定不误伤，且覆盖任意订阅 URL）。用 socks（非 http）——net.request 经 socks
   // 入站不挂死（Phase 0 V2 实证）+ socks 锚点跨平台一致。loopback 不进 TUN。分配失败则不注入。
@@ -269,7 +269,7 @@ export function buildInbounds(
       }
     }
 
-    // 节点 IP 排除（防 FlowZ 连节点的流量回流进 TUN 死循环）：Linux 加法态跳过整块（§12）——节点 /32(/128) 进
+    // 节点 IP 排除（防 暗影VPN 连节点的流量回流进 TUN 死循环）：Linux 加法态跳过整块（§12）——节点 /32(/128) 进
     // route_exclude 同样触发表分解害连入；拨号回环由 auto_detect_interface bind/oif 逸出 TUN 防（v6 侧 Y6 相
     // EGRESS6 已佐证 direct 重拨经 oif 逸出，v4 侧真实节点走 L-B2 裁决）。darwin/win32 维持双保险。
     if (process.platform !== 'linux') {
@@ -295,7 +295,7 @@ export function buildInbounds(
     }
 
     // 「连入来源排除」（本机作服务端被 off-subnet 私网连入 → 回包被 TUN 用户态栈误劫持的治本项，见
-    // docs/design/flowz-tun-lan-exclusion-scenarios.md）：把用户声明的来源网段追加进 route_exclude_address，
+    // docs/design/shadowvpn-tun-lan-exclusion-scenarios.md）：把用户声明的来源网段追加进 route_exclude_address，
     // 使该段（出/入双向）绕过 TUN、走物理网卡。减【生效】组网 force-route 段（mesh 优先，否则误伤组网）/ fakeip 段；
     // macOS 额外减本机物理 LAN 段（排除物理 LAN 会触发 NE 反向路由丢 TUN 回包，见本函数顶部 line ~130 注释）。
     // 仅在用户声明了段时才进入本块（空/未设 → 跳过 getOwnLanCidrs 接口枚举 + computeUserTunExclude）。
@@ -386,7 +386,7 @@ export function buildInbounds(
       tunAddress.push(config.tunConfig?.inet6Address || 'fdfe:dcba:9876::1/126');
     }
 
-    // TUN 网络栈：经 resolveTunStack 把用户选择（含 'auto' 默认档）解析成下发给核的【具体】栈。FlowZ 始终显式
+    // TUN 网络栈：经 resolveTunStack 把用户选择（含 'auto' 默认档）解析成下发给核的【具体】栈。暗影VPN 始终显式
     // pin，绝不吃 sing-box build-tag 默认（编进 gvisor→默认漂成 mixed）。'auto'/缺省→平台默认（mac·Win gvisor /
     // Linux system）；显式 system/gvisor/mixed 原样下发（honor 用户选择，零强制回退——旧 darwin&&system→gvisor
     // 强制回退已移除，它把"用户选 system"与"未设置"混为一谈）。依据/置信度见 docs/design/tun-stack-option.md。

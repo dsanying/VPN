@@ -48,9 +48,12 @@ describe('isSupported', () => {
     's5://x',
     'http://x',
     'https://x',
+    'hysteria://x',
+    'wireguard://x',
+    'wg://x',
   ])('支持 %s', (u) => expect(parser.isSupported(u)).toBe(true));
 
-  it.each(['ftp://x', 'wireguard://x', 'tailscale://x', 'foobar'])('不支持 %s', (u) =>
+  it.each(['ftp://x', 'tailscale://x', 'foobar'])('不支持 %s', (u) =>
     expect(parser.isSupported(u)).toBe(false)
   );
 });
@@ -472,8 +475,14 @@ describe('IPv6 / 通用', () => {
   });
 
   it('generateUrl 不支持协议 → 抛错', () => {
-    expect(() => parser.generateUrl({ id: 'x', protocol: 'wireguard' } as ServerConfig)).toThrow(
+    expect(() => parser.generateUrl({ id: 'x', protocol: 'tailscale' } as ServerConfig)).toThrow(
       /不支持的协议/
+    );
+  });
+
+  it('generateUrl WireGuard 缺设置 → 抛错而非生成残链', () => {
+    expect(() => parser.generateUrl({ id: 'x', protocol: 'wireguard' } as ServerConfig)).toThrow(
+      /缺少私钥/
     );
   });
 });
@@ -1001,5 +1010,101 @@ describe('ALPN 归一化（逗号串 → 数组统一 dedupeTrim：修剪空白 
       const c = parser.parseUrl(mkVmess({ ...base, alpn: ['h2', ' http/1.1'] }));
       expect(c.tlsSettings?.alpn).toEqual(['h2', 'http/1.1']);
     });
+  });
+});
+
+describe('Hysteria v1（hysteria:// → mihomo 兼容）', () => {
+  it('完整参数 → mihomo 出站字段', () => {
+    const c = parser.parseUrl(
+      'hysteria://e.example.com:443?auth=secret&peer=e.example.com&insecure=1&upmbps=100&downmbps=200&alpn=h3,h2&obfs=x&protocol=udp&mport=443,5000-6000#h1'
+    );
+    expect(c.protocol).toBe('custom');
+    expect(c.compatibilitySettings).toEqual({
+      engine: 'mihomo',
+      outbound: {
+        name: 'h1',
+        type: 'hysteria',
+        server: 'e.example.com',
+        port: 443,
+        'auth-str': 'secret',
+        sni: 'e.example.com',
+        'skip-cert-verify': true,
+        up: 100,
+        down: 200,
+        obfs: 'x',
+        protocol: 'udp',
+        ports: '443,5000-6000',
+        alpn: ['h3', 'h2'],
+      },
+    });
+  });
+
+  it('缺 auth 拒绝', () => {
+    expect(() => parser.parseUrl('hysteria://e.example.com:443#h1')).toThrow('缺少 auth');
+  });
+
+  it('往返稳定', () => {
+    void expectRoundTripStable(
+      'hysteria://e.example.com:443?auth=secret&peer=e.example.com&upmbps=100#h1'
+    );
+  });
+});
+
+describe('WireGuard（wireguard:///wg://）', () => {
+  const wgUrl =
+    'wireguard://cHJpdg%3D%3D@wg.example.com:51820?publickey=cHVi%3D&address=10.0.0.2%2F32%2Cfd00%3A%3A2%2F128&presharedkey=cHNr&mtu=1420&reserved=1%2C2%2C3&keepalive=25&allowedips=10.9.0.0%2F24#wg';
+
+  it('完整参数 → 原生 wireguardSettings', () => {
+    const c = parser.parseUrl(wgUrl);
+    expect(c.protocol).toBe('wireguard');
+    expect(c.wireguardSettings).toEqual({
+      privateKey: 'cHJpdg==',
+      localAddress: ['10.0.0.2/32', 'fd00::2/128'],
+      peerPublicKey: 'cHVi=',
+      preSharedKey: 'cHNr',
+      allowedIPs: ['10.9.0.0/24'],
+      reserved: [1, 2, 3],
+      mtu: 1420,
+      persistentKeepalive: 25,
+    });
+  });
+
+  it('wg:// 别名等价', () => {
+    expect(parser.parseUrl(wgUrl.replace('wireguard://', 'wg://')).wireguardSettings).toEqual(
+      parser.parseUrl(wgUrl).wireguardSettings
+    );
+  });
+
+  it('缺公钥/私钥/address 拒绝', () => {
+    expect(() => parser.parseUrl('wireguard://key@wg.example.com?address=10.0.0.2/32')).toThrow(
+      '缺少私钥或对端公钥'
+    );
+    expect(() => parser.parseUrl('wireguard://@wg.example.com?publickey=x')).toThrow(
+      '缺少私钥或对端公钥'
+    );
+    expect(() => parser.parseUrl('wireguard://k@wg.example.com?publickey=x')).toThrow('address');
+  });
+
+  it('非法 reserved/mtu 拒绝而非静默退化', () => {
+    expect(() =>
+      parser.parseUrl('wireguard://k@wg.example.com?publickey=x&address=10.0.0.1/32&reserved=1,2')
+    ).toThrow('reserved');
+    expect(() =>
+      parser.parseUrl('wireguard://k@wg.example.com?publickey=x&address=10.0.0.1/32&mtu=abc')
+    ).toThrow('mtu');
+  });
+
+  it('往返稳定', () => {
+    void expectRoundTripStable(wgUrl);
+  });
+
+  it('组网/WARP 语义节点拒绝有损导出', () => {
+    const c = parser.parseUrl(wgUrl);
+    expect(() =>
+      parser.generateUrl({
+        ...c,
+        wireguardSettings: { ...c.wireguardSettings!, reverseMesh: true },
+      })
+    ).toThrow('组网/WARP');
   });
 });

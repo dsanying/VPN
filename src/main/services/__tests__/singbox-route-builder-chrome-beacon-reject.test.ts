@@ -3,7 +3,7 @@
  *
  * 缺陷形态：`buildRouteConfig` 曾有一张无条件（`proxyMode !== 'direct'` 即发射）的 `action: 'reject'`
  * 域名表，收录 14 个 Google 域名，本意是拒掉 Chrome 周期性后台服务、防它们在代理出口超时"耗尽连接池"。
- * 其中 **`clients2.google.com` 是扩展商店 CRX 的更新与下载端点** —— 于是每个 FlowZ 用户装扩展/主题必失败
+ * 其中 **`clients2.google.com` 是扩展商店 CRX 的更新与下载端点** —— 于是每个 暗影VPN 用户装扩展/主题必失败
  * （Chrome 报 `Download interrupted`），系统代理与 TUN 同症（route 规则模式无关），而其他 sing-box
  * 客户端无此表故不复现。真内核 A/B 实测：表在场 `connection closed: rejected`；移除后同一 URL
  * 302 → CRX 200 / 47794 B。表内另有三处静默功能损失：Chrome 自升级、Google 账号登录、FCM 网页推送。
@@ -15,7 +15,7 @@
  * 本门钉的是**判据**而不是那 14 个域名：**任何按域名匹配、且不带 `network`/`port` 收窄的 reject 规则
  * 都不得出现**。缩表版、换一批域名的新表、别处再塞一张，全部判红。
  *
- * 为什么用"不带 network/port"划界：FlowZ 有两类刻意的 reject —— QUIC(UDP 443) 迫使回退 TCP、
+ * 为什么用"不带 network/port"划界：暗影VPN 有两类刻意的 reject —— QUIC(UDP 443) 迫使回退 TCP、
  * DoH 域名(443/853) 防泄漏绕过 hijack-dns。它们都带收窄字段，且都不是"整类域名一律拒"。
  * 另两类不按域名匹配（`protocol: 'stun'` 的 WebRTC block 档、自定义规则的 logical AND udp443），
  * 天然不在射程内 —— 下方 blockQuic 档就是为证明本门不误伤它们而设。
@@ -27,7 +27,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-route-beacon-test-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-route-beacon-test-'));
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getAppPath: () => TMP, isPackaged: false },
   net: {},

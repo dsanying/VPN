@@ -3,17 +3,17 @@ export type ThemeMode = 'light' | 'dark';
 /** Public design settings preserve the established client geometry across every host. */
 export const designTokens = {
   breakpoint: { compact: 480, narrow: 640, mobile: 768 },
-  control: { height: 36, heightLg: 40, heightSm: 28 },
+  control: { height: 32, heightLg: 40, heightSm: 28 },
   font: {
     family:
       '"IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif',
     mono: '"IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
-    sizeBody: 16,
-    sizeLg: 18,
-    sizeMetric: 32,
-    sizePageTitle: 26,
-    sizeTitle: 22,
-    sizeXs: 14,
+    sizeBody: 14,
+    sizeLg: 16,
+    sizeMetric: 28,
+    sizePageTitle: 24,
+    sizeTitle: 20,
+    sizeXs: 12,
   },
   layout: {
     contentMaxWidth: 1600,

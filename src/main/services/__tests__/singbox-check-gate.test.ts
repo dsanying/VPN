@@ -42,7 +42,7 @@ import { createServer, request } from 'http';
 import { createServer as createTcpServer } from 'net';
 import { once } from 'events';
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-sbcheck-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-sbcheck-'));
 jest.mock('electron', () => ({
   app: {
     getPath: () => TMP,

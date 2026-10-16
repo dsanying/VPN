@@ -11,8 +11,8 @@
  */
 
 const mockApp = {
-  getPath: jest.fn((k: string): string => (k === 'userData' ? '/root/.config/FlowZ' : '/root')),
-  getName: jest.fn((): string => 'FlowZ'),
+  getPath: jest.fn((k: string): string => (k === 'userData' ? '/root/.config/暗影VPN' : '/root')),
+  getName: jest.fn((): string => '暗影VPN'),
   setPath: jest.fn(),
   isPackaged: false,
 };
@@ -63,13 +63,13 @@ describeRoot('userData root 提权统一（initUserDataPath setPath 根治 shado
   it('darwin+root：initUserDataPath 修正到真实用户家并 setPath；getUserDataPath 不再被 shadow', () => {
     setPlatform('darwin');
     asRoot(0);
-    process.env.SUDO_USER = 'zzflowztestuser';
+    process.env.SUDO_USER = 'zzshadowvpntestuser';
     process.env.HOME = '/var/root';
-    setUserDataDefault('/var/root/Library/Application Support/FlowZ');
+    setUserDataDefault('/var/root/Library/Application Support/暗影VPN');
     jest.isolateModules(() => {
       const paths = require('../paths');
       paths.initUserDataPath();
-      const expected = '/Users/zzflowztestuser/Library/Application Support/FlowZ';
+      const expected = '/Users/zzshadowvpntestuser/Library/Application Support/暗影VPN';
       expect(mockApp.setPath).toHaveBeenCalledWith('userData', expected);
       expect(paths.getUserDataPath()).toBe(expected);
     });
@@ -79,11 +79,11 @@ describeRoot('userData root 提权统一（initUserDataPath setPath 根治 shado
     setPlatform('linux');
     asRoot(0);
     process.env.HOME = '/data/custom-user';
-    setUserDataDefault('/root/.config/FlowZ');
+    setUserDataDefault('/root/.config/暗影VPN');
     jest.isolateModules(() => {
       const paths = require('../paths');
       paths.initUserDataPath();
-      const expected = '/data/custom-user/.config/FlowZ';
+      const expected = '/data/custom-user/.config/暗影VPN';
       expect(mockApp.setPath).toHaveBeenCalledWith('userData', expected);
       expect(paths.getUserDataPath()).toBe(expected);
     });
@@ -93,12 +93,12 @@ describeRoot('userData root 提权统一（initUserDataPath setPath 根治 shado
     setPlatform('linux');
     asRoot(1000);
     process.env.HOME = '/home/normal';
-    setUserDataDefault('/home/normal/.config/FlowZ');
+    setUserDataDefault('/home/normal/.config/暗影VPN');
     jest.isolateModules(() => {
       const paths = require('../paths');
       paths.initUserDataPath();
       expect(mockApp.setPath).not.toHaveBeenCalled();
-      expect(paths.getUserDataPath()).toBe('/home/normal/.config/FlowZ');
+      expect(paths.getUserDataPath()).toBe('/home/normal/.config/暗影VPN');
     });
   });
 
@@ -106,12 +106,12 @@ describeRoot('userData root 提权统一（initUserDataPath setPath 根治 shado
     setPlatform('darwin');
     asRoot(0);
     process.env.HOME = '/var/root';
-    process.env.SUDO_USER = 'zzflowztestcarol';
-    setUserDataDefault('/var/root/Library/Application Support/FlowZ');
+    process.env.SUDO_USER = 'zzshadowvpntestcarol';
+    setUserDataDefault('/var/root/Library/Application Support/暗影VPN');
     jest.isolateModules(() => {
       const paths = require('../paths');
       expect(paths.getUserDataPath()).toBe(
-        '/Users/zzflowztestcarol/Library/Application Support/FlowZ'
+        '/Users/zzshadowvpntestcarol/Library/Application Support/暗影VPN'
       );
     });
   });

@@ -1,7 +1,7 @@
 /**
  * 极小 DNS wire（application/dns-message, RFC 1035）编解码 —— 纯函数、无 I/O、可逐字节单测。
  *
- * 用途（#57 resolve-ahead）：FlowZ 主进程在生成 sing-box 配置前，用 DoH（POST application/dns-message）
+ * 用途（#57 resolve-ahead）：暗影VPN 主进程在生成 sing-box 配置前，用 DoH（POST application/dns-message）
  * 把节点服务器域名并发解析为 IP。选 wire 而非各家 JSON API：universal、与现有 dns-bootstrap 同协议、
  * 易固定包字节断言。仅需 A（IPv4）记录——v1 不解析 AAAA（与关 IPv6 时 ipv4_only 一致）。
  *

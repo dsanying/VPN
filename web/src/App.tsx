@@ -1,3 +1,4 @@
+import { NodeAuthenticationHost } from '@/components/vpn/NodeAuthenticationHost';
 import { useEffect } from 'react';
 import { useRoutes } from 'react-router';
 import { ConfigProvider, App as AntdApp } from 'antd';
@@ -57,6 +58,7 @@ export function App() {
     <AntdApp className="ds-desktop-shell" notification={{ placement: 'topRight', duration: 3, showProgress: true, stack: { threshold: 2 } }}>
       <FeedbackBridge />
       <GlobalUpdateNotice />
+      {ready ? <NodeAuthenticationHost /> : null}
       <DesktopTitlebar />
       <div className="ds-desktop-body"><RuntimeBoundary>{content}</RuntimeBoundary></div>
       {ready ? <DesktopStatus /> : null}

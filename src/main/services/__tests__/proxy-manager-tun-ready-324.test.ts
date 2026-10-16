@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const fsSync = require('fs');
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-tun324-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-tun324-'));
 
 jest.mock('electron', () => ({
   app: { getPath: () => TMP, getVersion: () => '9.9.9', isPackaged: false, getAppPath: () => TMP },
@@ -231,7 +231,7 @@ describe('B8 — 就绪窗内零 spawn（起核关键路径上不得起进程）
   /**
    * 为什么这组门值一整个 describe：真机实测「杀软扫 82MB 新核」的窗口里，一次 netsh/tasklist 要 150–819ms
    * （空载 50–80ms），而 `execFile` 的异步只是**回调**异步——`uv_spawn` 在 event loop 线程上同步跑，
-   * 起一次进程就把主线程堵那么久。同窗口 FlowZ 自己的首次就绪探测（一次 loopback connect，正常 <5ms）
+   * 起一次进程就把主线程堵那么久。同窗口 暗影VPN 自己的首次就绪探测（一次 loopback connect，正常 <5ms）
    * 被拖到 2538–4036ms，API 明明 1.2–1.6s 就已可连，就绪却要 3.0–4.4s 才宣布。
    * 故「窗内不起进程」是这批改动的**判据本身**，不是实现细节——下面每条都钉一个会让它复活的变异。
    */

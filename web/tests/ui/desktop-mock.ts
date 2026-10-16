@@ -9,6 +9,7 @@ export async function installDesktopMock(page:Page,options:{helperStatus?:Partia
   const invoke=async(channel:string,args:any)=>{calls.push({channel,args});let data:unknown;
    if(channel===options.failActionChannel)throw new Error('Action rejected');
    switch(channel){
+    case 'enterprise:get':data={profiles:[],sessions:[]};break;
     case 'server:measurements':data=options.fixtures?.measurements??{};break;
     case 'config:get':data=config;break;
     case 'config:getPrivacyMode':data=options.locked??false;break;

@@ -11,7 +11,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fsSync from 'fs';
 
-const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'flowz-upd-gh-'));
+const TMP = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-upd-gh-'));
 
 jest.mock('electron', () => ({
   app: {

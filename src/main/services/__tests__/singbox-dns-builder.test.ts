@@ -13,8 +13,8 @@
 
 // getCustomRulesDir / getRuleSetRuntimeDir 依赖 electron app → mock 成固定 tmp，避免 buildDnsConfig 间接触 electron。
 jest.mock('../../utils/paths', () => ({
-  getUserDataPath: () => '/tmp/flowz-dns-builder-test',
-  getCustomRulesDir: () => '/tmp/flowz-dns-builder-test/rules',
+  getUserDataPath: () => '/tmp/shadowvpn-dns-builder-test',
+  getCustomRulesDir: () => '/tmp/shadowvpn-dns-builder-test/rules',
 }));
 
 import { buildDnsConfig } from '../singbox-dns-builder';
@@ -508,4 +508,48 @@ describe('buildDnsConfig — §15 主核测速探测池', () => {
     expect(probeIdx).toBe(0); // §15.11-F3：非 FakeIP 分支下 probe 规则同样在绝对最前
     expect(catchAllIdx).toBeGreaterThan(probeIdx);
   });
+});
+
+test('enterprise resource DNS stays on its tunnel resolver and preserves explicit domain overrides', () => {
+  const node: ServerConfig = {
+    id: 'enterprise',
+    name: 'Enterprise',
+    protocol: 'socks',
+    address: '127.0.0.1',
+    port: 22000,
+    enterpriseSettings: {
+      profileId: 'enterprise',
+      gateway: 'https://example.com/',
+      client: 'anyconnect',
+      dnsPort: 24001,
+    },
+  };
+  const config = baseConfig([node], null);
+  config.proxyMode = 'smart';
+  config.customRules = [
+    { id: 'user', type: 'domain', values: ['public.example.com'], enabled: true, action: 'direct' },
+    {
+      id: 'resource',
+      type: 'domainSuffix',
+      values: ['internal.example.com'],
+      enabled: true,
+      action: 'proxy',
+      targetServerId: 'enterprise',
+    },
+  ];
+  const dns = build(config);
+  expect(dns.servers).toContainEqual({
+    tag: 'dns-enterprise-enterprise',
+    type: 'udp',
+    server: '127.0.0.1',
+    server_port: 24001,
+  });
+  const user = dns.rules!.findIndex((r) => r.domain?.includes('public.example.com'));
+  const resource = dns.rules!.findIndex((r) => r.domain_suffix?.includes('internal.example.com'));
+  expect(user).toBeGreaterThanOrEqual(0);
+  expect(resource).toBeGreaterThan(user);
+  expect(dns.rules![user].server).toBe('dns-domestic');
+  expect(dns.rules![resource].server).toBe('dns-enterprise-enterprise');
+  config.proxyMode = 'global';
+  expect(build(config).servers.some((s) => s.tag === 'dns-enterprise-enterprise')).toBe(false);
 });

@@ -20,6 +20,13 @@ import {
 
 /** key → 各受支持语言文案。satisfies 保证每键 5 语齐全；新增主进程用户可见串在此扩展。 */
 const MESSAGES = {
+  gatewayRegion: {
+    'zh-CN': '网关地区',
+    'en-US': 'Gateway region',
+    'zh-TW': '閘道地區',
+    ru: 'Регион шлюза',
+    fa: 'منطقه دروازه',
+  },
   productName: {
     'zh-CN': '暗影VPN',
     'zh-TW': '暗影VPN',
@@ -30,13 +37,13 @@ const MESSAGES = {
   // —— CLI / 非 GUI 早退（cli-early-exit，main 进程顶层；headless 提示走系统 locale，禁硬编码） ——
   headlessNoDisplay: {
     'zh-CN':
-      'FlowZ 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：flowz --version',
+      '暗影VPN 是图形界面应用，需要桌面环境运行；当前未检测到显示服务（DISPLAY/Wayland）。查看版本请运行：shadow-vpn --version',
     'zh-TW':
-      'FlowZ 是圖形介面應用，需要桌面環境執行；目前未偵測到顯示服務（DISPLAY/Wayland）。查看版本請執行：flowz --version',
+      '暗影VPN 是圖形介面應用，需要桌面環境執行；目前未偵測到顯示服務（DISPLAY/Wayland）。查看版本請執行：shadow-vpn --version',
     'en-US':
-      'FlowZ is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: flowz --version',
-    ru: 'FlowZ — графическое приложение, которому нужна среда рабочего стола; сервер отображения (DISPLAY/Wayland) не обнаружен. Чтобы узнать версию, выполните: flowz --version',
-    fa: 'FlowZ یک برنامهٔ گرافیکی است و به محیط دسکتاپ نیاز دارد؛ هیچ سرور نمایشی (DISPLAY/Wayland) شناسایی نشد. برای دیدن نسخه اجرا کنید: flowz --version',
+      'ShadowVPN is a GUI application and needs a desktop environment; no display server (DISPLAY/Wayland) was detected. To check the version, run: shadow-vpn --version',
+    ru: 'ShadowVPN — графическое приложение, которому нужна среда рабочего стола; сервер отображения (DISPLAY/Wayland) не обнаружен. Чтобы узнать версию, выполните: shadow-vpn --version',
+    fa: 'ShadowVPN یک برنامهٔ گرافیکی است و به محیط دسکتاپ نیاز دارد؛ هیچ سرور نمایشی (DISPLAY/Wayland) شناسایی نشد. برای دیدن نسخه اجرا کنید: shadow-vpn --version',
   },
   // —— 本地导入文件对话框（subscription-handlers，dialog.showOpenDialog title/filters 跟随系统语言） ——
   localImportPickTitle: {
@@ -62,12 +69,12 @@ const MESSAGES = {
   },
   // —— Windows 便携自更新覆盖失败提示（update-install-script VBS MsgBox；路径由 VBS 拼接，故末尾留冒号） ——
   portableUpdateManualReplace: {
-    'zh-CN': 'FlowZ 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：',
-    'zh-TW': 'FlowZ 自動更新未能替換便攜程式。新版已下載到下方路徑，請手動替換：',
+    'zh-CN': '暗影VPN 自动更新未能替换便携程序。新版已下载到下方路径，请手动替换：',
+    'zh-TW': '暗影VPN 自動更新未能替換便攜程式。新版已下載到下方路徑，請手動替換：',
     'en-US':
-      'FlowZ auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:',
-    ru: 'FlowZ не смог заменить переносимый файл при автообновлении. Новая версия загружена по пути ниже — замените её вручную:',
-    fa: 'به‌روزرسانی خودکار FlowZ نتوانست فایل قابل‌حمل را جایگزین کند. نسخهٔ جدید در مسیر زیر دانلود شد — لطفاً به‌صورت دستی جایگزین کنید:',
+      'ShadowVPN auto-update could not replace the portable executable. The new version was downloaded to the path below — please replace it manually:',
+    ru: 'ShadowVPN не смог заменить переносимый файл при автообновлении. Новая версия загружена по пути ниже — замените её вручную:',
+    fa: 'به‌روزرسانی خودکار ShadowVPN نتوانست فایل قابل‌حمل را جایگزین کند. نسخهٔ جدید در مسیر زیر دانلود شد — لطفاً به‌صورت دستی جایگزین کنید:',
   },
   // —— deb 更新的一次性授权说明（pkexec polkit 通用框文案改不了，先在 app 内解释缘由） ——
   debUpdateElevationTitle: {
@@ -78,11 +85,11 @@ const MESSAGES = {
     fa: 'به‌روزرسانی به یک مجوز مدیر (یک‌بار) نیاز دارد',
   },
   debUpdateElevationMessage: {
-    'zh-CN': '即将更新 FlowZ（deb 版）',
-    'zh-TW': '即將更新 FlowZ（deb 版）',
-    'en-US': 'About to update FlowZ (deb build)',
-    ru: 'Обновление FlowZ (сборка deb)',
-    fa: 'در حال به‌روزرسانی FlowZ (نسخهٔ deb)',
+    'zh-CN': '即将更新 暗影VPN（deb 版）',
+    'zh-TW': '即將更新 暗影VPN（deb 版）',
+    'en-US': 'About to update ShadowVPN (deb build)',
+    ru: 'Обновление ShadowVPN (сборка deb)',
+    fa: 'در حال به‌روزرسانی ShadowVPN (نسخهٔ deb)',
   },
   debUpdateElevationDetail: {
     'zh-CN':
@@ -110,18 +117,18 @@ const MESSAGES = {
   },
   // —— 桌面通知（notify-user 出口） ——
   proxyErrorTitle: {
-    'zh-CN': 'FlowZ 代理出错',
-    'zh-TW': 'FlowZ 代理出錯',
-    'en-US': 'FlowZ Proxy Error',
-    ru: 'Ошибка прокси FlowZ',
-    fa: 'خطای پروکسی FlowZ',
+    'zh-CN': '暗影VPN 代理出错',
+    'zh-TW': '暗影VPN 代理出錯',
+    'en-US': 'ShadowVPN Proxy Error',
+    ru: 'Ошибка прокси ShadowVPN',
+    fa: 'خطای پروکسی ShadowVPN',
   },
   proxyErrorBody: {
     'zh-CN': '代理已停止，请打开应用查看详情',
     'zh-TW': '代理已停止，請打開應用查看詳情',
-    'en-US': 'The proxy has stopped. Open FlowZ for details.',
-    ru: 'Прокси остановлен. Откройте FlowZ, чтобы узнать подробности.',
-    fa: 'پروکسی متوقف شد. برای جزئیات FlowZ را باز کنید.',
+    'en-US': 'The proxy has stopped. Open ShadowVPN for details.',
+    ru: 'Прокси остановлен. Откройте ShadowVPN, чтобы узнать подробности.',
+    fa: 'پروکسی متوقف شد. برای جزئیات ShadowVPN را باز کنید.',
   },
   fakeIpTunAutoEnabledTitle: {
     'zh-CN': '已自动启用 FakeIP',
@@ -139,11 +146,11 @@ const MESSAGES = {
     fa: 'FakeIP برای حالت TUN به‌طور خودکار فعال شد (توصیه‌شده). در تنظیمات ← شبکه خاموش کنید.',
   },
   helperDisabledTitle: {
-    'zh-CN': 'FlowZ 提权助手被关闭',
-    'zh-TW': 'FlowZ 提權助手被關閉',
-    'en-US': 'FlowZ helper disabled',
-    ru: 'Помощник FlowZ отключён',
-    fa: 'دستیار FlowZ غیرفعال شد',
+    'zh-CN': '暗影VPN 提权助手被关闭',
+    'zh-TW': '暗影VPN 提權助手被關閉',
+    'en-US': 'ShadowVPN helper disabled',
+    ru: 'Помощник ShadowVPN отключён',
+    fa: 'دستیار ShadowVPN غیرفعال شد',
   },
   helperDisabledBody: {
     'zh-CN': 'TUN 无法自动启动，点此打开设置重新开启。',
@@ -169,22 +176,22 @@ const MESSAGES = {
     fa: 'برنامه را به‌صورت دستی حذف کنید',
   },
   uninstallManualMessage: {
-    'zh-CN': 'FlowZ 用户数据已清除。',
-    'zh-TW': 'FlowZ 使用者資料已清除。',
-    'en-US': 'FlowZ user data has been removed.',
-    ru: 'Пользовательские данные FlowZ удалены.',
-    fa: 'داده‌های کاربری FlowZ حذف شد.',
+    'zh-CN': '暗影VPN 用户数据已清除。',
+    'zh-TW': '暗影VPN 使用者資料已清除。',
+    'en-US': 'ShadowVPN user data has been removed.',
+    ru: 'Пользовательские данные ShadowVPN удалены.',
+    fa: 'داده‌های کاربری ShadowVPN حذف شد.',
   },
   // detail 末尾会拼接应用本体的实际路径（exe 目录或 AppImage 文件），故以冒号结尾。
   uninstallManualBody: {
     'zh-CN':
-      '应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：',
+      '应用本体未能自动删除（可能位于系统目录或受保护位置）：\n• 若经 .deb 安装：sudo apt remove shadow-vpn（或 sudo dpkg -r shadow-vpn）\n• 若以 AppImage 运行：请删除你的 .AppImage 文件\n• 否则请手动删除以下路径：',
     'zh-TW':
-      '應用本體未能自動刪除（可能位於系統目錄或受保護位置）：\n• 若經 .deb 安裝：sudo apt remove flowz（或 sudo dpkg -r flowz）\n• 若以 AppImage 執行：請刪除你的 .AppImage 檔案\n• 否則請手動刪除以下路徑：',
+      '應用本體未能自動刪除（可能位於系統目錄或受保護位置）：\n• 若經 .deb 安裝：sudo apt remove shadow-vpn（或 sudo dpkg -r shadow-vpn）\n• 若以 AppImage 執行：請刪除你的 .AppImage 檔案\n• 否則請手動刪除以下路徑：',
     'en-US':
-      'The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove flowz (or sudo dpkg -r flowz)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:',
-    ru: 'Само приложение не удалось удалить автоматически (возможно, оно в системном или защищённом расположении):\n• Если установлено через .deb: sudo apt remove flowz (или sudo dpkg -r flowz)\n• Если запущено как AppImage: удалите ваш файл .AppImage\n• Иначе удалите этот путь вручную:',
-    fa: 'خودِ برنامه به‌صورت خودکار حذف نشد (ممکن است در مسیری سیستمی یا محافظت‌شده باشد):\n• اگر از طریق ‎.deb‎ نصب شده: sudo apt remove flowz (یا sudo dpkg -r flowz)\n• اگر به‌صورت AppImage اجرا می‌شود: فایل ‎.AppImage‎ خود را حذف کنید\n• در غیر این صورت این مسیر را به‌صورت دستی حذف کنید:',
+      'The app itself could not be removed automatically (it may be in a system or protected location):\n• If installed via .deb: sudo apt remove shadow-vpn (or sudo dpkg -r shadow-vpn)\n• If running as an AppImage: delete your .AppImage file\n• Otherwise, delete this path manually:',
+    ru: 'Само приложение не удалось удалить автоматически (возможно, оно в системном или защищённом расположении):\n• Если установлено через .deb: sudo apt remove shadow-vpn (или sudo dpkg -r shadow-vpn)\n• Если запущено как AppImage: удалите ваш файл .AppImage\n• Иначе удалите этот путь вручную:',
+    fa: 'خودِ برنامه به‌صورت خودکار حذف نشد (ممکن است در مسیری سیستمی یا محافظت‌شده باشد):\n• اگر از طریق ‎.deb‎ نصب شده: sudo apt remove shadow-vpn (یا sudo dpkg -r shadow-vpn)\n• اگر به‌صورت AppImage اجرا می‌شود: فایل ‎.AppImage‎ خود را حذف کنید\n• در غیر این صورت این مسیر را به‌صورت دستی حذف کنید:',
   },
   uninstallManualOk: {
     'zh-CN': '知道了',
@@ -299,16 +306,16 @@ const MESSAGES = {
     fa: 'باز کردن پنجره اصلی',
   },
   trayDisableProxy: {
-    'zh-CN': '断开代理',
-    'zh-TW': '斷開代理',
-    'en-US': 'Disconnect Proxy',
+    'zh-CN': '关闭代理',
+    'zh-TW': '關閉代理',
+    'en-US': 'Disable Proxy',
     ru: 'Отключить прокси',
     fa: 'غیرفعال‌سازی پروکسی',
   },
   trayEnableProxy: {
-    'zh-CN': '连接代理',
-    'zh-TW': '連接代理',
-    'en-US': 'Connect Proxy',
+    'zh-CN': '开启代理',
+    'zh-TW': '開啟代理',
+    'en-US': 'Enable Proxy',
     ru: 'Включить прокси',
     fa: 'فعال‌سازی پروکسی',
   },
@@ -328,6 +335,13 @@ const MESSAGES = {
     fa: 'مسیریابی',
   },
 
+  trayExportDiagnostics: {
+    'zh-CN': '导出日志',
+    'zh-TW': '匯出日誌',
+    'en-US': 'Export diagnostics',
+    ru: 'Экспорт диагностики',
+    fa: 'صدور گزارش عیب‌یابی',
+  },
   trayOpenSettings: {
     'zh-CN': '打开设置',
     'zh-TW': '開啟設定',
@@ -524,13 +538,13 @@ const MESSAGES = {
   },
   dlgMacBgOffDetail: {
     'zh-CN':
-      '请在「系统设置 > 通用 > 登录项与扩展」重新打开 FlowZ 的「允许在后台」开关，然后回到 FlowZ 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。',
+      '请在「系统设置 > 通用 > 登录项与扩展」重新打开 暗影VPN 的「允许在后台」开关，然后回到 暗影VPN 重新点击启动即可（届时免授权直接走提权助手）。\n「本次直接启动」会以系统管理员授权方式运行（弹一次密码框），不依赖后台开关；但之后每次启停都需授权，建议尽快去系统设置打开开关。',
     'zh-TW':
-      '請在「系統設定 > 一般 > 登入項目與擴充功能」重新打開 FlowZ 的「允許在背景」開關，然後回到 FlowZ 重新點擊啟動即可（屆時免授權直接走提權助手）。\n「本次直接啟動」會以系統管理員授權方式執行（彈一次密碼框），不依賴背景開關；但之後每次啟停都需授權，建議盡快去系統設定打開開關。',
+      '請在「系統設定 > 一般 > 登入項目與擴充功能」重新打開 暗影VPN 的「允許在背景」開關，然後回到 暗影VPN 重新點擊啟動即可（屆時免授權直接走提權助手）。\n「本次直接啟動」會以系統管理員授權方式執行（彈一次密碼框），不依賴背景開關；但之後每次啟停都需授權，建議盡快去系統設定打開開關。',
     'en-US':
-      'Open System Settings → General → Login Items & Extensions and turn the "Allow in Background" toggle back on for FlowZ, then return to FlowZ and start again (no authorization needed then).\n"Start this session" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended.',
-    ru: 'Откройте «Системные настройки → Основные → Объекты входа и расширения» и снова включите переключатель «Разрешить в фоне» для FlowZ, затем вернитесь в FlowZ и запустите снова (тогда авторизация не нужна).\n«Запустить сейчас» работает с авторизацией системного администратора (один запрос пароля) и не зависит от переключателя; после этого каждый запуск/остановка будет запрашивать пароль, поэтому рекомендуется снова включить переключатель.',
-    fa: 'به «تنظیمات سیستم ← عمومی ← موارد ورود و افزونه‌ها» بروید و کلید «اجازه در پس‌زمینه» را برای FlowZ دوباره روشن کنید، سپس به FlowZ بازگردید و دوباره راه‌اندازی کنید (آنگاه به احراز هویت نیازی نیست).\n«راه‌اندازی این بار» با احراز هویت مدیر سیستم اجرا می‌شود (یک بار درخواست رمز) و به این کلید وابسته نیست؛ اما پس از آن هر شروع/توقف درخواست رمز می‌کند، بنابراین روشن کردن دوباره کلید توصیه می‌شود.',
+      'Open System Settings → General → Login Items & Extensions and turn the "Allow in Background" toggle back on for ShadowVPN, then return to ShadowVPN and start again (no authorization needed then).\n"Start this session" runs with system administrator authorization (one password prompt) and does not depend on the toggle; each start/stop will prompt afterwards, so re-enabling the toggle is recommended.',
+    ru: 'Откройте «Системные настройки → Основные → Объекты входа и расширения» и снова включите переключатель «Разрешить в фоне» для ShadowVPN, затем вернитесь в ShadowVPN и запустите снова (тогда авторизация не нужна).\n«Запустить сейчас» работает с авторизацией системного администратора (один запрос пароля) и не зависит от переключателя; после этого каждый запуск/остановка будет запрашивать пароль, поэтому рекомендуется снова включить переключатель.',
+    fa: 'به «تنظیمات سیستم ← عمومی ← موارد ورود و افزونه‌ها» بروید و کلید «اجازه در پس‌زمینه» را برای ShadowVPN دوباره روشن کنید، سپس به ShadowVPN بازگردید و دوباره راه‌اندازی کنید (آنگاه به احراز هویت نیازی نیست).\n«راه‌اندازی این بار» با احراز هویت مدیر سیستم اجرا می‌شود (یک بار درخواست رمز) و به این کلید وابسته نیست؛ اما پس از آن هر شروع/توقف درخواست رمز می‌کند، بنابراین روشن کردن دوباره کلید توصیه می‌شود.',
   },
   dlgMacRepairNoteOff: {
     'zh-CN':

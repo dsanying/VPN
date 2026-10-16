@@ -182,7 +182,12 @@ describe('redactUrlValue', () => {
 describe('buildDiagnosticReport', () => {
   const base: DiagnosticReportInput = {
     generatedAt: '2026-06-17T00:00:00.000Z',
-    app: { flowzVersion: '1.0.0', coreVersion: '1.13.0', os: 'win32 x64 10.0', electron: '42.0.0' },
+    app: {
+      shadowvpnVersion: '1.0.0',
+      coreVersion: '1.13.0',
+      os: 'win32 x64 10.0',
+      electron: '42.0.0',
+    },
     runtime: {
       proxyMode: 'smart',
       proxyModeType: 'systemProxy',
@@ -308,7 +313,7 @@ describe('buildDiagnosticReport', () => {
   it('startupLogSource 如实进段标题（写侧不同 → 内容含义不同，不能一律写「核 stdout/stderr」）', () => {
     const md = buildDiagnosticReport({
       ...base,
-      startupLogTail: 'FlowZ watchdog starting...',
+      startupLogTail: '暗影VPN watchdog starting...',
       startupLogSource:
         '写侧 UAC 看护脚本：**仅看护脚本自述行，不含核输出** · 0.01 MB · 最后写入 2026-07-24T14:38:50.000Z',
     });
@@ -346,14 +351,14 @@ describe('buildDiagnosticReport', () => {
       processMetrics: {
         totalMemoryMb: 2348,
         rows: [
-          { type: 'Utility', pid: 374035, memoryMb: 2048, cpuPercent: 1, label: 'flowz-stats' },
+          { type: 'Utility', pid: 374035, memoryMb: 2048, cpuPercent: 1, label: 'shadowvpn-stats' },
           { type: 'Browser', pid: 373944, memoryMb: 300, cpuPercent: 0 },
         ],
       },
     });
     expect(md).toContain('## 进程内存');
     expect(md).toContain('| 类型 | PID | 内存(MB) | 峰值(MB) | CPU(%) | 标识 | 创建时刻 |');
-    expect(md).toContain('| Utility | 374035 | 2048 |  | 1 | flowz-stats |  |');
+    expect(md).toContain('| Utility | 374035 | 2048 |  | 1 | shadowvpn-stats |  |');
     expect(md).toContain('| Browser | 373944 | 300 |  | 0 |  |  |');
     expect(md).toContain('2348 MB');
   });
@@ -370,11 +375,13 @@ describe('buildDiagnosticReport', () => {
       nodeIdentifiers: [{ value: '2048', placeholder: '<node-1>' }],
       processMetrics: {
         totalMemoryMb: 2048,
-        rows: [{ type: 'Utility', pid: 2048, memoryMb: 2048, cpuPercent: 1, label: 'flowz-stats' }],
+        rows: [
+          { type: 'Utility', pid: 2048, memoryMb: 2048, cpuPercent: 1, label: 'shadowvpn-stats' },
+        ],
       },
     });
     // 表在 redact 之后拼接 → 表内 PID/内存的 2048 原样保留，定位价值不被毁
-    expect(md).toContain('| Utility | 2048 | 2048 |  | 1 | flowz-stats |');
+    expect(md).toContain('| Utility | 2048 | 2048 |  | 1 | shadowvpn-stats |');
     // 但表以外（日志）的同名节点仍被正常打码，脱敏不受影响
     expect(md).toContain('node <node-1> connected');
   });
@@ -469,7 +476,12 @@ describe('buildDiagnosticReport', () => {
 describe('buildDiagnosticReport × issue #242 §6 观测随包新字段', () => {
   const base: DiagnosticReportInput = {
     generatedAt: '2026-07-02T00:00:00.000Z',
-    app: { flowzVersion: '4.1.9', coreVersion: '1.13.0', os: 'linux x64 6.0', electron: '42.0.0' },
+    app: {
+      shadowvpnVersion: '4.1.9',
+      coreVersion: '1.13.0',
+      os: 'linux x64 6.0',
+      electron: '42.0.0',
+    },
     runtime: {
       proxyMode: 'smart',
       proxyModeType: 'tun',
@@ -494,7 +506,7 @@ describe('buildDiagnosticReport × issue #242 §6 观测随包新字段', () => 
             pid: 100,
             memoryMb: 2048,
             cpuPercent: 5,
-            label: 'flowz-stats',
+            label: 'shadowvpn-stats',
             peakMemoryMb: 2200,
             creationTime: Date.UTC(2026, 6, 2, 8, 0, 0),
           },
@@ -503,7 +515,7 @@ describe('buildDiagnosticReport × issue #242 §6 观测随包新字段', () => 
     });
     expect(md).toContain('| 类型 | PID | 内存(MB) | 峰值(MB) | CPU(%) | 标识 | 创建时刻 |');
     expect(md).toContain(
-      `| Utility | 100 | 2048 | 2200 | 5 | flowz-stats | ${formatDeviceDateTime(Date.UTC(2026, 6, 2, 8, 0, 0))} |`
+      `| Utility | 100 | 2048 | 2200 | 5 | shadowvpn-stats | ${formatDeviceDateTime(Date.UTC(2026, 6, 2, 8, 0, 0))} |`
     );
   });
 
@@ -715,7 +727,7 @@ describe('redactIdentifiers — 文本统一打码 + 主机边界锚定（P0.6 /
 describe('buildDiagnosticReport × P0.6：末尾统一打码节点标识符（配置块 + 日志一致）', () => {
   const input: DiagnosticReportInput = {
     generatedAt: '2026-06-17T00:00:00.000Z',
-    app: { flowzVersion: '1', coreVersion: '1.13', os: 'win32' },
+    app: { shadowvpnVersion: '1', coreVersion: '1.13', os: 'win32' },
     runtime: {
       proxyMode: 'smart',
       proxyModeType: 'tun',

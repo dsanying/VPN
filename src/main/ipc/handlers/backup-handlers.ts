@@ -29,7 +29,7 @@ import {
   type BackupInfo,
 } from '../../../shared/backup-format';
 const IMPORT_FILTERS = [
-  { name: 'FlowZ 备份文件', extensions: ['flowz-backup'] },
+  { name: '暗影VPN 备份文件', extensions: ['shadowvpn-backup'] },
   { name: 'JSON 文件', extensions: ['json'] },
   { name: '所有文件', extensions: ['*'] },
 ];
@@ -57,10 +57,10 @@ export function registerBackupHandlers(
       };
 
       const result = await dialog.showSaveDialog({
-        title: '导出 FlowZ 配置备份',
-        defaultPath: `flowz-backup-${new Date().toISOString().slice(0, 10)}.flowz-backup`,
+        title: '导出 暗影VPN 配置备份',
+        defaultPath: `shadowvpn-backup-${new Date().toISOString().slice(0, 10)}.shadowvpn-backup`,
         filters: [
-          { name: 'FlowZ 备份文件', extensions: ['flowz-backup'] },
+          { name: '暗影VPN 备份文件', extensions: ['shadowvpn-backup'] },
           { name: '所有文件', extensions: ['*'] },
         ],
       });
@@ -90,7 +90,7 @@ export function registerBackupHandlers(
     }
   >(IPC_CHANNELS.BACKUP_IMPORT_PICK, async (_event: IpcMainInvokeEvent) => {
     const result = await dialog.showOpenDialog({
-      title: '导入 FlowZ 配置备份',
+      title: '导入 暗影VPN 配置备份',
       filters: IMPORT_FILTERS,
       properties: ['openFile'],
     });

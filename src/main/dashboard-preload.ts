@@ -9,8 +9,8 @@
  *  - `sing-box-dashboard.servers`：权威存储 {servers:[{id,name,url,secret}],activeId}（面板渲染/连接实际数据源）。
  *  - `sing-box-dashboard.server` ：旧版迁移键 扁平 {url,secret}（面板读一次即 removeItem 并入 servers 存储）兜底极旧版。
  *
- * payload 经 webPreferences.additionalArguments 以 `--flowz-dashboard-server=<json>` 传入（主进程构造，含运行期动态
- * 端口 + secret），结构 {servers:<对象>, legacy:<对象>}。此窗口是 FlowZ 自有受信内容（本地 127.0.0.1 面板），
+ * payload 经 webPreferences.additionalArguments 以 `--shadowvpn-dashboard-server=<json>` 传入（主进程构造，含运行期动态
+ * 端口 + secret），结构 {servers:<对象>, legacy:<对象>}。此窗口是 暗影VPN 自有受信内容（本地 127.0.0.1 面板），
  * contextIsolation 关、零 Node 暴露：本脚本只写 localStorage，不 expose 任何 API、不引 ipcRenderer。
  */
 
@@ -25,7 +25,7 @@ const ls = (
   }
 ).localStorage;
 
-const ARG_PREFIX = '--flowz-dashboard-server=';
+const ARG_PREFIX = '--shadowvpn-dashboard-server=';
 
 try {
   const arg = process.argv.find((a) => a.startsWith(ARG_PREFIX));
@@ -38,7 +38,7 @@ try {
     // 权威存储键（面板实际数据源）+ 旧版迁移键兜底。各自 stringify（localStorage 值须为 string）。
     if (payload.servers) ls.setItem('sing-box-dashboard.servers', JSON.stringify(payload.servers));
     if (payload.legacy) ls.setItem('sing-box-dashboard.server', JSON.stringify(payload.legacy));
-    // 面板语言：仅首开（用户未手选过）写入，对齐 FlowZ 语言——否则 Electron 窗口 navigator.languages=en 致中文系统显英文。
+    // 面板语言：仅首开（用户未手选过）写入，对齐 暗影VPN 语言——否则 Electron 窗口 navigator.languages=en 致中文系统显英文。
     // 已存在即跳过（不覆盖用户在面板里的手动选择）。值为面板合法码（en/zh-Hans/zh-Hant/fa/ru）。
     if (payload.language && !ls.getItem('sing-box-dashboard.language')) {
       ls.setItem('sing-box-dashboard.language', payload.language);

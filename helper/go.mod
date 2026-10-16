@@ -1,4 +1,4 @@
-module flowzhelper
+module shadowvpn-helper-mac
 
 go 1.27.1
 

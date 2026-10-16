@@ -12,7 +12,8 @@ export function nodeAvailability(
   testedAt: number | undefined,
   now: number,
   invalidated = false,
-  reason?: string
+  reason?: string,
+  evidence?: 'available' | 'failed' | 'unknown'
 ): NodeAvailabilityState {
   if (
     invalidated ||
@@ -23,11 +24,20 @@ export function nodeAvailability(
   )
     return 'untested';
   if (measurementExpired(testedAt, now)) return 'stale';
+  if (evidence) return evidence;
   if (latency < 0 && isProbeUnavailable(reason)) return 'unknown';
   return latency >= 0 ? 'available' : 'failed';
 }
 
 /** Local probe failures provide no evidence that the remote node is broken. */
 export function isProbeUnavailable(reason?: string): boolean {
-  return ['core-not-ready', 'select-failed', 'exception', 'unusable'].includes(reason ?? '');
+  return [
+    'core-not-ready',
+    'select-failed',
+    'exception',
+    'unusable',
+    'enterprise-busy',
+    'enterprise-auth-required',
+    'enterprise-engine-unavailable',
+  ].includes(reason ?? '');
 }

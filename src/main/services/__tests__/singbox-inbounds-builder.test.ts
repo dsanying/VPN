@@ -237,11 +237,11 @@ describe('buildInbounds — TUN', () => {
     expect(excl).not.toContain('1.1.1.1/32');
   });
 
-  it('Windows TUN：下发固定接口名 interface_name=flowz-tun0（缺省，issue #159 适配器释放门控锚点）', () => {
+  it('Windows TUN：下发固定接口名 interface_name=shadowvpn-tun0（缺省，issue #159 适配器释放门控锚点）', () => {
     const ibs = withPlatform('win32', () =>
       buildInbounds(cfg({ proxyModeType: 'tun' }), undefined, deps())
     );
-    expect(byTag(ibs, 'tun-in').interface_name).toBe('flowz-tun0');
+    expect(byTag(ibs, 'tun-in').interface_name).toBe('shadowvpn-tun0');
   });
 
   it('Windows TUN：尊重 tunConfig.interfaceName 覆盖', () => {

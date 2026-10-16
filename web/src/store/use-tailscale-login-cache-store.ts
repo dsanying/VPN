@@ -13,7 +13,7 @@
  */
 import { create } from 'zustand';
 
-const STORAGE_KEY = 'flowz.tailscaleLoginCache';
+const STORAGE_KEY = 'shadow-vpn.tailscaleLoginCache';
 
 export interface TailscaleLoginCacheEntry {
   loggedIn: boolean;

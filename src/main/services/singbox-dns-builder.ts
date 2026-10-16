@@ -101,6 +101,13 @@ export function buildDnsConfig(
   probeProxyPort: number | null = null
 ): SingBoxDnsConfig {
   const proxyMode = (config.proxyMode || 'smart').toLowerCase();
+  const enterpriseResolver = (tag: string, id?: string | null): SingBoxDnsServer | undefined => {
+    if (proxyMode === 'direct') return undefined;
+    const port = config.servers.find((node) => node.id === id)?.enterpriseSettings?.dnsPort;
+    return port && Number.isInteger(port) && port > 0 && port <= 65535
+      ? { tag, type: 'udp', server: '127.0.0.1', server_port: port }
+      : undefined;
+  };
 
   // 获取用户 DNS 配置，不存在则使用默认值
   const userDnsConfig = config.dnsConfig || {
@@ -183,7 +190,8 @@ export function buildDnsConfig(
     buildUserDns('dns-domestic', domestic),
     // 远程代理 DNS（用户可自定义，默认 dns.google DoH）。必须走代理 detour，
     // 否则在境内直接发起会因 GFW 拦截/污染导致 FakeIP 映射失败或 TTL 极短产生大量无效解析。
-    buildUserDns('dns-remote', foreign, selectedServerTag),
+    enterpriseResolver('dns-remote', config.selectedServerId) ??
+      buildUserDns('dns-remote', foreign, selectedServerTag),
   ];
 
   // §15 主核测速探测池 DNS server：K 个 dns-probe-exit-k（**223.5.5.5 over DoH:443**，detour=probe-selector-k）。端点
@@ -662,7 +670,10 @@ export function buildDnsConfig(
         ? getDomesticResolverTag(config, 'dns-domestic')
         : `dns-app-${rule.appId}`;
     if (rule.action === 'proxy' && !dnsServers.some((s) => s.tag === server)) {
-      dnsServers.push(buildUserDns(server, foreign, `rule-sel-app-${rule.appId}`));
+      dnsServers.push(
+        enterpriseResolver(server, rule.targetServerId ?? config.selectedServerId) ??
+          buildUserDns(server, foreign, `rule-sel-app-${rule.appId}`)
+      );
     }
     for (const matcher of matchers) {
       dnsRules.push({
@@ -670,6 +681,39 @@ export function buildDnsConfig(
         ...(rule.action === 'block' ? { action: 'reject' } : { server }),
       });
     }
+  }
+
+  // Enterprise resource names must resolve through the same authenticated adapter, including
+  // gateway static resource maps. These runtime-only loopback resolvers never leak internal names
+  // to public DNS. Mirror simple explicit domain overrides before generated resource rules.
+  if (proxyMode === 'smart') {
+    const resolvers = new Map<string, string>();
+    for (const node of config.servers) {
+      const port = node.enterpriseSettings?.dnsPort;
+      if (!port || !Number.isInteger(port) || port < 1 || port > 65535) continue;
+      const tag = `dns-enterprise-${node.id}`;
+      dnsServers.push({ tag, type: 'udp', server: '127.0.0.1', server_port: port });
+      resolvers.set(node.id, tag);
+    }
+    if (resolvers.size)
+      for (const rule of effectiveCustomRules(config)) {
+        if (!rule.enabled || (rule.conditions?.length ?? 0) > 1) continue;
+        const key =
+          rule.type === 'domain'
+            ? 'domain'
+            : rule.type === 'domainSuffix'
+              ? 'domain_suffix'
+              : undefined;
+        if (!key || !rule.values.length) continue;
+        const resolver =
+          rule.action === 'direct'
+            ? 'dns-domestic'
+            : (resolvers.get(rule.targetServerId ?? config.selectedServerId ?? '') ?? 'dns-remote');
+        dnsRules.push({
+          [key]: rule.values,
+          ...(rule.action === 'block' ? { action: 'reject' } : { server: resolver }),
+        } as SingBoxDnsRule);
+      }
   }
 
   // 智能分流/全局代理模式下的 DNS 规则

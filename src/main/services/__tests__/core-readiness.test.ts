@@ -137,7 +137,7 @@ describe('CoreStartTunPersistentError (issue #324)', () => {
 describe('startMessageIsNonRetryable (issue #176/#324 retry 词表守卫)', () => {
   it('#324 A1「TUN 适配器未建立」文案 → 可重试（不命中词表）', () => {
     expect(
-      startMessageIsNonRetryable('sing-box 已就绪但 TUN 适配器 flowz-tun0 未建立，正在自动重试')
+      startMessageIsNonRetryable('sing-box 已就绪但 TUN 适配器 shadowvpn-tun0 未建立，正在自动重试')
     ).toBe(false);
   });
   it('#324 A3「TUN 适配器从未创建」文案 → 可重试', () => {

@@ -9,7 +9,7 @@ describe('reconcileTreeOwnership — 运行时目录属主归一', () => {
   const gid = process.getgid ? process.getgid() : 0;
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowz-own-'));
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-own-'));
   });
   afterEach(() => {
     try {

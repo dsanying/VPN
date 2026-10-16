@@ -11,16 +11,16 @@ resources/
 ├── win/                          # Windows (x64)
 │   ├── sing-box.exe              # sing-box binary (fetched, not committed)
 │   ├── libcronet.dll             # NaiveProxy/cronet runtime lib (dlopen, fetched, not committed)
-│   └── com.flowz.helper.exe      # privilege service helper (built, not committed)
+│   └── com.shadow-vpn.helper.exe      # privilege service helper (built, not committed)
 ├── linux/                        # Linux (x64)
 │   ├── sing-box                  # sing-box binary (fetched, not committed)
 │   └── libcronet.so              # NaiveProxy/cronet runtime lib (dlopen, fetched, not committed)
 ├── mac-x64/                      # macOS Intel (x64)
 │   ├── sing-box                  # sing-box binary (fetched, not committed)
-│   └── com.flowz.helper          # privilege service helper (built, not committed)
+│   └── com.shadow-vpn.helper          # privilege service helper (built, not committed)
 ├── mac-arm64/                    # macOS Apple Silicon (arm64)
 │   ├── sing-box                  # sing-box binary (fetched, not committed)
-│   ├── com.flowz.helper          # privilege service helper (built, not committed)
+│   ├── com.shadow-vpn.helper          # privilege service helper (built, not committed)
 │   └── LICENSE
 ├── dashboard/                    # official sing-box dashboard static assets (fetched, not committed)
 ├── data/                         # shared data: bundled geo rule-sets (geoip-*.srs / geosite-*.srs, committed)
@@ -29,12 +29,12 @@ resources/
 └── README.en.md                  # English
 ```
 
-> The `data/` geo rule-sets, icons, and `LICENSE` are **committed**; the `sing-box` binary, `libcronet.*`, `dashboard/`, and `com.flowz.helper{,.exe}` are large or build artifacts and are **not committed** — they're fetched/built in dev/CI and packaged together with `resources/`:
+> The `data/` geo rule-sets, icons, and `LICENSE` are **committed**; the `sing-box` binary, `libcronet.*`, `dashboard/`, and `com.shadow-vpn.helper{,.exe}` are large or build artifacts and are **not committed** — they're fetched/built in dev/CI and packaged together with `resources/`:
 >
 > - `npm run fetch:core` → per-platform `sing-box[.exe]` (SagerNet official release; pulled per `core-manifest.json` `bundledCoreVersion`, archive verified by `coreArchiveSha256`)
 > - `npm run fetch:cronet` → per-platform `libcronet.*` (NaiveProxy/cronet, runtime dlopen)
 > - `npm run fetch:dashboard` → `dashboard/` (official panel, gh-pages build output)
-> - `npm run build:helper` → per-platform `com.flowz.helper{,.exe}` (privilege service, cross-compiled)
+> - `npm run build:helper` → per-platform `com.shadow-vpn.helper{,.exe}` (privilege service, cross-compiled)
 >
 > The app icon itself is `build/icon.ico` / `build/icon.icns` (used by electron-builder); `resources/app*.png` are tray icons only.
 

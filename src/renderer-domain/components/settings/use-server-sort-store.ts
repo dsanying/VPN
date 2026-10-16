@@ -11,7 +11,7 @@
 import { create } from 'zustand';
 import type { SortKey, SortOrder } from './server-list-helpers';
 
-const STORAGE_KEY = 'flowz.serverSort';
+const STORAGE_KEY = 'shadow-vpn.serverSort';
 const VALID_KEYS: readonly SortKey[] = ['name', 'protocol', 'latency', 'address'];
 const DEFAULT_KEY: SortKey = 'name';
 const DEFAULT_ORDER: SortOrder = 'asc';

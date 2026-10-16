@@ -24,13 +24,13 @@ const pipeName = `\\.\pipe\shadowvpn-helper`
 //	(A;;FA;;;SY)   Allow / FILE_ALL_ACCESS(FA) / SYSTEM(SY)        —— 服务本体（LocalSystem）完全控制管道
 //	(A;;GRGW;;;IU) Allow / GENERIC_READ+GENERIC_WRITE / Interactive Users(IU) —— 交互登录用户可读/写/连接
 //
-// 选 IU（交互登录用户）而非 BU/AU：FlowZ GUI 由当前桌面登录用户运行，IU 精确覆盖「本机交互会话」，
+// 选 IU（交互登录用户）而非 BU/AU：本应用 GUI 由当前桌面登录用户运行，IU 精确覆盖「本机交互会话」，
 // 不授予服务账户/远程会话/网络登录，最小化攻击面。GENERIC_READ|GENERIC_WRITE 足以连接管道并读写消息
 // （命名管道客户端连接 + ReadFile/WriteFile 即需此二者），不授予 FILE_ALL_ACCESS（无需改 ACL/删管道权能）。
 // 无显式 owner/group/SACL（前缀仅 D:）→ owner 默认 SYSTEM（创建者），无审计，符合纵深防御定位。
 //
 // 注意：DACL 一旦显式给出即「拒绝未列明者」（无隐式 Everyone）。故非交互/非 SYSTEM 进程（如远程、服务账户、
-// 非交互令牌）连不上管道 —— 真机必验项：确认 FlowZ app 进程令牌带 Interactive SID（标准桌面 GUI 启动满足；
+// 非交互令牌）连不上管道 —— 真机必验项：确认本应用 app 进程令牌带 Interactive SID（标准桌面 GUI 启动满足；
 // 若 app 以计划任务/服务等非交互方式启动，需放宽到 AU/BU 或改授权 SID）。
 const pipeSDDL = "D:(A;;FA;;;SY)(A;;GRGW;;;IU)"
 
@@ -52,12 +52,12 @@ func serve(l net.Listener) {
 
 }
 
-// flowzService 实现 svc.Handler。
-type flowzService struct{}
+// shadowvpnService 实现 svc.Handler。
+type shadowvpnService struct{}
 
 // Execute：SCM 调用入口。启动管道监听 + serve goroutine，主循环处理控制请求。
 // STOP/SHUTDOWN → 先 reapChildOnExit（收割 child sing-box），再关 listener、回报 Stopped 退出 → 无孤儿。
-func (m *flowzService) Execute(args []string, r <-chan svc.ChangeRequest, status chan<- svc.Status) (svcSpecificEC bool, exitCode uint32) {
+func (m *shadowvpnService) Execute(args []string, r <-chan svc.ChangeRequest, status chan<- svc.Status) (svcSpecificEC bool, exitCode uint32) {
 	const accepted = svc.AcceptStop | svc.AcceptShutdown
 	status <- svc.Status{State: svc.StartPending}
 
@@ -90,5 +90,5 @@ func (m *flowzService) Execute(args []string, r <-chan svc.ChangeRequest, status
 
 // runService：以 SCM 服务身份运行（main 在非 --console 时调用）。serviceName 仅用于 SCM 日志登记。
 func runService(serviceName string) error {
-	return svc.Run(serviceName, &flowzService{})
+	return svc.Run(serviceName, &shadowvpnService{})
 }

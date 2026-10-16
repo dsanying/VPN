@@ -1,7 +1,7 @@
 /**
  * 逐进程内存/CPU 指标的纯分析（issue #242 诊断可靠性）。
  *
- * 背景：#242 报告 Linux 下 FlowZ 单个子进程内存涨到 2GB+，但系统监视器只显示 basename「flowz」重复多行、
+ * 背景：#242 报告 Linux 下 暗影VPN 单个子进程内存涨到 2GB+，但系统监视器只显示 basename「shadow-vpn」重复多行、
  * 分不清是主进程 / 渲染进程 / GPU / utility 里的哪一个。app.getAppMetrics() 天然按进程给出 type/pid/内存/CPU，
  * 一次采样即可定位是哪个子进程在涨。本模块把 getAppMetrics() 的结果做纯分析（汇总排序 / 超阈值筛查），
  * 供「诊断导出的逐进程表」与「ProxyManager 周期自检的告警」共用，纯函数、无 electron 依赖、可单测。
@@ -19,10 +19,10 @@ export interface ProcessMetricLike {
   cpu?: { percentCPUUsage?: number };
   creationTime?: number; // 进程创建时刻（epoch ms，getAppMetrics 提供）——排查「谁重启过/新拉起」
   // 注意 name/serviceName 的实际填法与直觉相反（本机 xvfb 探针实测坐实，见 process-metrics.test.ts）：
-  // Electron utilityProcess.fork(path, args, {serviceName:'flowz-stats'}) 传入的自定义名最终落在 `.name`，
+  // Electron utilityProcess.fork(path, args, {serviceName:'shadowvpn-stats'}) 传入的自定义名最终落在 `.name`，
   // 而 `.serviceName` 恒是 Chromium 的通用接口名（如 'node.mojom.NodeService'，等价于该进程命令行里的
   // --utility-sub-type 值）——对 Electron 自己 fork 出的所有 utilityProcess 都长这样，分不出具体是哪一个。
-  // 故 toRow 取 label 须 name 优先、serviceName 兜底（顺序颠倒会让 FlowZ 自己的 worker 显示成无辨识度的
+  // 故 toRow 取 label 须 name 优先、serviceName 兜底（顺序颠倒会让 暗影VPN 自己的 worker 显示成无辨识度的
   // 泛型接口名，而不是 fork 时起的名字——正是这张表最该认出来的那个进程）。
   serviceName?: string;
   name?: string;

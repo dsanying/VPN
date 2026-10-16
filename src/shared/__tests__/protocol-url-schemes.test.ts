@@ -8,7 +8,7 @@ describe('isSupportedShareUrl', () => {
   // naive:// 曾仅后端支持、前端漏列，单独锁回归（issue #191）
   it('支持裸 naive://', () => expect(isSupportedShareUrl('naive://u:p@h:443#n')).toBe(true));
 
-  it.each(['ftp://x', 'wireguard://x', 'tailscale://x', 'foobar', ''])('不支持 %s', (u) =>
+  it.each(['ftp://x', 'tailscale://x', 'foobar', ''])('不支持 %s', (u) =>
     expect(isSupportedShareUrl(u)).toBe(false)
   );
 

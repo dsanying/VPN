@@ -1,7 +1,7 @@
 /**
- * wg-quick .conf（INI）解析为 FlowZ WireGuard 节点字段（纯函数；UI 表单"粘贴 .conf 自动填充"用，无网络/FS）。
+ * wg-quick .conf（INI）解析为 暗影VPN WireGuard 节点字段（纯函数；UI 表单"粘贴 .conf 自动填充"用，无网络/FS）。
  * 单 peer 模型：peer 的 Endpoint(host:port) → {address, port}（= ServerConfig.address/port）；其余 → WireGuardSettings。
- * 缺必填（PrivateKey / PublicKey / Endpoint / Address）→ null（调用方提示改手填）。DNS 字段忽略（FlowZ 用自身 DNS）。
+ * 缺必填（PrivateKey / PublicKey / Endpoint / Address）→ null（调用方提示改手填）。DNS 字段忽略（暗影VPN 用自身 DNS）。
  */
 import type { WireGuardSettings } from './types';
 

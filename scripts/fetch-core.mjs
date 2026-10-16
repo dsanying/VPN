@@ -135,7 +135,7 @@ for (const t of TARGETS) {
 
   mkdirSync(absDir, { recursive: true });
   const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${t.asset}`;
-  const work = mkdtempSync(join(tmpdir(), 'flowz-core-'));
+  const work = mkdtempSync(join(tmpdir(), 'shadowvpn-core-'));
   try {
     const archive = join(work, t.asset);
     console.log(`downloading ${t.asset} ...`);

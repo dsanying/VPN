@@ -66,9 +66,10 @@ for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: '编辑', exact: true }).click();
     await page.getByRole('dialog').locator('.client-help').focus();
     await expect(page.getByRole('tooltip')).toHaveText('此名称会保存在当前记录中。');
-    await expect(
-      page.getByRole('dialog').getByRole('button', { name: '保存', exact: true })
-    ).toBeVisible();
+    await expect(page.getByRole('dialog').locator('.ant-drawer-footer').getByRole('button', { name: '关闭', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
+    await page.getByRole('dialog').getByLabel('名称', { exact: true }).fill('modified');
+    await expect(page.getByRole('dialog').getByRole('button', { name: '保存', exact: true })).toBeVisible();
     await expect.poll(async () => page.getByRole('dialog').evaluate(node=>node.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
     const overflow = await page.evaluate(() => ({width: innerWidth, scroll: document.documentElement.scrollWidth, offenders: [...document.querySelectorAll('*')].map(node=>({tag:node.tagName,cls:node.className,rect:node.getBoundingClientRect()})).filter(node=>node.rect.right>innerWidth+1).map(node=>({tag:node.tag,cls:node.cls,right:node.rect.right})).slice(0,12)}));
     expect(overflow.scroll, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.width);

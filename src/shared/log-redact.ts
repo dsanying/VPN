@@ -1,6 +1,8 @@
 /** Last defense shared by storage, IPC display and diagnostic export. Never interpolate real credentials into fixtures. */
 export function redactLogText(text: string): string {
   return text
+    .replace(/(?:\/Users\/|\/home\/)[^/\s]+/g, '<home>')
+    .replace(/[A-Z]:\\Users\\[^\\\s]+/gi, '<home>')
     .replace(
       /-----BEGIN [^-]*(?:PRIVATE KEY|PRIVATE)-----[\s\S]*?-----END [^-]+-----/g,
       '<redacted-private-key>'
@@ -31,7 +33,19 @@ export function redactLogText(text: string): string {
     .replace(/\b(authorization\s*[:=]\s*)(?:Bearer|Basic)\s+[^\s,;]+/gi, '$1<redacted>')
     .replace(/\b(cookie|set-cookie)\s*:\s*[^\r\n]+/gi, '$1: <redacted>')
     .replace(
-      /(["']?(?:(?:privacy|obfs|tls[_-]?)?password|passwd|uuid|private[_-]?key(?:passphrase)?|preshared[_-]?key|psk|(?:clashApi)?secret|(?:access[_-]?|refresh[_-]?)?token|auth[_-]?key|api[_-]?key)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;}&]+)/gi,
+      /(["']?(?:(?:privacy|obfs|tls[_-]?)?password|passwd|username|otp|passcode|verification[_-]?code|samlresponse|prelogin[_-]?cookie|portal[_-]?userauthcookie|uuid|private[_-]?key(?:passphrase)?|preshared[_-]?key|psk|(?:clashApi)?secret|(?:access[_-]?|refresh[_-]?)?token|auth[_-]?key|api[_-]?key)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;}&"']+)/gi,
       '$1<redacted>'
     );
+}
+
+/** Preserve structured JSON while applying text redaction to every string leaf. */
+export function redactLogValue(value: unknown, depth = 0): unknown {
+  if (depth > 30) return '<diagnostic-depth-limit>';
+  if (typeof value === 'string') return redactLogText(value);
+  if (Array.isArray(value)) return value.map((child) => redactLogValue(child, depth + 1));
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, redactLogValue(child, depth + 1)])
+    );
+  return value;
 }

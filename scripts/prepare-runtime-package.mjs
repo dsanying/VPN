@@ -11,7 +11,7 @@ lock.packages[''] = { name: runtimePackage.name, version: runtimePackage.version
 // An independent, clean application directory prevents stale developer modules from becoming runtime dependencies.
 fs.rmSync(destination,{recursive:true,force:true});
 fs.mkdirSync(destination,{recursive:true});
-for (const entry of ['dist','LICENSE.txt','NOTICE.md','licenses']) {
+for (const entry of ['dist','LICENSE.txt','licenses']) {
   const source = path.join(root,entry);
   if (fs.existsSync(source)) fs.cpSync(source,path.join(destination,entry),{recursive:true});
 }

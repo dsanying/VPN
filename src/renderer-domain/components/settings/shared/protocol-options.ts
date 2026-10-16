@@ -8,6 +8,7 @@ import type { TFunction } from 'i18next';
  * 排序，custom（自定义出站 JSON）恒置末。新增协议：在此加一行即可（顺序自动）+ types.ts Protocol/bridge Protocol 同步。
  */
 export const PROTOCOL_OPTIONS: { value: Protocol; label: string }[] = [
+  { value: 'enterprise', label: 'Enterprise VPN' },
   { value: 'anytls', label: 'AnyTLS' },
   // custom 是唯一描述性（非品牌名）标签，需本地化：消费方对 'custom' 用 t('servers.protocolCustom') 覆盖此英文兜底。
   { value: 'custom', label: 'Custom Outbound JSON' },

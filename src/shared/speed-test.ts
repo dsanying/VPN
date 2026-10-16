@@ -11,7 +11,7 @@ import type { ServerConfig } from './types';
 /**
  * 默认测速端点：www.gstatic.com generate_204（204 空响应，连接可立即复用）。
  *
- * 为何不用 cp.cloudflare.com（曾用，issue #154）：CF-Workers / 优选IP 节点（FlowZ 用户里占大头）对 cp.cloudflare
+ * 为何不用 cp.cloudflare.com（曾用，issue #154）：CF-Workers / 优选IP 节点（暗影VPN 用户里占大头）对 cp.cloudflare
  * 这个 Cloudflare 自家端点测速会失败——reporter 实证「把测速地址换成非 CF 端点即恢复正常」。
  * 为何 gstatic 的国内 CDN 镜像在此不成问题：测速目标域名由【每个被测节点的出口】远程解析，**不经本机 AliDNS**
  * （localhost 实验确证 sing-box 把域名 ATYP=domain 透传给出站，见 docs/design/speedtest-remote-resolve-154.md）——
@@ -173,8 +173,19 @@ export interface EntryProbeResult {
   /** Socket error code only, never a message containing a node address or credentials. */
   reason?: string;
 }
+export interface NodeRegionObservation {
+  reason?: 'non-public-address' | 'lookup-failed';
+  ip: string;
+  countryCode?: string;
+  measuredAt: number;
+  provider: string;
+}
 export interface NodeProbeDetails {
-  exit?: { ip: string; countryCode?: string; measuredAt: number; provider: string };
+  /** Independent evidence: authenticated enterprise tunnel, never synthetic latency. */
+  availability?: 'available' | 'failed' | 'unknown';
+  /** Location of the endpoint IP, never evidence of the proxy exit. */
+  gateway?: NodeRegionObservation;
+  exit?: NodeRegionObservation;
   entry: EntryProbeResult;
   proxyTarget?: string;
   proxyReason?: string;
