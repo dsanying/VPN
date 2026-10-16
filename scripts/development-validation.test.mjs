@@ -53,7 +53,7 @@ test('candidate cleanup is bounded to declared generated directories and ignores
     assert.equal(candidateDirectories(root).length, 0);
   } finally { fs.rmSync(root, { recursive: true }); fs.rmSync(external, { recursive: true }); }
 });
-test('stale registry cleanup excludes the real installation and other projects', () => {
+test('stale registry cleanup excludes the real installation and other projects', { skip: process.platform !== 'darwin' }, () => {
   const root = '/Users/fixture/VPN';
   const dump = ['/Applications/暗影VPN.app', `${root}/dist-validation68/mac-arm64/暗影VPN.app`,
     `${root}/dist-validation/mac/暗影VPN.app`, '/Users/fixture/Other/dist-validation68/mac-arm64/暗影VPN.app',
