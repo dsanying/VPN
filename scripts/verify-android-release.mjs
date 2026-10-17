@@ -14,7 +14,8 @@ export function emulatorIdentity(serial, property) {
   return /^emulator-\d+$/.test(serial ?? '') && property.trim() === '1';
 }
 function execute(command, args, options = {}) {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 180_000, ...options });
+  // TCG-accelerated emulators run instrumentation and APK installs far slower than hardware; 15 minutes is the bound for a genuinely stuck ADB call.
+  const result = spawnSync(command, args, { encoding: 'utf8', timeout: 900_000, ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${path.basename(command)} failed (${result.status}): ${result.stdout}${result.stderr}`);
   return result.stdout + result.stderr;
