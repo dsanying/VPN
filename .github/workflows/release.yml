@@ -287,7 +287,10 @@ jobs:
       - name: Create and boot disposable emulator
         timeout-minutes: 15
         run: |
-          echo "no" | "$AVDMANAGER" create avd --name release-check --package "system-images;android-35;google_apis;x86_64" --device pixel_6 --force
+          mkdir -p "$HOME/.android/avd/release-check.avd"
+          printf 'avd.ini.encoding=UTF-8\npath=%s\npath.rel=avd/release-check.avd\ntarget=android-35\n' "$HOME/.android/avd/release-check.avd" > "$HOME/.android/avd/release-check.ini"
+          printf '%s\n' 'AvdId=release-check' 'abi.type=x86_64' 'avd.ini.displayname=release-check' 'avd.ini.encoding=UTF-8' 'disk.dataPartition.size=4G' 'hw.cpu.ncore=4' 'hw.device.name=pixel_6' 'hw.gpu.enabled=yes' 'hw.gpu.mode=swiftshader_indirect' 'hw.keyboard=yes' 'hw.lcd.density=420' 'hw.lcd.height=2400' 'hw.lcd.width=1080' 'hw.ramSize=3072' 'image.sysdir.1=system-images/android-35/google_apis/x86_64/' 'showDeviceFrame=no' 'tag.display=Google APIs' 'tag.id=google_apis' 'target=android-35' 'vm.heapSize=576' > "$HOME/.android/avd/release-check.avd/config.ini"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -x release-check
           "$ANDROID_HOME/emulator/emulator" -avd release-check -accel auto -gpu swiftshader_indirect -no-window -no-audio -no-snapshot -no-boot-anim -memory 3072 &
           EMU_PID=$!
           for i in $(seq 1 240); do
