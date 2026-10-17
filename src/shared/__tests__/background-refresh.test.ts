@@ -1,12 +1,28 @@
-import { BACKGROUND_REFRESH_MS, observationIsFresh } from '../background-refresh';
+import {
+  BACKGROUND_REFRESH_MS,
+  OBSERVATION_CLOCK_SKEW_MS,
+  observationIsFresh,
+} from '../background-refresh';
 import { measurementExpired } from '../node-availability';
 import { dueMeasurementScope } from '../measurement-refresh-scope';
 import { createDefaultConfig } from '../config-defaults';
 const now = 2_000_000_000_000;
-test.each([undefined, null, NaN, Infinity, -1, now + 1, 'invalid', now - BACKGROUND_REFRESH_MS])(
+test.each([undefined, null, NaN, Infinity, -1, 'invalid', now - BACKGROUND_REFRESH_MS])(
   'invalid or expired timestamp %p cannot suppress refresh',
   (time) => {
     expect(observationIsFresh(time, now)).toBe(false);
+  }
+);
+test.each([0, OBSERVATION_CLOCK_SKEW_MS - 1, OBSERVATION_CLOCK_SKEW_MS])(
+  'filesystem timestamps %p ms ahead of the clock still count as fresh',
+  (skew) => {
+    expect(observationIsFresh(now + skew, now)).toBe(true);
+  }
+);
+test.each([OBSERVATION_CLOCK_SKEW_MS + 1, BACKGROUND_REFRESH_MS])(
+  'timestamps %p ms beyond clock skew cannot suppress refresh',
+  (skew) => {
+    expect(observationIsFresh(now + skew, now)).toBe(false);
   }
 );
 test('numeric and ISO observations use the identical six-hour boundary', () => {
