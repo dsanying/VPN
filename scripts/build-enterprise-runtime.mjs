@@ -14,9 +14,10 @@ function run(cmd, args, cwd = project) {
   if (r.status !== 0) throw new Error(cmd + ' failed');
 }
 if (!fs.existsSync(source)) {
-  run('git', ['clone', 'https://github.com/Mythologyli/zju-connect.git', source], root);
+  run('git', ['clone', '-c', 'core.autocrlf=false', 'https://github.com/Mythologyli/zju-connect.git', source], root);
   run('git', ['checkout', '--detach', revision], source);
 }
+run('git', ['config', 'core.autocrlf', 'false'], source);
 const actual = spawnSync('git', ['rev-parse', 'HEAD'], {
   cwd: source,
   encoding: 'utf8',
