@@ -45,6 +45,16 @@ it('deduplicates concurrent country downloads and reuses the fresh cache', async
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(await data.ensureCountryRuleSet('invalid')).toBe(false);
 });
+it('a cache file dated ahead of the wall clock still counts as fresh', async () => {
+  const file = path.join(getRuleSetRuntimeDir(), 'geoip-jp.srs');
+  fs.writeFileSync(file, 'SRS-valid');
+  const ahead = Date.now() / 1000 + 120;
+  fs.utimesSync(file, ahead, ahead);
+  const { data, fetch } = service();
+  fetch.mockResolvedValue({ ok: true, buf: Buffer.from('SRS-newer') });
+  expect(await data.ensureCountryRuleSet('jp')).toBe(true);
+  expect(fetch).not.toHaveBeenCalled();
+});
 it('failed updates retain the last valid cache and apply retry backoff', async () => {
   const file = path.join(getRuleSetRuntimeDir(), 'geoip-jp.srs');
   fs.writeFileSync(file, 'SRS-old');
