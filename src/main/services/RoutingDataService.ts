@@ -64,7 +64,10 @@ export class RoutingDataService {
       const valid = isValidSrsFile(file.dest);
       if (valid) {
         const stat = await fs.stat(file.dest).catch(() => null);
-        if (!force && stat && observationIsFresh(Math.floor(stat.mtimeMs))) return true;
+        // NTFS mtimes may land slightly ahead of Date.now(); a future-dated file
+        // can only prove freshness, never staleness, so clamp it to the wall clock.
+        if (!force && stat && observationIsFresh(Math.min(Math.floor(stat.mtimeMs), Date.now())))
+          return true;
       }
       if (!this.backoff.isEligible(file.dest, Date.now())) {
         this.failures.add(file.dest);
