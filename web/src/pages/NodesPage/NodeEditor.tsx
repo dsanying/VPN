@@ -6,7 +6,7 @@ import { Button, Form, Input, InputNumber, Select } from 'antd';
 import { LoginOutlined, LogoutOutlined, CloseOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DrawerForm, MultiSelect, FormGrid, ResponsiveActions, Popconfirm } from '@/components/client';
+import { DrawerForm, MultiSelect, FormGrid, ResponsiveActions, Popconfirm, QueryErrorAlert } from '@/components/client';
 import { JsonEditor } from '@/components/JsonEditor';
 import { api } from '@/ipc';
 import { useAppStore } from '@/store/app-store';
@@ -31,7 +31,21 @@ export function NodeEditor({ node, onClose }: { node?: ServerConfig; onClose: ()
     }
     form.setFieldValue('selections', selections);
   }, [authFields, form]);
-  useEffect(() => { if (node?.enterpriseSettings) void api.enterprise.get().then(snapshot => { const value = snapshot.profiles.find(p => p.id === node.enterpriseSettings?.profileId); setProfile(value); form.setFieldsValue({username:value?.username,selections:value?.selections}); if (value) void api.enterprise.detect(value.gateway).then(d => setAuthFields(d.fields ?? []), e => notifyActionFailed('sync',e)); }, e => notifyActionFailed('sync',e)); }, [node,form]);
+  const [enterpriseError, setEnterpriseError] = useState<unknown>();
+  const [enterpriseTick, setEnterpriseTick] = useState(0);
+  useEffect(() => {
+    if (!node?.enterpriseSettings) return;
+    let active = true;
+    void api.enterprise.get().then(snapshot => {
+      if (!active) return;
+      const value = snapshot.profiles.find(p => p.id === node.enterpriseSettings?.profileId);
+      setProfile(value);
+      form.setFieldsValue({username:value?.username,selections:value?.selections});
+      if (!value) return;
+      void api.enterprise.detect(value.gateway).then(d => { if (active) setAuthFields(d.fields ?? []); }, e => { if (active) setEnterpriseError(e); });
+    }, e => { if (active) setEnterpriseError(e); });
+    return () => { active = false; };
+  }, [node,form,enterpriseTick]);
   const [detected, setDetected] = useState<ServerConfig | undefined>(node);
   const protocol = detected?.protocol;
   const network = detected?.network;
@@ -93,7 +107,7 @@ export function NodeEditor({ node, onClose }: { node?: ServerConfig; onClose: ()
     {detecting ? <span role="status">{t('vpn.detectingConfiguration')}</span> : null}
     <Form.Item label={t('common.vocab.protocol')} tooltip={t('vpn.automaticSourceHint')}><span role="status">{protocol === 'enterprise' && detected?.enterpriseSettings ? ENTERPRISE_NAMES[detected.enterpriseSettings.client] : protocol?.toUpperCase() ?? t('vpn.awaitingSource')}</span></Form.Item>
     {protocol && protocol !== 'tailscale' && protocol !== 'custom' && protocol !== 'enterprise' ? <FormGrid columns={2}><Form.Item label={t('common.vocab.address')} name="address" rules={[{required:true,whitespace:true}]}><Input allowClear /></Form.Item><Form.Item label={t('common.vocab.port')} name="port" rules={[{required:true}]}><InputNumber min={1} max={65535} /></Form.Item></FormGrid> : null}
-    {protocol === 'enterprise' ? <>{authFields.filter(field => (field.choices?.length ?? 0) > 1).map(field => <Form.Item key={field.name} name={['selections',field.name]} label={field.name === 'authentication' ? t('vpn.enterprise.authenticationMethod') : field.label} tooltip={t('vpn.enterprise.selectionHint')} rules={[{required:true}]} initialValue={field.choices?.length === 1 ? field.choices[0].value : undefined}><Select options={field.choices} /></Form.Item>)}<Form.Item label={t('vpn.enterprise.username')} tooltip={t('vpn.enterprise.usernameHint')} name="username"><Input allowClear autoComplete="username" /></Form.Item><Form.Item label={t('vpn.enterprise.password')} tooltip={t(profile?.hasPassword ? 'vpn.enterprise.savedPasswordHint' : 'vpn.enterprise.passwordHint')} name="password"><Input.Password autoComplete="new-password" /></Form.Item></> : null}
+    {protocol === 'enterprise' ? <>{enterpriseError ? <QueryErrorAlert error={enterpriseError} errorTitle={t('errors.configNotLoaded')} retryLabel={t('common.actions.retry')} onRetry={() => { setEnterpriseError(undefined); setEnterpriseTick(v => v + 1); }} /> : null}{authFields.filter(field => (field.choices?.length ?? 0) > 1).map(field => <Form.Item key={field.name} name={['selections',field.name]} label={field.name === 'authentication' ? t('vpn.enterprise.authenticationMethod') : field.label} tooltip={t('vpn.enterprise.selectionHint')} rules={[{required:true}]} initialValue={field.choices?.length === 1 ? field.choices[0].value : undefined}><Select options={field.choices} /></Form.Item>)}<Form.Item label={t('vpn.enterprise.username')} tooltip={t('vpn.enterprise.usernameHint')} name="username"><Input allowClear autoComplete="username" /></Form.Item><Form.Item label={t('vpn.enterprise.password')} tooltip={t(profile?.hasPassword ? 'vpn.enterprise.savedPasswordHint' : 'vpn.enterprise.passwordHint')} name="password"><Input.Password autoComplete="new-password" /></Form.Item></> : null}
     {['vmess','vless','tuic'].includes(protocol ?? '') ? <Form.Item label={t('vpn.uuid')} name="uuid" rules={[{required:true}]}><Input allowClear /></Form.Item> : null}
     {['trojan','shadowsocks','hysteria2','tuic','anytls','snell','socks','http','ssh','naive'].includes(protocol ?? '') ? <Form.Item label={t('common.vocab.password')} name={protocol==='shadowsocks'?['shadowsocksSettings','password']:'password'}><Input.Password allowClear /></Form.Item> : null}
     {['socks','http','ssh','naive'].includes(protocol ?? '') ? <Form.Item label={t('vpn.username')} name="username"><Input allowClear /></Form.Item> : null}
