@@ -21,6 +21,13 @@ export function checkPlatforms(root, { release = false, evidencePath, gitRunner 
     if (target.host === 'electron' && ['android', 'ios'].includes(target.platform)) errors.push('Electron cannot be used as the mobile host');
     if (target.host === 'capacitor' && !['android', 'ios'].includes(target.platform)) errors.push('Capacitor target must be mobile');
     if (typeof target.buildCommand !== 'string' || !target.buildCommand.trim()) errors.push(`Missing build command: ${identity}`);
+    const effective = target.nativeChecks ?? config.nativeChecks;
+    if (!Array.isArray(effective) || !['launch', 'operations'].every(check => effective.includes(check))) {
+      errors.push(`Native checks must include launch and operations: ${identity}`);
+    }
+    if (target.host === 'electron' && Array.isArray(effective) && !effective.includes('layout')) {
+      errors.push(`Electron targets must verify layout: ${identity}`);
+    }
   }
   if (!Array.isArray(config.nativeChecks) || !['launch', 'layout', 'operations'].every(check => config.nativeChecks.includes(check))) {
     errors.push('Required native checks must include launch, layout and operations');
@@ -53,7 +60,7 @@ export function checkPlatforms(root, { release = false, evidencePath, gitRunner 
           if (rows.length !== 1) { errors.push(`Expected one evidence row: ${target.platform}/${target.arch}`); continue; }
           const row = rows[0];
           if (row.host !== target.host || row.build !== 'passed' || row.native !== true) errors.push(`Native build not verified: ${target.platform}/${target.arch}`);
-          for (const check of config.nativeChecks ?? []) {
+          for (const check of target.nativeChecks ?? config.nativeChecks ?? []) {
             if (row.checks?.[check] !== 'passed') errors.push(`Missing native check ${check}: ${target.platform}/${target.arch}`);
           }
           if (!Array.isArray(row.files) || !row.files.length) errors.push('Evidence must reference actual files');

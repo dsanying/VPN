@@ -69,6 +69,24 @@ test('native release evidence cannot reference an outside file directly or throu
     }
   } finally { fs.rmSync(outside, { force: true }); }
 }));
+test('per-target native checks scope evidence validation and require launch plus operations', () => fixture(root => {
+  const evidence = releaseFixture(root);
+  const file = path.join(root, 'client-platforms.json');
+  const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+  config.targets[0].nativeChecks = ['launch', 'operations'];
+  fs.writeFileSync(file, JSON.stringify(config));
+  assert.deepEqual(checkPlatforms(root, { release: true }), []);
+  config.targets[0].nativeChecks = ['launch', 'operations', 'network'];
+  fs.writeFileSync(file, JSON.stringify(config));
+  assert.ok(checkPlatforms(root, { release: true }).some(error => error.includes('network')));
+  config.targets[0].nativeChecks = ['layout'];
+  fs.writeFileSync(file, JSON.stringify(config));
+  assert.ok(checkPlatforms(root).some(error => error.includes('launch and operations')));
+  config.targets[0].nativeChecks = ['launch', 'operations'];
+  fs.writeFileSync(file, JSON.stringify(config));
+  assert.deepEqual(checkPlatforms(root), []);
+  assert.ok(evidence.targets[0].native);
+}));
 test('release rejects source changes even when native evidence names HEAD', () => fixture(root => {
   releaseFixture(root);
   const gitRunner = (_command, args) => ({

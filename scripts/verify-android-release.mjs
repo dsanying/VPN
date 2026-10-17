@@ -93,6 +93,16 @@ export function verifyAndroidRelease({ root = process.cwd(), serial, sdk, javaHo
       passed: true,
       excludes: [...(baseline ? [] : ['version-upgrade']), 'public-update-chain', 'native-layout', 'background-full-cycle', 'autostart'],
     }, null, 2) + '\n');
+    // Release evidence collected by create-release; refs are repo-relative paths inside the same artifact tree.
+    fs.writeFileSync(path.join(root, 'artifacts', 'client-platform-evidence.json'), JSON.stringify({
+      version, commit,
+      targets: [{
+        platform: 'android', arch: 'arm64', host: 'capacitor', build: 'passed', native: true,
+        checks: { launch: 'passed', operations: 'passed', network: 'passed', updates: 'passed' },
+        environment: 'disposable arm64 emulator',
+        files: ['artifacts/android-arm64/signed-native-checks.json', 'artifacts/android-arm64/signed-native-checks.log'],
+      }],
+    }, null, 2) + '\n');
   } finally {
     fs.writeFileSync(path.join(output, 'signed-native-checks.log'), logs.join('\n'));
     const reportPath = path.join(output, 'signed-native-checks.json');

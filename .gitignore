@@ -126,6 +126,9 @@ resources/*/xray.exe
 resources/*/mihomo
 resources/*/mihomo.exe
 
+# CI 原生验收下载的候选工件（native-* jobs 下载 release-* artifacts 到此处）
+/downloaded/
+
 # Android local SDK, generated builds and private signing material
 /android/local.properties
 /android/.gradle/

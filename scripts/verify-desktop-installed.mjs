@@ -123,6 +123,16 @@ try {
     platform: identity.platform, arch: identity.arch, native: true, checkedAt: new Date().toISOString(), checks, ui,
     excludes: [...(ui ? [] : ['layout']), 'network', 'updates', 'login-after-reboot', 'version-upgrade'],
   }, null, 2) + '\n');
+  // Release evidence collected by create-release: repo-relative refs must exist inside
+  // the same uploaded artifact tree (see collect-client-evidence.mjs uploadRoot).
+  const platformName = { darwin: 'macos', win32: 'windows' }[process.platform];
+  fs.writeFileSync(path.join(root, 'artifacts', 'client-platform-evidence.json'), JSON.stringify({
+    version, commit: identity.buildCommit,
+    targets: [{
+      platform: platformName, arch: identity.arch, host: 'electron', build: 'passed', native: true, checks,
+      files: fs.readdirSync(output).map(name => `artifacts/${path.basename(output)}/${name}`),
+    }],
+  }, null, 2) + '\n');
 } finally {
   if (invoke && originalAutostart !== undefined) {
     try { assert.equal(await invoke('autoStart:set', { enabled: originalAutostart }), true); }
