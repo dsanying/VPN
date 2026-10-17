@@ -148,7 +148,7 @@ export default function BasicLayout({
               placement="left"
               size={240}
               title={<Brand />}
-              styles={{ body: { padding: '8px 0' }, footer: { padding: 0 } }}
+              styles={{ body: { padding: 'var(--ds-space-8) 0' }, footer: { padding: 0 } }}
               footer={<Preferences items={footerItems} />}
             >
               {menu}

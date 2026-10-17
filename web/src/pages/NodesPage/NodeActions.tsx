@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dropdown, Modal, type MenuProps } from 'antd';
+import { Button, Dropdown, type MenuProps } from 'antd';
 import { CheckCircleOutlined, CopyOutlined, DeleteOutlined, EditOutlined, LinkOutlined, MoreOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { ResponsiveActions, useCopyToClipboard } from '@/components/client';
+import { Popconfirm, ResponsiveActions, useCopyToClipboard } from '@/components/client';
 import { api } from '@/ipc';
 import { notifyActionFailed, notifyActionSuccess } from '@/utils/feedback';
 import type { ServerConfig } from '@shared/types';
@@ -29,8 +29,8 @@ export function NodeActions({node,selected,testing,select,edit,remove,test,clone
   return <><ResponsiveActions justify="start">
     <Button size="small" icon={<CheckCircleOutlined aria-hidden/>} disabled={selected} onClick={()=>select(node)}>{t(selected?'common.vocab.current':'vpn.setDefaultNode')}</Button>
     <Button size="small" icon={<ThunderboltOutlined aria-hidden/>} title={t('vpn.nodeDetectionHint')} loading={testing} onClick={()=>void test([node])}>{t('common.vocab.testLatency')}</Button>
-    <Dropdown trigger={['click']} placement="bottomRight" menu={{items,onClick}}><Button size="small" icon={<MoreOutlined aria-hidden/>}>{t('common.actions.more')}</Button></Dropdown>
-  </ResponsiveActions><Modal okButtonProps={{danger:true}} open={deleting} title={t('common.confirm.execute')} confirmLoading={busy} onCancel={()=>{if(!busy)setDeleting(false);}} onOk={async()=>{setBusy(true);try{if(await remove(node.id))setDeleting(false);}finally{setBusy(false);}}}>
-    {t('vpn.deleteImpact')}
-  </Modal></>;
+    <Popconfirm open={deleting} title={t('common.confirm.execute')} description={t('vpn.deleteImpact')} okButtonProps={{danger:true,loading:busy}} onConfirm={async()=>{setBusy(true);try{if(await remove(node.id))setDeleting(false);}finally{setBusy(false);}}} onCancel={()=>{if(!busy)setDeleting(false);}}>
+      <Dropdown trigger={['click']} placement="bottomRight" menu={{items,onClick}} disabled={deleting}><Button size="small" icon={<MoreOutlined aria-hidden/>}>{t('common.actions.more')}</Button></Dropdown>
+    </Popconfirm>
+  </ResponsiveActions></>;
 }

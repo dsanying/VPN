@@ -1,24 +1,35 @@
 import { Button, Form, Image, Input, Select } from 'antd';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DrawerForm, Stack } from '@/components/client';
+import { DrawerForm, Stack, QueryErrorAlert } from '@/components/client';
 import { api } from '@/ipc';
 import { useAppStore } from '@/store/app-store';
 import { notifyActionFailed } from '@/utils/feedback';
 import { type EnterpriseChallenge } from '@shared/enterprise-vpn';
 import { useEnterpriseNodes } from '@/store/enterprise-nodes';
 export function NodeAuthenticationHost() {
+  const { t } = useTranslation();
   const challenge = useEnterpriseNodes(s => s.sessions.find(v => v.challenge)?.challenge);
+  const [loadError, setLoadError] = useState<unknown>();
+  const [retryTick, setRetryTick] = useState(0);
   useEffect(() => {
     let active = true; let received = false;
     const accept = (snapshot: Awaited<ReturnType<typeof api.enterprise.get>>) => {
       if (active) useEnterpriseNodes.getState().setSessions(snapshot.sessions ?? []);
     };
     const off = api.enterprise.onChanged(snapshot => { received = true; accept(snapshot); });
-    void api.enterprise.get().then(snapshot => { if (!received) accept(snapshot); }, error => notifyActionFailed('sync',error));
+    void api.enterprise.get().then(snapshot => {
+      if (!received) accept(snapshot);
+      if (active) setLoadError(undefined);
+    }, error => { if (active) setLoadError(error); });
     return () => { active=false; off(); };
-  }, []);
-  return challenge ? <EnterpriseAuthentication key={challenge.id} challenge={challenge} onCancel={() => void api.proxy.stop().then(() => useAppStore.getState().refreshConnectionStatus(), error => notifyActionFailed('disconnect', error))} /> : null;
+  }, [retryTick]);
+  return (
+    <>
+      {loadError ? <QueryErrorAlert error={loadError} errorTitle={t('errors.configNotLoaded')} retryLabel={t('common.actions.retry')} onRetry={() => { setLoadError(undefined); setRetryTick(v => v + 1); }} /> : null}
+      {challenge ? <EnterpriseAuthentication key={challenge.id} challenge={challenge} onCancel={() => void api.proxy.stop().then(() => useAppStore.getState().refreshConnectionStatus(), error => notifyActionFailed('disconnect', error))} /> : null}
+    </>
+  );
 }
 function EnterpriseAuthentication({
   challenge,

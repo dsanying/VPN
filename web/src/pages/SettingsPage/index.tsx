@@ -1,6 +1,6 @@
 import { clientHost } from '@/config/client-host';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Select, Switch, Space } from 'antd';
+import { Button, Form, Select, Switch } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,12 +10,10 @@ import {
   ResponsiveActions,
   StatusTag,
   ViewSwitch,
-  HelpTip,
   FieldLabel,
-  SectionHeader,
-  ContentStack,
 } from '@/components/client';
 import { ConfigBoundary } from '@/components/vpn/ConfigBoundary';
+import { DesktopSection } from '@/components/vpn/DesktopSection';
 import { useAppStore } from '@/store/app-store';
 import { useThemeStore } from '@/stores/useThemeStore';
 import { notifyActionFailed, notifyActionSuccess } from '@/utils/feedback';
@@ -61,26 +59,21 @@ export default function SettingsPage() {
       <ConfigBoundary>
         <PageStack>
           {host.desktopHelper ? (
-            <ContentStack>
-              <SectionHeader
-                title={
-                  <Space size="small">
-                    {t('common.vocab.helper')}
-                    <HelpTip title={t('vpn.helperPurpose')} />
-                  </Space>
-                }
-                extra={
-                  <StatusTag tone={helper?.ready ? 'success' : 'neutral'}>
-                    {t(
-                      helper?.ready
-                        ? 'common.vocab.ready'
-                        : helper?.installed
-                          ? 'vpn.helperUnavailable'
-                          : 'vpn.helperMissing'
-                    )}
-                  </StatusTag>
-                }
-              />
+            <DesktopSection
+              title={t('common.vocab.helper')}
+              tooltip={t('vpn.helperPurpose')}
+              extra={
+                <StatusTag tone={helper?.ready ? 'success' : 'neutral'}>
+                  {t(
+                    helper?.ready
+                      ? 'common.vocab.ready'
+                      : helper?.installed
+                        ? 'vpn.helperUnavailable'
+                        : 'vpn.helperMissing'
+                  )}
+                </StatusTag>
+              }
+            >
               {helper?.supported ? (
                 !helper.ready ? (
                   <ResponsiveActions justify="start">
@@ -96,31 +89,27 @@ export default function SettingsPage() {
               ) : (
                 <span>{t('vpn.notInstalledPlatform')}</span>
               )}
-            </ContentStack>
+            </DesktopSection>
           ) : (
-            <ContentStack>
-              <SectionHeader
-                title={
-                  <Space size="small">
-                    {t('vpn.systemVpn')}
-                    <HelpTip title={t('vpn.systemVpnHint')} />
-                  </Space>
-                }
-                extra={
-                  <Button
-                    onClick={() =>
-                      void api.system
-                        .openVpnSettings()
-                        .catch((error) => notifyActionFailed('openSettings', error))
-                    }
-                  >
-                    {t('common.actions.manage')}
-                  </Button>
-                }
-              />
-            </ContentStack>
+            <DesktopSection
+              title={t('vpn.systemVpn')}
+              tooltip={t('vpn.systemVpnHint')}
+              extra={
+                <Button
+                  onClick={() =>
+                    void api.system
+                      .openVpnSettings()
+                      .catch((error) => notifyActionFailed('openSettings', error))
+                  }
+                >
+                  {t('common.actions.manage')}
+                </Button>
+              }
+            >
+              {null}
+            </DesktopSection>
           )}
-          <Card title={t('common.vocab.general')}>
+          <DesktopSection title={t('common.vocab.general')}>
             <Form layout="vertical">
               <FormGrid columns={3}>
                 {host.loginAutostart ? (
@@ -202,16 +191,16 @@ export default function SettingsPage() {
                 </Form.Item>
               </FormGrid>
             </Form>
-          </Card>
-          <Card title={t('common.vocab.networkSettings')}>
+          </DesktopSection>
+          <DesktopSection title={t('common.vocab.networkSettings')}>
             <NetworkOptions />
-          </Card>
-          <Card title={t('common.actions.update')}>
+          </DesktopSection>
+          <DesktopSection title={t('common.actions.update')}>
             <SettingsTools />
-          </Card>
-          <Card title={t('vpn.backup')}>
+          </DesktopSection>
+          <DesktopSection title={t('vpn.backup')}>
             <BackupTools />
-          </Card>
+          </DesktopSection>
         </PageStack>
       </ConfigBoundary>
     </AppPage>
