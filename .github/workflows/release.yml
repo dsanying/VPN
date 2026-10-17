@@ -244,15 +244,15 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
-  # arm64 Linux runner：qemu-aarch64 支持 TCG（macOS 构建无此回退，HVF 也不可用）；
-  # 有 KVM 则接近原生速度，无则 TCG 慢速但仍是同一 arm64 APK 的真实验收。
+  # ubuntu runner 有 KVM：x86_64 模拟器接近原生速度。APK 为通用包（arm64+amd64），
+  # 验收跑的是发布工件本身的 x86_64 分片；环境字段如实记录 ABI。
   native-android:
     needs: release
     if: always() && !cancelled()
     permissions:
       contents: read
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.0.0
@@ -273,38 +273,28 @@ jobs:
           cp -R "downloaded/android/app/build/outputs/apk/." android/app/build/outputs/apk/
           test -f android/app/build/outputs/apk/release/app-release.apk
           test -f android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
-      - name: Install emulator image and tools
+      - name: Enable KVM and install emulator image
         run: |
-          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          if [ -z "$SDK" ]; then
-            SDK="$RUNNER_TEMP/android-sdk"
-            mkdir -p "$SDK/cmdline-tools"
-            curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
-            unzip -q /tmp/cmdtools.zip -d "$SDK/cmdline-tools"
-            mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
-            echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-            echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          fi
-          SDKMANAGER=$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -1)
+          sudo chmod 666 /dev/kvm
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" --install "platform-tools" "emulator" "build-tools;35.0.0" "system-images;android-35;google_apis;arm64-v8a"
+          "$SDKMANAGER" --install "platform-tools" "emulator" "build-tools;35.0.0" "system-images;android-35;google_apis;x86_64"
           echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
-          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-          echo "$SDK/emulator" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/emulator" >> "$GITHUB_PATH"
           echo "AVDMANAGER=$(dirname "$SDKMANAGER")/avdmanager" >> "$GITHUB_ENV"
-          [ -e /dev/kvm ] && sudo chmod 666 /dev/kvm || echo "No KVM; emulator will use TCG (slow)"
       - name: Create and boot disposable emulator
-        timeout-minutes: 45
+        timeout-minutes: 15
         run: |
-          echo "no" | "$AVDMANAGER" create avd --name release-check --package "system-images;android-35;google_apis;arm64-v8a" --device pixel_6 --force
+          echo "no" | "$AVDMANAGER" create avd --name release-check --package "system-images;android-35;google_apis;x86_64" --device pixel_6 --force
           "$ANDROID_HOME/emulator/emulator" -avd release-check -accel auto -gpu swiftshader_indirect -no-window -no-audio -no-snapshot -no-boot-anim -memory 3072 &
           EMU_PID=$!
           for i in $(seq 1 240); do
             kill -0 "$EMU_PID" 2>/dev/null || { echo "Emulator process exited early"; wait "$EMU_PID"; exit 1; }
             STATE=$(adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
             [ "$STATE" = "1" ] && break
-            sleep 10
+            sleep 5
           done
           STATE=$(adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
           test "$STATE" = "1"

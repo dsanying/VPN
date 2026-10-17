@@ -100,7 +100,8 @@ export function verifyAndroidRelease({ root = process.cwd(), serial, sdk, javaHo
       targets: [{
         platform: 'android', arch: 'arm64', host: 'capacitor', build: 'passed', native: true,
         checks: { launch: 'passed', operations: 'passed', network: 'passed', updates: 'passed' },
-        environment: 'disposable arm64 emulator',
+        environment: 'disposable x86_64 KVM emulator running the shipped universal APK',
+        emulatorAbi: 'x86_64',
         files: ['artifacts/android-arm64/signed-native-checks.json', 'artifacts/android-arm64/signed-native-checks.log'],
       }],
     }, null, 2) + '\n');
