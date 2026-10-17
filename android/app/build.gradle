@@ -27,7 +27,7 @@ android {
         applicationId "com.dsanying.shadowvpn.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        ndk { abiFilters 'arm64-v8a' }
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
         versionCode clientVersionCode
         versionName clientVersion
         buildConfigField 'String', 'SOURCE_COMMIT', '"' + clientBuildCommit + '"'
