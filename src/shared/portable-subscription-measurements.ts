@@ -85,7 +85,7 @@ export class PortableSubscriptionMeasurements {
       };
       emit({ subscriptionId: id, url: sub.url, startedAt: observedAt });
       const probe = async (route: 'direct' | 'current'): Promise<SubscriptionLinkProbe> => {
-        const start = performance.now();
+        const start = Date.now();
         try {
           const response = await this.request(
             sub.url,
@@ -97,7 +97,7 @@ export class PortableSubscriptionMeasurements {
           return {
             status: response.status >= 200 && response.status < 300 ? 'reachable' : 'http-error',
             httpStatus: response.status,
-            latencyMs: Math.round(performance.now() - start),
+            latencyMs: Math.round(Date.now() - start),
           };
         } catch (error) {
           if (abort.signal.aborted) throw error;

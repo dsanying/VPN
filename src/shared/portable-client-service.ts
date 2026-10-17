@@ -91,7 +91,7 @@ export class PortableClientService {
   }
   async invoke(channel: string, args?: unknown): Promise<ApiResponse<unknown>> {
     const traceId = globalThis.crypto?.randomUUID?.().replace(/-/g, '');
-    const started = performance.now();
+    const started = Date.now();
     const readOnly = /:(?:get|read|is|has|stateExists|measurements)/i.test(channel);
     const record = async (phase: 'start' | 'success' | 'failure', message = '') => {
       if (readOnly && phase !== 'failure') return;
@@ -104,7 +104,7 @@ export class PortableClientService {
           traceId,
           operation: channel,
           phase,
-          durationMs: Math.round(performance.now() - started),
+          durationMs: Math.round(Date.now() - started),
         });
       } catch {
         /* A log sink failure must not change the result of committed work. */
