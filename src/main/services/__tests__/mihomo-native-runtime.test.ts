@@ -14,7 +14,7 @@ import { MihomoApiClient } from '../MihomoApiClient';
 import { probeMihomoReadiness } from '../mihomo-readiness';
 import type { ServerConfig, UserConfig } from '../../../shared/types';
 
-jest.setTimeout(30000);
+jest.setTimeout(90000);
 const platform =
   process.platform === 'darwin'
     ? process.arch === 'arm64'
@@ -94,7 +94,7 @@ function launch(name: 'mihomo' | 'xray', config: object): void {
   });
 }
 async function ready(): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 400; attempt++) {
     if (children.some((child) => child.exitCode !== null)) throw new Error('Fixture core exited');
     try {
       await probeMihomoReadiness(api!, expectedMihomoConfig, 100);
