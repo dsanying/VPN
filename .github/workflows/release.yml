@@ -110,6 +110,14 @@ jobs:
           SHADOW_ANDROID_STORE_PASSWORD: ${{ secrets.SHADOW_ANDROID_STORE_PASSWORD }}
           SHADOW_ANDROID_KEY_PASSWORD: ${{ secrets.SHADOW_ANDROID_KEY_PASSWORD }}
 
+      - name: Build signed release instrumentation APK (android)
+        if: matrix.platform == 'android'
+        run: node scripts/android-gradle.mjs :app:assembleReleaseAndroidTest -PshadowTestBuildType=release
+        env:
+          SHADOW_ANDROID_KEY_ALIAS: ${{ secrets.SHADOW_ANDROID_KEY_ALIAS }}
+          SHADOW_ANDROID_STORE_PASSWORD: ${{ secrets.SHADOW_ANDROID_STORE_PASSWORD }}
+          SHADOW_ANDROID_KEY_PASSWORD: ${{ secrets.SHADOW_ANDROID_KEY_PASSWORD }}
+
       - name: Remove temporary Android signing key
         if: always() && matrix.platform == 'android'
         run: node scripts/prepare-android-signing.mjs --cleanup
@@ -169,6 +177,8 @@ jobs:
             dist-package/*.exe
             dist-package/*.dmg
             android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/release/output-metadata.json
+            android/app/build/outputs/apk/androidTest/release/*.apk
             android/app/libs/sing-box-android-source-*.tar.gz
             android/app/libs/libbox-build.json
             artifacts/client-platform-evidence.json
@@ -226,12 +236,69 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: native-mac-${{ matrix.arch }}
-          path: artifacts/mac-${{ matrix.arch }}/
+          # collect-client-evidence 要求 artifact 顶层保留 artifacts/ 目录结构；
+          # 加 package.json 使公共祖先回到仓库根，前缀得以保留。
+          path: |
+            artifacts/**
+            package.json
+          if-no-files-found: error
+          retention-days: 5
+
+  # Apple Silicon runner 上以 arm64 原生虚拟化跑一次性模拟器，验收已签名的最终 APK。
+  native-android:
+    needs: release
+    if: always() && !cancelled()
+    permissions:
+      contents: read
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '26'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download signed release artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: release-android
+          path: downloaded
+      - name: Restore APK layout expected by the verifier
+        run: |
+          mkdir -p android/app/build/outputs/apk
+          cp -R "downloaded/android/app/build/outputs/apk/." android/app/build/outputs/apk/
+          test -f android/app/build/outputs/apk/release/app-release.apk
+          test -f android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk
+      - name: Install emulator image and tools
+        run: |
+          sdkmanager "platform-tools" "emulator" "build-tools;35.0.0" "system-images;android-35;google_apis;arm64-v8a"
+      - name: Create and boot disposable emulator
+        timeout-minutes: 15
+        run: |
+          echo "no" | avdmanager create avd --name release-check --package "system-images;android-35;google_apis;arm64-v8a" --device pixel_6 --force
+          "$ANDROID_HOME/emulator/emulator" -avd release-check -no-window -no-audio -no-snapshot -no-boot-anim &
+          adb wait-for-device
+          adb shell 'while [ "$(getprop sys.boot_completed | tr -d "\r")" != "1" ]; do sleep 3; done'
+      - name: Verify signed release on disposable emulator
+        env:
+          ANDROID_SERIAL: emulator-5554
+        run: node scripts/verify-android-release.mjs --reset-fixture
+      - name: Upload actual native acceptance results
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: native-android
+          path: |
+            artifacts/**
+            package.json
           if-no-files-found: error
           retention-days: 5
 
   create-release:
-    needs: [release, native-mac]
+    needs: [release, native-mac, native-android]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
