@@ -186,6 +186,8 @@ jobs:
             artifacts/mac-x64/**
             artifacts/windows-x64/**
             artifacts/android-arm64/**
+          # rerun 同名产物不可变会留存旧尝试的残缺包；覆盖保证下游恒取最新尝试。
+          overwrite: true
           retention-days: 5
 
   native-mac:
@@ -242,6 +244,7 @@ jobs:
             artifacts/**
             package.json
           if-no-files-found: error
+          overwrite: true
           retention-days: 5
 
   # ubuntu runner 有 KVM：x86_64 模拟器接近原生速度。APK 为通用包（arm64+amd64），
@@ -314,6 +317,7 @@ jobs:
             artifacts/**
             package.json
           if-no-files-found: error
+          overwrite: true
           retention-days: 5
 
   create-release:
