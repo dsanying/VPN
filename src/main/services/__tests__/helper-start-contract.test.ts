@@ -46,6 +46,35 @@ it.each(['darwin', 'win32', 'linux'] as const)(
     expect(service.helperGate).toHaveBeenCalledTimes(1);
   }
 );
+it.each(['darwin'] as const)(
+  '%s ready helpers with stale confdir still enter the gate (start would be denied → per-launch osascript prompt)',
+  async (platform) => {
+    const service = make();
+    service.helperManager.getStatus.mockResolvedValue({
+      installed: true,
+      ready: true,
+      confdirMismatch: true,
+    });
+    await withPlatformAsync(platform, async () => {
+      await service.maybePromptHelperGate({}, true, {});
+    });
+    expect(service.helperGate).toHaveBeenCalledTimes(1);
+  }
+);
+it('ready helper without any mismatch or background block skips the gate entirely', async () => {
+  const service = make();
+  service.helperManager.getStatus.mockResolvedValue({
+    installed: true,
+    ready: true,
+    pathMismatch: false,
+    confdirMismatch: false,
+    backgroundDisabled: false,
+  });
+  await withPlatformAsync('darwin', async () => {
+    await service.maybePromptHelperGate({}, true, {});
+  });
+  expect(service.helperGate).not.toHaveBeenCalled();
+});
 it('missing management port stops a spawned core instead of accepting its PID as success', async () => {
   const service = make();
   service.tailscaleApiPort = null;

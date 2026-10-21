@@ -61,6 +61,42 @@ it('concurrent maintenance checks share preparation, resolve settled status and 
   expect(apply).toHaveBeenCalledWith('core');
   expect(service.getSnapshot().items.find((item) => item.kind === 'core')?.status).toBe('applied');
 });
+it('apply waits for an in-flight check instead of rejecting, then applies the prepared update', async () => {
+  const { service, prepare, apply } = fixture();
+  let finish!: () => void;
+  prepare.software.mockImplementation(async () => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return { kind: 'software', status: 'ready', restart: 'software' };
+  });
+  const check = service.checkVersions();
+  await Promise.resolve();
+  const applying = service.apply('software');
+  finish();
+  await Promise.all([check, applying]);
+  expect(apply).toHaveBeenCalledWith('software');
+  expect(service.getSnapshot().items.find((item) => item.kind === 'software')?.status).toBe(
+    'applied'
+  );
+});
+it('apply waiting on a check still rejects when the check leaves no prepared update', async () => {
+  const { service, prepare, apply } = fixture();
+  let finish!: () => void;
+  prepare.software.mockImplementation(async () => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return { kind: 'software', status: 'latest' };
+  });
+  const check = service.checkVersions();
+  await Promise.resolve();
+  const applying = service.apply('software');
+  finish();
+  await expect(applying).rejects.toThrow('No prepared update');
+  await check;
+  expect(apply).not.toHaveBeenCalled();
+});
 it('a failed recheck preserves prepared updates and does not block unrelated checks', async () => {
   const { service, prepare } = fixture();
   prepare.core.mockResolvedValue({

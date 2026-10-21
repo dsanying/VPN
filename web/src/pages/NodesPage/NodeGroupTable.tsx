@@ -309,7 +309,7 @@ export function NodeGroupTable({
             {
               title: t('common.vocab.operations'),
               key: 'action',
-              width: columnWidth.actions(1, 5),
+              width: columnWidth.actions(1, 4),
               render: (_, row) =>
                 row.subscription ? (
                   <ResponsiveActions>

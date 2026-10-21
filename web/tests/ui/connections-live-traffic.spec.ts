@@ -289,7 +289,7 @@ test('首帧仅有开发客户端和系统连接时立即显示出口图，无�
     ], at: Date.now(),
   }));
   const region = page.getByRole('region', { name: '连接出口图', exact: true });
-  await expect(region.getByText('本机 · 3', { exact: true })).toBeVisible();
+  await expect(region.getByText('本机 · 3', { exact: true })).toHaveCount(0);
   await expect(region.getByText('Electron · 1', { exact: true })).toBeVisible();
   await expect(region.getByText('apsd · 1', { exact: true })).toBeVisible();
   await expect(region.getByText('未识别应用 · 1', { exact: true })).toBeVisible();

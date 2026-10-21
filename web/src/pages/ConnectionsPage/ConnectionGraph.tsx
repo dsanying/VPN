@@ -9,7 +9,6 @@ import { useChartColors } from '@/components/ReactEcharts/useChartColors';
 import {
   CHART_HEIGHT,
   REALTIME_CHART_HEIGHT,
-  valueLabelGridRight,
 } from '@/components/ReactEcharts/chartOptions';
 import { ScrollRegion } from '@/components/client';
 import { designTokens } from '@/design/tokens';
@@ -28,7 +27,6 @@ export interface ConnectionSelection {
 export function ConnectionGraph({
   flows,
   applications,
-  source,
   label,
   display,
   onSelect,
@@ -36,7 +34,6 @@ export function ConnectionGraph({
   flows: ConnectionFlow[];
   applications: InstalledApplication[];
   onSelect: (selection: ConnectionSelection) => void;
-  source: string;
   label: string;
   display: (value: string) => string;
 }) {
@@ -45,10 +42,10 @@ export function ConnectionGraph({
   const servers = useAppStore((s) => s.config?.servers);
   const subscriptions = useAppStore((s) => s.config?.subscriptions);
   const details = useAppStore((s) => s.probeDetails);
-  const graph = useMemo(() => connectionSankey(flows, source), [flows, source]);
+  const graph = useMemo(() => connectionSankey(flows), [flows]);
   const rows = Math.max(
-    graph.nodes.filter((n) => n.depth === 1).length,
-    graph.nodes.filter((n) => n.depth === 2).length
+    graph.nodes.filter((n) => n.depth === 0).length,
+    graph.nodes.filter((n) => n.depth === 1).length
   );
   // Enough spacing for the smallest branch's label, even when a dominant route carries most connections.
   const height = Math.max(
@@ -65,7 +62,7 @@ export function ConnectionGraph({
             ? colors.textTertiary
             : colors.info;
     const nodeName = (n: (typeof graph.nodes)[number]) => {
-      const node = n.depth === 2 ? resolveNodeIdentity(n.name, servers ?? []) : undefined;
+      const node = n.depth === 1 ? resolveNodeIdentity(n.name, servers ?? []) : undefined;
       return node
         ? nodeDisplayName(
             node.name,
@@ -80,7 +77,7 @@ export function ConnectionGraph({
     const appByPath = new Map(applications.map((application) => [application.path, application]));
     const names = new Map(graph.nodes.map((n) => [n.id, nodeName(n)]));
     const data: SankeySeriesOption['data'] = graph.nodes.map((n) => {
-      const application = n.depth === 1 ? appByPath.get(n.identity ?? '') : undefined;
+      const application = n.depth === 0 ? appByPath.get(n.identity ?? '') : undefined;
       const name = names.get(n.id)!;
       const caption = `${name} · ${formatNumber(n.value)}`;
       return {
@@ -88,11 +85,11 @@ export function ConnectionGraph({
         name,
         value: n.value,
         depth: n.depth,
-        itemStyle: { color: n.depth === 2 ? routeColor(n.outbound) : colors.info },
+        itemStyle: { color: n.depth === 1 ? routeColor(n.outbound) : colors.info },
         label: {
-          position: n.depth === 0 ? 'left' : 'right',
-          formatter: n.depth === 1 ? `{icon|} {caption|${caption}}` : caption,
-          ...(n.depth === 1
+          position: 'right' as const,
+          formatter: n.depth === 0 ? `{icon|} {caption|${caption}}` : caption,
+          ...(n.depth === 0
             ? {
                 rich: {
                   icon: {
@@ -136,7 +133,7 @@ export function ConnectionGraph({
           nodeGap: designTokens.space.xl,
           nodeWidth: designTokens.space.lg,
           lineStyle: { opacity: 0.35, curveness: 0.5 },
-          left: valueLabelGridRight([`${source} · ${formatNumber(graph.nodes[0].value)}`]),
+          left: designTokens.space.xl,
           right: designTokens.layout.queryControlWidth,
           top: designTokens.space.xl,
           bottom: designTokens.space.xl,
@@ -152,7 +149,7 @@ export function ConnectionGraph({
         },
       ],
     };
-  }, [graph, applications, display, colors, source, servers, subscriptions, details, t]);
+  }, [graph, applications, display, colors, servers, subscriptions, details, t]);
   const bindChart = useCallback(
     (chart: ECharts) => {
       chart.off('click');

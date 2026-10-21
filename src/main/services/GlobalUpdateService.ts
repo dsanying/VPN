@@ -157,8 +157,15 @@ export class GlobalUpdateService {
     this.publish();
   }
   async apply(kind: UpdateKind): Promise<GlobalUpdateSnapshot> {
-    if (this.applying || this.flight || this.versionFlight)
-      throw new Error('Update preparation is busy');
+    if (this.applying) throw new Error('Update preparation is busy');
+    // 已预备的更新独立于在途检查：等待检查结束而非拒绝，避免「待重启」按钮在慢速检查期间不可点或点击报错。
+    while (this.flight || this.versionFlight) {
+      try {
+        await (this.flight ?? this.versionFlight);
+      } catch {
+        /* A failed check must not block applying an already-prepared update. */
+      }
+    }
     if (!this.snapshot.items.some((item) => item.kind === kind && item.status === 'ready'))
       throw new Error('No prepared update');
     this.applying = true;

@@ -44,8 +44,9 @@ describe('complete application scope', () => {
         UNKNOWN_APPLICATION,
       ])
     );
-    const graph = connectionSankey(flows, 'device');
-    expect(graph.nodes[0].value).toBe(conns.length);
+    const graph = connectionSankey(flows);
+    expect(graph.links.reduce((total, link) => total + link.value, 0)).toBe(conns.length);
+    expect(graph.nodes.every((node) => node.depth === 0 || node.depth === 1)).toBe(true);
     expect(filterConnections(conns, 'apsd')).toHaveLength(1);
   });
 });
@@ -111,14 +112,14 @@ it('shared exits and split application routes conserve counts without merging id
     { ...connection('direct'), metadata: { processPath: '/opt/a/helper' }, outbound: 'direct' },
     { ...connection('other'), metadata: { processPath: '/opt/b/helper' }, outbound: 'node' },
   ];
-  const graph = connectionSankey(connectionFlows(connections, 'application'), 'Device');
-  expect(graph.nodes.filter((n) => n.depth === 1).map((n) => [n.name, n.value])).toEqual([
+  const graph = connectionSankey(connectionFlows(connections, 'application'));
+  expect(graph.nodes.filter((n) => n.depth === 0).map((n) => [n.name, n.value])).toEqual([
     ['helper', 25],
     ['helper', 1],
   ]);
   expect(
     graph.nodes
-      .filter((n) => n.depth === 2)
+      .filter((n) => n.depth === 1)
       .map((n) => [n.name, n.value])
       .sort()
   ).toEqual([
@@ -128,10 +129,10 @@ it('shared exits and split application routes conserve counts without merging id
   const count = (id: string, side: 'source' | 'target') =>
     graph.links.filter((l) => l[side] === id).reduce((sum, l) => sum + l.value, 0);
   for (const node of graph.nodes) {
-    if (node.depth > 0) expect(count(node.id, 'target')).toBe(node.value);
-    if (node.depth < 2) expect(count(node.id, 'source')).toBe(node.value);
+    if (node.depth === 1) expect(count(node.id, 'target')).toBe(node.value);
+    if (node.depth === 0) expect(count(node.id, 'source')).toBe(node.value);
   }
-  expect(graph.nodes[0].value).toBe(connections.length);
+  expect(graph.links.reduce((total, link) => total + link.value, 0)).toBe(connections.length);
 });
 it('search matches actual paths, application names, rules, target ports and translated outbounds before pagination', () => {
   const connections = [

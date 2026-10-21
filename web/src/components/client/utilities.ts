@@ -21,7 +21,7 @@ export const columnWidth = {
   code: 240,
   long: 420,
   handle: 40,
-  actions: (labels: number, icons = 0) => (labels + icons) * 100,
+  actions: (textCount: number, iconCount = 0) => textCount * 100 + iconCount * 40,
 };
 export function buildTablePagination(overrides: TablePaginationConfig = {}): TablePaginationConfig {
   return {
@@ -49,10 +49,3 @@ export function useCopyToClipboard() {
 }
 
 export {installOverflowScroll} from './overflowScroll';
-export function measureTextWidth(text: string, font?: string) {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  if (!context) return text.length * 16;
-  context.font = font ?? getComputedStyle(document.body).font;
-  return context.measureText(text).width;
-}
