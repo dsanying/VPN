@@ -15,10 +15,11 @@ import {
 import { ConfigBoundary } from '@/components/vpn/ConfigBoundary';
 import { DesktopSection } from '@/components/vpn/DesktopSection';
 import { useAppStore } from '@/store/app-store';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import { notifyActionFailed, notifyActionSuccess } from '@/utils/feedback';
 import { api } from '@/ipc';
 import type { UserConfig } from '@shared/types';
+import { LOGIN_ITEMS_SETTINGS_URL } from '@shared/constants';
 import { patchConfig } from '@/store/config-mutations';
 import { NetworkOptions } from './NetworkOptions';
 import { SettingsTools, BackupTools } from './SettingsTools';
@@ -63,29 +64,55 @@ export default function SettingsPage() {
               title={t('common.vocab.helper')}
               tooltip={t('vpn.helperPurpose')}
               extra={
-                <StatusTag tone={helper?.ready ? 'success' : 'neutral'}>
+                <StatusTag
+                  tone={
+                    helper?.ready && !helper.needsRepair
+                      ? 'success'
+                      : helper?.needsRepair
+                        ? 'warning'
+                        : 'neutral'
+                  }
+                >
                   {t(
-                    helper?.ready
+                    helper?.ready && !helper.needsRepair
                       ? 'common.vocab.ready'
-                      : helper?.installed
-                        ? 'vpn.helperUnavailable'
-                        : 'vpn.helperMissing'
+                      : helper?.needsRepair
+                        ? 'vpn.helperNeedsRepair'
+                        : helper?.installed
+                          ? 'vpn.helperUnavailable'
+                          : 'vpn.helperMissing'
                   )}
                 </StatusTag>
               }
             >
               {helper?.supported ? (
-                !helper.ready ? (
-                  <ResponsiveActions justify="start">
-                    <Button
-                      icon={<SafetyCertificateOutlined aria-hidden />}
-                      loading={helperBusy}
-                      onClick={() => void helperAction()}
-                    >
-                      {t(helper.installed ? 'vpn.repairHelper' : 'common.vocab.install')}
-                    </Button>
-                  </ResponsiveActions>
-                ) : null
+                <>
+                  {!helper.ready || helper.needsRepair ? (
+                    <ResponsiveActions justify="start">
+                      <Button
+                        icon={<SafetyCertificateOutlined aria-hidden />}
+                        loading={helperBusy}
+                        onClick={() => void helperAction()}
+                      >
+                        {t(helper.installed ? 'vpn.repairHelper' : 'common.vocab.install')}
+                      </Button>
+                    </ResponsiveActions>
+                  ) : null}
+                  {helper.backgroundDisabled ? (
+                    <ResponsiveActions justify="start">
+                      <span>{t('vpn.helperBackgroundOffHint')}</span>
+                      <Button
+                        onClick={() =>
+                          void api.system
+                            .openExternal(LOGIN_ITEMS_SETTINGS_URL)
+                            .catch((e) => notifyActionFailed('openSettings', e))
+                        }
+                      >
+                        {t('vpn.openSettings')}
+                      </Button>
+                    </ResponsiveActions>
+                  ) : null}
+                </>
               ) : (
                 <span>{t('vpn.notInstalledPlatform')}</span>
               )}

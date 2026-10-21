@@ -20,6 +20,6 @@ export function ConnectionTopology({ snapshot, connections, applications, displa
     <SummaryStrip items={[{ key: 'total', label: t('common.vocab.connections'), value: visible.length }, { key: 'groups', label: t('common.vocab.groups'), value: new Set(flows.map(f => f.identity)).size }, { key: 'outbounds', label: t('common.vocab.outbound'), value: new Set(flows.map(f => f.outbound)).size }]} />
     {snapshot?.limited ? <Alert type="warning" title={t('vpn.connectionsLimited')} /> : null}
     {snapshot?.unavailable ? <Alert type="warning" title={t('vpn.deviceConnectionsUnavailable')} /> : null}
-    {visible.length ? <ConnectionGraph flows={flows} applications={applications} display={display} source={t('common.vocab.thisDevice')} label={t('vpn.connectionTopology')} onSelect={onSelect} /> : !snapshot?.connections.length ? <Typography.Text type="secondary">{t('vpn.noActiveConnections')}</Typography.Text> : null}
+    {visible.length ? <ConnectionGraph flows={flows} applications={applications} display={display} label={t('vpn.connectionTopology')} onSelect={onSelect} /> : !snapshot?.connections.length ? <Typography.Text type="secondary">{t('vpn.noActiveConnections')}</Typography.Text> : null}
   </ContentStack></Card>;
 }

@@ -18,7 +18,7 @@ import {
 export function UpdateActions() {
   const { t } = useTranslation();
   const snapshot = useUpdateStore((s) => s.snapshot);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   return (
     <ResponsiveActions justify="start">
       {snapshot.items
@@ -33,10 +33,10 @@ export function UpdateActions() {
             icon={<SyncOutlined aria-hidden />}
             className="ds-update-restart"
             variant="outlined"
-            loading={busy}
-            disabled={snapshot.checking}
+            loading={busy === item.kind}
+            disabled={busy !== null && busy !== item.kind}
             onClick={() => {
-              setBusy(true);
+              setBusy(item.kind);
               void api.update
                 .apply(item.kind)
                 .then((result) => {
@@ -46,7 +46,7 @@ export function UpdateActions() {
                     notifyActionSuccess('update');
                 })
                 .catch((error) => notifyActionFailed('update', error))
-                .finally(() => setBusy(false));
+                .finally(() => setBusy(null));
             }}
           >
             {t(

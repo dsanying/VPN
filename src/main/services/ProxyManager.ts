@@ -1739,7 +1739,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 切接管/CONFIG_CHANGED 重启/换节点回退重启…）汇入此处；仅 interactive 启动 + 支持平台 + TUN +
    * helper 未就绪时，经注入回调弹 native 引导（无窗口依赖）；回调返回 'abort' → 抛
    * HELPER_GATE_ABORTED 终止启动（终态等价 osascript 取消=停止态）。崩溃自动重启(interactive:false) 跳过。
-   * 注：ready 但 pathMismatch（socket 通但 plist 路径失效）必须进 gate（否则 startViaHelper 会失败→裸弹 osascript）。
+   * 注：ready 但 pathMismatch/confdirMismatch（socket 通但 plist 烧录路径/配置目录失效，start 必被拒）
+   *   必须进 gate（否则 startViaHelper 会失败→裸弹 osascript）。
    */
   private async maybePromptHelperGate(
     config: UserConfig,
@@ -1753,7 +1754,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 关键：backgroundDisabled 时**即便 ready 也不能早退**——install-over-top 让 daemon 在跑(ready=true)但 BTM
     // 开关仍关（disposition allowed 位缺），必须进 gate 提示用户去系统设置手动开启（修 Bug2：原 `ready→return` 把
     // 混合态直接放过，用户永远收不到引导）。getStatus 已直读 disposition 判 backgroundDisabled（无需去抖）。
-    if (hs.ready && !hs.pathMismatch && !hs.backgroundDisabled) return;
+    if (hs.ready && !hs.pathMismatch && !hs.confdirMismatch && !hs.backgroundDisabled) return;
 
     const decision = await this.helperGate(hs, config);
     if (decision === 'abort') {
@@ -5064,6 +5065,13 @@ rm -f "$STOPFLAG"
         this.logToManager(
           'warn',
           'helper「允许在后台」被系统关闭：本次走 osascript 看护脚本（不依赖 BTM，避免 daemon 被系统收割）。请在「系统设置 > 通用 > 登录项与扩展」重新打开开关以恢复免授权启停'
+        );
+      } else if (st?.confdirMismatch) {
+        // confdir 失配时 helper ping 仍通（isReady=true），但 start 必被 cfgAllowed 拒（config-path-denied）——
+        // 跳过这次注定失败的 RPC 直接落 osascript，并指出根治路径（修复重登记后启停免授权）。
+        this.logToManager(
+          'warn',
+          'helper 配置目录与当前数据目录不符（启动必被 config-path-denied 拒绝）：本次走 osascript 授权路径；修复提权助手后恢复免授权启停'
         );
       } else if (await this.helperManager.isReady()) {
         try {

@@ -24,6 +24,7 @@ import { getUserDataPath } from '../utils/paths';
 import { shq } from '../utils/shell-quote';
 import { sha256File } from '../../shared/file-hash';
 import { stageHelperInstallation } from './helper-install-staging';
+import { dirsEquivalent, plistFlagValue } from './helper-plist';
 
 // plist 5 使用标准 ESM；仅在读取 macOS 后台记录时加载。
 
@@ -44,6 +45,8 @@ const SM_CACHE_TTL_MS = 3_000;
 export class HelperManager implements IPrivilegedHelper {
   /** 路径不符 warn 仅首次记（getStatus 被设置页/首页高频调用，避免刷屏）。 */
   private pathMismatchWarned = false;
+  /** confdir 不符 warn 同理仅首次记。 */
+  private confdirMismatchWarned = false;
 
   // ── 「允许在后台」检测状态（仅 macOS）──────────────────────────────────
   /** launchctl 探测结果缓存（TTL 见 LOADED_PROBE_TTL_MS；null=探测不可用）。 */
@@ -164,6 +167,7 @@ export class HelperManager implements IPrivilegedHelper {
         needsRepair: false,
         backgroundDisabled: false,
         pathMismatch: false,
+        confdirMismatch: false,
         installedSingboxPath: null,
       };
     }
@@ -262,6 +266,28 @@ export class HelperManager implements IPrivilegedHelper {
       }
     }
 
+    // --confdir 不符检测：plist 烧录的允许配置目录 ≠ 当前 userData（数据目录改名/品牌迁移后，如
+    // ShadowVPN-FlowZ → ShadowVPN）。此状态 daemon ping 仍通（ready=true、卡片显示就绪），但 helper 的
+    // cfgAllowed 会拒绝 start（config-path-denied）→ 每次启停静默回退 osascript 裸弹授权框（真机实证）。
+    // 与 pathMismatch 不同，本检测不限 isPackaged：dev/prod 共用同一 userData（resolveUserDataPath 恒为
+    // ShadowVPN），差异在任何模式下都是真实失配；plist 缺 --confdir 的旧 helper 恒拒全部 start → 同样算不符。
+    let confdirMismatch = false;
+    if (installed) {
+      const confdir = this.installedConfdir();
+      // undefined = plist 读失败（未知，不误报）；null = 无 --confdir flag（旧版，必拒 start）→ 不符。
+      if (confdir !== undefined) {
+        confdirMismatch =
+          confdir === null || !dirsEquivalent(confdir, getUserDataPath(), fs.realpathSync);
+        if (confdirMismatch && !this.confdirMismatchWarned) {
+          this.confdirMismatchWarned = true;
+          this.log(
+            'warn',
+            `helper 配置目录不符: plist=${confdir ?? '(无 --confdir)'} 当前=${getUserDataPath()}（启动将被 config-path-denied 拒绝，需修复重登记）`
+          );
+        }
+      }
+    }
+
     return {
       supported: true,
       installed,
@@ -269,9 +295,10 @@ export class HelperManager implements IPrivilegedHelper {
       version,
       capabilities: this.capabilities,
       loaded,
-      needsRepair: installed && (!ready || pathMismatch),
+      needsRepair: installed && (!ready || pathMismatch || confdirMismatch),
       backgroundDisabled,
       pathMismatch,
+      confdirMismatch,
       installedSingboxPath,
     };
   }
@@ -765,24 +792,31 @@ export class HelperManager implements IPrivilegedHelper {
       .replace(/"/g, '&quot;');
   }
 
-  /** xmlEscape 的逆（plist 由本类生成，仅这四个实体；&amp; 最后解，避免二次替换）。 */
-  private xmlUnescape(s: string): string {
-    return s
-      .replace(/&quot;/g, '"')
-      .replace(/&gt;/g, '>')
-      .replace(/&lt;/g, '<')
-      .replace(/&amp;/g, '&');
+  /** 读已装 plist 原文；读失败返回 null（视为未知，不报 mismatch）。 */
+  private readPlistXml(): string | null {
+    try {
+      return fs.readFileSync(PLIST_PATH, 'utf8');
+    } catch {
+      return null;
+    }
   }
 
   /** 读已装 plist 中烧录的 --singbox 路径；不存在/解析失败返回 null（视为未知，不报 mismatch）。 */
   private installedSingboxPath(): string | null {
-    try {
-      const xml = fs.readFileSync(PLIST_PATH, 'utf8');
-      const m = xml.match(/<string>--singbox<\/string>\s*<string>([^<]*)<\/string>/);
-      return m ? this.xmlUnescape(m[1]) : null;
-    } catch {
-      return null;
-    }
+    const xml = this.readPlistXml();
+    return xml ? plistFlagValue(xml, '--singbox') : null;
+  }
+
+  /**
+   * 读已装 plist 中烧录的 --confdir（helper 放行配置文件的目录）。
+   * - 读文件失败 → undefined（未知，调用方不报 mismatch）。
+   * - 有文件但无 flag → null（旧版 helper confDir=""，pathAllowed 恒拒全部 start → 真失配）。
+   * - 有 flag → 烧录值原文（解 xml 实体）。
+   */
+  private installedConfdir(): string | null | undefined {
+    const xml = this.readPlistXml();
+    if (xml === null) return undefined;
+    return plistFlagValue(xml, '--confdir');
   }
 
   private buildInstallScript(

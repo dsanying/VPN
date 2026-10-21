@@ -171,7 +171,7 @@ export interface HelperStatus {
   version: string | null;
   /** daemon 是否被 launchd 加载（launchctl print 退出码）；非 macOS / 未安装为 null */
   loaded: boolean | null;
-  /** 已安装但无法就绪、协议版本不符、或烧录路径与当前 app 不符 → 建议重装修复 */
+  /** 已安装但无法就绪、协议版本不符、烧录路径或烧录配置目录与当前 app 不符 → 建议重装修复 */
   needsRepair: boolean;
   /** macOS「系统设置→登录项→允许在后台」被关。判定链：SMAppService.statusForLegacyURL(=2) → BTM disposition 直读
    *  → launchctl 去抖启发式（BTM .btm 目录受 TCC 完全磁盘访问保护、生产 GUI 读不到，故 SMAppService 为权威首通道）。
@@ -179,6 +179,9 @@ export interface HelperStatus {
   backgroundDisabled: boolean;
   /** 仅 macOS 打包版：plist 烧录的 sing-box 路径 ≠ 当前 app 路径（app 被移动过） */
   pathMismatch: boolean;
+  /** 仅 macOS：plist 烧录的 --confdir ≠ 当前 userData（数据目录改名/迁移后）。此状态下 ping 仍通（ready=true），
+   *  但 helper 拒绝 start（config-path-denied）→ 每次启停回退 osascript 裸弹授权框；修复重装即根治。 */
+  confdirMismatch: boolean;
   /** plist 中烧录的 sing-box 路径（诊断展示用；未装/解析失败为 null） */
   installedSingboxPath: string | null;
 }

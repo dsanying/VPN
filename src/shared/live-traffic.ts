@@ -160,8 +160,8 @@ export function createConnectionFlowSelector() {
   };
 }
 
-/** Three distinct layers, shared group/exit nodes, with real connection counts conserved. */
-export function connectionSankey(flows: ConnectionFlow[], source: string) {
+/** Two layers: source groups to shared exits. All connections originate on this device, so no constant root node. */
+export function connectionSankey(flows: ConnectionFlow[]) {
   const nodes: Array<{
     id: string;
     name: string;
@@ -169,7 +169,7 @@ export function connectionSankey(flows: ConnectionFlow[], source: string) {
     depth: number;
     identity?: string;
     outbound?: string;
-  }> = [{ id: 'device', name: source, value: 0, depth: 0 }];
+  }> = [];
   const groups = new Map<string, number>();
   const exits = new Map<string, number>();
   const links: Array<{ source: string; target: string; value: number }> = [];
@@ -182,7 +182,7 @@ export function connectionSankey(flows: ConnectionFlow[], source: string) {
         id: `group:${flow.identity}`,
         name: flow.name,
         value: 0,
-        depth: 1,
+        depth: 0,
         identity: flow.identity,
       });
     }
@@ -194,19 +194,13 @@ export function connectionSankey(flows: ConnectionFlow[], source: string) {
         id: `exit:${flow.outbound}`,
         name: flow.outbound,
         value: 0,
-        depth: 2,
+        depth: 1,
         outbound: flow.outbound,
       });
     }
-    nodes[0].value += flow.count;
     nodes[group].value += flow.count;
     nodes[exit].value += flow.count;
     links.push({ source: nodes[group].id, target: nodes[exit].id, value: flow.count });
   }
-  const incoming = [...groups.values()].map((group) => ({
-    source: 'device',
-    target: nodes[group].id,
-    value: nodes[group].value,
-  }));
-  return { nodes, links: [...incoming, ...links] };
+  return { nodes, links };
 }

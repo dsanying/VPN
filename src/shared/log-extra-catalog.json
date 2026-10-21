@@ -488,5 +488,13 @@
     "parts": ["目标连接被拒绝 [", "]"],
     "zh": "目标连接被拒绝 [{0}]",
     "en": "Destination connection refused [{0}]"
+  },
+  {
+    "id": "extra.helper-confdir-mismatch",
+    "parts": [
+      "helper 配置目录与当前数据目录不符（启动必被 config-path-denied 拒绝）：本次走 osascript 授权路径；修复提权助手后恢复免授权启停"
+    ],
+    "zh": "helper 配置目录与当前数据目录不符（启动必被 config-path-denied 拒绝）：本次走 osascript 授权路径；修复提权助手后恢复免授权启停",
+    "en": "Helper config directory no longer matches the app data directory (starts are rejected with config-path-denied); using osascript authorization this time. Repair the privileged helper to restore prompt-free start/stop"
   }
 ]

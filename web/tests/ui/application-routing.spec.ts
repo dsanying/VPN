@@ -57,6 +57,51 @@ for (const mode of ['global','direct'] as const) test(`保存应用规则保持 
  await mock.expectNoUnexpectedRequests();
 });
 
+const secondApp={id:'custom-installed-terminal',name:'示例终端',path:'/Applications/TerminalExample.app',processPaths:[],processPathRegex:['^/Applications/TerminalExample\\.app/'],coverage:'bundle'};
+async function openPickerWithSecondApp(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => localStorage.setItem('shadowvpn-lang', 'zh-CN'));
+  const mock = await installDesktopMock(page, { extraApps: [secondApp] });
+  await page.goto('/#/apps');
+  await page.getByRole('button', { name: '新增', exact: true }).click();
+  await page.getByRole('menuitem', { name: '应用规则', exact: true }).click();
+  return mock;
+}
+test('新增应用规则可一次多选生成多条规则', async ({ page }) => {
+  const mock = await openPickerWithSecondApp(page);
+  const drawer = page.getByRole('dialog');
+  await drawer.getByRole('combobox', { name: '选择应用', exact: true }).click();
+  await page.getByRole('option', { name: /示例应用/ }).click();
+  await page.getByRole('option', { name: /示例终端/ }).click();
+  await drawer.getByRole('button', { name: /保存$/ }).click();
+  await expect(drawer).not.toBeVisible();
+  const rules = await page.evaluate(() => (window as any).desktopTest.getConfig().customRules);
+  expect(rules).toHaveLength(2);
+  expect(rules[0].values).toContain('^/Applications/Example\\.app/');
+  expect(rules[1].values).toContain('^/Applications/TerminalExample\\.app/');
+  await mock.expectNoUnexpectedRequests();
+});
+test('编辑应用规则可多选追加应用：原规则保留槽位，其余生成新规则', async ({ page }) => {
+  const mock = await openPickerWithSecondApp(page);
+  const drawer = page.getByRole('dialog');
+  await drawer.getByRole('combobox', { name: '选择应用', exact: true }).click();
+  await page.getByRole('option', { name: /示例应用/ }).click();
+  await drawer.getByRole('button', { name: /保存$/ }).click();
+  await expect(drawer).not.toBeVisible();
+  const originalId = await page.evaluate(() => (window as any).desktopTest.getConfig().customRules[0].id);
+  await page.locator('tbody tr[data-row-key]').filter({ hasText: '示例应用' }).getByRole('button', { name: '编辑', exact: true }).click();
+  const editDrawer = page.getByRole('dialog');
+  await expect(editDrawer.getByText('示例应用', { exact: true }).first()).toBeVisible();
+  await editDrawer.getByRole('combobox', { name: '选择应用', exact: true }).click();
+  await page.getByRole('option', { name: /示例终端/ }).click();
+  await editDrawer.getByRole('button', { name: /保存$/ }).click();
+  await expect(editDrawer).not.toBeVisible();
+  const rules = await page.evaluate(() => (window as any).desktopTest.getConfig().customRules);
+  expect(rules).toHaveLength(2);
+  expect(rules[0].id).toBe(originalId);
+  expect(rules[0].values).toContain('^/Applications/Example\\.app/');
+  expect(rules[1].values).toContain('^/Applications/TerminalExample\\.app/');
+  await mock.expectNoUnexpectedRequests();
+});
 test('应用分流不显示常用服务或手工进程入口，旧预设记录不冒充安装应用', async ({ page }) => {
   const mock = await openPicker(page);
   await expect(page.getByText('常用服务', { exact: true })).toHaveCount(0);

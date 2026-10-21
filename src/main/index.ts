@@ -493,13 +493,18 @@ async function promptHelperGate(
     return 'abort'; // 取消
   }
   if (hs.needsRepair || hs.pathMismatch) {
-    // 需修复有两种成因，文案分流（避免 proto 升级也报「应用位置已变更」误导用户，L3）：
-    //  - pathMismatch：应用被移动，plist 烧录路径失效；
+    // 需修复有三种成因，文案分流（避免 proto 升级也报「应用位置已变更」误导用户，L3）：
+    //  - pathMismatch：应用被移动，plist 烧录的 sing-box 路径失效；
+    //  - confdirMismatch：数据目录改名/迁移（如 ShadowVPN-FlowZ→ShadowVPN），plist 烧录的 --confdir 失配，
+    //    helper 拒收 start（ready 仍 true，不能走升级文案）；
     //  - 否则（!ready）：多为协议版本升级（如 v2→v3），已装 helper 需重装到新版本。
     // 诚实化：此「修复」=重装，**不会**恢复系统设置里「允许在后台」开关；若开关被关需到系统设置手动开启（Bug2 文案）。
     const detail =
-      (hs.pathMismatch ? mt('dlgMacRepairPathMismatchDetail') : mt('dlgMacRepairUpgradeDetail')) +
-      mt('dlgMacRepairNoteOff');
+      (hs.pathMismatch
+        ? mt('dlgMacRepairPathMismatchDetail')
+        : hs.confdirMismatch
+          ? mt('dlgMacRepairConfdirDetail')
+          : mt('dlgMacRepairUpgradeDetail')) + mt('dlgMacRepairNoteOff');
     const { response } = await dialog.showMessageBox({
       type: 'question',
       buttons: [mt('btnRepairStart'), mt('btnUseSystemAuth'), mt('btnCancel')],

@@ -1,7 +1,7 @@
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Select, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { DrawerForm, FormGrid, Popconfirm } from '@/components/client';
+import { DrawerForm, FieldLabel, FormGrid, Popconfirm } from '@/components/client';
 import { ServerSelect } from '@/components/vpn/ServerSelect';
 import { DesktopSection } from '@/components/vpn/DesktopSection';
 import { RuleValueField } from '@/components/vpn/RuleValueField';
@@ -67,7 +67,7 @@ export function RuleEditor({ rule, onClose }: { rule?: Rule; onClose: () => void
     <Form.Item label={t('vpn.remarks')} name="remarks"><Input allowClear /></Form.Item>
     <FormGrid columns={2} field="short">
       <Form.Item label={t('common.actions.enable')} name="enabled" valuePropName="checked"><Switch /></Form.Item>
-      <Form.Item label={t('vpn.bypassFakeIp')} name="bypassFakeIP" valuePropName="checked"><Switch /></Form.Item>
+      <Form.Item label={<FieldLabel label={t('vpn.bypassFakeIp')} help={t('vpn.bypassFakeIpHint')} />} name="bypassFakeIP" valuePropName="checked"><Switch /></Form.Item>
     </FormGrid>
   </DrawerForm>;
 }

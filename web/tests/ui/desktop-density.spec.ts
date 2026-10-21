@@ -15,12 +15,12 @@ for (const language of ['zh-CN', 'en-US']) {
         (window as any).desktopTest.emit('event:unlockUpdated', { results: Object.fromEntries(ids.map(id => [id, { status: id === 'netflix' ? 'blocked' : 'ok', httpStatus: id === 'netflix' ? 451 : 200 }])), checkedAt: Date.now(), egress: { ip: '203.0.113.2' } });
       });
       const websites = page.locator('[data-layout="desktop-section"]').filter({ has: page.getByRole('heading', { name: language === 'zh-CN' ? '网站连通性' : 'Website connectivity', exact: true }) });
-      await expect(websites.locator('.client-information-grid > div')).toHaveCount(16);
+      await expect(websites.locator('.ds-summary-strip__item')).toHaveCount(16);
       await expect(websites.getByText('HTTP 200', { exact: true })).toHaveCount(15);
       const geometry = await websites.evaluate(section => {
         const heading = section.querySelector('h2, h3, h4')!.getBoundingClientRect();
         const button = section.querySelector('button')!.getBoundingClientRect();
-        const cells = [...section.querySelectorAll('.client-information-grid > div')].map(cell => {
+        const cells = [...section.querySelectorAll('.ds-summary-strip__item')].map(cell => {
           const status = cell.querySelector('.ant-tag')!.getBoundingClientRect();
           const http = cell.querySelector('.client-atomic')!.getBoundingClientRect();
           return { height: cell.getBoundingClientRect().height, centers: Math.abs(status.y + status.height / 2 - http.y - http.height / 2) };

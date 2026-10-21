@@ -65,6 +65,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       needsRepair: false,
       backgroundDisabled: false,
       pathMismatch: false,
+      confdirMismatch: false,
       installedSingboxPath: null,
     };
   }
@@ -167,6 +168,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       // 仍指向安装时锁定的 sing-box，此处不检测漂移（恒 false）→ 不触发修复 gate。后续可比对服务 ImagePath 的 --singbox
       // 段 vs 当前 getSingBoxPath() 实现之；当前 Windows 核更新走 app 侧、非 helper，影响有限。
       pathMismatch: false,
+      confdirMismatch: false,
       installedSingboxPath: null,
     };
   }
