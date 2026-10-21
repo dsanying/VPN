@@ -365,7 +365,8 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.dmg
-            artifacts/**/*.apk
+            # 只发布正式安装包：apk/androidTest/ 下的插桩测试 APK 是 CI 验收工件，不随 Release 分发。
+            artifacts/**/apk/release/*.apk
             artifacts/**/sing-box-android-source-*.tar.gz
             artifacts/**/libbox-build.json
         env:
