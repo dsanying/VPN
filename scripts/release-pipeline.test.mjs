@@ -145,6 +145,11 @@ test('clean CI prepares pinned native binaries before tests and uploads referenc
   assert.ok(upload.with.path.includes(`android/app/libs/${sourceArchive}`));
   const publication = workflow('release.yml').jobs['create-release'].steps.find(step => step.uses?.startsWith('softprops/action-gh-release@'));
   assert.ok(publication.with.files.includes(`artifacts/**/${sourceArchive}`), 'Modified GPL source must accompany the distributed APK');
+  assert.ok(
+    publication.with.files.includes('artifacts/**/apk/release/*.apk') &&
+      !publication.with.files.includes('artifacts/**/*.apk'),
+    'Only the release APK is published; the signed androidTest instrumentation APK stays a CI artifact',
+  );
   const ignoredArchive = spawnSync('git', ['check-ignore', '--no-index', 'android/app/libs/sing-box-android-source-validation.tar.gz'], {
     cwd: path.resolve(scripts, '..'), encoding: 'utf8',
   });
