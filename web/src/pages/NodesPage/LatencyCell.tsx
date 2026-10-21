@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { StatusTag } from '@/components/client';
 import { useAppStore } from '@/store/app-store';
 import { now } from '@/utils/dateTime';
-import { deriveLatencyBadge } from '../../../../src/renderer-domain/lib/latency-badge';
+import { deriveLatencyBadge } from '@/domain/lib/latency-badge';
 import type { ServerConfig } from '@shared/types';
 export function LatencyCell({ node }: { node: ServerConfig }) {
   const { t } = useTranslation();

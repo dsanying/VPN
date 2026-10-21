@@ -2,7 +2,7 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/web/src/store', '<rootDir>/web/src/hooks/__tests__',
-    '<rootDir>/web/src/mobile/__tests__', '<rootDir>/web/src/pages/NodesPage/__tests__'],
+    '<rootDir>/web/src/mobile/__tests__', '<rootDir>/web/src/pages/NodesPage/__tests__', '<rootDir>/web/src/domain'],
   testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
   // `sing-box check` 门需要**随包内核**（resources/<平台>/sing-box，66–74MB、已 gitignore），默认 `npm test` 与 CI
   // 测试 job 都没有它。故把该门移出默认测试集，改由 `npm run test:core-gate` 单独跑——该 script 已接进

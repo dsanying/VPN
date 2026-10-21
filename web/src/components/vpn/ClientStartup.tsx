@@ -1,7 +1,7 @@
 import { Button, ConfigProvider, Result, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { buildThemeConfig } from '@/config/theme';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import { designTokens } from '@/design/tokens';
 
 /** Startup has no business reads: the native owner initializes before pages mount. */

@@ -2,7 +2,7 @@ import { lazy, Suspense, type CSSProperties, type ReactNode } from 'react';
 import type { EditorProps } from '@monaco-editor/react';
 import { Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import './style.css';
 
 const NativeEditor = lazy(() => import('./MonacoEditor'));

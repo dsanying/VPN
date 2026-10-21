@@ -58,6 +58,8 @@ config.json
 singbox_config.json
 singbox_config.json.bak
 sing-box.exe.bak
+root.json
+sub-store.json
 sing-box.bak
 cache.db
 singbox.log

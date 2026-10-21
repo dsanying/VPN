@@ -10,7 +10,7 @@ const tooling = file => /^(?:package(?:-lock)?\.json|jest\.config\.js|tsconfig.*
 export const checks = [
   { id: 'tests', command: ['test', '--', '--runInBand'], includes: file => tooling(file) || /^(src\/|web\/|scripts\/|resources\/)/.test(file) },
   { id: 'lint', command: ['run', 'lint'], includes: file => tooling(file) || file.startsWith('src/') },
-  { id: 'renderer-types', command: ['run', 'typecheck:renderer'], includes: file => tooling(file) || /^(src\/shared\/|src\/renderer-domain\/|web\/)/.test(file) },
+  { id: 'renderer-types', command: ['run', 'typecheck:renderer'], includes: file => tooling(file) || /^(src\/shared\/|web\/src\/domain\/|web\/)/.test(file) },
   { id: 'core', command: ['run', 'test:core-gate'], includes: file => tooling(file) || /^(src\/main\/|src\/shared\/|resources\/|scripts\/.*core)/.test(file) },
   { id: 'build', command: ['run', 'build'], includes: file => tooling(file) || /^(src\/|web\/|scripts\/gen-build-info)/.test(file) },
 ];

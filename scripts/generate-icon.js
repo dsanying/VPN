@@ -23,15 +23,13 @@ function androidVector(size, scale, offset) {
   return `<?xml version="1.0" encoding="utf-8"?>\n<!-- Generated from build/brand/mark.svg; edit the master, not this file. -->\n<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="${size}dp" android:height="${size}dp" android:viewportWidth="${size}" android:viewportHeight="${size}">\n<group android:translateX="${offset}" android:translateY="${offset}" android:scaleX="${scale}" android:scaleY="${scale}">\n<group android:translateX="-128" android:translateY="-120" android:scaleX=".9" android:scaleY=".9">\n${[...master.matchAll(/<path d="([^"]+)"\/>/g)].map(([, d]) => `<path android:fillColor="#F5F5F5" android:fillType="evenOdd" android:pathData="${d}"/>`).join('\n')}\n</group></group></vector>\n`;
 }
 async function main() {
-  write('ui/icon.svg', app); write('web/src/assets/brand-icon.svg', app);
-  write('ui/favicon.svg', svg(glyph('#111111'))); write('ui/favicon-dark.svg', svg(glyph('#ffffff')));
+  write('web/src/assets/brand-icon.svg', app);
   write('web/public/favicon.svg', app);
   const sizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
   for (const size of sizes) write(`build/icons/${size}x${size}.png`, png(app, size));
   for (const file of ['build/icon.png', 'resources/app.png', 'docs/logo.png']) write(file, png(app, 1024));
-  write('ui/apple-touch-icon.png', png(app, 180));
   const ico = await pngToIco([16, 32, 48, 256].map(size => png(app, size)));
-  write('build/icon.ico', ico); write('ui/favicon.ico', ico);
+  write('build/icon.ico', ico);
   const chunks = [[16, 'icp4'], [32, 'icp5'], [64, 'icp6'], [128, 'ic07'], [256, 'ic08'], [512, 'ic09'], [1024, 'ic10']].map(([size, type]) => {
     const data = png(app, size); const header = Buffer.alloc(8); header.write(type); header.writeUInt32BE(data.length + 8, 4); return Buffer.concat([header, data]);
   });

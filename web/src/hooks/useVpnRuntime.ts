@@ -2,7 +2,7 @@ import { clientHost } from '@/config/client-host';
 import { useSpeedTestStore } from '@/store/useSpeedTestStore';
 import i18n from '@/i18n';
 import { notifyActionFailed, notifyActionSuccess, notifyWarning } from '@/utils/feedback';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import { patchConfig } from '@/store/config-mutations';
 import { useEffect, useEffectEvent } from 'react';
 import { useNavigate } from 'react-router';

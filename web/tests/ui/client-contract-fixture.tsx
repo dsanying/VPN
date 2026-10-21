@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { StrictMode, useState } from 'react';
 import { App, Button, ConfigProvider, Form, Input } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { useThemeStore } from '../../src/stores/useThemeStore';
+import { useThemeStore } from '../../src/store/useThemeStore';
 import { buildThemeConfig } from '../../src/config/theme';
 import {
   DrawerForm,

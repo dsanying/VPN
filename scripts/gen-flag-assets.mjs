@@ -17,7 +17,7 @@ import { format, resolveConfig } from 'prettier';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
-const SETTINGS_DIR = join(ROOT, 'src/renderer-domain/components/settings');
+const SETTINGS_DIR = join(ROOT, 'web/src/domain/components/settings');
 const FLAG_DIR = join(ROOT, 'node_modules/country-flag-icons/3x2');
 const PKG = join(ROOT, 'node_modules/country-flag-icons/package.json');
 
