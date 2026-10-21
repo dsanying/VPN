@@ -4,7 +4,7 @@ import { TooltipComponent } from 'echarts/components';
 import { init, use as registerModules } from 'echarts/core';
 import { SVGRenderer, CanvasRenderer } from 'echarts/renderers';
 import type { ECharts, EChartsOption } from 'echarts';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 
 registerModules([SankeyChart, TooltipComponent, SVGRenderer, CanvasRenderer]);
 interface ChartProps {

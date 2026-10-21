@@ -9,7 +9,7 @@ import type { Locale } from 'antd/es/locale';
 import { useTranslation } from 'react-i18next';
 import { routes } from '@/routes';
 import { buildThemeConfig } from '@/config/theme';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import { useVpnRuntime } from '@/hooks/useVpnRuntime';
 import { useAppStore } from '@/store/app-store';
 import { setStaticInstances } from '@/utils/antdStatic';

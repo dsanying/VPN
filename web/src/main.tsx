@@ -7,7 +7,7 @@ import './design/tokens.css';
 import './global.css';
 import { App } from '@/App';
 import { ClientStartup } from '@/components/vpn/ClientStartup';
-import { bootstrapPersistedTheme } from '@/stores/useThemeStore';
+import { bootstrapPersistedTheme } from '@/store/useThemeStore';
 import { installOverflowScroll } from '@/components/client';
 
 // React 挂载前应用持久化主题偏好，避免首帧闪白/闪黑。

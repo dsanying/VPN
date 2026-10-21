@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { readCssColorToken } from '@/design/tokens';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import { buildDataPalette } from './dataPalette';
 
 // Canvas libraries need resolved colors rather than CSS variable expressions.

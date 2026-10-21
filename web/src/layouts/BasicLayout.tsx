@@ -13,7 +13,7 @@ import { Link, Outlet, useLocation } from 'react-router';
 import { IconButton, LoadingState, RouteCrumbsContext, SidebarMenu } from '@/components/client';
 import { menuRoutes, type MenuEntry } from '@/routes';
 import { matchMenuChain, selectedMenuKey } from '@/routes/menuMatch';
-import { useThemeStore } from '@/stores/useThemeStore';
+import { useThemeStore } from '@/store/useThemeStore';
 import brandIcon from '@/assets/brand-icon.svg';
 import './BasicLayout.css';
 
