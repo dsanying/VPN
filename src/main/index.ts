@@ -23,25 +23,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 app.setName('暗影VPN');
-// 品牌迁移：旧 userData 目录 ShadowVPN-FlowZ → ShadowVPN（仅默认数据路径、目标不存在时整体
-// 改名，不覆盖；--validation-profile 隔离验收目录绝不接管生产数据）。
-{
-  const resolvedUserData = resolveUserDataPath(app.getPath('appData'), process.argv);
-  const defaultUserData = path.join(app.getPath('appData'), 'ShadowVPN');
-  const legacyUserData = path.join(app.getPath('appData'), 'ShadowVPN-FlowZ');
-  if (
-    resolvedUserData === defaultUserData &&
-    !fs.existsSync(resolvedUserData) &&
-    fs.existsSync(legacyUserData)
-  ) {
-    try {
-      fs.renameSync(legacyUserData, resolvedUserData);
-    } catch {
-      // 迁移失败不阻断启动；新目录照常创建，旧目录保留。
-    }
-  }
-  app.setPath('userData', resolvedUserData);
-}
+// --validation-profile 隔离验收目录绝不接管生产数据。
+app.setPath('userData', resolveUserDataPath(app.getPath('appData'), process.argv));
 
 import { ConfigManager } from './services/ConfigManager';
 import { NetworkChangeMonitor } from './services/NetworkChangeMonitor';
@@ -495,7 +478,7 @@ async function promptHelperGate(
   if (hs.needsRepair || hs.pathMismatch) {
     // 需修复有三种成因，文案分流（避免 proto 升级也报「应用位置已变更」误导用户，L3）：
     //  - pathMismatch：应用被移动，plist 烧录的 sing-box 路径失效；
-    //  - confdirMismatch：数据目录改名/迁移（如 ShadowVPN-FlowZ→ShadowVPN），plist 烧录的 --confdir 失配，
+    //  - confdirMismatch：数据目录改名/迁移后，plist 烧录的 --confdir 失配，
     //    helper 拒收 start（ready 仍 true，不能走升级文案）；
     //  - 否则（!ready）：多为协议版本升级（如 v2→v3），已装 helper 需重装到新版本。
     // 诚实化：此「修复」=重装，**不会**恢复系统设置里「允许在后台」开关；若开关被关需到系统设置手动开启（Bug2 文案）。

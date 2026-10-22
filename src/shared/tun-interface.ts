@@ -2,7 +2,7 @@
  * Windows TUN 接口名（wintun 适配器名）单一真值。
  *
  * 背景（issue #159）：Windows 服务模式硬杀 sing-box 后 wintun 适配器滞留，重启撞同名网卡 → open 卡死。
- * 修复需「起核前等自家 TUN 网卡释放」，而判据不能用 IP（172.19.0.1 是 FlowZ 默认地址，外部 sing-box /
+ * 修复需「起核前等自家 TUN 网卡释放」，而判据不能用 IP（172.19.0.1 是常见默认地址，外部 sing-box /
  * 用户手动核 / 自家孤儿核都可能同址 → 误等/误删）。故给 Windows TUN 下发固定可辨的 interface_name，
  * 释放门控/清理只认本名。buildInbounds 下发的名字与 ProxyManager 等待的名字必须同源，否则等错网卡。
  *

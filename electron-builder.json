@@ -174,7 +174,7 @@
     "category": "Network",
     "icon": "build/icons",
     "synopsis": "Clean, modern cross-platform proxy client",
-    "description": "暗影VPN — 跨平台代理/VPN 客户端（基于 FlowZ）",
+    "description": "暗影VPN — 跨平台代理/VPN 客户端",
     "desktop": {
       "entry": {
         "Comment[zh_CN]": "简洁现代的跨平台代理客户端",

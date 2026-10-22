@@ -266,8 +266,8 @@ export class HelperManager implements IPrivilegedHelper {
       }
     }
 
-    // --confdir 不符检测：plist 烧录的允许配置目录 ≠ 当前 userData（数据目录改名/品牌迁移后，如
-    // ShadowVPN-FlowZ → ShadowVPN）。此状态 daemon ping 仍通（ready=true、卡片显示就绪），但 helper 的
+    // --confdir 不符检测：plist 烧录的允许配置目录 ≠ 当前 userData（数据目录改名/迁移后）。
+    // 此状态 daemon ping 仍通（ready=true、卡片显示就绪），但 helper 的
     // cfgAllowed 会拒绝 start（config-path-denied）→ 每次启停静默回退 osascript 裸弹授权框（真机实证）。
     // 与 pathMismatch 不同，本检测不限 isPackaged：dev/prod 共用同一 userData（resolveUserDataPath 恒为
     // ShadowVPN），差异在任何模式下都是真实失配；plist 缺 --confdir 的旧 helper 恒拒全部 start → 同样算不符。

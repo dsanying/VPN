@@ -2,7 +2,7 @@
 
 **简体中文** · [English](RELEASE.en.md)
 
-本文档描述如何发布 FlowZ 新版本。发布的「单一触发点」是**推送 `v*` tag**：CI（`.github/workflows/release.yml`）随后在三平台构建并自动创建 GitHub Release。本地全量打包仅用于验证/离线出包，不走发布路径。
+本文档描述如何发布暗影VPN新版本。发布的「单一触发点」是**推送 `v*` tag**：CI（`.github/workflows/release.yml`）随后在三平台构建并自动创建 GitHub Release。本地全量打包仅用于验证/离线出包，不走发布路径。
 
 ## 前置要求
 
