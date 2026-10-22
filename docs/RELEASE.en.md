@@ -2,7 +2,7 @@
 
 [简体中文](RELEASE.md) · **English**
 
-This document describes how to ship a new FlowZ release. The single trigger for a release is **pushing a `v*` tag**: CI (`.github/workflows/release.yml`) then builds on three platforms and creates the GitHub Release automatically. Local full packaging is for verification / offline builds only and is not part of the release path.
+This document describes how to ship a new ShadowVPN release. The single trigger for a release is **pushing a `v*` tag**: CI (`.github/workflows/release.yml`) then builds on three platforms and creates the GitHub Release automatically. Local full packaging is for verification / offline builds only and is not part of the release path.
 
 ## Prerequisites
 

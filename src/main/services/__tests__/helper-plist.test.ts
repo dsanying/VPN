@@ -50,10 +50,10 @@ describe('dirsEquivalent（与 helper cfgAllowed 同口径）', () => {
 
   it('目录已改名 → 字面不等且 realpath 失败 → 判不等（config-path-denied 场景）', () => {
     const realpath = (p: string) => {
-      if (p === '/data/ShadowVPN-FlowZ') throw new Error('ENOENT');
+      if (p === '/data/ShadowVPN-Old') throw new Error('ENOENT');
       return p;
     };
-    expect(dirsEquivalent('/data/ShadowVPN-FlowZ', '/data/ShadowVPN', realpath)).toBe(false);
+    expect(dirsEquivalent('/data/ShadowVPN-Old', '/data/ShadowVPN', realpath)).toBe(false);
   });
 
   it('软链接两侧归一后相同 → 等价', () => {

@@ -1,7 +1,7 @@
 {
   "name": "shadow-vpn",
   "version": "0.3.0",
-  "description": "暗影VPN — 跨平台代理/VPN 客户端（基于 FlowZ）",
+  "description": "暗影VPN — 跨平台代理/VPN 客户端",
   "desktopName": "shadow-vpn",
   "main": "dist/main/main/index.js",
   "scripts": {

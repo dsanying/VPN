@@ -25,7 +25,7 @@ export type ConcreteTunStack = 'system' | 'gvisor' | 'mixed';
 /**
  * `Auto` 档的平台映射（单一真值）：
  *   · macOS（darwin）→ gvisor —— Apple 严格接管场景强制 gvisor / system·mixed 不可用（sing-box TunnelVision 文档）
- *     + FlowZ 历史实证（3.3.18 稳定组合）+ DNS/NetworkExtension 约束；
+ *     + 历史稳定组合实证 + DNS/NetworkExtension 约束；
  *   · Windows（win32）→ gvisor —— 207 实测（wintun）：新默认组合（gvisor/65535）相对旧默认（system/1350）
  *     **+133% 吞吐、CPU 减半**；热切换环路三栈补测均 21/21 零失败（**裸 sing-box 最小配置**，暗影VPN 本体
  *     回归见 benchmark 0.5），据此同批删除原「仅 system 放行」的 guard（见 ProxyManager.planHotSwitch）。

@@ -92,7 +92,7 @@ describe('selectPortableStaleOld', () => {
         '暗影VPN-0.1.0-win-x64-portable.exe.old',
         '暗影VPN-0.1.1-win-x64-portable.exe',
         'Other.EXE.OLD', // 他家工具 → 不删
-        'FlowZ-4.1.5-win-x64-portable.exe.old', // 上游产品 → 不删
+        'OtherApp-4.1.5-win-x64-portable.exe.old', // 他厂便携包 → 不删
         'data',
         'config.json',
       ])
