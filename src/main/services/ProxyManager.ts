@@ -442,7 +442,9 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     this.automaticRegion = region;
     if (previous?.enabled === region.enabled && previous?.region === region.region) return;
     if (this.currentConfig?.proxyMode === 'smart' && this.getStatus().running) {
-      this.scheduleDebouncedRestart();
+      this.scheduleDebouncedRestart(
+        `自动地区策略变化(enabled:${previous?.enabled}→${region.enabled},region:${previous?.region || '-'}→${region.region || '-'})`
+      );
     }
   }
   /**
@@ -1765,6 +1767,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   }
 
   async restart(config: UserConfig, options: { interactive?: boolean } = {}): Promise<void> {
+    this.logToManager('info', '正在重启代理核心...');
     this.beginLifecycleOp();
     try {
       await this.stop();
@@ -1814,7 +1817,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
     if (this.restartPending) {
       this.restartPending = false;
-      this.scheduleDebouncedRestart();
+      this.scheduleDebouncedRestart('排空在飞期挂起的重启');
     }
   }
 
@@ -1831,7 +1834,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * **不并发起第二条**（那正是「就绪等待中又来重启」叠加 stop/超时/restart 互踩的风暴根因），只置 restartPending；
    * 待在飞操作 settle 回 depth 0 时由 endLifecycleOp 排空一次。
    */
-  private scheduleDebouncedRestart(): void {
+  private scheduleDebouncedRestart(reason = '未标注'): void {
+    this.logToManager('debug', `调度去抖重启: ${reason}`);
     if (this.restartDebounceTimer) clearTimeout(this.restartDebounceTimer);
     this.restartDebounceTimer = setTimeout(() => {
       this.restartDebounceTimer = null;
@@ -1968,7 +1972,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         'warn',
         `热更外化规则文件失败，退回去抖重启: ${e instanceof Error ? e.message : String(e)}`
       );
-      this.scheduleDebouncedRestart();
+      this.scheduleDebouncedRestart('外化规则文件落盘失败');
     }
   }
 
@@ -2003,7 +2007,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     }
     if (!this.singboxProcess && !this.singboxPid) return 'skipped'; // 真未运行：下次 start 从磁盘纳入新节点
     this.pendingForceRestartConfig = newConfig; // depth 0 运行中：直接去抖重启，drain 亦读专用字段绕开潜在覆盖
-    this.scheduleDebouncedRestart();
+    this.scheduleDebouncedRestart('强制重启（订阅更新/手动应用）');
     return 'applied';
   }
 
@@ -2038,6 +2042,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
     try {
       if (await this.nodeAdapters?.prepare(newConfig)) {
+        // 企业引擎会话集发生变化 → 须整核重启让 project() 投影生效（直连 restart，不经去抖）。
+        this.logToManager('info', '企业 VPN 会话变更，直接重启应用...');
         await this.restart(newConfig);
         return;
       }
@@ -2096,7 +2102,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         // L3：norm 排除了外化规则的值 → 「切节点 + 改外化规则值」同一次 save 会通过 planHotSwitch 检查，
         //   补一次文件对账防值静默丢失（通常零 diff、幂等）。降级态文件无消费者 → 改走重启重落盘（与 no-op 分支对称）。
         if (this.customRuleFilesDegraded) {
-          if (ruleValuesChanged) this.scheduleDebouncedRestart();
+          if (ruleValuesChanged) this.scheduleDebouncedRestart('外化规则降级+值变更(热切腿)');
         } else await this.syncCustomRuleFiles(newConfig);
         // 解锁检测失效（M1）：任何热切换（global/rules/both）都可能改变解锁出口——切全局节点变全局出口；
         // 改规则目标节点变某服务（如 netflix.com）的分流出口。二者都须使 unlock 缓存失效重测。与 node-hot-switched
@@ -2141,7 +2147,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // L3 值热更主路径：norm 结构相等但外化规则的值可能变了 ⇔ 文件内容 diff → 原子替换 + fswatch 热重载、零重启。
       // 降级桥：上次有外化规则未落盘走 inline（文件无消费者）→ 改走重启重落盘，防「写了没人消费」的值陈旧。
       if (this.customRuleFilesDegraded) {
-        if (ruleValuesChanged) this.scheduleDebouncedRestart();
+        if (ruleValuesChanged) this.scheduleDebouncedRestart('外化规则降级+值变更(no-op腿)');
       } else await this.syncCustomRuleFiles(newConfig);
       // 缺陷1：此分支含「切登录期出口让位开关」（meshLoginFallbackDirect 已排除出 norm）→ 关开关须即刻 disengage
       // 切回出口（不等 STATUS 帧/健康检查）。reconcile 幂等：未 engage / 开关仍开则 no-op。
@@ -2169,7 +2175,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       // H-1：defer 更新 currentConfig 后同样刷新待决 force-restart 快照，防 timer 重启回退到旧节点（见热切腿说明）。
       if (this.pendingForceRestartConfig !== null) this.pendingForceRestartConfig = newConfig;
       if (this.customRuleFilesDegraded) {
-        if (ruleValuesChanged) this.scheduleDebouncedRestart();
+        if (ruleValuesChanged)
+          this.scheduleDebouncedRestart('外化规则降级+值变更(新增节点defer腿)');
       } else await this.syncCustomRuleFiles(newConfig);
       return;
     }
@@ -2181,7 +2188,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     this.currentConfig = newConfig;
     // H-1：结构性重启用更新的完整 config → 超代任何待决 force-restart 快照（newer 胜，避免旧 force cfg 反 shadow 本次变更）。
     this.pendingForceRestartConfig = null;
-    this.scheduleDebouncedRestart();
+    this.scheduleDebouncedRestart('结构性配置变更');
   }
 
   /**
