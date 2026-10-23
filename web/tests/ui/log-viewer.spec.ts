@@ -93,6 +93,41 @@ test('千条日志保持虚拟滚动，跟随最新可看到最后一条', async
     ])
   );
   await expect(viewer).toContainText('new-followed-log');
+  // 回归：按住指针（拖滚动条/选中文字）会闩住滚动意图；此期间到达的批次重建
+  // 虚拟列表产生的回顶滚动不得解除跟随并把视图卡在顶部。
+  const box = await viewport.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20);
+  await page.mouse.down();
+  for (let i = 0; i < 8; i++) {
+    await page.evaluate(
+      (n) =>
+        (window as any).desktopTest.emit('event:logReceivedBatch', [
+          {
+            id: `held-${n}`,
+            timestamp: '2026-10-01T00:00:03Z',
+            level: 'info',
+            source: 'Main',
+            message: `held-batch-${n}`,
+          },
+        ]),
+      i
+    );
+    await page.waitForTimeout(60);
+  }
+  await page.mouse.up();
+  await page.evaluate(() =>
+    (window as any).desktopTest.emit('event:logReceivedBatch', [
+      {
+        id: 'new3',
+        timestamp: '2026-10-01T00:00:04Z',
+        level: 'info',
+        source: 'Main',
+        message: 'tail-batch-after-wheel',
+      },
+    ])
+  );
+  await expect(viewer).toContainText('tail-batch-after-wheel');
+  await expect(viewer).not.toContainText('example-line-0');
   await mock.expectNoUnexpectedRequests();
 });
 

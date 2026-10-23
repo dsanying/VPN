@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom';
 import { LazyLog } from '@melloware/react-logviewer';
-import { useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppEmpty, LoadingState } from '@/components/client';
 import { designTokens } from '@/design/tokens';
@@ -37,8 +37,26 @@ function FollowingLog({ text, ...props }: ComponentProps<typeof LazyLog>) {
   const [follow, setFollow] = useState(true);
   const [visibleText, setVisibleText] = useState(text);
   const scrollIntent = useRef(false);
+  const stream = useRef<HTMLDivElement>(null);
+  const lastScrollHeight = useRef(0);
   if (follow && visibleText !== text) setVisibleText(text);
-  return <div className="ds-log-viewer__stream"
+  // LazyLog rebuilds its virtual list from scratch on every text change and its
+  // own scroll-to-bottom is skipped while a user scroll is in flight, which left
+  // the view stuck at line 0. While following, pin the tail after our commit and
+  // for a few frames, covering the rebuild commit that lands right after ours.
+  useLayoutEffect(() => {
+    if (!follow) return;
+    let frames = 0;
+    let raf = 0;
+    const pin = () => {
+      const viewport = stream.current?.querySelector('.react-lazylog');
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+      if (++frames < 6) raf = requestAnimationFrame(pin);
+    };
+    pin();
+    return () => cancelAnimationFrame(raf);
+  }, [follow, visibleText]);
+  return <div ref={stream} className="ds-log-viewer__stream"
     onWheelCapture={event => {
       scrollIntent.current = event.deltaY > 0;
 
@@ -64,7 +82,15 @@ function FollowingLog({ text, ...props }: ComponentProps<typeof LazyLog>) {
       } else if (['End', 'PageDown', 'ArrowDown'].includes(event.key)) scrollIntent.current = true;
     }}
     onScrollCapture={event => {
-      const {scrollTop,scrollHeight,clientHeight} = event.target as HTMLElement;
+      const target = event.target as HTMLElement;
+      const {scrollTop,scrollHeight,clientHeight} = target;
+      // A rebuild of the virtualized list shrinks scrollHeight and emits scroll
+      // events — that is not a user scroll, so it must not toggle following.
+      if (scrollHeight < lastScrollHeight.current - 1) {
+        lastScrollHeight.current = scrollHeight;
+        return;
+      }
+      lastScrollHeight.current = scrollHeight;
       // Transient list resets are not a user decision to resume following.
       if (!scrollIntent.current || scrollHeight <= clientHeight) return;
       const atBottom = scrollTop >= scrollHeight - clientHeight - 1;
