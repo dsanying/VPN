@@ -1584,6 +1584,15 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * 真实停止逻辑在 stopInner。stop 是终态 → endLifecycleOp('stop') 在回到 idle 时丢弃待决重启（停止优先）。
    */
   async stop(opts?: { quitting?: boolean }): Promise<void> {
+    // 归因埋点：自动化路径（后台对账/adapter 兜底/守护回放）曾出现无任何日志的静默停核——
+    // 记调用栈前两帧，下次复现可直接定位肇事者。
+    const caller =
+      new Error().stack
+        ?.split('\n')
+        .slice(2, 5)
+        .map((f) => f.trim().replace(/^at\s+/, ''))
+        .join(' <- ') ?? 'unknown';
+    this.logToManager('info', `停止代理 invoked by: ${caller}`);
     this.beginLifecycleOp();
     try {
       await this.stopInner(opts);
@@ -2048,6 +2057,12 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
         return;
       }
     } catch (error) {
+      // prepare 抛错兜底停核会被上游静默吞掉（configApplyQueue/调用方 catch）——必须在此留证，
+      // 否则表现为「代理无故自动关闭」且零诊断。
+      this.logToManager(
+        'warn',
+        `企业 VPN 会话准备失败，代理已停止: ${error instanceof Error ? error.message : String(error)}`
+      );
       await this.ensureSystemProxyCleared();
       await this.stop();
       throw error;
