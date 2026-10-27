@@ -620,26 +620,52 @@ export function buildDnsConfig(
 
   // Unified domain/application rules share their displayed order for DNS as well as routing.
   // Keep infrastructure DNS rules above; process identity never becomes a domain-only match.
-  if (dnsCustomRules.some((rule) => rule.application || rule.type === 'processPathRegex')) {
-    const queryTypes = new Set([
-      'domain',
-      'domainSuffix',
-      'domainKeyword',
-      'domainRegex',
-      'processName',
-      'processPath',
-      'processPathRegex',
-    ]);
+  // 用户自定义规则的 DNS 侧投影。FakeIP 开启时拆两截发射：
+  //   · block 规则留在 fakeip catch-all 之前（DNS 层 reject 语义不变）；
+  //   · direct/proxy 规则移到 fakeip catch-all 之后（见下方 FakeIP 分支发射点）并加 query_type A/AAAA——
+  //     客户端 A/AAAA 查询必须命中 fakeip 拿假 IP、保留域名上下文，route 侧才能按域名命中用户规则。
+  //     若投影挡在 catch-all 之前，客户端拿到真实 IP，而 SSH 等无 SNI 协议的连接无域名可反查（FakeIP 开启时
+  //     reverse_mapping 关闭），route 侧域名规则永远匹配不上、落兜底走错出口（P8：github 域名直连规则下
+  //     ssh 卡死即此根因）。真实解析只留给内核 dial-time lookup（allowFakeIP=false 跳过 fakeip server 继续
+  //     匹配），解析器按规则去向分桶（direct→境内、proxy→随规则 selector），与 #347 出口影子规则同语义。
+  //   · 非 FakeIP 路径（系统代理等）无 catch-all，维持原位全量发射：客户端拿按去向解析的真实 IP 正是正确语义。
+  // 顺序不变量：用户规则在 route 侧是终止规则且排在 geo 之前，DNS 侧首命中即停，投影必须先于出口影子/geo 二分。
+  const hasUserRuleDnsProjection = dnsCustomRules.some(
+    (rule) => rule.application || rule.type === 'processPathRegex'
+  );
+  const userRuleDnsQueryTypes = new Set([
+    'domain',
+    'domainSuffix',
+    'domainKeyword',
+    'domainRegex',
+    'processName',
+    'processPath',
+    'processPathRegex',
+  ]);
+  const emitCustomRuleDnsRules = (
+    part: 'block' | 'routed' | 'all',
+    withQueryType: boolean
+  ): void => {
     for (const rule of dnsCustomRules) {
       if (!rule.enabled) continue;
+      if (
+        part !== 'all' &&
+        (part === 'block' ? rule.action !== 'block' : rule.action === 'block')
+      ) {
+        continue;
+      }
       const conditions = ruleConditions(rule);
-      if (conditions.some((condition) => !queryTypes.has(condition.type))) continue;
+      if (conditions.some((condition) => !userRuleDnsQueryTypes.has(condition.type))) continue;
       const matchers = conditions.map(condMatcherFields);
       if (!matchers.length || matchers.some((matcher) => !matcher)) continue;
       const matcher =
         matchers.length === 1
           ? matchers[0]!
           : { type: 'logical', mode: rule.combineMode ?? 'or', rules: matchers };
+      if (part === 'block') {
+        dnsRules.push({ ...matcher, action: 'reject' } as unknown as SingBoxDnsRule);
+        continue;
+      }
       const server =
         rule.action === 'direct'
           ? getDomesticResolverTag(config, 'dns-domestic')
@@ -649,9 +675,13 @@ export function buildDnsConfig(
       }
       dnsRules.push({
         ...matcher,
-        ...(rule.action === 'block' ? { action: 'reject' } : { server }),
+        ...(withQueryType ? { query_type: ['A', 'AAAA'] } : {}),
+        server,
       } as unknown as SingBoxDnsRule);
     }
+  };
+  if (hasUserRuleDnsProjection) {
+    emitCustomRuleDnsRules(enableFakeIp ? 'block' : 'all', false);
   }
 
   // DNS follows the same installed-application policy, even when resolve-ahead is disabled.
@@ -739,6 +769,11 @@ export function buildDnsConfig(
         // 数量级的兜底、代价降一档。下界仍由「别把客户端解析器打成忙等」约束，两侧留余量。
         rewrite_ttl: FAKEIP_REWRITE_TTL,
       } as SingBoxDnsRule);
+      // P8 修复：用户 direct/proxy 规则的 DNS 投影。必须在 fakeip catch-all 之后——客户端查询命中 fakeip 即停
+      // 拿假 IP（域名上下文保留，route 侧按域名命中用户规则，SSH 等无 SNI 协议也生效）；内核 dial-time lookup
+      // （allowFakeIP=false）跳过 fakeip 继续匹配到这里，按规则去向拿真实 IP。先于出口影子规则/geo 二分
+      // （用户去向优先）。query_type A/AAAA 防止 HTTPS(TYPE65) 等非地址查询被拐去真实解析、与 A 记录的假 IP 不一致。
+      if (hasUserRuleDnsProjection) emitCustomRuleDnsRules('routed', true);
       // 位置：fakeip catch-all 之后（app 侧查询命中 fakeip 即停、走不到这里）、S0/S1 之前（用户去向优先于 geo 二分）。
       if (resolveAhead) pushDirectExitShadowRules();
       pushAutomaticCountryDns();

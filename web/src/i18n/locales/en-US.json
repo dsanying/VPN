@@ -219,7 +219,7 @@
     },
     "bundledCoreHint": "The Android core is updated with the app package and cannot be replaced separately. Install an app update that includes the newer core.",
     "bypassFakeIp": "use real IP",
-    "bypassFakeIpHint": "Domains matching this rule resolve to real addresses instead of the TUN virtual IP (FakeIP) mapping. Only applies to domain-type rules; usually leave off.",
+    "bypassFakeIpHint": "Off by default: connections keep their domain context, so every protocol (including non-SNI ones like SSH) matches this rule, and resolution happens at the exit side. Turn on to resolve matching domains to real IPs (direct rules use domestic resolvers, proxy rules resolve through the tunnel) — only needed when a specific HTTPS site consistently fails through a node due to node-side DNS. Trade-off: non-SNI protocols such as SSH will no longer match this rule. Applies to domain-type rules only.",
     "checkUpdate": "check for update",
     "chooseApplication": "choose application",
     "clearLogsImpact": "clear recorded logs.",
