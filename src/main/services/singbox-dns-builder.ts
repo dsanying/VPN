@@ -592,6 +592,8 @@ export function buildDnsConfig(
     const directKeywords: string[] = [];
     for (const rule of dnsCustomRules) {
       if (!rule.enabled || rule.action !== 'direct') continue;
+      // 投影已完整发射过的规则不再重复发影子（同 matcher 同 server，死规则）。
+      if (projectedRuleIds.has(rule.id)) continue;
       // 恒取 inline 值（不复用外化的 <base>-dns rule_set：那批 tag 只为 bypassFakeIP 注册，语义不同）。
       for (const cond of ruleConditions(rule)) {
         const vals = (cond.values || []).map((v) => v.trim()).filter(Boolean);
@@ -632,6 +634,10 @@ export function buildDnsConfig(
   const hasUserRuleDnsProjection = dnsCustomRules.some(
     (rule) => rule.application || rule.type === 'processPathRegex'
   );
+  // 已被投影完整发射的规则 id：direct 规则经投影后，#347 出口影子规则对其是逐字段重复
+  // （同 matcher + 同 server = getDomesticResolverTag），再发一条恒为死规则 → 影子收集时跳过。
+  // 混合条件（含 port 等非域名条件）的规则投影会整体跳过，影子照旧收集其域名部分，不受影响。
+  const projectedRuleIds = new Set<string>();
   const userRuleDnsQueryTypes = new Set([
     'domain',
     'domainSuffix',
@@ -677,6 +683,7 @@ export function buildDnsConfig(
         ...(withQueryType ? { query_type: ['A', 'AAAA'] } : {}),
         server,
       } as unknown as SingBoxDnsRule);
+      projectedRuleIds.add(rule.id);
     }
   };
   if (hasUserRuleDnsProjection) {

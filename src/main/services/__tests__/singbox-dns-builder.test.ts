@@ -369,6 +369,7 @@ describe('buildDnsConfig — P8：用户域名规则 DNS 投影不得挡在 fake
       proxyModeType: 'tun',
       enableIPv6: false,
       dnsConfig: { enableFakeIp: true },
+      resolveDestination: true, // 开出口影子路径：与 P8 投影同开正是去重回归的触发条件
       customRules: [
         {
           id: 'r-github',
@@ -428,6 +429,19 @@ describe('buildDnsConfig — P8：用户域名规则 DNS 投影不得挡在 fake
     expect(rules.indexOf(vercel!)).toBeGreaterThan(fakeipIdx);
     expect(vercel!.query_type).toEqual(['A', 'AAAA']);
     expect(vercel!.server).toBe('dns-rule-r-vercel');
+  });
+
+  it('direct 用户规则的投影与 #347 出口影子去重：同 matcher 同 server 只发一条', () => {
+    // 回归背景：P8 把 direct/proxy 投影移到 fakeip catch-all 之后后，resolveDestination 开启时
+    // #347 影子规则对同一条 direct 规则再发一条逐字段相同（同 matcher + 同 getDomesticResolverTag
+    // server）的死规则——github 直连规则在 dns.rules 里出现两遍即此。
+    const rules = rulesOf();
+    const githubRules = rules.filter((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && kw.includes('github');
+    });
+    expect(githubRules).toHaveLength(1);
+    expect(githubRules[0]!.query_type).toEqual(['A', 'AAAA']);
   });
 
   it('catch-all 之前没有任何规则引用用户规则的域名值（客户端 A/AAAA 首命中必是 fakeip）', () => {

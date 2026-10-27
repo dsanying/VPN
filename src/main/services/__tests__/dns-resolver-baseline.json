@@ -38,29 +38,18 @@
       ],
       "rules": [
         {
-          "domain": [
-            "a.example-argo.com",
-            "sni-a.example.net"
-          ],
+          "domain": ["a.example-argo.com", "sni-a.example.net"],
           "domain_suffix": [
             "a.example-argo.com",
             ".a.example-argo.com",
             "sni-a.example.net",
             ".sni-a.example.net"
           ],
-          "domain_keyword": [
-            "a.example-argo.com",
-            "sni-a.example.net"
-          ],
+          "domain_keyword": ["a.example-argo.com", "sni-a.example.net"],
           "server": "dns-domestic"
         },
         {
-          "domain": [
-            "doh.pub",
-            "dns.google",
-            "cloudflare-dns.com",
-            "one.one.one.one"
-          ],
+          "domain": ["doh.pub", "dns.google", "cloudflare-dns.com", "one.one.one.one"],
           "server": "dns-bootstrap"
         },
         {
@@ -96,10 +85,7 @@
           "server": "dns-local"
         },
         {
-          "query_type": [
-            "A",
-            "AAAA"
-          ],
+          "query_type": ["A", "AAAA"],
           "server": "fakeip"
         }
       ],
@@ -111,10 +97,7 @@
         "action": "sniff"
       },
       {
-        "process_name": [
-          "sing-box",
-          "sing-box.exe"
-        ],
+        "process_name": ["sing-box", "sing-box.exe"],
         "action": "route",
         "outbound": "direct"
       },
@@ -126,17 +109,12 @@
           "119.28.28.28/32",
           "114.114.114.114/32"
         ],
-        "port": [
-          53,
-          443
-        ],
+        "port": [53, 443],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "port": [
-          53
-        ],
+        "port": [53],
         "action": "hijack-dns"
       },
       {
@@ -175,37 +153,22 @@
           "dns.quad9.net",
           "one.one.one.one"
         ],
-        "port": [
-          443,
-          853
-        ],
+        "port": [443, 853],
         "action": "reject"
       },
       {
-        "domain": [
-          "a.example-argo.com",
-          "sni-a.example.net",
-          "b.trycloudflare.com"
-        ],
-        "domain_suffix": [
-          ".a.example-argo.com",
-          ".sni-a.example.net",
-          ".b.trycloudflare.com"
-        ],
+        "domain": ["a.example-argo.com", "sni-a.example.net", "b.trycloudflare.com"],
+        "domain_suffix": [".a.example-argo.com", ".sni-a.example.net", ".b.trycloudflare.com"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "ip_cidr": [
-          "203.0.113.7/32"
-        ],
+        "ip_cidr": ["203.0.113.7/32"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "domain_suffix": [
-          ".microdone.cn"
-        ],
+        "domain_suffix": [".microdone.cn"],
         "action": "route",
         "outbound": "direct",
         "override_address": "127.0.0.1"
@@ -258,27 +221,9 @@
         "outbound": "direct"
       },
       {
-        "network": [
-          "icmp"
-        ],
+        "network": ["icmp"],
         "action": "route",
         "outbound": "direct"
-      },
-      {
-        "domain_keyword": [
-          "dns.google",
-          "cloudflare-dns.com",
-          "doh.opendns.com",
-          "dns.quad9.net",
-          "one.one.one.one"
-        ],
-        "network": [
-          "udp"
-        ],
-        "port": [
-          443
-        ],
-        "action": "reject"
       },
       {
         "protocol": "dns",
@@ -286,32 +231,12 @@
         "outbound": "direct"
       },
       {
-        "ip_cidr": [
-          "223.5.5.5/32"
-        ],
-        "port": [
-          53,
-          443
-        ],
+        "domain_suffix": ["doh.pub"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "domain_suffix": [
-          "doh.pub"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "domain_keyword": [
-          "google",
-          "gmail",
-          "youtube",
-          "gstatic",
-          "googleapis",
-          "googlevideo"
-        ],
+        "domain_keyword": ["google", "gmail", "youtube", "gstatic", "googleapis", "googlevideo"],
         "action": "route",
         "outbound": "proxy-selector"
       },
@@ -399,29 +324,18 @@
       ],
       "rules": [
         {
-          "domain": [
-            "a.example-argo.com",
-            "sni-a.example.net"
-          ],
+          "domain": ["a.example-argo.com", "sni-a.example.net"],
           "domain_suffix": [
             "a.example-argo.com",
             ".a.example-argo.com",
             "sni-a.example.net",
             ".sni-a.example.net"
           ],
-          "domain_keyword": [
-            "a.example-argo.com",
-            "sni-a.example.net"
-          ],
+          "domain_keyword": ["a.example-argo.com", "sni-a.example.net"],
           "server": "dns-domestic"
         },
         {
-          "domain": [
-            "doh.pub",
-            "dns.google",
-            "cloudflare-dns.com",
-            "one.one.one.one"
-          ],
+          "domain": ["doh.pub", "dns.google", "cloudflare-dns.com", "one.one.one.one"],
           "server": "dns-bootstrap"
         },
         {
@@ -457,10 +371,7 @@
           "server": "dns-local"
         },
         {
-          "query_type": [
-            "A",
-            "AAAA"
-          ],
+          "query_type": ["A", "AAAA"],
           "server": "fakeip"
         }
       ],
@@ -472,10 +383,7 @@
         "action": "sniff"
       },
       {
-        "process_name": [
-          "sing-box",
-          "sing-box.exe"
-        ],
+        "process_name": ["sing-box", "sing-box.exe"],
         "action": "route",
         "outbound": "direct"
       },
@@ -487,17 +395,12 @@
           "119.28.28.28/32",
           "114.114.114.114/32"
         ],
-        "port": [
-          53,
-          443
-        ],
+        "port": [53, 443],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "port": [
-          53
-        ],
+        "port": [53],
         "action": "hijack-dns"
       },
       {
@@ -536,37 +439,22 @@
           "dns.quad9.net",
           "one.one.one.one"
         ],
-        "port": [
-          443,
-          853
-        ],
+        "port": [443, 853],
         "action": "reject"
       },
       {
-        "domain": [
-          "a.example-argo.com",
-          "sni-a.example.net",
-          "b.trycloudflare.com"
-        ],
-        "domain_suffix": [
-          ".a.example-argo.com",
-          ".sni-a.example.net",
-          ".b.trycloudflare.com"
-        ],
+        "domain": ["a.example-argo.com", "sni-a.example.net", "b.trycloudflare.com"],
+        "domain_suffix": [".a.example-argo.com", ".sni-a.example.net", ".b.trycloudflare.com"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "ip_cidr": [
-          "203.0.113.7/32"
-        ],
+        "ip_cidr": ["203.0.113.7/32"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "domain_suffix": [
-          ".microdone.cn"
-        ],
+        "domain_suffix": [".microdone.cn"],
         "action": "route",
         "outbound": "direct",
         "override_address": "127.0.0.1"
@@ -619,27 +507,9 @@
         "outbound": "direct"
       },
       {
-        "network": [
-          "icmp"
-        ],
+        "network": ["icmp"],
         "action": "route",
         "outbound": "direct"
-      },
-      {
-        "domain_keyword": [
-          "dns.google",
-          "cloudflare-dns.com",
-          "doh.opendns.com",
-          "dns.quad9.net",
-          "one.one.one.one"
-        ],
-        "network": [
-          "udp"
-        ],
-        "port": [
-          443
-        ],
-        "action": "reject"
       },
       {
         "protocol": "dns",
@@ -647,20 +517,7 @@
         "outbound": "direct"
       },
       {
-        "ip_cidr": [
-          "223.5.5.5/32"
-        ],
-        "port": [
-          53,
-          443
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "domain_suffix": [
-          "doh.pub"
-        ],
+        "domain_suffix": ["doh.pub"],
         "action": "route",
         "outbound": "direct"
       }
@@ -728,29 +585,18 @@
       ],
       "rules": [
         {
-          "domain": [
-            "a.example-argo.com",
-            "sni-a.example.net"
-          ],
+          "domain": ["a.example-argo.com", "sni-a.example.net"],
           "domain_suffix": [
             "a.example-argo.com",
             ".a.example-argo.com",
             "sni-a.example.net",
             ".sni-a.example.net"
           ],
-          "domain_keyword": [
-            "a.example-argo.com",
-            "sni-a.example.net"
-          ],
+          "domain_keyword": ["a.example-argo.com", "sni-a.example.net"],
           "server": "dns-domestic"
         },
         {
-          "domain": [
-            "doh.pub",
-            "dns.google",
-            "cloudflare-dns.com",
-            "one.one.one.one"
-          ],
+          "domain": ["doh.pub", "dns.google", "cloudflare-dns.com", "one.one.one.one"],
           "server": "dns-bootstrap"
         },
         {
@@ -801,10 +647,7 @@
         "action": "sniff"
       },
       {
-        "process_name": [
-          "sing-box",
-          "sing-box.exe"
-        ],
+        "process_name": ["sing-box", "sing-box.exe"],
         "action": "route",
         "outbound": "direct"
       },
@@ -816,17 +659,12 @@
           "119.28.28.28/32",
           "114.114.114.114/32"
         ],
-        "port": [
-          53,
-          443
-        ],
+        "port": [53, 443],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "port": [
-          53
-        ],
+        "port": [53],
         "action": "hijack-dns"
       },
       {
@@ -865,37 +703,22 @@
           "dns.quad9.net",
           "one.one.one.one"
         ],
-        "port": [
-          443,
-          853
-        ],
+        "port": [443, 853],
         "action": "reject"
       },
       {
-        "domain": [
-          "a.example-argo.com",
-          "sni-a.example.net",
-          "b.trycloudflare.com"
-        ],
-        "domain_suffix": [
-          ".a.example-argo.com",
-          ".sni-a.example.net",
-          ".b.trycloudflare.com"
-        ],
+        "domain": ["a.example-argo.com", "sni-a.example.net", "b.trycloudflare.com"],
+        "domain_suffix": [".a.example-argo.com", ".sni-a.example.net", ".b.trycloudflare.com"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "ip_cidr": [
-          "203.0.113.7/32"
-        ],
+        "ip_cidr": ["203.0.113.7/32"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "domain_suffix": [
-          ".microdone.cn"
-        ],
+        "domain_suffix": [".microdone.cn"],
         "action": "route",
         "outbound": "direct",
         "override_address": "127.0.0.1"
@@ -948,27 +771,9 @@
         "outbound": "direct"
       },
       {
-        "network": [
-          "icmp"
-        ],
+        "network": ["icmp"],
         "action": "route",
         "outbound": "direct"
-      },
-      {
-        "domain_keyword": [
-          "dns.google",
-          "cloudflare-dns.com",
-          "doh.opendns.com",
-          "dns.quad9.net",
-          "one.one.one.one"
-        ],
-        "network": [
-          "udp"
-        ],
-        "port": [
-          443
-        ],
-        "action": "reject"
       },
       {
         "protocol": "dns",
@@ -976,32 +781,12 @@
         "outbound": "direct"
       },
       {
-        "ip_cidr": [
-          "223.5.5.5/32"
-        ],
-        "port": [
-          53,
-          443
-        ],
+        "domain_suffix": ["doh.pub"],
         "action": "route",
         "outbound": "direct"
       },
       {
-        "domain_suffix": [
-          "doh.pub"
-        ],
-        "action": "route",
-        "outbound": "direct"
-      },
-      {
-        "domain_keyword": [
-          "google",
-          "gmail",
-          "youtube",
-          "gstatic",
-          "googleapis",
-          "googlevideo"
-        ],
+        "domain_keyword": ["google", "gmail", "youtube", "gstatic", "googleapis", "googlevideo"],
         "action": "route",
         "outbound": "proxy-selector"
       },

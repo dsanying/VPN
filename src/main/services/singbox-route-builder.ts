@@ -11,7 +11,7 @@ import { protectProxyQuic } from '../../shared/runtime-policy';
 
 import * as path from 'path';
 import type { UserConfig } from '../../shared/types';
-import { BOOTSTRAP_DIRECT_DNS_IPS, DOH_UPSTREAM_IPS } from '../../shared/dns';
+import { BOOTSTRAP_DIRECT_DNS_IPS } from '../../shared/dns';
 import {
   endpointForcedRouteCidrs,
   meshForcedRouteCidrs,
@@ -58,7 +58,7 @@ import { buildCustomRules } from './singbox-custom-rules';
 import { bypassLanCidrs, effectiveBypassLan } from '../../shared/system-proxy-bypass';
 
 // 浏览器 DoH 泄漏拦截：清单与开关语义的单一真值在 shared/browser-doh（默认值 + effectiveBrowserDohKeywords）。
-// 本文件只消费：同一份数组同时喂给 TCP(443/853) 与 UDP(443) 两条 reject，杜绝两处漂移。
+// 本文件只消费：发一条网络无关（TCP+UDP）的 port 443/853 reject——曾配对的 UDP(443) 腿被其完全包含，已删。
 
 /**
  * QUIC(UDP/443) reject 规则工厂：可选叠加域名/进程等匹配器。route 与各处代理 QUIC 防护共用，
@@ -260,7 +260,9 @@ export function buildRouteConfig(
       ...(deps.raceUpstreamIps ?? [])
         .map((ip) => hostToExcludeCidr(ip))
         .filter((c): c is string => c !== null),
-    ],
+    ]
+      // 去重保序：race 池的 ali/dnspod 上游与 BOOTSTRAP_DIRECT_DNS_IPS 重叠，不去重会同一 IP 写两遍。
+      .filter((cidr, index, all) => all.indexOf(cidr) === index),
     // :53=UDP / :443=DoH（恒）。DoT(:853) 二期未实现——race server queryOneUpstream 不支持 dot、
     // parseCustomUpstream 已拒 tls://，故无任何 DoT 上游，不为永不工作的协议开无用端口。
     // 待 DoT 落地后再按「上游中确有 dot」精确放行 853，而非按「有自定义上游」的浅条件。
@@ -682,9 +684,11 @@ export function buildRouteConfig(
   // 这样游戏设为直连时，进程名匹配在前，游戏的 UDP 流量不会被误拒。
   // 仅阻断浏览器的 DoH over QUIC，迫使浏览器回退到系统 UDP 53 + hijack-dns 体系。
   // 重要：不能全量 reject 所有 UDP 443，否则 Hysteria2/TUIC 等 QUIC 协议节点会被误伤。
-  if (browserDohKeywords.length > 0) {
-    rules.push(udp443RejectRule({ domain_keyword: browserDohKeywords }));
-  }
+  // 【已删除：DoH 域名的 QUIC/UDP-443 reject 配对腿】
+  // 原在此处按同一清单再发一条 network:udp + port:443 的 reject。恒为死规则：上方 TCP(443/853) 腿
+  // 无 network 过滤，UDP/443 已被其先行命中（首命中即停），配对腿永远匹配不到。
+  // 保留清单单一真值 browserDohKeywords 只喂一条网络无关 reject；udp443RejectRule 工厂仍服务
+  // 用户代理规则的 QUIC 防护配对（那些规则的 TCP 侧不是 reject，语义不同、不重复）。
 
   // 【DNS 死循环防范】：sing-box 本地 DNS 解析器的请求必须强制直连，否则在全局代理模式下会产生死循环
   // 兼容 Windows 1.12.x 版本，不使用 DNS 配置里的 detour
@@ -695,18 +699,14 @@ export function buildRouteConfig(
   });
 
   rules.push({
-    // DoH 上游 IP（223.5.5.5 AliDNS + 1.12.12.12 DNSPod #57）直连放行，派生自单一真值 DOH_UPSTREAM_IPS。
-    ip_cidr: DOH_UPSTREAM_IPS.map((ip) => `${ip}/32`),
-    port: [53, 443],
-    action: 'route',
-    outbound: 'direct',
-  });
-
-  rules.push({
     domain_suffix: ['doh.pub'],
     action: 'route',
     outbound: 'direct',
   });
+  // 【已删除：DOH_UPSTREAM_IPS 后置直连放行】
+  // 原在此处再发一条 ip_cidr=DOH_UPSTREAM_IPS(223.5.5.5/1.12.12.12) + port[53,443] 直连。恒为死规则：
+  // 上方 C 条（无条件发射）的 ip_cidr 已包含 BOOTSTRAP_DIRECT_DNS_IPS ⊇ DOH_UPSTREAM_IPS、端口同为
+  // [53,443]（+用户自定义端口），首命中即停，本条永远匹配不到。
 
   // 【已删除：Chrome/Edge 后台 beacon 域名黑名单（issue #352）】
   // 曾在此处无条件（`proxyMode !== 'direct'` 即发射）reject 14 个 Google 域名。整块删除，不留缩表版本。

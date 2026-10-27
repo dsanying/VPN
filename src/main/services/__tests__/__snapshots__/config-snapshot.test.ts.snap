@@ -481,37 +481,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -1010,37 +982,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -1534,37 +1478,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -2088,37 +2004,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -2462,7 +2350,6 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
             "119.29.29.29/32",
             "119.28.28.28/32",
             "114.114.114.114/32",
-            "223.6.6.6/32",
           ],
           "outbound": "direct",
           "port": [
@@ -2597,37 +2484,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -3097,37 +2956,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -3606,37 +3437,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -4090,37 +3893,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -4604,37 +4379,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -5132,37 +4879,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -5693,37 +5412,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -6218,37 +5909,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -6697,37 +6360,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -7206,37 +6841,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -7689,37 +7296,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -8149,37 +7728,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -8668,37 +8219,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -9223,37 +8746,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -9742,37 +9237,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -10285,37 +9752,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -10805,37 +10244,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -11323,37 +10734,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -11832,37 +11215,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -12369,37 +11724,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -12838,37 +12165,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -13297,37 +12596,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -13855,37 +13126,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -14391,37 +13634,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -14927,37 +14142,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -15436,37 +14623,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -15920,37 +15079,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -16386,37 +15517,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -16844,37 +15947,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -17429,37 +16504,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -17958,37 +17005,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -18495,37 +17514,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -19004,37 +17995,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
@@ -19542,37 +18505,9 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "outbound": "direct",
         },
         {
-          "action": "reject",
-          "domain_keyword": [
-            "dns.google",
-            "cloudflare-dns.com",
-            "doh.opendns.com",
-            "dns.quad9.net",
-            "one.one.one.one",
-          ],
-          "network": [
-            "udp",
-          ],
-          "port": [
-            443,
-          ],
-        },
-        {
           "action": "route",
           "outbound": "direct",
           "protocol": "dns",
-        },
-        {
-          "action": "route",
-          "ip_cidr": [
-            "223.5.5.5/32",
-            "1.12.12.12/32",
-          ],
-          "outbound": "direct",
-          "port": [
-            53,
-            443,
-          ],
         },
         {
           "action": "route",
