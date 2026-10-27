@@ -301,11 +301,10 @@ export function buildDnsConfig(
   // macOS 安全(dns-local→mDNSResponder，在直连白名单，查询不被 hijack)；Linux 不接管。故仅 Win 下把会落 type:local 的
   // unicast 域名改路由：银行公网→dns-domestic、内网/反查/captive→dns-lan(有 LAN 解析器)否则 dns-domestic。
   // .local 走 mDNS/LLMNR 组播(不发 unicast)，留 dns-local。
-  // winLoopRisk 解耦（T2）：死环源于 Win strict_route(WFP) + type:local 本身，与 takeoverSystemDns 开关无关（Win
-  // setDns 本就收敛 no-op）→ 改为「Win + TUN」恒判，不再以 takeoverSystemDns 为代理键。修原 takeoverSystemDns=false
-  // 时死环防护被误关、该边界仍撞 svchost ∞ 环的潜在 bug（与系统 DNS 接管开关的默认值无关）。
-  // ⚠️ 真机待验（推理可判但 DNS 运行期须实证）：Win + takeoverSystemDns=false
-  //    + TUN 下 nslookup 内网/银行域名走 dns-domestic 不成环、内网 NXDOMAIN 不挂（见 docs/design/dns-ipv6-takeover.md §A）。
+  // winLoopRisk 解耦（T2）：死环源于 Win strict_route(WFP) + type:local 本身，与系统 DNS 是否被改无关（Win
+  // setDns 收敛 no-op，见 SystemDnsManager）→ 按「Win + TUN」恒判，不以任何 DNS 开关为代理键。
+  // ⚠️ 真机待验（推理可判但 DNS 运行期须实证）：Win + TUN 下 nslookup 内网/银行域名走 dns-domestic
+  //    不成环、内网 NXDOMAIN 不挂（见 docs/design/dns-ipv6-takeover.md §A）。
   const winLoopRisk = process.platform === 'win32' && config.proxyModeType === 'tun';
   // 内网/反查/captive 解析器：优先 dns-lan(直连放行的 LAN IP)；无则 Win 退 dns-domestic(避免 type:local 死环、
   // 内网域名 NXDOMAIN 但不挂)，非 Win 退 dns-local(系统解析器=真实 LAN，正常)。

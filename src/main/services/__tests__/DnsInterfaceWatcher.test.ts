@@ -274,28 +274,15 @@ describe('DnsInterfaceWatcher', () => {
 
 // ⑥ 门控真值表（= startDnsInterfaceWatcher 的逻辑核心 + ProxyManager 注入 onTrigger 的门控判定）。
 describe('shouldReconcileDns 门控真值', () => {
-  const tunOn = {
-    proxyModeType: 'tun',
-    dnsConfig: { takeoverSystemDns: true },
-  } as UserConfig;
-  const tunTakeoverOff = {
-    proxyModeType: 'tun',
-    dnsConfig: { takeoverSystemDns: false },
-  } as UserConfig;
+  const tunOn = { proxyModeType: 'tun' } as UserConfig;
   const sysProxy = { proxyModeType: 'systemProxy' } as UserConfig;
   const manual = { proxyModeType: 'manual' } as unknown as UserConfig;
 
-  it('tun + 明确开启接管 + marker 在 → true', () => {
+  it('tun + marker 在 → true（TUN 恒接管，无开关）', () => {
     expect(shouldReconcileDns(tunOn, true)).toBe(true);
-  });
-  it.each([undefined, {}])('tun + DNS 接管缺省 %p + marker 在 → false', (dnsConfig) => {
-    expect(shouldReconcileDns({ proxyModeType: 'tun', dnsConfig } as UserConfig, true)).toBe(false);
   });
   it('tun + marker 不在 → false（接管未激活，不擅自动手）', () => {
     expect(shouldReconcileDns(tunOn, false)).toBe(false);
-  });
-  it('tun + takeover=false → false（用户关掉接管开关）', () => {
-    expect(shouldReconcileDns(tunTakeoverOff, true)).toBe(false);
   });
   it('systemProxy 模式 → false（系统代理走远程解析，watcher 不改 DNS）', () => {
     expect(shouldReconcileDns(sysProxy, true)).toBe(false);

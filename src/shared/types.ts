@@ -312,12 +312,6 @@ export interface DnsConfig {
   nodeResolverCustom?: CustomDnsUpstream[];
   // 旧 nodeDomainResolver → 新多源模型一次性迁移标记。undefined=未迁移。
   nodeResolverMigrated?: boolean;
-  // TUN 模式手动接管系统 DNS（SystemDnsManager）：仅 true 开启，缺省/false 关闭。on-link 的 LAN/ISP DNS 不进 TUN →
-  // hijack-dns 看不到 → 需代理的域名走系统解析得到真实/错族 IP（双栈站 ERR_CONNECTION_CLOSED / 真 v6 泄漏）。
-  // 开 → TUN 启动把系统 DNS 改为可路由的 8.8.8.8 使其经 TUN 被 hijack；停止/退出/崩溃还原。
-  // 关 → 不接管（dns-local 恢复用原 LAN DNS、内网域名正常，但 TUN 下有上述泄漏风险），供有自定义/内网 DNS 的用户用。
-  // 仅 TUN 模式生效；新装及旧配置无此字段 → 关闭，保留明确保存的开关值。详见 docs/design/dns-ipv6-takeover.md。
-  takeoverSystemDns?: boolean;
   // P2b 乐观 DNS 缓存（sing-box 1.14 `dns.optimistic`）：缺省/false=关。开 → 缓存过期后先返回旧值、后台异步刷新，
   // 降低尾延迟（牺牲首条过期响应的新鲜度）。映射到顶层 dns.optimistic:true（仅 true 时下发，关时省略保字节）。
   optimisticCache?: boolean;

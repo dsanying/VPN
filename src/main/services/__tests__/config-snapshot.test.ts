@@ -656,7 +656,7 @@ describe('generateSingBoxConfig — characterization 快照（抽取前锁基线
         cfg({
           proxyModeType: 'tun',
           servers: [server({})],
-          dnsConfig: { takeoverSystemDns: true },
+          dnsConfig: {},
         } as unknown as Partial<UserConfig>),
         '1.13.0',
         'win32'

@@ -37,7 +37,6 @@ export function createDefaultConfig(installationSecret: string): UserConfig {
     dnsConfig: {
       domesticDns: DEFAULT_DNS_ENDPOINTS.direct,
       foreignDns: DEFAULT_DNS_ENDPOINTS.proxy,
-      takeoverSystemDns: false, // 保留系统/内网 DNS，禁止接管
       // issue #147 节点域名解析（多源 race）：新装默认 race-on、池=AliDNS+DNSPod；off 单选默认 Ali。
       nodeResolverPool: ['ali', 'dnspod'],
       nodeResolverSingle: 'ali',

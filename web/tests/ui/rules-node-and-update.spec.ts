@@ -53,7 +53,7 @@ for (const language of ['zh-CN', 'en-US']) {
   await expect(tip).toBeVisible();
   await tip.hover();
   const tooltip = page.getByRole('tooltip');
-  await expect(tooltip).toContainText('FakeIP');
+  await expect(tooltip).toContainText(chinese ? '无 SNI 协议' : 'non-SNI');
   await expect(tooltip).toContainText(chinese ? '域名' : 'domain');
   await mock.expectNoUnexpectedRequests();
  });

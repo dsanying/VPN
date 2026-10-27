@@ -67,7 +67,7 @@ test('更多中的删除可取消，失败保留确认框和原节点',async({pa
 });
 test('所有设置直接展示，修改 DNS 保留其他配置',async({page})=>{
  await chinese(page);const mock=await installDesktopMock(page);await page.goto('/#/settings');await expect(page.getByLabel('直连 DNS',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'安装',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'检查更新',exact:true})).toBeVisible();await expect(page.getByText('设置密码',{exact:true})).toHaveCount(0);await expect(page.getByText('其他设置',{exact:true})).toHaveCount(0);await expect(page.locator('.ant-collapse')).toHaveCount(0);expect(await page.evaluate(()=>(window as any).desktopTest.calls.filter((c:any)=>c.channel==='config:save').length)).toBe(0);
- const dns=page.getByLabel('直连 DNS',{exact:true});await dns.fill('https://example.com/dns-query');await page.getByRole('heading',{level:1}).click();await expect.poll(()=>page.evaluate(()=>(window as any).desktopTest.calls.filter((c:any)=>c.channel==='config:save').length)).toBe(1);const payload=await page.evaluate(()=>(window as any).desktopTest.calls.find((c:any)=>c.channel==='config:save').args);expect(payload.dnsConfig).toEqual({domesticDns:'https://example.com/dns-query',foreignDns:'https://dns.google/dns-query',enableFakeIp:true,takeoverSystemDns:false});await mock.expectNoUnexpectedRequests();
+ const dns=page.getByLabel('直连 DNS',{exact:true});await dns.fill('https://example.com/dns-query');await page.getByRole('heading',{level:1}).click();await expect.poll(()=>page.evaluate(()=>(window as any).desktopTest.calls.filter((c:any)=>c.channel==='config:save').length)).toBe(1);const payload=await page.evaluate(()=>(window as any).desktopTest.calls.find((c:any)=>c.channel==='config:save').args);expect(payload.dnsConfig).toEqual({domesticDns:'https://example.com/dns-query',foreignDns:'https://dns.google/dns-query',enableFakeIp:true});await mock.expectNoUnexpectedRequests();
 });
 
 test('测速跨页结束仍通知，部分不可用不冒充成功',async({page})=>{
@@ -172,18 +172,18 @@ test('只有 TUN 接管，各分流方式不回退系统代理',async({page})=>{
   await expect.poll(()=>page.evaluate(()=>(window as any).desktopTest.getConfig().proxyModeType)).toBe('tun');
  }
  const config=await page.evaluate(()=>(window as any).desktopTest.getConfig());
- expect(config.dnsConfig.takeoverSystemDns).toBe(false);
+ expect(config.proxyModeType).toBe('tun');
  await mock.expectNoUnexpectedRequests();
 });
 
-test('内部 DNS 可编辑，系统 DNS 接管入口已移除',async({page})=>{
+test('内部 DNS 可编辑，系统 DNS 接管入口已移除（接管恒开无开关）',async({page})=>{
  await chinese(page);const mock=await installDesktopMock(page);await page.goto('/#/settings');
  await expect(page.getByRole('switch',{name:'接管系统 DNS（TUN）',exact:true})).toHaveCount(0);
  const input=page.getByRole('textbox',{name:'直连 DNS',exact:true});
  await input.fill('https://example.com/dns-query');await input.blur();
  await expect.poll(()=>page.evaluate(()=>(window as any).desktopTest.getConfig().dnsConfig.domesticDns)).toBe('https://example.com/dns-query');
  const after=await page.evaluate(()=>(window as any).desktopTest.getConfig());
- expect(after.proxyModeType).toBe('tun');expect(after.dnsConfig.takeoverSystemDns).toBe(false);
+ expect(after.proxyModeType).toBe('tun');
  await mock.expectNoUnexpectedRequests();
 });
 
