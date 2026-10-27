@@ -219,7 +219,7 @@
     },
     "bundledCoreHint": "内核随 Android 安装包更新，不能单独替换。检测到新版内核后，请安装包含该内核的软件更新。",
     "bypassFakeIp": "使用真实 IP",
-    "bypassFakeIpHint": "命中本规则的域名使用真实解析地址，不走 TUN 的虚拟 IP（FakeIP）映射。仅对域名类规则生效，一般无需开启。",
+    "bypassFakeIpHint": "默认关闭：流量携带域名上下文，所有协议（含 SSH 等无 SNI 协议）都能按本规则分流，解析在出口侧完成。开启后命中本规则的域名改为真实解析（直连向经境内解析器、代理向经隧道解析），仅当个别 HTTPS 站点经某节点稳定打不开（节点侧解析异常）时才需要开启；代价是 SSH 等无 SNI 协议不再命中本规则。仅对域名类规则生效。",
     "checkUpdate": "检查更新",
     "chooseApplication": "选择应用",
     "clearLogsImpact": "清空已记录的日志。",

@@ -357,6 +357,132 @@ describe('buildDnsConfig — R1（§14.4）FakeIP 分支境内/境外影子规�
   });
 });
 
+describe('buildDnsConfig — P8：用户域名规则 DNS 投影不得挡在 fakeip catch-all 之前', () => {
+  // 场景复现：github 域名关键词直连规则 + 进程规则（满足投影 guard）。若投影在 catch-all 之前拦截客户端查询，
+  // 客户端拿真实 IP，SSH 等无 SNI 协议无域名可反查（FakeIP 开启时 reverse_mapping 关闭）→ route 侧域名规则
+  // 永远匹配不上、落兜底走错出口。
+  const p8Config = (): UserConfig =>
+    ({
+      servers: [],
+      selectedServerId: null,
+      proxyMode: 'smart',
+      proxyModeType: 'tun',
+      enableIPv6: false,
+      dnsConfig: { enableFakeIp: true },
+      customRules: [
+        {
+          id: 'r-github',
+          type: 'domainKeyword',
+          values: ['github'],
+          action: 'direct',
+          enabled: true,
+        },
+        {
+          id: 'r-vercel',
+          type: 'domainKeyword',
+          values: ['vercel'],
+          action: 'proxy',
+          enabled: true,
+        },
+        {
+          id: 'r-block',
+          type: 'domain',
+          values: ['ads.example.com'],
+          action: 'block',
+          enabled: true,
+        },
+        {
+          id: 'r-app',
+          type: 'processPathRegex',
+          values: ['^/Applications/'],
+          action: 'direct',
+          enabled: true,
+        },
+      ],
+    }) as unknown as UserConfig;
+
+  const rulesOf = (): Record<string, unknown>[] =>
+    buildDnsConfig(p8Config(), 'proxy-selector', null, new Map(), noopLog, 0, [])
+      .rules as unknown as Record<string, unknown>[];
+
+  it('direct/proxy 域名投影在 fakeip catch-all 之后，且带 query_type A/AAAA（客户端查询拿假 IP）', () => {
+    const rules = rulesOf();
+    const fakeipIdx = rules.findIndex((r) => r.server === 'fakeip');
+    expect(fakeipIdx).toBeGreaterThanOrEqual(0);
+
+    const github = rules.find((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && kw.includes('github');
+    });
+    expect(github).toBeDefined();
+    expect(rules.indexOf(github!)).toBeGreaterThan(fakeipIdx);
+    expect(github!.query_type).toEqual(['A', 'AAAA']);
+    // direct 去向 → 境内解析器（race 就绪时为 dns-node-race，否则 dns-domestic）。
+    expect(['dns-domestic', 'dns-node-race']).toContain(github!.server);
+
+    const vercel = rules.find((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && kw.includes('vercel');
+    });
+    expect(vercel).toBeDefined();
+    expect(rules.indexOf(vercel!)).toBeGreaterThan(fakeipIdx);
+    expect(vercel!.query_type).toEqual(['A', 'AAAA']);
+    expect(vercel!.server).toBe('dns-rule-r-vercel');
+  });
+
+  it('catch-all 之前没有任何规则引用用户规则的域名值（客户端 A/AAAA 首命中必是 fakeip）', () => {
+    const rules = rulesOf();
+    const fakeipIdx = rules.findIndex((r) => r.server === 'fakeip');
+    const before = rules.slice(0, fakeipIdx);
+    // catch-all 之前只允许基础设施清单（bootstrap/本地/NTP 等）与 block reject；
+    // 用户 direct/proxy 投影的域名值（github/vercel）不得出现在 catch-all 之前。
+    const userValues = ['github', 'vercel', 'ads.example.com'];
+    const hitsUserValues = (r: Record<string, unknown>): boolean =>
+      ['domain', 'domain_suffix', 'domain_keyword', 'domain_regex'].some((k) => {
+        const v = r[k];
+        return (
+          Array.isArray(v) &&
+          v.some((s) =>
+            userValues.some((u) => typeof s === 'string' && s.toLowerCase().includes(u))
+          )
+        );
+      });
+    const leaked = before.filter(
+      (r) => hitsUserValues(r) && r.server !== 'fakeip' && r.action !== 'reject'
+    );
+    expect(leaked).toEqual([]);
+  });
+
+  it('block 规则保持在 fakeip catch-all 之前（DNS 层 reject 语义不变）', () => {
+    const rules = rulesOf();
+    const fakeipIdx = rules.findIndex((r) => r.server === 'fakeip');
+    const block = rules.find((r) => {
+      const d = r.domain;
+      return Array.isArray(d) && d.includes('ads.example.com');
+    });
+    expect(block).toBeDefined();
+    expect(rules.indexOf(block!)).toBeLessThan(fakeipIdx);
+    expect(block!.action).toBe('reject');
+  });
+
+  it('dial-time 语义：fakeip 之后、出口影子/geo 之前首命中用户投影（用户去向优先）', () => {
+    const rules = rulesOf();
+    const fakeipIdx = rules.findIndex((r) => r.server === 'fakeip');
+    const githubIdx = rules.findIndex((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && kw.includes('github');
+    });
+    const after = rules.slice(fakeipIdx + 1, githubIdx);
+    // github 与投影之间不允许夹出口影子/geo 影子规则（它们的 server 是 dns-node-race/dns-domestic 且带
+    // domain/domain_suffix/domain_keyword 匹配器）——否则 dial-time lookup 会被抢先命中。
+    const shadowBetween = after.filter((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && kw.length > 0;
+    });
+    expect(shadowBetween).toEqual([]);
+  });
+});
+
 describe('buildDnsConfig — §15 主核测速探测池', () => {
   // FakeIP 分支（proxyMode global + enableFakeIp:true）才注入 pool DNS 规则。
   const poolConfig = (): UserConfig =>
