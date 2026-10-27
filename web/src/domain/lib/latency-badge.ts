@@ -88,3 +88,10 @@ export function deriveLatencyBadge(i: LatencyBadgeInput): LatencyBadge {
   // 可测无值：§16.3.3 not-in-pool（订阅新增/改址未重启入池）→ reason 供 tooltip 引导刷新；否则纯未测「—」。
   return i.notInPool ? { kind: 'untested', reason: 'not-in-pool' } : { kind: 'untested' };
 }
+
+/** 节点卡片延迟色档（卡片视图主视觉口径；列表视图保持中性文字不受影响）。 */
+export type LatencyTone = 'good' | 'warn' | 'bad';
+/** 色档阈值：≤150ms 良好（绿）/ ≤400ms 一般（黄）/ 其余偏差（红）。纯函数，随 deriveLatencyBadge 同源消费。 */
+export function latencyTone(latency: number): LatencyTone {
+  return latency <= 150 ? 'good' : latency <= 400 ? 'warn' : 'bad';
+}

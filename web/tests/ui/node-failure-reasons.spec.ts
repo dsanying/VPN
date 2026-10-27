@@ -16,9 +16,9 @@ for (const fixture of [
     } } });
     await page.goto('/#/nodes');
     const item = page.locator('.vpn-node-list > li').first();
-    await expect(item.locator('dd').first().getByText(fixture.entryText, { exact: true })).toBeVisible();
-    await expect(item.locator('dd').last().getByText(fixture.proxyText, { exact: true })).toBeVisible();
-    await expect(item.locator('dd').getByText('—', { exact: true })).toHaveCount(0);
+    await expect(item.locator('[data-slot="entry"]').getByText(fixture.entryText, { exact: true })).toBeVisible();
+    await expect(item.locator('[data-slot="proxy"]').getByText(fixture.proxyText, { exact: true })).toBeVisible();
+    await expect(item.locator('[data-slot]').getByText('—', { exact: true })).toHaveCount(0);
     await mock.expectNoUnexpectedRequests();
   });
 }

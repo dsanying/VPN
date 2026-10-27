@@ -86,7 +86,7 @@ test('普通设置保存只改对应字段，保留订阅、节点与规则',asy
 
 test('入口延迟与代理延迟独立展示，实际备用目标可见',async({page})=>{
  await chinese(page);const mock=await installDesktopMock(page);await page.goto('/#/nodes');await page.getByRole('button',{name:'全部测速',exact:true}).click();
- await expect(page.getByRole('term').filter({hasText:'入口延迟'})).toBeVisible();await expect(page.getByText('52 ms',{exact:true})).toBeVisible();await expect(page.getByText('92 ms',{exact:true})).toBeVisible();await expect(page.getByText('cp.cloudflare.com',{exact:true})).toBeVisible();await mock.expectNoUnexpectedRequests();
+ await expect(page.locator('[data-slot="entry"]').getByText('52 ms',{exact:true})).toBeVisible();await expect(page.locator('[data-slot="proxy"]').getByText('92 ms',{exact:true})).toBeVisible();await expect(page.locator('[data-slot="proxy"] [title="cp.cloudflare.com"]')).toBeAttached();await mock.expectNoUnexpectedRequests();
 });
 test('网站只呈现连通性与地区拒绝，403 也显示可达和响应码',async({page})=>{
  await chinese(page);const mock=await installDesktopMock(page,{running:true});await page.goto('/#/connections');await expect(page.getByRole('heading',{name:'网站连通性',exact:true})).toBeAttached();await page.getByRole('button',{name:'刷新',exact:true}).click();
