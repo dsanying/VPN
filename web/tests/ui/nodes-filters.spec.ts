@@ -57,8 +57,8 @@ for(const height of [600,440])test(`节点列表独立滚动，${height} 高度�
 test('后台整批检测显示进度，结束后展示可用结论与明确失败信息',async({page})=>{
  await setup(page); const list=page.getByRole('region',{name:'节点列表'});
  await page.evaluate(()=> (window as any).desktopTest.emit('event:speedTestProgress',{tested:0,ok:0,total:2,serverIds:['n1','n2'],active:true}));
- await expect(list.locator('.vpn-node-list__identity').getByText('检测中',{exact:true})).toHaveCount(2);
- await expect(list.locator('dd').getByText('检测中',{exact:true})).toHaveCount(4);
+ await expect(list.locator('.vpn-node-list__metrics .ant-tag').getByText('检测中',{exact:true})).toHaveCount(2);
+ await expect(list.locator('[data-slot]').getByText('检测中',{exact:true})).toHaveCount(4);
  await expect(page.getByRole('status').filter({hasText:'已测 0/2'})).toBeVisible();
  await page.evaluate(()=>{
   const emit=(window as any).desktopTest.emit;
@@ -68,10 +68,10 @@ test('后台整批检测显示进度，结束后展示可用结论与明确失�
   emit('event:speedTestProgress',{active:false});
  });
  await expect(list.getByText('当前不可用',{exact:true})).toBeVisible();
- await expect(list.locator('dd').getByText('连接失败',{exact:true})).toHaveCount(2);
+ await expect(list.locator('[data-slot]').getByText('连接失败',{exact:true})).toHaveCount(2);
  await expect(list.locator('.anticon-question-circle')).toHaveCount(0);
  await page.evaluate(()=> (window as any).desktopTest.emit('event:speedTestDetails',{serverId:'n2',detail:{entry:{status:'unavailable'},proxyReason:'core-not-ready'}}));
- await expect(list.locator('dd').getByText('无法确认',{exact:true})).toBeVisible();
+ await expect(list.locator('[data-slot]').getByText('无法确认',{exact:true})).toBeVisible();
 });
 
 test('节点组在地区图标前，选用后列表、选择器与底栏保留原名和节点 ID',async({page})=>{
@@ -79,7 +79,7 @@ test('节点组在地区图标前，选用后列表、选择器与底栏保留�
  const identity=list.getByRole('listitem').first().locator('.ds-node-identity');
  await expect(identity).toHaveText('示例订阅一 /日本示例');
  expect(await identity.evaluate(el=>Array.from(el.children).map(child=>child.getAttribute('role')==='img'?'region':child.textContent))).toEqual(['示例订阅一 /','region','日本示例']);
- await list.getByRole('listitem').nth(1).getByRole('button',{name:'设为默认',exact:true}).click();
+ await list.getByRole('listitem').nth(1).locator('.vpn-node-list__card').click();
  await expect(page.locator('.ant-cascader .ds-node-identity')).toHaveText('示例订阅二 /美国示例');
  await expect(page.locator('footer .ds-node-identity')).toHaveText('示例订阅二 /美国示例');
  const switches=await page.evaluate(()=>(window as any).desktopTest.calls.filter((call:any)=>call.channel==='server:switch'));

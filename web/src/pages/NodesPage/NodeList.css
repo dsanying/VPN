@@ -2,24 +2,69 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--ds-color-border);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  gap: var(--ds-space-8);
+}
+.vpn-node-list__item { position: relative; min-width: 0; }
+.vpn-node-list__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-8);
+  width: 100%;
+  min-width: 0;
+  padding: var(--ds-space-8) var(--ds-space-12);
+  border: 1px solid var(--ds-color-border-strong);
   border-radius: var(--ds-radius-md);
   background: var(--ds-color-surface);
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
 }
-.vpn-node-list__item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-16);
-  padding: var(--ds-space-16);
+.vpn-node-list__card:hover { background: var(--ds-color-surface-muted); }
+.vpn-node-list__card:focus-visible { outline: 2px solid var(--ds-color-primary); outline-offset: 1px; }
+.vpn-node-list__item[data-selected="true"] .vpn-node-list__card {
+  border-color: var(--ds-color-primary-border);
+  background: var(--ds-color-primary-surface);
+}
+.vpn-node-list__current { color: var(--ds-color-primary); flex: none; }
+.vpn-node-list__identity { display: flex; align-items: center; gap: var(--ds-space-8); min-width: 0; }
+.vpn-node-list__name { font-weight: 600; flex: 1 1 auto; min-width: 0; }
+.vpn-node-list__identity .ant-tag {
+  margin: 0;
+  flex: none;
+  font-size: var(--ds-font-size-xs);
+  line-height: 16px;
+  padding-inline: 4px;
+}
+.vpn-node-list__metrics { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ds-space-8); min-width: 0; }
+.vpn-node-list__lat { flex: none; display: flex; align-items: center; min-width: 0; }
+.vpn-node-list__latnum { font-size: var(--ds-font-size-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vpn-node-list__latnum--good { color: var(--ds-color-success); }
+.vpn-node-list__latnum--warn { color: var(--ds-color-warning); }
+.vpn-node-list__latnum--bad { color: var(--ds-color-error); }
+.vpn-node-list__entry {
+  flex: 1 1 auto;
   min-width: 0;
+  color: var(--ds-color-text-tertiary);
+  font-size: var(--ds-font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
-.vpn-node-list__item + .vpn-node-list__item { border-block-start: 1px solid var(--ds-color-border); }
-.vpn-node-list__item[data-selected="true"] { background: var(--ds-color-primary-surface); }
-.vpn-node-list__identity { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: var(--ds-space-8); }
-.vpn-node-list__name { font-weight: 600; }
-.vpn-node-list__metrics { display: flex; flex: 1 1 240px; flex-wrap: wrap; gap: var(--ds-space-16); margin: 0; min-width: 0; }
-.vpn-node-list__metrics > div { flex: 1 1 100px; min-width: 0; display: flex; flex-direction: column; gap: var(--ds-space-8); }
-.vpn-node-list__metrics dt { color: var(--ds-color-text-secondary); display: flex; align-items: center; gap: var(--ds-space-8); }
-.vpn-node-list__metrics dd { margin: 0; }
-.vpn-node-list__actions { min-width: 0; max-width: 100%; }
+.vpn-node-list__metrics .ant-tag { margin: 0; flex: none; }
+.vpn-node-list__ops {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-xs);
+  background: var(--ds-color-surface);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.vpn-node-list__item[data-selected="true"] .vpn-node-list__ops { background: var(--ds-color-primary-surface); }
+.vpn-node-list__item:hover .vpn-node-list__ops,
+.vpn-node-list__item:focus-within .vpn-node-list__ops { opacity: 1; }
