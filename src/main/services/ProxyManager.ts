@@ -1108,11 +1108,11 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     // 逐个跑 netsh 读解析器，合成一格看不出是谁在波动，故拆开——与 seedRules/customRules 同一处置。
     this.markStart('reconcileOwnership');
 
-    // 3.8 方案B：DNS 接管激活时,先读接管前的内网 LAN 解析器(私网 IPv4),供 generateDnsConfig 把内网/captive 域名
-    //     重定向到它(takeover 把系统 DNS 改公网 8.8.8.8 后 dns-local 解不了内网/可能环)。必须在 generateSingBoxConfig
+    // 3.8 方案B：TUN 接管系统 DNS,先读接管前的内网 LAN 解析器(私网 IPv4),供 generateDnsConfig 把内网/captive 域名
+    //     重定向到它(接管后系统 DNS 指向隧道内地址,dns-local 解不了内网/可能环)。必须在 generateSingBoxConfig
     //     之前读(此刻系统 DNS 尚未被 setDns 改写,scutil/netsh 反映的仍是 LAN 解析器)。无可用→null→退回 dns-local。
     this.lanResolverForDns = null;
-    if (config.proxyModeType === 'tun' && config.dnsConfig?.takeoverSystemDns === true) {
+    if (config.proxyModeType === 'tun') {
       this.lanResolverForDns =
         (await this.systemDnsManager?.getLanResolverForDns().catch(() => null)) ?? null;
       if (this.lanResolverForDns) {
@@ -1333,9 +1333,28 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
       void this.meshExitRoute.reconcile(config, !!config.enableIPv6);
     }
 
-    // TUN-only connections never write OS proxy preferences or DNS servers.
-    // Restore only a DNS takeover owned by an older session, if one exists.
-    await this.ensureSystemDnsRestored();
+    // 系统 DNS 接管收口（macOS scoped resolver 治本）：仅 TUN 模式接管——on-link 的 LAN/ISP DNS 不进
+    // TUN → hijack-dns 看不到；且 macOS scoped resolver 绑定物理接口、连路由劫持都绕开（真机实测：本机
+    // 应用 getaddrinfo 恒拿真实 IP，FakeIP 对本机应用不生效）。故 TUN 启动把系统 DNS 改为 TUN 内地址，
+    // 使查询经 hijack 真进 sing-box（FakeIP/远程解析）。systemProxy/manual 模式不接管 → 反向还原可能
+    // 残留（覆盖 TUN→其它模式切换）。best-effort：setDns 内部失败仅告警 + 回滚，绝不抛、不阻断 TUN 启动。
+    try {
+      if (config.proxyModeType === 'tun') {
+        // 地址取真值三元组的前两项（与下发给核的 builder 同源）：用户显式配置最高优先，其次冲突预检选出的
+        // 地址。只传 effective 的话，用户显式配置时 preflight 早退 → effective 恒 null → Linux 永不接管。
+        await this.systemDnsManager?.setDns({
+          tunInet4Address: config.tunConfig?.inet4Address ?? this.effectiveTunInet4Address,
+        });
+      } else {
+        // 非 TUN → 还原可能残留的受控 DNS（覆盖 TUN→其它模式切换）。
+        await this.ensureSystemDnsRestored();
+      }
+    } catch (e) {
+      this.logToManager(
+        'warn',
+        `系统 DNS 接管状态同步失败: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
     this.markStart('dnsTakeover');
 
     // 核已成功起动、DNS 接管状态已收口 → best-effort 刷 OS DNS 缓存（fire-and-forget，不阻塞启动；让位

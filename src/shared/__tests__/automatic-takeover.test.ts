@@ -64,14 +64,10 @@ it('removing application rules never falls back to system proxy', () => {
   for (const patch of [{ appRoutingEnabled: false }, { appRules: [] }, { customAppPresets: [] }])
     expect(prepareAutomaticTakeover({ ...withApplication(), ...patch }).proxyModeType).toBe('tun');
 });
-it('system DNS takeover is disabled while internal resolver settings are preserved', () => {
-  for (const takeoverSystemDns of [undefined, false, true]) {
-    const original = base();
-    original.dnsConfig!.takeoverSystemDns = takeoverSystemDns;
-    const result = prepareAutomaticTakeover(original);
-    expect(result.dnsConfig).toEqual({ ...original.dnsConfig, takeoverSystemDns: false });
-    expect(original.dnsConfig!.takeoverSystemDns).toBe(takeoverSystemDns);
-  }
+it('dnsConfig passes through untouched (takeover is unconditional, no per-config switch)', () => {
+  const original = base();
+  const result = prepareAutomaticTakeover(original);
+  expect(result.dnsConfig).toBe(original.dnsConfig);
 });
 it('legacy force flag is cleared without releasing TUN', () => {
   const result = prepareAutomaticTakeover({ ...base(), forceTun: true });

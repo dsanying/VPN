@@ -96,7 +96,6 @@ export function shouldReconcileDns(
 ): boolean {
   if (!config) return false;
   if (config.proxyModeType !== 'tun') return false;
-  if (config.dnsConfig?.takeoverSystemDns !== true) return false;
   return hasMarker;
 }
 
