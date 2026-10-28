@@ -91,28 +91,3 @@ export function LatencyCell({ node, variant }: { node: ServerConfig; variant?: '
     return t(badge.reason === 'ts-needs-core' ? 'vpn.needsConnect' : 'vpn.unsupported');
   return t(badge.reason === 'not-in-pool' ? 'vpn.pending' : 'vpn.untested');
 }
-
-export function EntryLatencyCell({ node }: { node: ServerConfig }) {
-  const { t } = useTranslation();
-  const entry = useAppStore((s) => s.probeDetails[node.id]?.entry);
-  const testing = useSpeedTestStore((s) => s.entryPending.includes(node.id));
-  const value = !entry
-    ? t('vpn.untested')
-    : entry.status === 'ok'
-      ? t('vpn.milliseconds', { value: entry.latencyMs })
-      : t(
-          entry.status === 'unavailable'
-            ? 'vpn.entryIntercepted'
-            : entry.status === 'unsupported'
-              ? entry.reason === 'NO_TCP_ENTRY'
-                ? 'vpn.entryNoTcp'
-                : entry.reason
-                  ? 'vpn.entryUnsupported'
-                  : 'vpn.untested'
-              : entry.status === 'timeout'
-                ? 'errors.connectionTimeout'
-                : 'vpn.networkFailure'
-        );
-  if (testing) return <AtomicValue text={t('vpn.availability.checking')} />;
-  return <AtomicValue text={value} />;
-}

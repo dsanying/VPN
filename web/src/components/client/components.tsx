@@ -215,8 +215,8 @@ export function AtomicValue({
     </span>
   );
 }
-export function MetadataTag({ children }: { children?: ReactNode }) {
-  return <Tag>{children}</Tag>;
+export function MetadataTag({ children, className }: { children?: ReactNode; className?: string }) {
+  return <Tag className={className}>{children}</Tag>;
 }
 export function StatusTag({
   tone,
