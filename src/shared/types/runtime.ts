@@ -209,6 +209,8 @@ export interface LogEntry {
   message: string;
   source: string;
   stack?: string;
+  /** 折叠计数：同键日志在折叠窗口内合并时累计（≥2 显示 ×N）；磁盘逐条落盘不受折叠影响。 */
+  repeatCount?: number;
 }
 
 export interface TrafficStats {

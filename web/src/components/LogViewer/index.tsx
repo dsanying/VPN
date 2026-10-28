@@ -120,8 +120,10 @@ export function LogViewer({ entries, search, viewKey, loading }: LogViewerProps)
   const text = entries.flatMap(entry => {
     const presentation = presentLog(entry, language);
     const prefix = `[${entry.level.toUpperCase()}] ${formatDateTime(entry.timestamp)} [${presentation.source}] `;
+    // 折叠计数：同键日志合并为一条关键信息，×N 表示窗口内实际发生了 N 次（磁盘逐条落盘不减）。
+    const count = entry.repeatCount && entry.repeatCount > 1 ? ` ×${entry.repeatCount}` : '';
     const body = plainText(presentation.message + (entry.stack ? `\n${entry.stack}` : ''));
-    return body.split(/\r?\n/).map((line, index) => prefix + (index ? '  ' : '') + line);
+    return body.split(/\r?\n/).map((line, index) => prefix + (index ? '  ' : '') + line + (index ? '' : count));
   }).join('\n');
   const formatPart = (part: string) => {
     const level = /^\[(DEBUG|INFO|WARN|ERROR|FATAL)\]/.exec(part)?.[1]?.toLowerCase() as LogLevel | undefined;
