@@ -11,7 +11,7 @@ test('节点列表、分组选项、搜索和应用目标共用地区缓存，�
   } });
   await page.goto('/#/nodes');
   const item = page.locator('.vpn-node-list > li').first();
-  await expect(item.locator('.vpn-node-list__name').getByRole('img', { name: '新加坡', exact: true })).toBeVisible();
+  await expect(item.locator('.vpn-node-list__identity').getByRole('img', { name: '新加坡', exact: true })).toBeVisible();
   await expect(item.getByText('新加坡', { exact: true })).toHaveCount(0);
   await expect(page.locator('footer').getByRole('img', { name: '新加坡', exact: true })).toBeVisible();
   await expect(page.locator('.ant-cascader').getByRole('img', { name: '新加坡', exact: true })).toBeVisible();

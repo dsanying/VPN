@@ -59,7 +59,7 @@ for (const lang of ['zh-CN','en-US']) {
         expect(part.right).toBeLessThanOrEqual(result.bounds.right);
       }
       await expect(item.getByRole('button')).toHaveCount(3);
-      await expect(item.locator('[data-slot]')).toHaveCount(2);
+      await expect(item.locator('[data-slot]')).toHaveCount(1);
     }
   });
 }

@@ -58,7 +58,7 @@ test('后台整批检测显示进度，结束后展示可用结论与明确失�
  await setup(page); const list=page.getByRole('region',{name:'节点列表'});
  await page.evaluate(()=> (window as any).desktopTest.emit('event:speedTestProgress',{tested:0,ok:0,total:2,serverIds:['n1','n2'],active:true}));
  await expect(list.locator('.vpn-node-list__metrics .ant-tag').getByText('检测中',{exact:true})).toHaveCount(2);
- await expect(list.locator('[data-slot]').getByText('检测中',{exact:true})).toHaveCount(4);
+ await expect(list.locator('[data-slot]').getByText('检测中',{exact:true})).toHaveCount(2);
  await expect(page.getByRole('status').filter({hasText:'已测 0/2'})).toBeVisible();
  await page.evaluate(()=>{
   const emit=(window as any).desktopTest.emit;
@@ -68,17 +68,22 @@ test('后台整批检测显示进度，结束后展示可用结论与明确失�
   emit('event:speedTestProgress',{active:false});
  });
  await expect(list.getByText('当前不可用',{exact:true})).toBeVisible();
- await expect(list.locator('[data-slot]').getByText('连接失败',{exact:true})).toHaveCount(2);
+ await expect(list.locator('[data-slot]').getByText('连接失败',{exact:true})).toHaveCount(1);
  await expect(list.locator('.anticon-question-circle')).toHaveCount(0);
  await page.evaluate(()=> (window as any).desktopTest.emit('event:speedTestDetails',{serverId:'n2',detail:{entry:{status:'unavailable'},proxyReason:'core-not-ready'}}));
  await expect(list.locator('[data-slot]').getByText('无法确认',{exact:true})).toBeVisible();
 });
 
-test('节点组在地区图标前，选用后列表、选择器与底栏保留原名和节点 ID',async({page})=>{
+test('节点名字为主位完整展示，来源降级为标签；选用后选择器与底栏保留原名和节点 ID',async({page})=>{
  const mock=await setup(page);const list=page.getByRole('region',{name:'节点列表'});
- const identity=list.getByRole('listitem').first().locator('.ds-node-identity');
- await expect(identity).toHaveText('示例订阅一 /日本示例');
- expect(await identity.evaluate(el=>Array.from(el.children).map(child=>child.getAttribute('role')==='img'?'region':child.textContent))).toEqual(['示例订阅一 /','region','日本示例']);
+ const first=list.getByRole('listitem').first();
+ const identity=first.locator('.vpn-node-list__identity');
+ await expect(identity.locator('.vpn-node-list__name')).toHaveText('日本示例');
+ // 名字完整可见：换行展示，不做省略或横向截断。
+ expect(await identity.locator('.vpn-node-list__name').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+ // 来源组降级为标签行，地区旗帜在名字前；选中卡片的名字前还有「当前」勾选图标（同为 role=img）。
+ expect(await identity.evaluate(el=>Array.from(el.children).map(child=>child.getAttribute('role')==='img'?(child.getAttribute('aria-label')==='当前'?'current':'region'):child.textContent))).toEqual(['current','region','日本示例']);
+ await expect(first.locator('.vpn-node-list__source')).toHaveText('示例订阅一');
  await list.getByRole('listitem').nth(1).locator('.vpn-node-list__card').click();
  await expect(page.locator('.ant-cascader .ds-node-identity')).toHaveText('示例订阅二 /美国示例');
  await expect(page.locator('footer .ds-node-identity')).toHaveText('示例订阅二 /美国示例');
@@ -99,18 +104,18 @@ test('节点组编辑与删除更新真实配置，取消删除保留节点',asy
  await expect(renamed).toHaveCount(0);expect(await page.evaluate(()=>(window as any).desktopTest.getConfig().servers.map((n:any)=>n.id))).toEqual(['n2']);await mock.expectNoUnexpectedRequests();
 });
 
-test('筛选单一来源时节点卡隐藏组前缀，清除筛选恢复',async({page})=>{
+test('筛选单一来源时节点卡隐藏来源标签，清除筛选恢复',async({page})=>{
  await setup(page);const list=page.getByRole('region',{name:'节点列表'});
- const identity=list.getByRole('listitem').first().locator('.ds-node-identity');
- await expect(identity).toHaveText('示例订阅一 /日本示例');
+ const first=list.getByRole('listitem').first();
+ await expect(first.locator('.vpn-node-list__source')).toHaveText('示例订阅一');
  await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'来源',exact:true})}).getByRole('combobox',{name:'来源',exact:true}).click();
  await page.locator('.ant-select-item-option').filter({hasText:'示例订阅二'}).click();
  await expect(list.getByRole('listitem')).toHaveCount(1);
- const filtered=list.getByRole('listitem').first().locator('.ds-node-identity');
- await expect(filtered).toHaveText('美国示例');
- expect(await filtered.evaluate(el=>Array.from(el.children).map(child=>child.getAttribute('role')==='img'?'region':child.textContent))).toEqual(['region','美国示例']);
+ const filtered=list.getByRole('listitem').first();
+ await expect(filtered.locator('.vpn-node-list__source')).toHaveCount(0);
+ await expect(filtered.locator('.vpn-node-list__name')).toHaveText('美国示例');
  await filtered.getByRole('button').count();
  await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'来源',exact:true})}).getByRole('combobox',{name:'来源',exact:true}).click();
  await page.locator('.ant-select-item-option').filter({hasText:'示例订阅一'}).click();
- await expect(identity).toHaveText('示例订阅一 /日本示例');
+ await expect(first.locator('.vpn-node-list__source')).toHaveText('示例订阅一');
 });

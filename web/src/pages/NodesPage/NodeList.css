@@ -4,13 +4,17 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  /* 所有行等高：每张卡片高度一致，不随名字/标签行数参差。 */
+  grid-auto-rows: 1fr;
   gap: var(--ds-space-8);
 }
-.vpn-node-list__item { position: relative; min-width: 0; }
+.vpn-node-list__item { position: relative; min-width: 0; display: flex; }
 .vpn-node-list__card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-8);
+  flex: 1;
   width: 100%;
   min-width: 0;
   padding: var(--ds-space-8) var(--ds-space-12);
@@ -21,7 +25,10 @@
   color: inherit;
   text-align: start;
   cursor: pointer;
+  overflow: hidden;
 }
+/* 地区旗帜虚化背景已按用户反馈移除：毛玻璃 backdrop-filter 在整页几十张卡片上 GPU 开销大，
+   且纯色卡片信息更清爽；地区信息仍由名字前的 NodeRegionIcon 承担。 */
 .vpn-node-list__card:hover { background: var(--ds-color-surface-muted); }
 .vpn-node-list__card:focus-visible { outline: 2px solid var(--ds-color-primary); outline-offset: 1px; }
 .vpn-node-list__item[data-selected="true"] .vpn-node-list__card {
@@ -30,27 +37,29 @@
 }
 .vpn-node-list__current { color: var(--ds-color-primary); flex: none; }
 .vpn-node-list__identity { display: flex; align-items: center; gap: var(--ds-space-8); min-width: 0; }
-.vpn-node-list__name { font-weight: 600; flex: 1 1 auto; min-width: 0; }
-.vpn-node-list__identity .ant-tag {
+/* 名字是卡片主位：允许换行完整展示，不做省略或横向滚动遮挡。 */
+.vpn-node-list__name {
+  font-weight: 600;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.vpn-node-list__tags { display: flex; flex-wrap: wrap; gap: var(--ds-space-4); min-width: 0; }
+.vpn-node-list__tags .ant-tag {
   margin: 0;
   flex: none;
   font-size: var(--ds-font-size-xs);
   line-height: 16px;
   padding-inline: 4px;
 }
+.vpn-node-list__source { color: var(--ds-color-text-tertiary); }
 .vpn-node-list__metrics { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ds-space-8); min-width: 0; }
 .vpn-node-list__lat { flex: none; display: flex; align-items: center; min-width: 0; }
 .vpn-node-list__latnum { font-size: var(--ds-font-size-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .vpn-node-list__latnum--good { color: var(--ds-color-success); }
 .vpn-node-list__latnum--warn { color: var(--ds-color-warning); }
 .vpn-node-list__latnum--bad { color: var(--ds-color-error); }
-.vpn-node-list__entry {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--ds-color-text-tertiary);
-  font-size: var(--ds-font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
 .vpn-node-list__metrics .ant-tag { margin: 0; flex: none; }
 .vpn-node-list__ops {
   position: absolute;
