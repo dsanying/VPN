@@ -5,6 +5,14 @@
   min-width: 0;
   max-width: 100%;
 }
+/* 默认节点行右侧的所选组剩余/总量：贴行尾，窄屏换行时独占一行靠左读起来更顺。 */
+.vpn-nodes-page .vpn-nodes-controls__quota { margin-left: auto; }
+.vpn-nodes-page .vpn-nodes-controls__quota .ds-subscription-quota { min-width: 200px; }
+.vpn-nodes-page .vpn-nodes-controls__quota .ds-subscription-quota__values {
+  font-size: var(--ds-font-size-xs);
+  color: var(--ds-color-text-secondary);
+  white-space: nowrap;
+}
 .vpn-nodes-page .ds-inline-control-form .ant-form-item {
   min-width: 0;
   max-width: 100%;
