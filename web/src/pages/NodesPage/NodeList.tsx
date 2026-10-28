@@ -13,10 +13,12 @@ type NodeListProps = Omit<Parameters<typeof NodeActions>[0], 'node' | 'selected'
   nodes: ServerConfig[];
   selected: string | null;
   testing: string[];
+  /** 筛选单一来源时来源名已由页面上下文可见，卡片不再重复组前缀。 */
+  suppressGroup?: boolean;
 };
 
 /** 节点紧凑卡片网格：点卡片即启用（主操作不占版面），悬停浮出测速/更多。 */
-export function NodeList({ nodes, selected, testing, ...actions }: NodeListProps) {
+export function NodeList({ nodes, selected, testing, suppressGroup, ...actions }: NodeListProps) {
   const { t } = useTranslation();
   if (!nodes.length) return <AppEmpty />;
   return (
@@ -36,7 +38,7 @@ export function NodeList({ nodes, selected, testing, ...actions }: NodeListProps
                 {isSelected ? (
                   <CheckCircleFilled className="vpn-node-list__current" aria-label={t('common.vocab.current')} />
                 ) : null}
-                <NodeIdentity nodeId={node.id} name={node.name} className="vpn-node-list__name" />
+                <NodeIdentity nodeId={node.id} name={node.name} className="vpn-node-list__name" groupName={suppressGroup ? '' : undefined} />
                 <MetadataTag>{node.enterpriseSettings ? ENTERPRISE_NAMES[node.enterpriseSettings.client] : node.protocol.toUpperCase()}</MetadataTag>
               </span>
               <span className="vpn-node-list__metrics">

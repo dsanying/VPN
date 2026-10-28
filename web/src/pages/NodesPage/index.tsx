@@ -373,6 +373,7 @@ export default function NodesPage() {
           >
             <NodeList
               nodes={ordered}
+              suppressGroup={source.length === 1}
               selected={config?.selectedServerId ?? null}
               testing={actions.testing}
               select={select}
