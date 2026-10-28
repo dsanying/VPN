@@ -17,6 +17,7 @@ import { getConfigPath } from '../utils/paths';
 import { writeFileAtomic } from '../utils/atomic-write';
 import { readPrivacyHash, writePrivacyHash, hashPasswordSync } from '../utils/privacy-lock';
 import { customRulesNeedMigration } from '../../shared/rules';
+import { mergeApplicationRuleGroups } from '../../shared/unified-rules';
 import { migrateBypassRules } from '../../shared/bypass-rule-migration';
 import { migrateTunDefaults } from '../../shared/tun-defaults';
 
@@ -179,6 +180,15 @@ export class ConfigManager implements IConfigManager {
       // DNS upstream migration and platform TUN defaults are independent of managed FakeIP.
       await this.migrateNodeResolver(config);
       await this.migrateTunDefaults(config);
+
+      // 应用规则多选分组：旧版本逐应用落盘的存量行按（去向/开关/目标）合并回单条多选规则（幂等）。
+      const grouped = mergeApplicationRuleGroups(config.customRules ?? []);
+      if (grouped !== (config.customRules ?? [])) {
+        config.customRules = grouped;
+        await this.saveConfig(config).catch((e) =>
+          this.log('warn', `应用规则分组迁移落盘失败（不阻断）: ${e}`)
+        );
+      }
 
       // Persist routing consolidation only after a recoverable copy of the original exists.
       const consolidated = migrateBypassRules(config);

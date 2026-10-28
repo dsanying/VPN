@@ -1,4 +1,9 @@
-import { applicationRuleValues, unifiedUserRules, withUnifiedUserRules } from '../unified-rules';
+import {
+  applicationRuleValues,
+  mergeApplicationRuleGroups,
+  unifiedUserRules,
+  withUnifiedUserRules,
+} from '../unified-rules';
 import type { InstalledApplication, Rule, UserConfig } from '../types';
 
 const application: InstalledApplication = {
@@ -42,7 +47,7 @@ it('preserves legacy application-first order and disabled state without storing 
   const rules = unifiedUserRules(config(false));
   expect(rules.map((r) => r.id)).toEqual(['application:example', 'domain']);
   expect(rules[0].enabled).toBe(false);
-  expect(rules[0].application?.iconDataUrl).toBeUndefined();
+  expect(rules[0].applications?.[0].iconDataUrl).toBeUndefined();
 });
 it('one reordered list persists domain before application without a duplicate legacy route or mode change', () => {
   const current = config();
@@ -79,4 +84,76 @@ it('avoids ID collision and retains unrelated legacy records', () => {
   expect(withUnifiedUserRules(current, rules).appRules).toEqual([
     { appId: 'other', action: 'block', enabled: false },
   ]);
+});
+
+describe('mergeApplicationRuleGroups — 应用规则按多选分组存储', () => {
+  const app2: InstalledApplication = {
+    ...application,
+    id: 'example-2',
+    name: 'Example 2',
+    path: '/Applications/Example2.app',
+    processPathRegex: ['^/Applications/Example2\\.app/'],
+    processPaths: [],
+  };
+  const appRule = (over: Partial<Rule>): Rule => ({
+    id: 'app',
+    type: 'processPathRegex',
+    values: applicationRuleValues(application),
+    applications: [{ ...application, iconDataUrl: undefined }],
+    action: 'proxy',
+    enabled: true,
+    ...over,
+  });
+
+  it('同去向/开关/目标的单应用存量行合并为一条多选规则，取首条位置与 id，值去重拼接', () => {
+    const merged = mergeApplicationRuleGroups([
+      { ...domain, id: 'domain' },
+      appRule({ id: 'a1' }),
+      appRule({
+        id: 'a2',
+        applications: [{ ...app2, iconDataUrl: undefined }],
+        values: applicationRuleValues(app2),
+      }),
+    ]);
+    expect(merged).toHaveLength(2);
+    expect(merged[1]!.id).toBe('a1');
+    expect(merged[1]!.applications).toHaveLength(2);
+    expect(merged[1]!.values).toEqual([
+      ...new Set([...applicationRuleValues(application), ...applicationRuleValues(app2)]),
+    ]);
+    // 幂等：再合并无变化。
+    expect(mergeApplicationRuleGroups(merged)).toEqual(merged);
+  });
+
+  it('去向或目标不同不合并；无应用身份的规则不受影响', () => {
+    const rules = [
+      appRule({ id: 'p1', targetServerId: 'node-a' }),
+      appRule({ id: 'p2', targetServerId: 'node-b' }),
+      appRule({ id: 'd1', action: 'direct' as const }),
+      appRule({ id: 'off', enabled: false }),
+    ];
+    const merged = mergeApplicationRuleGroups(rules);
+    expect(merged.map((r) => r.id)).toEqual(['p1', 'p2', 'd1', 'off']);
+  });
+});
+
+it('旧版单数字段（application）的存量行归一并按组合并', () => {
+  const legacy = (id: string, name: string, regex: string) =>
+    ({
+      id,
+      type: 'processPathRegex',
+      values: [regex],
+      application: { ...application, id, name, iconDataUrl: undefined },
+      action: 'direct',
+      enabled: true,
+    }) as unknown as Rule;
+  const merged = mergeApplicationRuleGroups([
+    legacy('a1', 'App One', '^/Applications/AppOne\\.app/'),
+    legacy('a2', 'App Two', '^/Applications/AppTwo\\.app/'),
+  ]);
+  expect(merged).toHaveLength(1);
+  expect(merged[0]!.id).toBe('a1');
+  expect(merged[0]!.applications!.map((a) => a.name)).toEqual(['App One', 'App Two']);
+  expect((merged[0] as unknown as { application?: unknown }).application).toBeUndefined();
+  expect(mergeApplicationRuleGroups(merged)).toEqual(merged);
 });
