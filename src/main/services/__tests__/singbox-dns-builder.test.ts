@@ -693,3 +693,128 @@ test('enterprise resource DNS stays on its tunnel resolver and preserves explici
   config.proxyMode = 'global';
   expect(build(config).servers.some((s) => s.tag === 'dns-enterprise-enterprise')).toBe(false);
 });
+
+describe('buildDnsConfig — split-horizon：直连去向域名走 dns-lan 条件采纳（ai.cuhk.edu.cn 内网断连修复）', () => {
+  // 真机实证：校园网 LAN 解析器 10.20.221.240 对 ai.cuhk.edu.cn 答 10.20.232.122（内网网关，401），
+  // 公共 DoH 答公网边缘（302 SSO 重定向）。直连投影/影子原取境内解析器（公共 DNS），隧道内直连域名连错服务器。
+  const lanConfig = (): UserConfig =>
+    ({
+      servers: [],
+      selectedServerId: null,
+      proxyMode: 'smart',
+      proxyModeType: 'tun',
+      enableIPv6: false,
+      dnsConfig: { enableFakeIp: true },
+      resolveDestination: true,
+      customRules: [
+        {
+          id: 'r-cuhk',
+          type: 'domainKeyword',
+          values: ['cuhk.edu.cn'],
+          action: 'direct',
+          enabled: true,
+        },
+        {
+          id: 'r-vercel',
+          type: 'domainKeyword',
+          values: ['vercel'],
+          action: 'proxy',
+          enabled: true,
+        },
+        {
+          // 混合条件（含 port）：投影整体跳过，域名部分由 #347 影子收集 → 影子也应是三元组。
+          id: 'r-mixed',
+          type: 'domain',
+          values: ['mix.example.com'],
+          conditions: [
+            { type: 'domain', values: ['mix.example.com'] },
+            { type: 'port', values: ['443'] },
+          ],
+          action: 'direct',
+          enabled: true,
+        },
+        {
+          id: 'r-app',
+          type: 'processPathRegex',
+          values: ['^/Applications/'],
+          action: 'direct',
+          enabled: true,
+        },
+      ],
+    }) as unknown as UserConfig;
+
+  const rulesOf = (lanResolver: string | null): Record<string, unknown>[] =>
+    buildDnsConfig(lanConfig(), 'proxy-selector', lanResolver, new Map(), noopLog, 0, [])
+      .rules as unknown as Record<string, unknown>[];
+
+  // 三元组：evaluate(dns-lan) → match_response 私网采纳 → 同 matcher 境内兜底。respond 无域名匹配器，
+  // 按位置取 evaluate 的后两条；兜底 server 随 race 就绪为 dns-node-race（getDomesticResolverTag 单一真值）。
+  const tripleOf = (rules: Record<string, unknown>[], key: string, value: string) => {
+    const evaluate = rules.find(
+      (r) =>
+        r.action === 'evaluate' &&
+        r.server === 'dns-lan' &&
+        Array.isArray(r[key]) &&
+        (r[key] as string[]).includes(value)
+    );
+    expect(evaluate).toBeDefined();
+    const idx = rules.indexOf(evaluate!);
+    return { evaluate: evaluate!, respond: rules[idx + 1]!, fallback: rules[idx + 2]! };
+  };
+
+  it('有 LAN 解析器：直连投影发三元组（dns-lan evaluate + 私网采纳 respond + 境内兜底），顺序固定', () => {
+    const rules = rulesOf('10.20.221.240');
+    const { evaluate, respond, fallback } = tripleOf(rules, 'domain_keyword', 'cuhk.edu.cn');
+    expect(evaluate).toMatchObject({
+      action: 'evaluate',
+      server: 'dns-lan',
+      timeout: '2s',
+      query_type: ['A', 'AAAA'],
+      domain_keyword: ['cuhk.edu.cn'],
+    });
+    expect(respond).toMatchObject({ match_response: true, action: 'respond' });
+    expect(respond.ip_cidr as string[]).toContain('10.0.0.0/8');
+    expect(respond.ip_cidr as string[]).toContain('fc00::/7');
+    expect(fallback).toMatchObject({
+      query_type: ['A', 'AAAA'],
+      domain_keyword: ['cuhk.edu.cn'],
+    });
+    expect(['dns-domestic', 'dns-node-race']).toContain(fallback.server);
+  });
+
+  it('有 LAN 解析器：投影过的 direct 规则不再被影子重复发射，混合条件规则由影子发三元组', () => {
+    const rules = rulesOf('10.20.221.240');
+    // r-cuhk 投影已覆盖 → 影子对其是死规则，不得再发（同 matcher 的 evaluate 恰好 1 条）。
+    expect(
+      rules.filter(
+        (r) => r.action === 'evaluate' && JSON.stringify(r.domain_keyword ?? []).includes('cuhk')
+      )
+    ).toHaveLength(1);
+    const { evaluate, respond, fallback } = tripleOf(rules, 'domain', 'mix.example.com');
+    expect(evaluate).toMatchObject({ server: 'dns-lan', timeout: '2s' });
+    expect(respond).toMatchObject({ match_response: true, action: 'respond' });
+    expect(['dns-domestic', 'dns-node-race']).toContain(fallback.server);
+  });
+
+  it('代理去向规则不受影响：仍单条投影到规则自身解析器', () => {
+    const rules = rulesOf('10.20.221.240');
+    const vercel = rules.filter((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && (kw as string[]).includes('vercel');
+    });
+    expect(vercel).toHaveLength(1);
+    expect(vercel[0]).toMatchObject({ server: 'dns-rule-r-vercel' });
+  });
+
+  it('无 LAN 解析器：直连投影保持历史单条（境内解析器），不引入 evaluate', () => {
+    const rules = rulesOf(null);
+    const cuhk = rules.filter((r) => {
+      const kw = r.domain_keyword;
+      return Array.isArray(kw) && (kw as string[]).includes('cuhk.edu.cn');
+    });
+    expect(cuhk).toHaveLength(1);
+    expect(['dns-domestic', 'dns-node-race']).toContain(cuhk[0]!.server);
+    expect(cuhk[0]).toMatchObject({ query_type: ['A', 'AAAA'] });
+    expect(rules.some((r) => r.server === 'dns-lan')).toBe(false);
+  });
+});
