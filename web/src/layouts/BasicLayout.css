@@ -57,6 +57,20 @@
   border-top: 1px solid var(--ds-color-border);
   padding-block: 8px;
 }
+.ds-basic-layout__sider-update {
+  margin: 0 8px 6px;
+  width: calc(100% - 16px);
+}
+.ds-basic-layout__sider-prefs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline: 8px;
+}
+.ds-basic-layout__sider-prefs > .ant-btn {
+  flex: 1;
+  min-width: 0;
+}
 .ds-basic-layout__main {
   min-width: 0;
   min-height: 0;

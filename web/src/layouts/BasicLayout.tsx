@@ -1,12 +1,12 @@
 import {
-  GlobalOutlined,
   MenuFoldOutlined,
   MenuOutlined,
   MenuUnfoldOutlined,
   MoonOutlined,
   SunOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
-import { Drawer, Grid, Layout, type MenuProps } from 'antd';
+import { Button, Drawer, Grid, Layout, type MenuProps, Tooltip } from 'antd';
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useLocation } from 'react-router';
@@ -14,6 +14,10 @@ import { IconButton, LoadingState, RouteCrumbsContext, SidebarMenu } from '@/com
 import { menuRoutes, type MenuEntry } from '@/routes';
 import { matchMenuChain, selectedMenuKey } from '@/routes/menuMatch';
 import { useThemeStore } from '@/store/useThemeStore';
+import { useUpdateStore } from '@/store/update-store';
+import { api } from '@/ipc';
+import { clientHost } from '@/config/client-host';
+import { notifyActionFailed, notifyActionSuccess } from '@/utils/feedback';
 import brandIcon from '@/assets/brand-icon.svg';
 import './BasicLayout.css';
 
@@ -61,32 +65,77 @@ function Preferences({ compact, items = [] }: { compact?: boolean; items?: MenuP
   const mode = useThemeStore((state) => state.mode);
   const toggle = useThemeStore((state) => state.toggle);
   const language = i18n.language === 'en-US' ? 'zh-CN' : 'en-US';
+  // 已下载待生效的更新常驻侧边栏左下角（对齐常见客户端的「重启以更新」角标）；点击即应用。
+  // GlobalUpdateNotice 的小窗仍会自动弹出一次，关闭后这里是不打扰的常驻入口。
+  // selector 必须返回稳定引用：zustand v5 走 useSyncExternalStore，这里若 .filter() 会在
+  // 每次 getSnapshot 产生新数组 → 「getSnapshot should be cached」无限重渲染（整页抽搐级）。
+  const updateItems = useUpdateStore((state) => state.snapshot.items);
+  const ready = updateItems.filter((item) => item.status === 'ready');
+  const [busy, setBusy] = useState<string | null>(null);
   return (
     <div className="ds-basic-layout__sider-footer">
-      <SidebarMenu
-        mode="inline"
-        inlineCollapsed={compact}
-        selectable={false}
-        items={[
-          ...items,
-          {
-            key: 'theme',
-            icon: mode === 'dark' ? <SunOutlined aria-hidden /> : <MoonOutlined aria-hidden />,
-            label: <span aria-label={t('common.theme.toggle')}>{t('common.theme.toggle')}</span>,
-            onClick: toggle,
-          },
-          {
-            key: 'language',
-            icon: <GlobalOutlined aria-hidden />,
-            label: (
-              <span lang={language} aria-label={t('common.language.switch')}>
-                {language === 'zh-CN' ? '中文' : 'EN'}
-              </span>
-            ),
-            onClick: () => void i18n.changeLanguage(language),
-          },
-        ]}
-      />
+      {items?.length ? (
+        <SidebarMenu mode="inline" inlineCollapsed={compact} selectable={false} items={items} />
+      ) : null}
+      {ready.map((item) => {
+        const restartLabel = t(
+          clientHost().bundledCore
+            ? 'vpn.installSoftwareUpdate'
+            : item.restart === 'software'
+              ? 'vpn.restartSoftwareUpdate'
+              : 'vpn.restartProxyUpdate'
+        );
+        return (
+          <Tooltip key={item.kind} title={compact ? restartLabel : undefined}>
+            <Button
+              type="primary"
+              ghost
+              block
+              size="small"
+              className="ds-basic-layout__sider-update"
+              aria-label={restartLabel}
+              icon={<SyncOutlined aria-hidden />}
+              loading={busy === item.kind}
+              disabled={busy !== null && busy !== item.kind}
+              onClick={() => {
+                setBusy(item.kind);
+                void api.update
+                  .apply(item.kind)
+                  .then((result) => {
+                    if (!result.success) throw new Error(result.error);
+                    // Native Android installation is completed by the system, after its visible confirmation.
+                    if (!result.installationRequested && !result.permissionRequired)
+                      notifyActionSuccess('update');
+                  })
+                  .catch((error) => notifyActionFailed('update', error))
+                  .finally(() => setBusy(null));
+              }}
+            >
+              {compact ? null : (
+                <span>
+                  {t('vpn.siderRestartUpdate')}
+                  {item.version ? ` · ${item.version}` : ''}
+                </span>
+              )}
+            </Button>
+          </Tooltip>
+        );
+      })}
+      <div className="ds-basic-layout__sider-prefs">
+        <IconButton
+          type="text"
+          label={t('common.theme.toggle')}
+          icon={mode === 'dark' ? <SunOutlined aria-hidden /> : <MoonOutlined aria-hidden />}
+          onClick={toggle}
+        />
+        <IconButton
+          type="text"
+          label={t('common.language.switch')}
+          onClick={() => void i18n.changeLanguage(language)}
+        >
+          <span lang={language}>{language === 'zh-CN' ? 'EN' : '中文'}</span>
+        </IconButton>
+      </div>
     </div>
   );
 }

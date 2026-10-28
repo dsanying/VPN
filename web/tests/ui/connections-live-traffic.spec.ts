@@ -174,7 +174,7 @@ test('桑基图合并出口，图表按搜索过滤，完整明细独立保留�
   await expect(region.locator('text').filter({ hasText: /^示例应用 · 25$/ })).toHaveCount(1);
   // Literal chart colors must follow live theme changes, including rich application labels.
   for (const mode of ['light', 'dark']) {
-    await page.getByRole('menuitem', { name: '切换亮暗主题' }).click();
+    await page.getByRole('button', { name: '切换亮暗主题' }).click();
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe(mode);
     await expect.poll(() => region.locator('text').filter({ hasText: /^示例应用 · 25$/ }).evaluate(element => {
       const expected = getComputedStyle(document.documentElement).getPropertyValue('--ds-color-text').trim();
