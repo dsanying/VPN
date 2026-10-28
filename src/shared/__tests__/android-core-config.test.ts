@@ -165,7 +165,7 @@ test('installed Android applications compile to exact package matchers with owne
       id: 'native-app',
       type: 'processPathRegex',
       values: applicationRuleValues(application),
-      application,
+      applications: [application],
       enabled: true,
       action: 'direct',
     },

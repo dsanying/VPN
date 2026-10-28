@@ -127,10 +127,17 @@ export function buildAndroidCoreConfig(config: UserConfig, host: AndroidCoreHost
   if (config.proxyMode !== 'direct')
     for (const rule of unifiedUserRules(config).filter((rule) => rule.enabled)) {
       const conditions = rule.conditions ?? [{ type: rule.type, values: rule.values }];
-      const application = rule.application;
-      const packageName = application?.coverage === 'package' ? application.packageName : undefined;
-      const packageValues = application
-        ? new Set(applicationRuleValues(application))
+      // 多应用规则（applications 数组）仅在全部应用同属一个 Android 包名时能映射为原生 package 规则；
+      // 混入桌面可执行档应用（coverage!=='package'）则 packageName 为空 → 走既有的「需应用映射」报错路径。
+      const applications = rule.applications ?? [];
+      const packageApps =
+        applications.length > 0 && applications.every((app) => app.coverage === 'package')
+          ? applications
+          : [];
+      const packageNames = new Set(packageApps.map((app) => app.packageName));
+      const packageName = packageNames.size === 1 ? packageApps[0]!.packageName : undefined;
+      const packageValues = packageName
+        ? new Set(packageApps.flatMap(applicationRuleValues))
         : new Set<string>();
       const nativePackageRule =
         !!packageName &&

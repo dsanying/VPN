@@ -52,8 +52,8 @@ export interface RuleCondition {
  * 端口("443"或"1000-2000")/进程名/路径/geo 标签/规则集(URL 或 res:<resourceId>)，一项一条。
  */
 export interface Rule {
-  /** Local application identity for displaying/editing a process-path rule. */
-  application?: InstalledApplication;
+  /** Local application identities for displaying/editing a process-path rule; multi-select stores every app. */
+  applications?: InstalledApplication[];
   id: string;
   type: RuleType; // 首条件镜像（向后兼容旧消费点 + 回滚安全；恒与 conditions[0] 一致）
   values: string[]; // 首条件镜像
