@@ -21,6 +21,14 @@ test('专用日志查看器本地化级别、文案与来源，并保留多行�
           message: 'Example error',
           stack: 'Error: example\n  at example.ts:12:4',
         },
+        {
+          id: 'c',
+          timestamp: '2026-10-01T00:00:02Z',
+          level: 'warn',
+          source: 'ProxyManager',
+          message: 'dns-race: 上游返回 decoy 答案，判 POISONED 丢弃（first-clean-wins）',
+          repeatCount: 47,
+        },
       ],
     },
   });
@@ -40,7 +48,10 @@ test('专用日志查看器本地化级别、文案与来源，并保留多行�
   await expect(viewer.locator('mark')).toContainText('example.ts');
   await expect(viewer).not.toContainText('应用已启动');
   await page.getByLabel('搜索', { exact: true }).fill('');
-  await page.getByRole('menuitem', { name: '切换语言', exact: true }).click();
+  // 折叠条目在行尾显示 ×N 计数（同键 N 次合并为一条关键信息）
+  await expect(viewer).toContainText('×47');
+  // 侧边栏一行化重构后语言切换是直接切换按钮（一次点击 zh↔en），不再是下拉菜单项。
+  await page.getByRole('button', { name: '切换语言', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Live logs' })).toContainText('[INFO]');
   await expect(page.getByRole('region', { name: 'Live logs' })).toContainText(
     'Application started'

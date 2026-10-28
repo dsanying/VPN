@@ -6,6 +6,7 @@ import * as path from 'path';
 import type { LogEntry, LogLevel } from '../../shared/types';
 import { identifyLogMessage } from '../../shared/log-presentation';
 import { redactLogText } from '../../shared/log-redact';
+import { LOG_FOLD_WINDOW_MS, logFoldKey } from '../../shared/log-fold';
 import { getLogsPath } from '../utils/paths';
 
 export interface ILogManager {
@@ -48,6 +49,10 @@ export class LogManager extends EventEmitter implements ILogManager {
   private readonly sessionId = randomUUID();
   private readonly sessionStartedAt = new Date().toISOString();
   private lastWriteError?: string;
+  /** 折叠索引：折叠键 → 内存尾中的代表条目与最近出现时刻。仅作用于内存/实时流，磁盘逐条落盘。 */
+  private foldIndex = new Map<string, { entry: LogEntry; lastAt: number }>();
+  /** 代表条目 → 折叠键的反查（内存尾逐出时清理索引，避免遍历整个索引）。 */
+  private foldKeyByEntry = new WeakMap<LogEntry, string>();
 
   constructor(logDir?: string) {
     super();
@@ -94,7 +99,7 @@ export class LogManager extends EventEmitter implements ILogManager {
       stack: stack ? redactLogText(stack) : undefined,
       ...(event ? { eventId: event.eventId, eventArgs: event.args } : {}),
     };
-    // Critical storms are bounded too. A reserve preserves errors during normal-level bursts.
+    // 磁盘逐条落盘：折叠只作用于内存尾与实时流，不减少任何诊断证据。
     const critical = level === 'error' || level === 'fatal';
     const capacity =
       LogManager.MAX_PENDING_WRITES + (critical ? LogManager.CRITICAL_WRITE_RESERVE : 0);
@@ -109,10 +114,35 @@ export class LogManager extends EventEmitter implements ILogManager {
       this.droppedDueToBackpressure++;
       if (critical) this.criticalDropped++;
     }
+    // 折叠（关键信息视图）：窗口内同键合并为代表条目并累计 ×N，实时流按 id 就地更新。
+    const nowMs = Date.now();
+    const foldKey = `${entry.operation ?? ''}|${entry.level}|${entry.source}|${logFoldKey(entry)}`;
+    const folded = this.foldIndex.get(foldKey);
+    if (folded && nowMs - folded.lastAt <= LOG_FOLD_WINDOW_MS) {
+      folded.lastAt = nowMs;
+      const target = folded.entry;
+      target.timestamp = entry.timestamp;
+      target.message = entry.message;
+      target.eventId = event?.eventId;
+      target.eventArgs = event?.args;
+      target.stack = entry.stack ?? target.stack;
+      target.repeatCount = (target.repeatCount ?? 1) + 1;
+      if (visible) this.emit('log', target);
+      return;
+    }
+    this.foldIndex.set(foldKey, { entry, lastAt: nowMs });
+    this.foldKeyByEntry.set(entry, foldKey);
     this.logs.push(entry);
     if (this.logs.length > this.maxLogs) {
-      this.logs.shift();
+      const evicted = this.logs.shift();
       this.memoryEvicted++;
+      if (evicted) {
+        const evictedKey = this.foldKeyByEntry.get(evicted);
+        if (evictedKey !== undefined && this.foldIndex.get(evictedKey)?.entry === evicted) {
+          this.foldIndex.delete(evictedKey);
+          this.foldKeyByEntry.delete(evicted);
+        }
+      }
     }
     if (visible) this.emit('log', entry);
   }
@@ -171,6 +201,7 @@ export class LogManager extends EventEmitter implements ILogManager {
 
   async clearLogs(): Promise<void> {
     this.logs = [];
+    this.foldIndex.clear();
     await this.enqueue(async () => {
       await this.initPromise;
       await fs.writeFile(this.logFilePath, '', 'utf-8');
