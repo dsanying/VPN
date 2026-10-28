@@ -440,6 +440,7 @@
     "setDefaultNode": "设为默认",
     "proxySwitchHint": "全局代理开关。开启后按分流方式处理流量；智能分流中的指定节点规则不受默认节点选择影响。",
     "enablingProxy": "正在开启代理",
-    "disablingProxy": "正在关闭代理"
+    "disablingProxy": "正在关闭代理",
+    "siderRestartUpdate": "重启更新"
   }
 }

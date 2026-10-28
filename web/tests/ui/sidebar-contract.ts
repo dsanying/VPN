@@ -9,7 +9,10 @@ export async function inspectSidebarRegions(page: Page): Promise<string[]> {
       if (!navigation.getBoundingClientRect().width) continue;
       const footer = navigation.querySelector('.ds-basic-layout__sider-footer');
       if (!footer) continue;
-      if (footer.querySelector('.ant-btn')) issues.push('Footer actions must remain navigation items');
+      // footer 底部的偏好按钮组（主题/语言）与更新入口是有意设计的紧凑动作按钮，
+      // 不属于导航项几何一致性约束；其余位置仍禁止出现 .ant-btn。
+      const prefs = footer.querySelectorAll('.ds-basic-layout__sider-prefs .ant-btn, .ds-basic-layout__sider-update .ant-btn');
+      if (footer.querySelectorAll('.ant-btn').length > prefs.length) issues.push('Footer actions must remain navigation items');
       const rows = [...navigation.querySelectorAll<HTMLElement>('[role="menuitem"]')]
         .filter(row => row.getBoundingClientRect().height > 0);
       if (!rows.length) { issues.push('Visible navigation has no menu items'); continue; }

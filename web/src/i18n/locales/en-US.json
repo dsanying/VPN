@@ -440,6 +440,7 @@
     "setDefaultNode": "Set default",
     "proxySwitchHint": "Global proxy switch. Traffic follows the routing mode; explicit node rules in smart routing are independent of the default node.",
     "enablingProxy": "Enabling proxy",
-    "disablingProxy": "Disabling proxy"
+    "disablingProxy": "Disabling proxy",
+    "siderRestartUpdate": "Restart to update"
   }
 }
