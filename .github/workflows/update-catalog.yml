@@ -14,6 +14,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
+    # release 事件的运行 ref 是 tag，github-pages 环境保护规则不允许 tag 部署（v0.3.1 实证 3s 失败）；
+    # 由 redrive 以 main 重派本工作流。schedule/workflow_dispatch 的运行 ref 是分支，直接发布。
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -34,3 +37,15 @@ jobs:
           path: dist-catalog
       - uses: actions/deploy-pages@v4
         id: deployment
+  redrive:
+    # 目录脚本经 GitHub API 读 release 清单，不依赖 checkout 的代码 ref，以 main 重派等价且能过部署保护。
+    # GITHUB_TOKEN 触发的事件不建新 run，workflow_dispatch 是明确例外，重派可落地。
+    if: github.event_name == 'release'
+    permissions:
+      actions: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-drive catalog publish on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/$GITHUB_REPOSITORY/actions/workflows/update-catalog.yml/dispatches" -f ref=main
