@@ -444,6 +444,33 @@ export function TablePanel({
     </section>
   );
 }
+/**
+ * 测量单元格子内容的最大内容宽度（max-content）。
+ * 测量前对子树临时强制单行：若直接量当前布局，已换行的内容只能量出最宽一行的宽度，
+ * 于是「换行态量得窄 → 列宽收窄 → 维持换行」，与展开态构成双稳态，ResizeObserver 每次触发
+ * 都翻到另一个解，规则页多标签行曾以约 4Hz 永久翻转并带动整页抖动。强制单行使测量值与
+ * 布局状态无关，反馈环不再有第二个不动点。仅改 style 属性，不会触发本组件的
+ * MutationObserver（其只监听 childList/characterData），测量自身不会产生新事件。
+ */
+function measureMaxContent(child: Element): number {
+  const targets = [child, ...child.querySelectorAll<HTMLElement>('*')];
+  const restored: Array<[HTMLElement, string, string]> = [];
+  for (const target of targets) {
+    if (!(target instanceof HTMLElement)) continue;
+    restored.push([target, target.style.flexWrap, target.style.whiteSpace]);
+    target.style.flexWrap = 'nowrap';
+    target.style.whiteSpace = 'nowrap';
+  }
+  const range = document.createRange();
+  range.selectNodeContents(child);
+  const width = range.getBoundingClientRect().width;
+  for (const [target, flexWrap, whiteSpace] of restored) {
+    target.style.flexWrap = flexWrap;
+    target.style.whiteSpace = whiteSpace;
+  }
+  return width;
+}
+
 export function Table<T extends object>({
   sortable,
   order: _order,
@@ -488,9 +515,7 @@ export function Table<T extends object>({
         for (const cell of owner.querySelectorAll<HTMLElement>('td[data-client-column]')) {
           if (cell.dataset.clientColumn !== key) continue;
           for (const child of cell.children) {
-            const text = document.createRange();
-            text.selectNodeContents(child);
-            content = Math.max(content, text.getBoundingClientRect().width);
+            content = Math.max(content, measureMaxContent(child));
           }
         }
         next[key] = fittedColumnWidth(title, content, head.dataset.clientPrimary === 'true');
