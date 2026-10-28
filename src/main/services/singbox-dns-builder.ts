@@ -312,6 +312,62 @@ export function buildDnsConfig(
   // 银行/U盾公网域名解析器：仅 Win 改 dns-domestic 绕死环；其余 dns-local（mac 经 mDNSResponder 直连解公网正常）。
   const bankResolverTag = winLoopRisk ? 'dns-domestic' : 'dns-local';
 
+  // 直连去向域名解析 · split-horizon 内网修复（真机实证：ai.cuhk.edu.cn 开代理即断）：
+  // 校园/企业内网域名只在接入网 LAN 解析器上有内网答案（ai.cuhk.edu.cn→10.20.232.122），公共 DNS 给的是
+  // 公网边缘（真机 curl 对照：公共答案 302 SSO 重定向、内网 IP 401 内网网关）。直连投影/影子原取
+  // getDomesticResolverTag（race on → dns-node-race 公共 DoH 竞速），隧道内直连域名被解析去错误服务器。
+  // 修复：有 LAN 解析器（lanResolverForDns 非空 → 已建 dns-lan=type:dhcp，跟随真实网关 DNS、不受 DNS 接管
+  // 影响）时，直连域名先问 dns-lan，**答案为私网地址才采纳**（内网存在 = split-horizon 实锤）；否则退回
+  // 境内解析器。不能整条换成 dns-lan：内网解析器可能对被墙域投毒、对企业域名白名单外的域 NXDOMAIN，
+  // evaluate + match_response(私网 CIDR) 的条件采纳与 pushAutomaticCountryDns 是同一对动作语义。
+  // 无 LAN 解析器维持原样（单条境内解析器，字节不变）。dial-time lookup 与 route resolve 都经 dns.rules
+  // 首命中，故三元组对两条解析路径同时生效。
+  const DIRECT_PRIVATE_ANSWER_CIDRS = [
+    '10.0.0.0/8',
+    '172.16.0.0/12',
+    '192.168.0.0/16',
+    '100.64.0.0/10',
+    '127.0.0.0/8',
+    '169.254.0.0/16',
+    'fc00::/7',
+    'fe80::/10',
+    '::1/128',
+  ];
+  const directExitDnsRules = (
+    matcher: Record<string, unknown>,
+    withQueryType: boolean
+  ): SingBoxDnsRule[] => {
+    const queryType = withQueryType ? { query_type: ['A', 'AAAA'] as const } : {};
+    if (!lanResolver) {
+      return [
+        {
+          ...matcher,
+          ...queryType,
+          server: getDomesticResolverTag(config, 'dns-domestic'),
+        } as unknown as SingBoxDnsRule,
+      ];
+    }
+    return [
+      {
+        ...matcher,
+        ...queryType,
+        action: 'evaluate',
+        server: 'dns-lan',
+        timeout: '2s',
+      } as unknown as SingBoxDnsRule,
+      {
+        match_response: true,
+        ip_cidr: DIRECT_PRIVATE_ANSWER_CIDRS,
+        action: 'respond',
+      } as unknown as SingBoxDnsRule,
+      {
+        ...matcher,
+        ...queryType,
+        server: getDomesticResolverTag(config, 'dns-domestic'),
+      } as unknown as SingBoxDnsRule,
+    ];
+  };
+
   const dnsConfig: SingBoxDnsConfig = {
     servers: dnsServers,
     rules: [],
@@ -608,14 +664,11 @@ export function buildDnsConfig(
       }
     }
     if (directDomains.length || directSuffixes.length || directKeywords.length) {
-      const shadow: Record<string, unknown> = {
-        query_type: ['A', 'AAAA'],
-        server: getDomesticResolverTag(config, 'dns-domestic'),
-      };
-      if (directDomains.length) shadow.domain = directDomains;
-      if (directSuffixes.length) shadow.domain_suffix = directSuffixes.flatMap(withDotPrefix);
-      if (directKeywords.length) shadow.domain_keyword = directKeywords;
-      dnsRules.push(shadow as unknown as SingBoxDnsRule);
+      const matcher: Record<string, unknown> = {};
+      if (directDomains.length) matcher.domain = directDomains;
+      if (directSuffixes.length) matcher.domain_suffix = directSuffixes.flatMap(withDotPrefix);
+      if (directKeywords.length) matcher.domain_keyword = directKeywords;
+      dnsRules.push(...directExitDnsRules(matcher, true));
     }
   };
 
@@ -632,7 +685,7 @@ export function buildDnsConfig(
   //   · 非 FakeIP 路径（系统代理等）无 catch-all，维持原位全量发射：客户端拿按去向解析的真实 IP 正是正确语义。
   // 顺序不变量：用户规则在 route 侧是终止规则且排在 geo 之前，DNS 侧首命中即停，投影必须先于出口影子/geo 二分。
   const hasUserRuleDnsProjection = dnsCustomRules.some(
-    (rule) => rule.application || rule.type === 'processPathRegex'
+    (rule) => rule.applications?.length || rule.type === 'processPathRegex'
   );
   // 已被投影完整发射的规则 id：direct 规则经投影后，#347 出口影子规则对其是逐字段重复
   // （同 matcher + 同 server = getDomesticResolverTag），再发一条恒为死规则 → 影子收集时跳过。
@@ -671,10 +724,14 @@ export function buildDnsConfig(
         dnsRules.push({ ...matcher, action: 'reject' } as unknown as SingBoxDnsRule);
         continue;
       }
-      const server =
-        rule.action === 'direct'
-          ? getDomesticResolverTag(config, 'dns-domestic')
-          : `dns-rule-${rule.id}`;
+      if (rule.action === 'direct') {
+        // 直连去向：有 LAN 解析器时发「dns-lan 条件采纳 + 境内兜底」三元组（split-horizon 修复，见
+        // directExitDnsRules 注释）；否则单条境内解析器（历史形态，字节不变）。
+        dnsRules.push(...directExitDnsRules(matcher as Record<string, unknown>, withQueryType));
+        projectedRuleIds.add(rule.id);
+        continue;
+      }
+      const server = `dns-rule-${rule.id}`;
       if (rule.action === 'proxy' && !dnsServers.some((item) => item.tag === server)) {
         dnsServers.push(buildUserDns(server, foreign, `rule-sel-${rule.id}`));
       }
@@ -701,10 +758,14 @@ export function buildDnsConfig(
       processPathRegex: preset.processPathRegex,
     });
     if (!matchers.length) continue;
-    const server =
-      rule.action === 'direct'
-        ? getDomesticResolverTag(config, 'dns-domestic')
-        : `dns-app-${rule.appId}`;
+    if (rule.action === 'direct') {
+      // 直连去向：同用户域名规则，走 dns-lan 条件采纳三元组（split-horizon 修复，见 directExitDnsRules 注释）。
+      for (const matcher of matchers) {
+        dnsRules.push(...directExitDnsRules(matcher as Record<string, unknown>, false));
+      }
+      continue;
+    }
+    const server = `dns-app-${rule.appId}`;
     if (rule.action === 'proxy' && !dnsServers.some((s) => s.tag === server)) {
       dnsServers.push(
         enterpriseResolver(server, rule.targetServerId ?? config.selectedServerId) ??
