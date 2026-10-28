@@ -98,3 +98,19 @@ test('节点组编辑与删除更新真实配置，取消删除保留节点',asy
  await renamed.getByRole('button',{name:'删除',exact:true}).click();await page.getByRole('tooltip').getByRole('button',{name:/确定$/}).click();
  await expect(renamed).toHaveCount(0);expect(await page.evaluate(()=>(window as any).desktopTest.getConfig().servers.map((n:any)=>n.id))).toEqual(['n2']);await mock.expectNoUnexpectedRequests();
 });
+
+test('筛选单一来源时节点卡隐藏组前缀，清除筛选恢复',async({page})=>{
+ await setup(page);const list=page.getByRole('region',{name:'节点列表'});
+ const identity=list.getByRole('listitem').first().locator('.ds-node-identity');
+ await expect(identity).toHaveText('示例订阅一 /日本示例');
+ await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'来源',exact:true})}).getByRole('combobox',{name:'来源',exact:true}).click();
+ await page.locator('.ant-select-item-option').filter({hasText:'示例订阅二'}).click();
+ await expect(list.getByRole('listitem')).toHaveCount(1);
+ const filtered=list.getByRole('listitem').first().locator('.ds-node-identity');
+ await expect(filtered).toHaveText('美国示例');
+ expect(await filtered.evaluate(el=>Array.from(el.children).map(child=>child.getAttribute('role')==='img'?'region':child.textContent))).toEqual(['region','美国示例']);
+ await filtered.getByRole('button').count();
+ await page.locator('.client-filter-select').filter({has:page.getByRole('combobox',{name:'来源',exact:true})}).getByRole('combobox',{name:'来源',exact:true}).click();
+ await page.locator('.ant-select-item-option').filter({hasText:'示例订阅一'}).click();
+ await expect(identity).toHaveText('示例订阅一 /日本示例');
+});
