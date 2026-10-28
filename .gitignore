@@ -121,6 +121,8 @@ resources/mac-*/shadowvpn-network-events
 
 # 前端浏览器检查产物（包含构建、截图及 trace）
 /web/.playwright/
+# Playwright 截图门禁的输出目录
+/web/test-results/
 
 # Official compatibility cores fetched with pinned hashes
 resources/*/xray
