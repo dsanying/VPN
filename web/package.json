@@ -23,6 +23,7 @@
     "preview": "vite preview",
     "test:unit": "node scripts/run-unit-tests.mjs",
     "test:ui": "pnpm build:ui && node scripts/run-runtime.mjs ui",
+    "test:ui:affected": "pnpm build:ui && node scripts/run-affected-ui.mjs",
     "test:ui:full": "pnpm build:ui && node scripts/run-runtime.mjs ui-full",
     "typecheck": "tsc -b --pretty false",
     "check:static": "node scripts/client-checks.mjs --phase static",
