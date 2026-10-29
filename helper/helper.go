@@ -36,6 +36,7 @@ var (
 	child     *exec.Cmd
 	childDone chan struct{} // Wait、运行目录回收完成后关闭
 	stopping  bool          // 停止期间保留 child，防止新旧内核重叠
+	dnsMarker string        // start 行7（可选）：系统 DNS 接管 marker 路径，父死收割后据此兜底还原（dns_restore.go）
 )
 
 // 恢复本会话实际改变过的 forwarding 键；原值已为 1 时不抢其他应用的状态。
@@ -417,7 +418,13 @@ func watchParent(ppid int, ppidStart string, c *exec.Cmd, done <-chan struct{}) 
 				return
 			}
 			beginStopLocked()
+			marker := dnsMarker
 			mu.Unlock()
+			// 收割完成后兜底还原系统 DNS（2026-10-28 事故加固）：应用已死，此刻只有 helper 能把停在
+			// 受控 IP（8.8.8.8）的系统 DNS 还回去。done 在 Wait + 运行目录归还后关闭（先放 mu 再等，
+			// Wait goroutine 收尾也要拿 mu）。
+			<-done
+			restoreDnsFromMarker(marker)
 			return
 		}
 	}
@@ -577,6 +584,14 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 		if ppid > 0 {
 			ppidStart = procStartTime(ppid)
 		}
+		// 行7（可选）：系统 DNS 接管 marker 路径。旧客户端只发 6 行即 FIN → 读到 "" → 兜底还原不启用
+		// （向后兼容）。父死看护收割 child 后按它还原系统 DNS（restoreDnsFromMarker），防「应用死了、
+		// 系统 DNS 停在 8.8.8.8」残留到下次启动。路径校验失败整单拒绝：marker 由 root 读、结果改系统状态。
+		dnsMarkerPath := args.Next()
+		if dnsMarkerPath != "" && !markerPathAllowed(dnsMarkerPath) {
+			fmt.Fprintln(conn, "ERR marker-path-denied")
+			return
+		}
 		if child != nil && child.Process != nil {
 			if stopping {
 				fmt.Fprintln(conn, "ERR stopping")
@@ -636,6 +651,7 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 			logFile.Close()
 		}
 		child = c
+		dnsMarker = dnsMarkerPath
 		done := make(chan struct{})
 		childDone = done
 		go func() {
@@ -704,10 +720,13 @@ func main() {
 		<-sigCh
 		mu.Lock()
 		c, done := child, childDone
+		marker := dnsMarker
 		mu.Unlock()
 		if c != nil && c.Process != nil {
 			terminateChild(c, done)
 		}
+		// helper 自身被卸载/杀掉时同样兜底还原 DNS（此后再无人守着 marker）。
+		restoreDnsFromMarker(marker)
 		os.Exit(0)
 	}()
 

@@ -26,8 +26,16 @@ export interface IPrivilegedHelper {
   isReady(): Promise<boolean>;
   /** 完整状态：供设置页展示 + 安装/卸载按钮判态。force=窗口聚焦时强制 fresh。 */
   getStatus(force?: boolean): Promise<HelperStatus>;
-  /** 经 helper 以特权启动 sing-box（零提权）。 */
-  startCore(configPath: string, logPath: string, forward: boolean): Promise<HelperStartResult>;
+  /** 经 helper 以特权启动 sing-box（零提权）。engine：内核镜像（mihomo 需 helper 支持 start-mihomo）；
+   *  dnsMarkerPath：系统 DNS 接管 marker 路径（macOS 专用，helper v10 第 7 行可选参数）——应用崩溃后
+   *  helper 父死收割内核时据此兜底还原系统 DNS；缺省不启用。 */
+  startCore(
+    configPath: string,
+    logPath: string,
+    forward: boolean,
+    engine?: 'sing-box' | 'mihomo',
+    dnsMarkerPath?: string
+  ): Promise<HelperStartResult>;
   /** 经 helper 停止 sing-box（零提权）。 */
   stopCore(): Promise<boolean>;
   /** 经 helper 杀掉所有 sing-box（含孤儿），零提权。 */

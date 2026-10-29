@@ -4508,7 +4508,14 @@ rm -f "$STOPFLAG"
       `TUN 模式经提权 helper 启动 sing-box（免授权）${forward ? '，并开启 IP 转发' : ''}...`
     );
 
-    const res = await helper.startCore(this.configPath, startupLogFile, forward);
+    // 第5参传系统 DNS 接管 marker 路径：应用崩溃后 helper 父死收割内核时兜底还原 DNS（helper v10）。
+    const res = await helper.startCore(
+      this.configPath,
+      startupLogFile,
+      forward,
+      'sing-box',
+      this.systemDnsManager?.getMarkerPath() ?? ''
+    );
     this.markStartLeg(startGen, 'spawn'); // 管道 RPC 往返 + helper 侧 CreateProcess 返回，**不含**核自身初始化
     if (!res.ok || !res.pid) {
       throw new Error(res.error || 'helper 启动 sing-box 失败');
