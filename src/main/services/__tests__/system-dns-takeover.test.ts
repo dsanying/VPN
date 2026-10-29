@@ -25,7 +25,7 @@ describe('TUN 恒接管系统 DNS（macOS scoped resolver 绕开路由劫持的�
   it('新装默认 TUN，门控恒开', async () => {
     const config = await new ConfigManager(path.join(TMP, 'new.json')).loadConfig();
     expect(config.proxyModeType).toBe('tun');
-    expect(shouldReconcileDns(config, true)).toBe(true);
+    expect(shouldReconcileDns(config, true, true)).toBe(true);
   });
 
   it('存量配置残留旧开关值（任意值）→ 门控恒开，不受残留字段影响', async () => {
@@ -34,7 +34,7 @@ describe('TUN 恒接管系统 DNS（macOS scoped resolver 绕开路由劫持的�
     for (const legacy of [false, true]) {
       fs.writeFileSync(file, JSON.stringify({ dnsConfig: { takeoverSystemDns: legacy } }));
       const loaded = await new ConfigManager(file).loadConfig();
-      expect(shouldReconcileDns(loaded, true)).toBe(true);
+      expect(shouldReconcileDns(loaded, true, true)).toBe(true);
     }
   });
 });

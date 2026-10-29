@@ -84,18 +84,23 @@ export interface DnsInterfaceWatcherDeps {
 
 /**
  * 纯门控判定：是否应执行 DNS reconcile（镜像 setDns 的接管条件）。
- * 仅 TUN 模式 + 明确开启接管开关 + 当前确有 marker（接管已激活）才放行 —— 系统代理/手动模式或未接管时，watcher
- * 绝不擅自改系统 DNS。抽成纯函数便于单测，也供 ProxyManager 接线层与本判定共用同一真值。
+ * 仅 TUN 模式 + 当前确有 marker（接管已激活）+ **内核进程存活** 才放行 —— 系统代理/手动模式、未接管、
+ * 或内核已死时，watcher 绝不擅自改系统 DNS。存活门控是 2026-10-28 事故（核死后 marker 滞留、
+ * 链路一变重灌把 8.8.8.8 灌回休眠服务）的直接修复：重灌的前提必须是接管真正在服役。抽成纯函数
+ * 便于单测，也供 ProxyManager 接线层与本判定共用同一真值。
  *
- * @param config 当前生效配置（ProxyManager.currentConfig）；null/非 TUN/关掉开关 → false。
+ * @param config 当前生效配置（ProxyManager.currentConfig）；null/非 TUN → false。
  * @param hasMarker SystemDnsManager.hasMarker() 结果（接管 marker 是否在）。
+ * @param engineAlive 内核进程是否存活（调用方以 activeCorePid + 探活求值；死核重灌只会扩大残留）。
  */
 export function shouldReconcileDns(
   config: UserConfig | null | undefined,
-  hasMarker: boolean
+  hasMarker: boolean,
+  engineAlive: boolean
 ): boolean {
   if (!config) return false;
   if (config.proxyModeType !== 'tun') return false;
+  if (!engineAlive) return false;
   return hasMarker;
 }
 

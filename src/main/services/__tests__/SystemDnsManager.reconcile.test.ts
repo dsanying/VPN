@@ -44,9 +44,6 @@ class TestDns extends SystemDnsBase {
   protected async applyDns(target: string, ips: string[]): Promise<void> {
     await this.applyDnsImpl(target, ips);
   }
-  protected listTargetsSync(): string[] {
-    return Object.keys(this.dnsMap);
-  }
   protected applyDnsSync(target: string, ips: string[]): void {
     this.dnsMap[target] = [...ips];
   }
@@ -188,6 +185,51 @@ describe('reconcileDns 热插重灌', () => {
     await mgr.reconcileDns();
 
     expect(spy).not.toHaveBeenCalled();
+    expect(readMarkerFile()).toBeNull();
+  });
+});
+
+describe('restoreDns / restoreDnsSync — 按 original 键全量还原（2026-10-29 泄漏事故加固）', () => {
+  it('服务已转休眠（listTargets 不再返回）→ 仍按 original 键还原，不漏', async () => {
+    // 场景复现：接管时改了 Wi-Fi + USB LAN；之后 USB LAN 被拔掉（listTargets 只剩 Wi-Fi）。
+    // 旧实现按 listTargets ∩ original 过滤 → USB LAN 漏还原 → 8.8.8.8 残留在休眠服务上（真实事故路径）。
+    const dns = new TestDns({ 'Wi-Fi': [CONTROLLED], 'USB 10/100/1000 LAN': [CONTROLLED] });
+    // USB LAN 已休眠（listTargets 活跃过滤后不再返回它）；listTargets 是 protected，经类型断言替换。
+    (dns as unknown as { listTargets: () => Promise<string[]> }).listTargets = async () => [
+      'Wi-Fi',
+    ];
+    writeMarkerFile({ 'Wi-Fi': [], 'USB 10/100/1000 LAN': [] });
+
+    await dns.restoreDns();
+
+    expect(dns.dnsMap['Wi-Fi']).toEqual([]);
+    expect(dns.dnsMap['USB 10/100/1000 LAN']).toEqual([]);
+    expect(readMarkerFile()).toBeNull(); // 全部成功 → 清 marker
+  });
+
+  it('部分还原失败 → 保留 marker 交下次启动重试', async () => {
+    const dns = new TestDns({ 'Wi-Fi': [CONTROLLED], 'USB 10/100/1000 LAN': [CONTROLLED] });
+    writeMarkerFile({ 'Wi-Fi': [], 'USB 10/100/1000 LAN': [] });
+    const orig = dns.applyDnsImpl.bind(dns);
+    jest.spyOn(dns, 'applyDnsImpl').mockImplementation(async (t, ips) => {
+      if (t === 'USB 10/100/1000 LAN') throw new Error('service not recognized');
+      await orig(t, ips);
+    });
+
+    await dns.restoreDns();
+
+    expect(readMarkerFile()).not.toBeNull();
+    expect(dns.dnsMap['Wi-Fi']).toEqual([]); // 其余服务照常还原（best-effort 不阻断）
+  });
+
+  it('restoreDnsSync 同口径：按 original 键全量还原（同步退出兜底）', () => {
+    const dns = new TestDns({ 'Wi-Fi': [CONTROLLED], 'Thunderbolt Bridge': [CONTROLLED] });
+    writeMarkerFile({ 'Wi-Fi': [], 'Thunderbolt Bridge': [] });
+
+    dns.restoreDnsSync();
+
+    expect(dns.dnsMap['Wi-Fi']).toEqual([]);
+    expect(dns.dnsMap['Thunderbolt Bridge']).toEqual([]);
     expect(readMarkerFile()).toBeNull();
   });
 });

@@ -6,6 +6,13 @@
  * hijack（真进 sing-box → FakeIP/远程解析）；停止/退出/崩溃恢复还原原始。
  * 完全沿用 SystemProxyManager 的 marker + single-writer + 防自指 + sync 退出 + 启动恢复五件套。
  * 设计见 docs/design/dns-ipv6-takeover.md。
+ *
+ * 残留面收敛（2026-10-29，真实泄漏事故后加固）：
+ *  - macOS 只接管「设备存在且链路活跃」的网络服务（filterMacActiveTargets）——休眠服务（未插的
+ *    USB 网卡、空 Thunderbolt Bridge）无流量无解析器，接管它们只会放大崩溃残留面（事故：休眠
+ *    USB LAN ×2 + 雷电桥残留 8.8.8.8 过夜）；
+ *  - 还原按 marker.original 键**全量**进行，不按当前活跃集过滤——接管后服务可能转休眠（拔网卡/
+ *    关 Wi-Fi），networksetup 对休眠服务仍可写，按活跃集过滤会漏还原（正是事故泄漏路径之一）。
  */
 
 import { exec, execFile, execFileSync } from 'child_process';
@@ -32,6 +39,9 @@ import {
   pickLanResolverIp,
   computeOriginalToSave,
   pickTunInterfaceByAddress,
+  parseMacHardwarePortDevices,
+  parseMacActiveDevices,
+  filterMacActiveTargets,
   resolvectlDnsArgs,
   resolvectlDomainArgs,
   resolvectlRevertArgs,
@@ -172,9 +182,7 @@ export abstract class SystemDnsBase implements ISystemDnsManager {
   protected abstract readDns(target: string): Promise<string[]>;
   /** 设某服务/接口 DNS（[] → DHCP/Empty 还原）。 */
   protected abstract applyDns(target: string, ips: string[]): Promise<void>;
-  /** 同步列接口（退出兜底）。 */
-  protected abstract listTargetsSync(): string[];
-  /** 同步设 DNS（退出兜底）。 */
+  /** 同步设 DNS（退出/关机兜底，仅 macOS 实现真正使用）。 */
   protected abstract applyDnsSync(target: string, ips: string[]): void;
   /** 读「生效」DNS 解析器候选 IP（含 DHCP 下发的；方案B 用）。无法读 → []。 */
   protected abstract readEffectiveResolvers(): Promise<string[]>;
@@ -332,20 +340,12 @@ export abstract class SystemDnsBase implements ISystemDnsManager {
     }
 
     this.log('info', '正在还原系统 DNS');
-    let targets: string[];
-    try {
-      targets = await this.listTargets();
-    } catch {
-      targets = Object.keys(original);
-    }
-    // 接管前不存在、本次新增的服务不动；只还原 original 里记录过的（= 我们改过的）。
-    // 接管时存在、还原时已消失的服务不在 listTargets → 自然跳过（其 DNS 设置随服务消失，无需还原）。
-    const restoreTargets = targets.length ? targets : Object.keys(original);
-    // 逐服务 best-effort：单服务失败不阻断其余还原（防『首个失败 → 后续已改服务漏还原』泄漏），与 restoreDnsSync
-    // 同口径。全部成功才清 marker + 内存；任一失败保留 marker 交下次启动 recovery 重试。
+    // 按 original 键**全量**还原（= 我们改过的服务全集），不按 listTargets（活跃集）过滤：
+    // 接管后服务可能转休眠（拔掉 USB 网卡/关 Wi-Fi），设备虽不在，networksetup 对该服务的 DNS
+    // 设置仍在且仍可写；按活跃集过滤会漏还原这些服务——正是「休眠服务残留 8.8.8.8」的泄漏路径。
+    // 服务被用户彻底删除时单条失败仅告警，marker 保留交下次启动重试（best-effort 语义不变）。
     let allOk = true;
-    for (const t of restoreTargets) {
-      if (!(t in original)) continue;
+    for (const t of Object.keys(original)) {
       try {
         await this.applyDns(t, original[t]);
       } catch (error) {
@@ -364,17 +364,15 @@ export abstract class SystemDnsBase implements ISystemDnsManager {
 
   /**
    * 同步还原（退出/关机紧急场景）：读 marker（跨会话，新实例内存无 originalDns），全部还原成功才清 marker。
+   * 与异步版同口径：按 original 键全量还原，不按活跃集过滤（见 restoreDns 注释）。
    */
   restoreDnsSync(): void {
     const marker = SystemDnsBase.readMarker();
     const original = marker?.original ?? this.originalDns ?? null;
     if (!original) return;
     try {
-      const targets = this.listTargetsSync();
-      const restoreTargets = targets.length ? targets : Object.keys(original);
       let allOk = true;
-      for (const t of restoreTargets) {
-        if (!(t in original)) continue;
+      for (const t of Object.keys(original)) {
         try {
           this.applyDnsSync(t, original[t]);
         } catch {
@@ -397,15 +395,33 @@ export class MacOSSystemDns extends SystemDnsBase {
     const { stdout } = await execAsync('networksetup -listallnetworkservices', {
       timeout: DNS_CMD_TIMEOUT_MS,
     });
-    return (
-      stdout
-        .split('\n')
-        .slice(1)
-        .map((l) => l.trim())
-        // 与 SystemProxyManager.getNetworkServices 口径统一，排除 Bluetooth PAN——
-        // 否则 DNS 接管会把 DNS 写到蓝牙网络（PAN/个人热点），关闭后可能残留。
-        .filter((l) => l && !l.startsWith('*') && !l.includes('Bluetooth'))
-    );
+    const services = stdout
+      .split('\n')
+      .slice(1)
+      .map((l) => l.trim())
+      // 与 SystemProxyManager.getNetworkServices 口径统一，排除 Bluetooth PAN——
+      // 否则 DNS 接管会把 DNS 写到蓝牙网络（PAN/个人热点），关闭后可能残留。
+      .filter((l) => l && !l.startsWith('*') && !l.includes('Bluetooth'));
+    // 只接管「设备存在且链路活跃」的服务：休眠服务（未插的 USB 网卡、空 Thunderbolt Bridge）
+    // 无流量无解析器，改了没用、只放大崩溃残留面。探测命令失败 → 按空集处理（fail-closed：
+    // 宁可本次不接管——hijack-dns 对走默认路由的 DNS 仍有效——也绝不盲写一堆服务）。
+    // 热插后新活跃服务由 reconcileDns 按同一判据补接管。
+    try {
+      const [portsOut, ifconfigOut] = await Promise.all([
+        execAsync('networksetup -listallhardwareports', { timeout: DNS_CMD_TIMEOUT_MS }).then(
+          (r) => r.stdout
+        ),
+        execAsync('ifconfig -a', { timeout: DNS_CMD_TIMEOUT_MS }).then((r) => r.stdout),
+      ]);
+      return filterMacActiveTargets(
+        services,
+        parseMacHardwarePortDevices(portsOut),
+        parseMacActiveDevices(ifconfigOut)
+      );
+    } catch (error) {
+      this.log('warn', `探测活跃网络服务失败，跳过本次 DNS 接管目标选择: ${error}`);
+      return [];
+    }
   }
 
   protected async readDns(service: string): Promise<string[]> {
@@ -420,20 +436,6 @@ export class MacOSSystemDns extends SystemDnsBase {
     await execFileAsync('networksetup', macSetDnsArgs(service, ips), {
       timeout: DNS_CMD_TIMEOUT_MS,
     });
-  }
-
-  protected listTargetsSync(): string[] {
-    const { execSync } = require('child_process');
-    return (
-      execSync('networksetup -listallnetworkservices', { timeout: DNS_CMD_TIMEOUT_MS })
-        .toString()
-        .split('\n')
-        .slice(1)
-        .map((l: string) => l.trim())
-        // 与 async listTargets 口径统一，排除 Bluetooth PAN——否则关机还原
-        //（restoreDnsSync 走此 sync 路径）仍会往蓝牙网络写 DNS，async/sync 服务集不一致。
-        .filter((l: string) => l && !l.startsWith('*') && !l.includes('Bluetooth'))
-    );
   }
 
   protected applyDnsSync(service: string, ips: string[]): void {
@@ -475,18 +477,6 @@ export class WindowsSystemDns extends SystemDnsBase {
   protected async applyDns(iface: string, ips: string[]): Promise<void> {
     for (const cmd of winSetDnsCommands(this.netshExe, iface, ips)) {
       await execAsync(cmd, { timeout: DNS_CMD_TIMEOUT_MS });
-    }
-  }
-
-  protected listTargetsSync(): string[] {
-    const { execSync } = require('child_process');
-    try {
-      const out = execSync(`"${this.netshExe}" interface ipv4 show interfaces`, {
-        timeout: DNS_CMD_TIMEOUT_MS,
-      }).toString();
-      return parseWinInterfaces(out);
-    } catch {
-      return [];
     }
   }
 
@@ -756,11 +746,6 @@ export class LinuxSystemDns extends SystemDnsBase {
       }
       throw e;
     }
-  }
-
-  protected listTargetsSync(): string[] {
-    const name = this.currentTunInterface();
-    return name ? [name] : [];
   }
 
   protected applyDnsSync(target: string, ips: string[]): void {
