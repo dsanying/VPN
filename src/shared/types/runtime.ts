@@ -182,6 +182,10 @@ export interface HelperStatus {
   /** 仅 macOS：plist 烧录的 --confdir ≠ 当前 userData（数据目录改名/迁移后）。此状态下 ping 仍通（ready=true），
    *  但 helper 拒绝 start（config-path-denied）→ 每次启停回退 osascript 裸弹授权框；修复重装即根治。 */
   confdirMismatch: boolean;
+  /** 仅 macOS 打包版：已装 helper 二进制 sha256 ≠ 随包 helper（app 更新携带了新 helper）。此状态下 daemon 仍就绪、
+   *  照常工作（协议向后兼容），但新 helper 的修复/兜底（如 v10 父死还原 DNS）不会生效——检测让重装提示只在
+   *  helper 真的变了时弹一次，而非每次 app 更新盲目弹或永不弹。两个 sha 都无需提权（两文件 644/755 可读）。 */
+  helperBinaryMismatch: boolean;
   /** plist 中烧录的 sing-box 路径（诊断展示用；未装/解析失败为 null） */
   installedSingboxPath: string | null;
 }

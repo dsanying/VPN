@@ -66,6 +66,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       backgroundDisabled: false,
       pathMismatch: false,
       confdirMismatch: false,
+      helperBinaryMismatch: false,
       installedSingboxPath: null,
     };
   }
@@ -169,6 +170,7 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       // 段 vs 当前 getSingBoxPath() 实现之；当前 Windows 核更新走 app 侧、非 helper，影响有限。
       pathMismatch: false,
       confdirMismatch: false,
+      helperBinaryMismatch: false,
       installedSingboxPath: null,
     };
   }

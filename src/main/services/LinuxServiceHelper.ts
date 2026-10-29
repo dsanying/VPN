@@ -99,6 +99,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
         backgroundDisabled: false,
         pathMismatch: false,
         confdirMismatch: false,
+        helperBinaryMismatch: false,
         installedSingboxPath: null,
       };
     }
@@ -128,6 +129,7 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
       backgroundDisabled: false,
       pathMismatch: false,
       confdirMismatch: false,
+      helperBinaryMismatch: false,
       installedSingboxPath: null,
     };
   }
