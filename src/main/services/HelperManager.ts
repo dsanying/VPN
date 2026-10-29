@@ -321,7 +321,8 @@ export class HelperManager implements IPrivilegedHelper {
     configPath: string,
     logPath: string,
     forward: boolean,
-    engine: 'sing-box' | 'mihomo' = 'sing-box'
+    engine: 'sing-box' | 'mihomo' = 'sing-box',
+    dnsMarkerPath = ''
   ): Promise<HelperStartResult> {
     try {
       if (engine === 'mihomo' && !this.capabilities.includes('start-mihomo'))
@@ -331,12 +332,16 @@ export class HelperManager implements IPrivilegedHelper {
       const resp = await this.sendCommand(
         // 行6=父 app PID（helper v2 父死看护：本进程消失 → helper 自行 TERM→KILL 收割 sing-box）。
         // HelperManager 跑在 Electron 主进程内，process.pid 即 GUI 父 PID → ProxyManager 零改动。
+        // 行7=系统 DNS 接管 marker 路径（helper v10，可选）：父死收割后 helper 按 marker 兜底还原
+        // 系统 DNS——应用已死无人还原，残留窗口从「到下次启动」压到 ≈0。旧 helper 读到多余行忽略
+        // （向后兼容）；本参数缺省 "" 时新 helper 同样不启用。
         [
           engine === 'mihomo' ? 'start-mihomo' : 'start',
           configPath,
           logPath || '',
           forward ? '1' : '0',
           String(process.pid),
+          dnsMarkerPath,
         ],
         8000
       );

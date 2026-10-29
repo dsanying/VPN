@@ -80,6 +80,9 @@ export interface ISystemDnsManager {
   restoreDnsSync(): void;
   /** 是否存在「DNS 由 暗影VPN 接管」marker（终态清理门控用）。 */
   hasMarker(): boolean;
+  /** marker 路径（userData/system-dns.marker.json）：startCore 传给 helper，应用崩溃后 helper 父死
+   *  收割内核时据此兜底还原系统 DNS（proto v10）。 */
+  getMarkerPath(): string;
   /**
    * 方案B：读「接管前的内网 LAN 解析器 IP」（私网 IPv4），供 generateDnsConfig 把内网/captive 域名重定向到它
    * （takeover 后 dns-local=公网 8.8.8.8 解不了内网）。无可用（DHCP 读不到/仅公网/Linux）→ null，调用方退回 dns-local。
@@ -114,9 +117,15 @@ export abstract class SystemDnsBase implements ISystemDnsManager {
     else console.log(message);
   }
 
-  /** 持久化 marker 路径（userData/system-dns.marker.json）。 */
-  private static getMarkerPath(): string {
+  /** 持久化 marker 路径（userData/system-dns.marker.json）。公开：startCore 传给 helper，应用崩溃后
+   *  helper 父死收割内核时据此兜底还原系统 DNS（proto v10）。 */
+  static getMarkerPath(): string {
     return path.join(getUserDataPath(), 'system-dns.marker.json');
+  }
+
+  /** marker 路径（userData/system-dns.marker.json）：startCore 经接口传给 helper（proto v10 兜底还原）。 */
+  getMarkerPath(): string {
+    return SystemDnsBase.getMarkerPath();
   }
 
   /** 写 marker（setDns 前置写入 intent；同步 fs，失败仅告警绝不抛）。 */
