@@ -45,6 +45,7 @@ const SM_CACHE_TTL_MS = 3_000;
 export class HelperManager implements IPrivilegedHelper {
   /** 路径不符 warn 仅首次记（getStatus 被设置页/首页高频调用，避免刷屏）。 */
   private pathMismatchWarned = false;
+  private helperBinaryMismatchWarned = false;
   /** confdir 不符 warn 同理仅首次记。 */
   private confdirMismatchWarned = false;
 
@@ -165,6 +166,7 @@ export class HelperManager implements IPrivilegedHelper {
         version: null,
         loaded: null,
         needsRepair: false,
+        helperBinaryMismatch: false,
         backgroundDisabled: false,
         pathMismatch: false,
         confdirMismatch: false,
@@ -288,6 +290,33 @@ export class HelperManager implements IPrivilegedHelper {
       }
     }
 
+    // helper 二进制漂移检测（仅打包版）：已装 helper sha256 ≠ 随包 helper → app 更新携带了新 helper。
+    // 此状态 daemon 就绪照常工作（协议向后兼容），但新 helper 的能力不会生效（如 v10 父死还原 DNS）——
+    // 没有本检测，app 更新后 helper 永远静默停留旧版。dev 不启用：每次重构建都算漂移会反复提示重装
+    // （与 pathMismatch 的 isPackaged 闸门同理）。两个文件均 755/644 可读，sha256 零提权。
+    let helperBinaryMismatch = false;
+    if (installed && app.isPackaged) {
+      const bundledHelper = resourceManager.getMacHelperPath();
+      try {
+        if (fs.existsSync(bundledHelper)) {
+          const [installedSha, bundledSha] = await Promise.all([
+            sha256File(HELPER_DEST),
+            sha256File(bundledHelper),
+          ]);
+          helperBinaryMismatch = installedSha !== bundledSha;
+          if (helperBinaryMismatch && !this.helperBinaryMismatchWarned) {
+            this.helperBinaryMismatchWarned = true; // 状态高频刷新，仅首次记日志
+            this.log(
+              'warn',
+              `helper 二进制漂移: 已装 ≠ 随包（app 更新携带新 helper），建议修复重装`
+            );
+          }
+        }
+      } catch {
+        /* 读失败（权限/IO 异常）不误报，保持 false */
+      }
+    }
+
     return {
       supported: true,
       installed,
@@ -295,10 +324,11 @@ export class HelperManager implements IPrivilegedHelper {
       version,
       capabilities: this.capabilities,
       loaded,
-      needsRepair: installed && (!ready || pathMismatch || confdirMismatch),
+      needsRepair: installed && (!ready || pathMismatch || confdirMismatch || helperBinaryMismatch),
       backgroundDisabled,
       pathMismatch,
       confdirMismatch,
+      helperBinaryMismatch,
       installedSingboxPath,
     };
   }
