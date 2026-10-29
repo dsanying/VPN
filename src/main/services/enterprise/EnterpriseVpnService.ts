@@ -18,6 +18,8 @@ interface ConfigStore {
 }
 interface TunnelOwner {
   stop(): Promise<void>;
+  /** 前置清理（生产注入的 ProxyManager 实现）：系统代理 + 接管 DNS 的 marker 门控收口。可选——测试桩只实现 stop()。 */
+  ensureSystemProxyCleared?(): Promise<void>;
   on?(event: 'stopped', listener: () => void): unknown;
   setNodeAdapters(adapter: {
     prepare(config: UserConfig): Promise<boolean>;
@@ -118,9 +120,20 @@ export class EnterpriseVpnService {
     this.notify();
     return saved;
   }
+  /**
+   * 终态停隧道统一入口：先做前置清理再 stop()。与 IPC PROXY_STOP / 托盘 onStop 的既有契约一致——
+   * stop() 会置位 stopping，信号死分支 emit('stopped') → index 监听器的 ensureSystemProxyCleared 被
+   * 设计性跳过（防重启 stop 腿与 start reconcile 打架，C1）；企业触发的停止若不做前置清理，接管 DNS
+   * 与 marker 就无人还原（真机事故：企业隧道中断自动停代理后系统 DNS 停在 8.8.8.8，用户手动还原）。
+   * 可选成员：测试桩只实现 stop() 时前置清理自然 no-op。
+   */
+  private async stopTunnelOwner(): Promise<void> {
+    await this.proxy.ensureSystemProxyCleared?.().catch(() => {});
+    await this.proxy.stop();
+  }
   async remove(id: string): Promise<void> {
     if (this.active.has(id)) {
-      await this.proxy.stop();
+      await this.stopTunnelOwner();
       await this.disconnect();
     }
     this.store.remove(id);
@@ -208,7 +221,7 @@ export class EnterpriseVpnService {
                     : '企业 VPN 隧道已中断，代理已关闭',
               });
               this.notify();
-              void this.proxy.stop();
+              void this.stopTunnelOwner();
             }
           },
           (phase) => {

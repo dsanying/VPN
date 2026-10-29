@@ -43,6 +43,9 @@ function setup(exitBeforeReady = false) {
     stop: jest.fn(async () => {
       await adapter.stop();
     }),
+    // 前置清理契约（生产为 ProxyManager.ensureSystemProxyCleared）：企业触发的停止必须先于 stop() 调用，
+    // 否则接管 DNS 与 marker 无人还原（真机事故：企业隧道中断 → 自动停代理 → 系统 DNS 残留 8.8.8.8）。
+    ensureSystemProxyCleared: jest.fn(async () => {}),
     setNodeAdapters: (value: typeof adapter) => {
       adapter = value;
     },
@@ -154,7 +157,16 @@ test('global/direct ignore inactive rules; tunnel loss closes the global proxy',
     c.selectedServerId = f.identity.id;
     await f.service.prepare(c);
     f.engines[0].exit!();
-    await Promise.resolve();
+    // fire-and-forget 的 stopTunnelOwner 现在是「前置清理 → stop()」两跳异步链，单次微任务
+    // 只够跑完第一跳；两次 macrotask 让全链（清理 → stop → adapter.stop）落地再断言。
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    // 前置清理必须先于 stop()（与 IPC PROXY_STOP / 托盘 onStop 契约一致）：stop() 置位 stopping 后
+    // 信号死分支会跳过 ensureSystemProxyCleared，还原责任在调用方。
+    expect(f.proxy.ensureSystemProxyCleared).toHaveBeenCalledTimes(1);
+    expect(f.proxy.ensureSystemProxyCleared.mock.invocationCallOrder[0]).toBeLessThan(
+      f.proxy.stop.mock.invocationCallOrder[0]
+    );
     expect(f.proxy.stop).toHaveBeenCalledTimes(1);
     expect(f.service.snapshot().sessions).toEqual(
       expect.arrayContaining([expect.objectContaining({ state: 'failed' })])
