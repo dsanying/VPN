@@ -22,6 +22,9 @@ import {
   parseResolvectlLinks,
   resolvectlLinkValues,
   pickTunInterfaceByAddress,
+  parseMacHardwarePortDevices,
+  parseMacActiveDevices,
+  filterMacActiveTargets,
   resolvectlDnsArgs,
   resolvectlDomainArgs,
   resolvectlRevertArgs,
@@ -317,5 +320,72 @@ describe('resolvectl 参数构造', () => {
 
   it('domain 恒为 ~. ——少了它 resolved 只把匹配搜索域的查询分派到本链路', () => {
     expect(resolvectlDomainArgs('x')[2]).toBe('~.');
+  });
+});
+
+describe('macOS 活跃服务过滤（接管面收敛，2026-10-29 泄漏事故加固）', () => {
+  const HARDWARE_PORTS = [
+    'Hardware Port: Ethernet Adapter (en3)',
+    'Device: en3',
+    'Ethernet Address: aa:bb:cc:dd:ee:01',
+    '',
+    'Hardware Port: USB 10/100/1G/2.5G LAN',
+    'Device: en5',
+    'Ethernet Address: aa:bb:cc:dd:ee:02',
+    '',
+    'Hardware Port: Thunderbolt Bridge',
+    'Device: bridge0',
+    'Ethernet Address: aa:bb:cc:dd:ee:03',
+    '',
+    'Hardware Port: Wi-Fi',
+    'Device: en0',
+    'Ethernet Address: aa:bb:cc:dd:ee:04',
+    '',
+  ].join('\n');
+
+  // 真机形态（2026-10-28 事故机）：休眠 USB LAN 设备消失、空 bridge0 无 status 行、Wi-Fi active。
+  const IFCONFIG = [
+    'en0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500',
+    '\toptions=...',
+    '\tmedia: autoselect',
+    '\tstatus: active',
+    'bridge0: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500',
+    '\tConfiguration:',
+    '\tipfilter disabled flags 0x0',
+    'utun4: flags=8051<UP,POINTOPOINT,RUNNING,0> mtu 1380',
+  ].join('\n');
+
+  it('parseMacHardwarePortDevices：服务名（含空格）→ 设备', () => {
+    const m = parseMacHardwarePortDevices(HARDWARE_PORTS);
+    expect(m['USB 10/100/1G/2.5G LAN']).toBe('en5');
+    expect(m['Wi-Fi']).toBe('en0');
+    expect(m['Thunderbolt Bridge']).toBe('bridge0');
+  });
+
+  it('parseMacActiveDevices：只认 status active/associated 的设备', () => {
+    const a = parseMacActiveDevices(IFCONFIG);
+    expect(a.has('en0')).toBe(true);
+    expect(a.has('bridge0')).toBe(false); // 无 status 行 → 不算活跃
+    expect(a.has('utun4')).toBe(false); // 无 status 行
+  });
+
+  it('filterMacActiveTargets：休眠服务（设备消失/无 status）被排除', () => {
+    const services = ['USB 10/100/1G/2.5G LAN', 'Thunderbolt Bridge', 'Wi-Fi'];
+    expect(
+      filterMacActiveTargets(
+        services,
+        parseMacHardwarePortDevices(HARDWARE_PORTS),
+        parseMacActiveDevices(IFCONFIG)
+      )
+    ).toEqual(['Wi-Fi']);
+  });
+
+  it('Wi-Fi associated（非 active）也算活跃', () => {
+    const a = parseMacActiveDevices('en0: flags=...\n\tstatus: associated\n');
+    expect(a.has('en0')).toBe(true);
+  });
+
+  it('探测命令输出为空 → 空集（fail-closed 不接管）', () => {
+    expect(filterMacActiveTargets(['Wi-Fi'], {}, new Set())).toEqual([]);
   });
 });

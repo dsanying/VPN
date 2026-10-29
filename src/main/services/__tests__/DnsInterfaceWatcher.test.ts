@@ -159,7 +159,7 @@ describe('DnsInterfaceWatcher', () => {
     const reconcileDns = jest.fn(() => Promise.resolve());
     // 模拟 ProxyManager 注入的 onTrigger：门控 false → 不调 reconcile。
     const gatedTrigger = jest.fn(async () => {
-      if (!shouldReconcileDns({ proxyModeType: 'systemProxy' } as UserConfig, true)) return;
+      if (!shouldReconcileDns({ proxyModeType: 'systemProxy' } as UserConfig, true, true)) return;
       await reconcileDns();
     });
     const { watcher, fakeChild } = setup({ onTrigger: gatedTrigger });
@@ -279,20 +279,25 @@ describe('shouldReconcileDns 门控真值', () => {
   const manual = { proxyModeType: 'manual' } as unknown as UserConfig;
 
   it('tun + marker 在 → true（TUN 恒接管，无开关）', () => {
-    expect(shouldReconcileDns(tunOn, true)).toBe(true);
+    expect(shouldReconcileDns(tunOn, true, true)).toBe(true);
   });
   it('tun + marker 不在 → false（接管未激活，不擅自动手）', () => {
-    expect(shouldReconcileDns(tunOn, false)).toBe(false);
+    expect(shouldReconcileDns(tunOn, false, true)).toBe(false);
   });
   it('systemProxy 模式 → false（系统代理走远程解析，watcher 不改 DNS）', () => {
-    expect(shouldReconcileDns(sysProxy, true)).toBe(false);
+    expect(shouldReconcileDns(sysProxy, true, true)).toBe(false);
   });
   it('manual 模式 → false', () => {
-    expect(shouldReconcileDns(manual, true)).toBe(false);
+    expect(shouldReconcileDns(manual, true, true)).toBe(false);
   });
   it('config 为 null/undefined → false', () => {
-    expect(shouldReconcileDns(null, true)).toBe(false);
-    expect(shouldReconcileDns(undefined, true)).toBe(false);
+    expect(shouldReconcileDns(null, true, true)).toBe(false);
+    expect(shouldReconcileDns(undefined, true, true)).toBe(false);
+  });
+
+  // 引擎存活门控（2026-10-28 事故修复）：核死后 marker 滞留、链路一变不得把受控 DNS 灌回更多服务。
+  it('tun + marker 在 + 引擎已死 → false（死核重灌只会扩大残留）', () => {
+    expect(shouldReconcileDns(tunOn, true, false)).toBe(false);
   });
 });
 

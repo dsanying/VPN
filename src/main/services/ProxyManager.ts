@@ -60,6 +60,7 @@ import {
   type OsDnsFlushResult,
 } from './os-dns-flush';
 import { localProxyPort, controlApiPort } from '../../shared/proxy-ports';
+import { isCoreProcessOutput } from '../../shared/core-process';
 import { isDirectSelection, resolveGlobalExitTag } from '../../shared/direct-selection';
 import { parseDefaultGateway, parseScutilRouter } from '../../shared/default-route';
 import {
@@ -413,7 +414,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   private clearingSystemDns = false;
   /**
    * 链路变化 watcher（issue #368 后语义）：**核起即起、三平台、与 DNS 接管解耦**。
-   * macOS 侧仍负责接管重灌（门控 shouldReconcileDns 未变）；三平台共同负责链路变化后补刷 OS DNS 缓存。
+   * macOS 侧仍负责接管重灌（门控 shouldReconcileDns：TUN+marker 在+**引擎存活**）；三平台共同负责链路变化后补刷 OS DNS 缓存。
    */
   private dnsInterfaceWatcher: DnsInterfaceWatcher | null = null;
   /** issue #367：最近一次 OS DNS 缓存刷新的结果（供诊断报告读取；null=本会话从未触发过）。 */
@@ -1367,7 +1368,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     this.flushOsDnsCacheBestEffort('start', this.readNetworkFingerprint());
 
     // issue #368：链路变化 watcher。**与 DNS 接管解耦、核在跑即起（全模式）**，不再只在 TUN+takeover 分支起。
-    //   · macOS 侧行为一字不变——是否真 reconcile 仍由 onTrigger 内的 shouldReconcileDns() 门控（TUN+未关开关+marker 在）；
+    //   · macOS 侧行为一字不变——是否真 reconcile 仍由 onTrigger 内的 shouldReconcileDns() 门控（TUN+marker 在+引擎存活）；
     //   · 新增的是「链路变化后补刷 OS DNS 缓存」这条腿，它与接管无关，故门控口径必须跟 start/stop 的 flush 对齐
     //     （那两处**有意全模式触发**，见上方注释）。systemProxy 模式同样用 FakeIP（usesFakeIp 纯看开关、不分模式），
     //     换网后陈旧假 IP 一样会被系统缓存命中——只在 TUN 起 watcher 会把这半个缺口留着。
@@ -6247,14 +6248,22 @@ rm -f "$STOPFLAG"
           stdio: ['ignore', 'pipe', 'ignore'],
         });
         // 如果进程存在，输出会包含进程信息；不存在则输出 "INFO: No tasks..."
-        return !result.includes('No tasks') && result.includes(String(pid));
+        // 镜像名身份核对（isCoreProcessOutput）：PID 复用会把别的进程误判成存活内核 → 健康检查永久失明
+        // （真实事故 2026-10-28：核死后接管 DNS 无人还原过夜）。
+        return (
+          !result.includes('No tasks') &&
+          result.includes(String(pid)) &&
+          isCoreProcessOutput(String(result))
+        );
       } else {
-        // macOS/Linux: 使用 ps 检测进程
-        const result = execSync(`ps -p ${pid} -o pid=`, {
+        // macOS/Linux: 使用 ps 检测进程；`-o comm=` 一并取镜像路径做身份核对（PID 复用识破，见上）。
+        const result = execSync(`ps -p ${pid} -o pid= -o comm=`, {
           encoding: 'utf-8',
           stdio: ['ignore', 'pipe', 'ignore'],
         });
-        return result.trim() === String(pid);
+        return (
+          new RegExp(`^\\s*${pid}\\s`).test(String(result)) && isCoreProcessOutput(String(result))
+        );
       }
     } catch {
       // 命令执行失败，进程不存在
@@ -6267,6 +6276,7 @@ rm -f "$STOPFLAG"
    * performHealthCheck 每 10s 调一次，Windows tasklist ~50-100ms/次 → 周期性主进程卡顿（拖拽/动画可感）。
    * 本方法用 execFileAsync 不阻塞，仅供 performHealthCheck（周期热路径）用；同步清理/kill 链仍用 isProcessAlive
    * （那些是进程已死/停止路径，同步语义 + 短暂阻塞可接受）。判定逻辑与 isProcessAlive 严格一致。
+   * 两者都含镜像名身份核对（isCoreProcessOutput）：PID 复用会把复用者误判成存活内核 → 永久失明。
    */
   private async isProcessAliveAsync(pid: number): Promise<boolean> {
     try {
@@ -6281,10 +6291,23 @@ rm -f "$STOPFLAG"
           { windowsHide: true, timeout: 3000 }
         );
         const result = String(stdout);
-        return !result.includes('No tasks') && result.includes(String(pid));
+        return (
+          !result.includes('No tasks') &&
+          result.includes(String(pid)) &&
+          isCoreProcessOutput(result)
+        );
       } else {
-        const { stdout } = await healthProbeExecFile('ps', ['-p', String(pid), '-o', 'pid=']);
-        return String(stdout).trim() === String(pid);
+        // `-o comm=` 一并取镜像路径做身份核对（PID 复用识破，见 isProcessAlive）。
+        const { stdout } = await healthProbeExecFile('ps', [
+          '-p',
+          String(pid),
+          '-o',
+          'pid=',
+          '-o',
+          'comm=',
+        ]);
+        const result = String(stdout);
+        return new RegExp(`^\\s*${pid}\\s`).test(result) && isCoreProcessOutput(result);
       }
     } catch {
       return false;
@@ -6382,17 +6405,16 @@ rm -f "$STOPFLAG"
       return;
     }
 
-    // 主进程内存自检（issue #210 可观测性）：跟随健康检查节拍（10s），但仅在非重启态执行（上方 isRestarting
-    // 早退已过滤重启期）。重启循环通常很短，跳过其间的内存采样无碍——长会话泄漏在稳态运行期会持续被采样。
-    this.checkMemoryUsage();
-    // 内存时间线采样（issue #242 §6.4）：同节拍触发、内部按 5min 降频记一帧；async best-effort，绝不阻断健康检查。
-    void this.recordMemoryTimelineFrame();
-
+    // ── 探活/恢复先行 ──
     // 判定依据与 getStatus 一致：经包装进程(osascript/UAC)启动才取 singboxPid，否则取 pid。
     // 修复 Linux TUN（直接 spawn，singboxPid 恒 null）下健康检查/自动重启完全失效（issue #33）。
+    // 探活必须排在一切观测段之前：观测段（内存采样等）抛异常不得挡住本 tick 的核死亡检测——
+    // 旧顺序（观测在前且 tick 顶层 catch 无声吞掉异常）正是 2026-10-28 事故的失明形态之一。
     const activePid = this.activeCorePid();
 
     if (!activePid) {
+      // PID 记录缺失 ≠ 安静无事：接管/启动态仍在时说明核记账已与真实脱节，交对账兜底（见方法注释）。
+      await this.handleMissingCorePid();
       return;
     }
 
@@ -6479,9 +6501,79 @@ rm -f "$STOPFLAG"
       }
       return; // 进程已死：不再对账让位（cleanup 已复位或即将重启由 reassert 重建）
     }
+    // ── 观测段（探活之后；每段独立隔离，任何一段异常都不得影响下一个 10s tick 的探活）──
+    // 主进程内存自检（issue #210 可观测性）：跟随健康检查节拍（10s），仅在非重启态执行。重启循环通常很短，
+    // 跳过其间的内存采样无碍——长会话泄漏在稳态运行期会持续被采样。
+    try {
+      this.checkMemoryUsage();
+    } catch (e) {
+      this.logToManager(
+        'warn',
+        `健康检查内存自检失败: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+    // 内存时间线采样（issue #242 §6.4）：同节拍触发、内部按 5min 降频记一帧；async best-effort。
+    void this.recordMemoryTimelineFrame().catch(() => {});
     // 缺陷1 出口让位无帧安全网：STATUS 是 push-on-change、稳态可能不再来帧，若 engage/restore 的 PUT 曾失败则 flag 与
     // selector 脱节、无后续帧重试 → 每 10s 健康检查读缓存末帧对账一次（幂等，到位则 no-op；核在跑才对账）。
-    void this.reconcileLoginFallback(this.selectedExitBackendState());
+    void this.reconcileLoginFallback(this.selectedExitBackendState()).catch(() => {});
+  }
+
+  /**
+   * 健康检查兜底：应有核心在跑，却取不到 PID（activeCorePid() 为 null）时的对账。
+   *
+   * 旧行为是静默 return——一旦 PID 记录因任何路径丢失，健康检查从此失明：核死了无人发现、UI 假连接、
+   * 系统 DNS 接管无人还原（真实事故 2026-10-28：核 22:45 静默死亡，DNS 8.8.8.8 残留过夜）。
+   * 现改为对账，且只在「核应在跑」时动作：
+   *  · 「核应在跑」判据：DNS 接管 marker 在（接管激活 = 核在服役）或 helper/wrapper 启动态未清理。
+   *    纯停机态与旧行为一致，静默返回，绝不对正常停止路径出手。
+   *  · helper status 是权威事实（root 守护自己持着 child 句柄）：它说核活着 → PID 记录丢失属记账事故，
+   *    自愈补回三元组，恢复监控；它说没托管 → 核已死且从未被检测到，走与「意外退出」同一条终态链
+   *    （emit stopped + ensureSystemProxyCleared → ensureSystemDnsRestored 还原接管 DNS + cleanup）。
+   *    此路径不自动重启：记账已与真实脱节，先收敛到确定的停止态让用户重连，避免在坏状态上叠重启循环。
+   *  · await 期间新 start 可能已接管（lifecycleGeneration 变化）→ 让位，本 tick 什么都不做。
+   */
+  private async handleMissingCorePid(): Promise<void> {
+    const takeoverActive = this.systemDnsManager?.hasMarker() ?? false;
+    if (!takeoverActive && !this.startedViaHelper && !this.startedViaWrapper) {
+      return;
+    }
+    const gen = this.lifecycleGeneration;
+    const status = await this.helperManager
+      ?.coreStatus()
+      .catch((): { running: boolean; pid?: number } => ({ running: false }));
+    if (this.lifecycleGeneration !== gen || this.isRestarting) {
+      return; // 新 start 已接管 → pid/状态归它管，本 tick 让位。
+    }
+    if (status?.running && status.pid) {
+      this.singboxPid = status.pid;
+      this.pid = status.pid;
+      this.startedViaHelper = true;
+      this.startTime ??= new Date();
+      this.logToManager(
+        'warn',
+        `核心 PID 记录丢失但进程仍在运行，经 helper 对账自愈 (PID: ${status.pid})`
+      );
+      return;
+    }
+    this.logToManager(
+      'error',
+      '核心进程丢失但系统 DNS 接管/启动态仍在（PID 记录缺失且 helper 未托管核心），执行崩溃恢复'
+    );
+    this.singboxProcess = null;
+    this.pid = null;
+    this.singboxPid = null;
+    this.startedViaHelper = false;
+    this.stopLogFileWatcher();
+    this.emit('error', {
+      message: 'sing-box 进程丢失（PID 记录缺失），已自动恢复系统 DNS，请重新连接',
+      code: -1,
+    });
+    this.emit('stopped');
+    this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_STOPPED, {});
+    // 终态：与意外退出同一条收口——还原系统代理 + 系统 DNS（marker 门控、单飞），绝不留下 8.8.8.8 残留。
+    void this.ensureSystemProxyCleared();
+    this.cleanup();
   }
 
   private shouldAutoRestart(): boolean {
@@ -6958,7 +7050,7 @@ rm -f "$STOPFLAG"
   /**
    * 起链路变化 watcher（薄接线，三平台；issue #368 从「仅 darwin」放宽）。
    * 唤醒源（平台对应的链路监听命令 / 指纹轮询 / powerMonitor resume）→ 去抖 → onTrigger：
-   *   · macOS：经门控 shouldReconcileDns（TUN + 未关接管 + marker 在）重灌系统 DNS 接管——**门控与行为一字未变**；
+   *   · macOS：经门控 shouldReconcileDns（TUN + marker 在 + 引擎存活）重灌系统 DNS 接管——存活门控防「核死后重灌扩大残留」（2026-10-28 事故修复）；
    *   · 三平台恒：**指纹对差后**补刷 OS DNS 缓存（issue #363 的持续失败即「两次启停之间的缓存污染无人清理」）。
    * Windows 无等价的链路监听命令 → 走指纹轮询（resume 只覆盖睡眠唤醒，覆盖不到换网/插拔）。
    * 幂等（DnsInterfaceWatcher.start 内部 started 守卫）。best-effort：构造/起失败仅 warn，绝不抛、不阻断启动。
@@ -6979,7 +7071,11 @@ rm -f "$STOPFLAG"
         reconcile: async () => {
           const mgr = this.systemDnsManager;
           if (!mgr) return;
-          if (!shouldReconcileDns(this.currentConfig, mgr.hasMarker())) return;
+          // 引擎存活是重灌的前提：核已死时接管早已失效，重灌只会把 8.8.8.8 灌回更多服务
+          // （2026-10-28 事故的直接修复之一）。activePid 为 null 视同不存活——记账缺失时宁可漏灌。
+          const activePid = this.activeCorePid();
+          const engineAlive = activePid !== null && this.isProcessAlive(activePid);
+          if (!shouldReconcileDns(this.currentConfig, mgr.hasMarker(), engineAlive)) return;
           await mgr.reconcileDns();
         },
         readFingerprint: () => this.readNetworkFingerprint(),

@@ -268,3 +268,63 @@ export function resolvectlDomainArgs(iface: string): string[] {
 export function resolvectlRevertArgs(iface: string): string[] {
   return ['revert', iface];
 }
+
+/**
+ * 从 `networksetup -listallhardwareports` 输出解析「网络服务名 → 设备名」映射。
+ * 输出以三行为一组（Hardware Port / Device / Ethernet Address），服务名可含空格（如 "USB 10/100/1000 LAN"）。
+ */
+export function parseMacHardwarePortDevices(stdout: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  let port: string | null = null;
+  for (const raw of stdout.split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('Hardware Port:')) {
+      port = line.slice('Hardware Port:'.length).trim();
+    } else if (line.startsWith('Device:') && port) {
+      const dev = line.slice('Device:'.length).trim();
+      if (dev) map[port] = dev;
+      port = null;
+    }
+  }
+  return map;
+}
+
+/**
+ * 从 `ifconfig -a` 输出解析「链路活跃」的设备名集合。
+ * 判据是设备块内的 `status: active|associated`：未插/休眠的物理网卡设备根本不出现在输出里；
+ * 无成员的 bridge 等没有 status 行 → 不算活跃（真机实测：休眠 USB LAN 设备消失、空 bridge0 无 status 行）。
+ */
+export function parseMacActiveDevices(stdout: string): Set<string> {
+  const active = new Set<string>();
+  let current: string | null = null;
+  for (const raw of stdout.split('\n')) {
+    const head = raw.match(/^(\S+?): flags=/);
+    if (head) {
+      current = head[1];
+      continue;
+    }
+    if (current && /^\s*status:\s*(active|associated)\s*$/i.test(raw)) {
+      active.add(current);
+    }
+  }
+  return active;
+}
+
+/**
+ * macOS DNS 接管目标过滤：只保留「硬件设备存在且链路活跃」的网络服务。
+ *
+ * 为什么必须过滤：接管休眠服务（未插的 USB 网卡、无成员的 Thunderbolt Bridge）没有任何收益
+ * （无流量、无解析器），却把「崩溃残留 8.8.8.8」的泄漏面从活跃的 1 个服务放大到全部服务
+ * （真实事故：2026-10-28 休眠 USB LAN ×2 + 雷电桥残留过夜）。热插后新活跃的服务由
+ * reconcileDns（链路 watcher）按同一判据补接管。
+ */
+export function filterMacActiveTargets(
+  services: string[],
+  hardwarePorts: Record<string, string>,
+  activeDevices: Set<string>
+): string[] {
+  return services.filter((s) => {
+    const dev = hardwarePorts[s];
+    return dev !== undefined && activeDevices.has(dev);
+  });
+}
