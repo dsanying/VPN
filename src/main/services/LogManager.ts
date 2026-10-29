@@ -115,9 +115,18 @@ export class LogManager extends EventEmitter implements ILogManager {
       if (critical) this.criticalDropped++;
     }
     // 折叠（关键信息视图）：窗口内同键合并为代表条目并累计 ×N，实时流按 id 就地更新。
+    // 操作生命周期证据（start/success/failure，每个 trace 各一条）**不参与折叠**：折叠代表条目保留
+    // 首次出现的上下文快照，若 start 与 success 同键（同 operation|level|source|message，如
+    // traceOperation 的 record 以 operation 为 message）合并，终态 phase/durationMs 会被 start 快照
+    // 吞掉——operation-context 诊断链与 DiagnosticArchive 都依赖终态条目（真机回归：折叠上线后
+    // 「proxy:start 成功」证据在内存视图消失）。折叠目标是重复噪音（查询/重试刷屏）；progress 阶段
+    // 的业务日志不在生命周期之列，仍正常折叠。
+    const lifecycleEvidence = entry.phase !== undefined && entry.phase !== 'progress';
     const nowMs = Date.now();
-    const foldKey = `${entry.operation ?? ''}|${entry.level}|${entry.source}|${logFoldKey(entry)}`;
-    const folded = this.foldIndex.get(foldKey);
+    const foldKey = lifecycleEvidence
+      ? undefined
+      : `${entry.operation ?? ''}|${entry.level}|${entry.source}|${logFoldKey(entry)}`;
+    const folded = foldKey !== undefined ? this.foldIndex.get(foldKey) : undefined;
     if (folded && nowMs - folded.lastAt <= LOG_FOLD_WINDOW_MS) {
       folded.lastAt = nowMs;
       const target = folded.entry;
@@ -130,8 +139,10 @@ export class LogManager extends EventEmitter implements ILogManager {
       if (visible) this.emit('log', target);
       return;
     }
-    this.foldIndex.set(foldKey, { entry, lastAt: nowMs });
-    this.foldKeyByEntry.set(entry, foldKey);
+    if (foldKey !== undefined) {
+      this.foldIndex.set(foldKey, { entry, lastAt: nowMs });
+      this.foldKeyByEntry.set(entry, foldKey);
+    }
     this.logs.push(entry);
     if (this.logs.length > this.maxLogs) {
       const evicted = this.logs.shift();

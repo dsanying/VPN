@@ -88,6 +88,49 @@ describe('Log folding keeps disk evidence complete while the UI tail shows key i
     expect(same.every((log) => log.repeatCount === undefined)).toBe(true);
   });
 
+  it('does not fold different levels or sources', () => {
+    const manager = new LogManager(directory);
+    manager.addLog('warn', 'same key', 'A');
+    manager.addLog('error', 'same key', 'A');
+    manager.addLog('warn', 'same key', 'B');
+    const same = manager.getLogs().filter((log) => log.message === 'same key');
+    expect(same).toHaveLength(3);
+    expect(same.every((log) => log.repeatCount === undefined)).toBe(true);
+  });
+
+  it('never folds operation lifecycle evidence even when start/success share the same key', async () => {
+    // 真机回归（e565519 折叠上线）：traceOperation 的 record 以 operation 为 message，start 与 success
+    // 事件同键折叠 → 终态证据被 start 快照吞掉，operation-context 诊断链与 DiagnosticArchive 失明。
+    const manager = new LogManager(directory);
+    const ctx = {
+      traceId: 't1',
+      operation: 'proxy:start',
+      phase: 'start' as const,
+    };
+    manager.addLog('info', 'proxy:start', 'Operation', undefined, { ...ctx });
+    manager.addLog('info', 'inner work', 'Engine', undefined, { ...ctx, phase: 'progress' });
+    manager.addLog('info', 'proxy:start', 'Operation', undefined, {
+      ...ctx,
+      phase: 'success',
+      durationMs: 15,
+    });
+    manager.addLog('error', 'proxy:start', 'Operation', 'Error: boom', {
+      ...ctx,
+      phase: 'failure',
+      durationMs: 20,
+    });
+    const op = manager.getLogs().filter((log) => log.operation === 'proxy:start');
+    // start、inner、success、failure 四条齐全，终态不被 start 快照合并
+    expect(op).toHaveLength(4);
+    expect(op.at(-2)).toMatchObject({ phase: 'success', durationMs: 15 });
+    expect(op.at(-1)).toMatchObject({ phase: 'failure', stack: 'Error: boom' });
+    // progress 阶段的业务日志仍正常折叠（同键重复合并为一条）
+    manager.addLog('info', 'inner work', 'Engine', undefined, { ...ctx, phase: 'progress' });
+    const inner = manager.getLogs().filter((log) => log.message === 'inner work');
+    expect(inner).toHaveLength(1);
+    expect(inner[0].repeatCount).toBe(2);
+  });
+
   it('clear resets the fold index', async () => {
     const manager = new LogManager(directory);
     manager.addLog('warn', 'same key', 'Example');
