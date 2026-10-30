@@ -1,1 +1,28 @@
-.vpn-connection-graph > div { min-width: calc(var(--ds-layout-control-width) * 2); }
+/* 出口图内层最小宽度：窄窗口横向滚动，保证两列标签与挂线都有可读空间。 */
+.vpn-connection-graph > div {
+  min-width: calc(var(--ds-layout-control-width) * 2);
+  position: relative;
+}
+
+.vpn-connection-graph__band,
+.vpn-connection-graph__node {
+  cursor: pointer;
+}
+
+/* 挂线悬浮提示（原 echarts tooltip 的替代）：跟随指针、只读。 */
+.vpn-connection-graph__tip {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  max-width: 320px;
+  padding: 4px 8px;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 6px;
+  background: var(--ds-color-surface-elevated);
+  color: var(--ds-color-text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
+}

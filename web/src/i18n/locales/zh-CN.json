@@ -339,6 +339,7 @@
     "remarks": "备注",
     "repairHelper": "修复",
     "responseStatus": "HTTP {code}",
+    "latencyMs": "{ms} ms",
     "restartProxyUpdate": "重启代理应用更新",
     "restartSoftwareUpdate": "重启软件应用更新",
     "restoreImpact": "所选类别将被备份中的内容替换。",

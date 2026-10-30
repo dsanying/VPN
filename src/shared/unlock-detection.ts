@@ -23,6 +23,8 @@ export interface UnlockResult {
   status: UnlockStatus;
   region?: string;
   httpStatus?: number;
+  /** 主请求（HEAD）往返耗时（毫秒）；传输失败/超时无值。UI 连通性条目用它替代 HTTP 码展示。 */
+  latencyMs?: number;
   reason?: string;
 }
 
