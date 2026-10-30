@@ -285,15 +285,19 @@ export function buildDnsConfig(
 
   // 方案B：DNS 接管把系统 DNS 改成公网 8.8.8.8 后，dns-local(type:local) 解不了内网域名(.lan/.home.arpa/内网域)、
   // 反查(.arpa) 与 captive portal。接管激活且读到内网 LAN 解析器(私网 IPv4)时，建 dns-lan 把这些域名重定向到它解析。
-  // type:'dhcp'(interface 省略=auto，靠 route.auto_detect_interface)：从 DHCP 动态拿当前网关下发的 DNS——
-  //   ① 换网络(默认接口变)经 InterfaceMonitor 自动重 fetch、跟随新网关，无需重生成 config/重启核(修原硬编码 LAN IP
-  //      换网络后指向旧网关失效)；② dhcp 读 DHCP lease 而非系统 resolver，DNS 接管后系统 DNS 被改成受控 IP 也不影响
-  //      (仍拿真实 LAN DNS，优于 type:local)；③ dhcp 用 LocalDialer 直连、不经 route hijack(rule C 的 LAN IP 放行
-  //      退化为首跳冗余兜底)。lanResolver 探测仍保留：决定是否建 dns-lan(无 LAN 解析器=无内网 DNS) + rule C 放行。
-  //   真机验(macOS 接管)：换网络后 dhcp 跟随新网关解内网域名、不成环；sing-box check 已确认 dhcp transport 已编译。
+  // type:'udp' 直指 lanResolverForDns（启动时接管**前**实测的 DHCP 解析器 IP）：
+  //   ① 不依赖系统 resolver（接管把系统 DNS 改成受控 IP 也不影响，仍拿真实 LAN DNS，优于 type:local）；
+  //   ② 私网 IP 经 rule C 直连放行，不经 route hijack（rule C 退化为首跳冗余兜底）；
+  //   ③ **弃用 type:'dhcp'（2026-10-30 真机实证）**：dhcp 传输每次重取都要对网关发 DHCP DISCOVER，校园网
+  //      对已租约客户端的重发现基本不应答——单日日志「初次成功 3 次、重取超时 103 次」，核启动数秒后 dns-lan
+  //      即死（fetch DNS servers: context deadline exceeded），内网专属域名 NXDOMAIN、split-horizon 域名拿到
+  //      公网假答案（ai.cuhk.edu.cn→公网边缘 IP），用户内网 API 反复中断。直读 DHCP lease（ipconfig getoption/
+  //      netsh/resolvectl）不受该限制——lanResolverForDns 就是这么来的。换网跟随由链路变化 watcher 的
+  //      LAN 解析器漂移检测补上（检测到新网络解析器变化 → 重生成配置并去抖重启核，见 ProxyManager reconcile 腿）。
+  //   lanResolver 探测仍保留：决定是否建 dns-lan(无 LAN 解析器=无内网 DNS) + rule C 放行。
   const lanResolver = lanResolverForDns;
   if (lanResolver) {
-    dnsServers.push({ tag: 'dns-lan', type: 'dhcp' });
+    dnsServers.push({ tag: 'dns-lan', type: 'udp', server: lanResolver, server_port: 53 });
   }
   // Q1 死循环防护（**仅 Windows**）：Win TUN 的 strict_route(WFP) 把所有 :53 逼进 TUN；type:local 经 svchost(Win DNS
   // 客户端，不在 route 直连进程白名单)发出的查询 → 进 TUN → hijack-dns → 命中 dns-local 规则 → 又 svchost → ∞。
@@ -316,8 +320,8 @@ export function buildDnsConfig(
   // 校园/企业内网域名只在接入网 LAN 解析器上有内网答案（ai.cuhk.edu.cn→10.20.232.122），公共 DNS 给的是
   // 公网边缘（真机 curl 对照：公共答案 302 SSO 重定向、内网 IP 401 内网网关）。直连投影/影子原取
   // getDomesticResolverTag（race on → dns-node-race 公共 DoH 竞速），隧道内直连域名被解析去错误服务器。
-  // 修复：有 LAN 解析器（lanResolverForDns 非空 → 已建 dns-lan=type:dhcp，跟随真实网关 DNS、不受 DNS 接管
-  // 影响）时，直连域名先问 dns-lan，**答案为私网地址才采纳**（内网存在 = split-horizon 实锤）；否则退回
+  // 修复：有 LAN 解析器（lanResolverForDns 非空 → 已建 dns-lan=udp 直指接管前实测的 DHCP 解析器，
+  // 不受 DNS 接管影响）时，直连域名先问 dns-lan，**答案为私网地址才采纳**（内网存在 = split-horizon 实锤）；否则退回
   // 境内解析器。不能整条换成 dns-lan：内网解析器可能对被墙域投毒、对企业域名白名单外的域 NXDOMAIN，
   // evaluate + match_response(私网 CIDR) 的条件采纳与 pushAutomaticCountryDns 是同一对动作语义。
   // 无 LAN 解析器维持原样（单条境内解析器，字节不变）。dial-time lookup 与 route resolve 都经 dns.rules

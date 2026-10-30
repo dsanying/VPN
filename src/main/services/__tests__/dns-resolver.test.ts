@@ -461,7 +461,7 @@ describe('Q1 Windows takeover：消除 type:local 死循环（dns-local 改路�
     expect(bankToLocal).toBe(false);
   });
 
-  it('Win+takeover+有 LAN 解析器：内网/captive→dns-lan，银行→dns-domestic，dns-lan(dhcp 动态)+ rule C 直连放行', () => {
+  it('Win+takeover+有 LAN 解析器：内网/captive→dns-lan，银行→dns-domestic，dns-lan(udp 直指实测解析器)+ rule C 直连放行', () => {
     setPlatform('win32');
     const pm = new ProxyManager();
     (pm as any).lanResolverForDns = '192.168.5.1';
@@ -469,9 +469,17 @@ describe('Q1 Windows takeover：消除 type:local 死循环（dns-local 改路�
     expect(lanRule(cfg)?.server).toBe('dns-lan');
     expect(captiveRule(cfg)?.server).toBe('dns-lan');
     expect(bankRule(cfg)?.server).toBe('dns-domestic');
-    // dns-lan 改 type:'dhcp'(动态跟随网关，不再硬编码 lanResolver IP)；lanResolver 仍决定是否建 dns-lan + rule C 放行
+    // dns-lan 用 type:'udp' 直指启动时实测的内网解析器（2026-10-30 真机实证弃 type:'dhcp'：校园网对 DHCP
+    // 重发现不应答，单日重取超时 103/106，核启动数秒后 dns-lan 即死 → 内网域名 NXDOMAIN/公网假答案）；
+    // lanResolver 仍决定是否建 dns-lan + rule C 放行；换网跟随由链路 watcher 的漂移检测+去抖重启负责。
     expect(
-      (cfg.dns.servers as AnyCfg[]).some((s) => s.tag === 'dns-lan' && s.type === 'dhcp')
+      (cfg.dns.servers as AnyCfg[]).some(
+        (s) =>
+          s.tag === 'dns-lan' &&
+          s.type === 'udp' &&
+          s.server === '192.168.5.1' &&
+          s.server_port === 53
+      )
     ).toBe(true);
     expect(hasRouteDirect(cfg, '192.168.5.1/32')).toBe(true);
   });

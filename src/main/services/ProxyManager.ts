@@ -43,6 +43,7 @@ import { type ISystemDnsManager } from './SystemDnsManager';
 import {
   DnsInterfaceWatcher,
   shouldReconcileDns,
+  shouldFollowLanResolverDrift,
   createLinkChangeHandler,
 } from './DnsInterfaceWatcher';
 import { resolveLinkMonitorSpec } from './dns-route-events';
@@ -7084,6 +7085,28 @@ rm -f "$STOPFLAG"
           const engineAlive = activePid !== null && this.isProcessAlive(activePid);
           if (!shouldReconcileDns(this.currentConfig, mgr.hasMarker(), engineAlive)) return;
           await mgr.reconcileDns();
+          // LAN 解析器漂移检测（dns-lan 弃 type:dhcp 后的换网跟随）：核配置里的 dns-lan 是启动时实测的
+          // 解析器 IP（udp 直指），换网后旧 IP 失效 → 内网域名全灭。此处免劫持重探，解析器变了就重生成
+          // 配置 + 去抖重启核（与自动地区策略变化同一重启通道）。同网噪音事件（RA/DHCP renew）解析器
+          // 不变 → 不重启。2026-10-30 内网 API 反复中断的收尾修复。
+          try {
+            const live = await mgr.readLanResolversLive();
+            const picked = shouldFollowLanResolverDrift(live, this.lanResolverForDns);
+            if (picked) {
+              const previous = this.lanResolverForDns;
+              this.lanResolverForDns = picked;
+              this.logToManager(
+                'info',
+                `LAN 解析器漂移：${previous ?? '无'} → ${picked}（链路变化重探），重生成配置跟随新网络`
+              );
+              this.scheduleDebouncedRestart(`LAN 解析器漂移(${previous ?? '无'}→${picked})`);
+            }
+          } catch (e) {
+            this.logToManager(
+              'debug',
+              `LAN 解析器漂移检测失败（不影响本次重灌）: ${e instanceof Error ? e.message : String(e)}`
+            );
+          }
         },
         readFingerprint: () => this.readNetworkFingerprint(),
         getLastFingerprint: () => this.lastNetworkFingerprint,

@@ -24,6 +24,7 @@
  */
 
 import type { LogLevel, UserConfig } from '../../shared/types';
+import { controlledTunDnsIp, pickLanResolverIp } from '../../shared/system-dns';
 
 /** spawn 出的子进程在本类内只需 stdout 可读流 + kill + 错误事件 —— 收窄接口便于 mock，不绑死 ChildProcess 全形。 */
 export interface WatchableChildProcess {
@@ -297,8 +298,27 @@ export class DnsInterfaceWatcher {
   }
 }
 
-/** createLinkChangeHandler 的注入面。全部为函数，便于在无 ProxyManager 实例的前提下单测组合逻辑。 */
-export interface LinkChangeHandlerDeps {
+/**
+ * LAN 解析器漂移判定（纯函数，供单测）。dns-lan 弃 type:dhcp 改 udp 直指后，换网跟随靠它：
+ *
+ *  - 输入 null/空数组 = 「无信息」（mac ipconfig 失败 / 平台读不到）→ 返回 null **不重启**：探测失败是常态噪音，
+ *    据此重启会把偶发命令失败放大成断流；漏检的真换网由下一次链路事件兜底。
+ *  - 探到的新解析器不是私网 IPv4（或恰为受控 IP）→ null：公网解析器不满足 dns-lan 语义（内网/captive 定向）。
+ *  - 与当前一致 → null（同网噪音事件：RA / DHCP renew / 自身路由操作，绝不能重启）。
+ *  - 私网且不同 → 返回新 IP，调用方更新 lanResolverForDns 并去抖重启核（重生成配置把新 IP 烤进 dns-lan）。
+ */
+export function shouldFollowLanResolverDrift(
+  liveCandidates: string[] | null,
+  currentResolver: string | null,
+  controlledIp: string = controlledTunDnsIp()
+): string | null {
+  if (!liveCandidates || liveCandidates.length === 0) return null;
+  const picked = pickLanResolverIp(liveCandidates, controlledIp);
+  if (!picked || picked === currentResolver) return null;
+  return picked;
+}
+
+/** createLinkChangeHandler 的注入面。全部为函数，便于在无 ProxyManager 实例的前提下单测组合逻辑。 */ export interface LinkChangeHandlerDeps {
   /**
    * macOS 接管重灌。生产接线恒传非 null（门控与 SystemDnsManager 都在闭包内每次求值），
    * null 支只保留给单测——用来钉住「没有 reconcile 时 flush 腿照常工作」这条组合语义。
