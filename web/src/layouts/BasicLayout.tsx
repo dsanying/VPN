@@ -5,6 +5,7 @@ import {
   MoonOutlined,
   SunOutlined,
   SyncOutlined,
+  TranslationOutlined,
 } from '@ant-design/icons';
 import { Button, Drawer, Grid, Layout, type MenuProps, Tooltip } from 'antd';
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -131,6 +132,7 @@ function Preferences({ compact, items = [] }: { compact?: boolean; items?: MenuP
         <IconButton
           type="text"
           label={t('common.language.switch')}
+          icon={<TranslationOutlined aria-hidden />}
           onClick={() => void i18n.changeLanguage(language)}
         >
           <span lang={language}>{language === 'zh-CN' ? 'EN' : '中文'}</span>
