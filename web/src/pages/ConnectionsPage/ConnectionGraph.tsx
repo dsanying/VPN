@@ -38,12 +38,12 @@ const PAD = designTokens.space.xl;
 interface GraphModel {
   width: number;
   height: number;
-  xDot: number;
-  apps: Array<{ id: string; identity: string; label: string; icon: string; y: number }>;
-  exits: Array<{ id: string; outbound: string; label: string; dot: string; y: number }>;
+  apps: Array<{ id: string; identity: string; label: string; icon: string; y: number; ax: number }>;
+  exits: Array<{ id: string; outbound: string; label: string; dot: string; y: number; ax: number }>;
   bands: Array<{
     key: string;
     d: string;
+    w: number;
     color: string;
     tip: string;
     application?: string;
@@ -51,13 +51,35 @@ interface GraphModel {
   }>;
 }
 
-/** 估算字符串像素宽（CJK 记 1、拉丁记 0.6 个字号单位），超宽截断加省略号。 */
+/** 锚点小圆点与文字的间距。 */
+const ANCHOR_GAP = 8;
+/** 锚点到中线两侧的最小距离：保证任意连线带区 ≥88px（测试按 path 宽 >80 识别挂线）。 */
+const ANCHOR_CLAMP = 44;
+
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+/** canvas 实测文字像素宽；同字体同文字结果确定，保证字节更新重渲染零 DOM 变更。 */
+function measureText(text: string): number {
+  if (measureCtx === undefined) {
+    measureCtx =
+      typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+    if (measureCtx) measureCtx.font = `${FONT}px ${designTokens.font.family}`;
+  }
+  if (!measureCtx) {
+    // 无 canvas 环境（SSR/测试降级）：CJK 记 1、拉丁记 0.6 个字号单位。
+    const units = [...text].reduce(
+      (sum, ch) => sum + ((ch.codePointAt(0) ?? 0) >= 0x2e80 ? 1 : 0.6),
+      0
+    );
+    return units * FONT;
+  }
+  return measureCtx.measureText(text).width;
+}
+
+/** canvas 实测宽度截断标签，超宽加省略号。 */
 function fitText(text: string, maxPx: number) {
-  const units = (s: string) =>
-    [...s].reduce((sum, ch) => sum + ((ch.codePointAt(0) ?? 0) >= 0x2e80 ? 1 : 0.6), 0);
-  if (units(text) * FONT <= maxPx) return text;
+  if (measureText(text) <= maxPx) return text;
   let end = text.length;
-  while (end > 1 && (units(text.slice(0, end)) + 1) * FONT > maxPx) end--;
+  while (end > 1 && measureText(`${text.slice(0, end).trimEnd()}…`) > maxPx) end--;
   return `${text.slice(0, end).trimEnd()}…`;
 }
 
@@ -67,12 +89,14 @@ export function ConnectionGraph({
   label,
   display,
   onSelect,
+  selection,
 }: {
   flows: ConnectionFlow[];
   applications: InstalledApplication[];
   onSelect: (selection: ConnectionSelection) => void;
   label: string;
   display: (value: string) => string;
+  selection?: ConnectionSelection;
 }) {
   const colors = useChartColors();
   const { t } = useTranslation();
@@ -83,6 +107,7 @@ export function ConnectionGraph({
   const hostRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [hover, setHover] = useState<ConnectionSelection | null>(null);
   useEffect(() => {
     const element = hostRef.current;
     if (!element) return;
@@ -94,11 +119,12 @@ export function ConnectionGraph({
   const model = useMemo<GraphModel | null>(() => {
     if (!width) return null;
     const routeColor = (outbound?: string) =>
-      outbound === 'direct' || outbound === 'system-network'
-        ? colors.success
-        : outbound === 'block' || outbound === 'reject'
-          ? colors.error
-          : colors.textTertiary;
+      // 配色语义：代理节点绿色（流量主角色）、直连灰色（背景流量）、阻断红色。
+      outbound === 'block' || outbound === 'reject'
+        ? colors.error
+        : outbound === 'direct' || outbound === 'system-network'
+          ? colors.textTertiary
+          : colors.success;
     // 标签文案与旧图一致：出口解析节点身份补地区/分组，其余走 display。
     const caption = (n: (typeof graph.nodes)[number]) => {
       const node = n.depth === 1 ? resolveNodeIdentity(n.name, servers ?? []) : undefined;
@@ -145,32 +171,44 @@ export function ConnectionGraph({
       .sort((a, b) => a.desired - b.desired || a.label.localeCompare(b.label));
     const exitIndex = new Map(exits.map((exit, index) => [exit.node.id, index]));
     const rows = Math.max(1, apps.length, exits.length);
-    const inner = Math.max(width - PAD * 2, 200);
-    const leftW = Math.min(300, Math.max(96, Math.round(inner * 0.34)));
-    const rightW = Math.min(240, Math.max(88, Math.round(inner * 0.28)));
+    // 锚点直接挂在本行文字旁：应用文字左起，出口文字右对齐，锚点在文字末侧 8px 处。
+    // 带区（两条锚点之间的连线区域）以中线对称，锚点向中线 clamp 保证带区 ≥2×ANCHOR_CLAMP。
     const xText = PAD + ICON + GAP;
-    const xLeft = xText + leftW;
-    const xRight = width - PAD - rightW;
-    const mid = (xLeft + xRight) / 2;
+    const xEnd = width - PAD;
+    const mid = (xText + xEnd) / 2;
     const appByPath = new Map(applications.map((application) => [application.path, application]));
+    const appMax = Math.max(24, mid - ANCHOR_CLAMP - ANCHOR_GAP - xText);
+    const exitMax = Math.max(24, xEnd - (mid + ANCHOR_CLAMP) - ANCHOR_GAP);
+    const appsModel = apps.map(({ node, label: text }, index) => {
+      const label = fitText(`${text} · ${formatNumber(node.value)}`, appMax);
+      return {
+        id: node.id,
+        identity: node.identity ?? '',
+        label,
+        icon: appByPath.get(node.identity ?? '')?.iconDataUrl ?? PROCESS_ICON,
+        y: rowY(index),
+        ax: Math.min(xText + measureText(label) + ANCHOR_GAP, mid - ANCHOR_CLAMP),
+      };
+    });
+    const exitsModel = exits.map(({ node, label: text }, index) => {
+      const label = fitText(`${text} · ${formatNumber(node.value)}`, exitMax);
+      return {
+        id: node.id,
+        outbound: node.outbound ?? '',
+        label,
+        dot: routeColor(node.outbound),
+        y: rowY(index),
+        ax: Math.max(xEnd - measureText(label) - ANCHOR_GAP, mid + ANCHOR_CLAMP),
+      };
+    });
+    // 连线宽度按连接数 3–10px：把旧桑基图「流量一眼可见」的信息量带回来，
+    // 只跟连接数走，与字节无关（字节更新不改变任何元素，零重绘契约不变）。
+    const maxLink = Math.max(1, ...graph.links.map((link) => link.value));
     return {
       width,
       height: TOP + rows * ROW + TOP,
-      xDot: xRight + 8,
-      apps: apps.map(({ node, label: text }, index) => ({
-        id: node.id,
-        identity: node.identity ?? '',
-        label: fitText(`${text} · ${formatNumber(node.value)}`, leftW),
-        icon: appByPath.get(node.identity ?? '')?.iconDataUrl ?? PROCESS_ICON,
-        y: rowY(index),
-      })),
-      exits: exits.map(({ node, label: text }, index) => ({
-        id: node.id,
-        outbound: node.outbound ?? '',
-        label: fitText(`${text} · ${formatNumber(node.value)}`, rightW),
-        dot: routeColor(node.outbound),
-        y: rowY(index),
-      })),
+      apps: appsModel,
+      exits: exitsModel,
       bands: graph.links.flatMap((link) => {
         const from = graph.nodes.find((n) => n.id === link.source);
         const to = graph.nodes.find((n) => n.id === link.target);
@@ -184,7 +222,8 @@ export function ConnectionGraph({
         return [
           {
             key: `${link.source}->${link.target}`,
-            d: `M ${xLeft} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${xRight} ${y2}`,
+            d: `M ${appsModel[app].ax} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${exitsModel[exit].ax} ${y2}`,
+            w: 3 + 7 * (link.value / maxLink),
             color: routeColor(to.outbound),
             tip: `${application} → ${outbound} · ${formatNumber(link.value)}`,
             application: from.identity,
@@ -199,6 +238,16 @@ export function ConnectionGraph({
     if (rect) setTip({ x: event.clientX - rect.left + 12, y: event.clientY - rect.top + 12, text });
   };
   const hideTip = () => setTip(null);
+  // 高亮焦点：悬停优先，其次页面当前的筛选选中。命中流向全亮，其余压暗。
+  const focus = hover?.application || hover?.outbound ? hover : selection;
+  const hasFocus = Boolean(focus?.application || focus?.outbound);
+  const bandOpacity = (band: { application?: string; outbound?: string }) => {
+    if (!hasFocus) return 0.55;
+    const active =
+      (focus?.application && band.application === focus.application) ||
+      (focus?.outbound && band.outbound === focus.outbound);
+    return active ? 0.95 : 0.15;
+  };
   const height = Math.min(CHART_HEIGHT, Math.max(REALTIME_CHART_HEIGHT, model?.height ?? 0));
   return (
     <ScrollRegion axis="both" label={label} className="vpn-connection-graph" style={{ height }}>
@@ -218,10 +267,15 @@ export function ConnectionGraph({
                 d={band.d}
                 fill="none"
                 stroke={band.color}
-                strokeWidth={1.5}
-                strokeOpacity={0.55}
+                strokeWidth={band.w}
+                strokeLinecap="round"
+                strokeOpacity={bandOpacity(band)}
                 onMouseMove={moveTip(band.tip)}
-                onMouseLeave={hideTip}
+                onMouseEnter={() => setHover({ application: band.application, outbound: band.outbound })}
+                onMouseLeave={() => {
+                  setHover(null);
+                  hideTip();
+                }}
                 onClick={() => onSelect({ application: band.application, outbound: band.outbound })}
               />
             ))}
@@ -244,6 +298,7 @@ export function ConnectionGraph({
                 >
                   {app.label}
                 </text>
+                <circle cx={app.ax} cy={app.y} r={3} fill={colors.info} />
               </g>
             ))}
             {model.exits.map((exit) => (
@@ -254,7 +309,7 @@ export function ConnectionGraph({
                 onMouseLeave={hideTip}
                 onClick={() => onSelect({ outbound: exit.outbound })}
               >
-                <circle cx={model.xDot} cy={exit.y} r={3} fill={exit.dot} />
+                <circle cx={exit.ax} cy={exit.y} r={3} fill={exit.dot} />
                 <text
                   x={model.width - PAD}
                   y={exit.y}
