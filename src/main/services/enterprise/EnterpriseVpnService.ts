@@ -40,7 +40,7 @@ export class EnterpriseVpnService {
     private readonly store: EnterpriseProfileStore,
     readonly discovery: EnterpriseDiscovery,
     private readonly createEngine: () => EnterpriseEngine,
-    private readonly proxy: TunnelOwner,
+    proxy: TunnelOwner,
     private readonly configStore: ConfigStore,
     private readonly publish: (snapshot: EnterpriseSnapshot) => void,
     private readonly log?: EnterpriseLogger
