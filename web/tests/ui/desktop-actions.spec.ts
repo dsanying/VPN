@@ -490,17 +490,18 @@ test('普通设置保存只改对应字段，保留订阅、节点与规则', as
   await mock.expectNoUnexpectedRequests();
 });
 
-test('入口延迟与代理延迟独立展示，实际备用目标可见', async ({ page }) => {
+test('代理延迟常驻卡片，入口延迟降级为提示，实际备用目标可见', async ({ page }) => {
   await chinese(page);
   const mock = await installDesktopMock(page);
   await page.goto('/#/nodes');
   await page.getByRole('button', { name: '全部测速', exact: true }).click();
   await expect(
-    page.locator('[data-slot="entry"]').getByText('52 ms', { exact: true })
-  ).toBeVisible();
-  await expect(
     page.locator('[data-slot="proxy"]').getByText('92 ms', { exact: true })
   ).toBeVisible();
+  // 入口延迟不再是独立槽位（d0a9873 卡片重构），以 tooltip 形式挂在代理延迟上。
+  await expect(
+    page.locator('[data-slot="proxy"]')
+  ).toHaveAttribute('title', '入口延迟 52 ms');
   await expect(page.locator('[data-slot="proxy"] [title="cp.cloudflare.com"]')).toBeAttached();
   await mock.expectNoUnexpectedRequests();
 });
