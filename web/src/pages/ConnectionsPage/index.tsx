@@ -48,6 +48,10 @@ export default function ConnectionsPage() {
     setSelectedOutbounds(value.outbound ? [value.outbound] : []);
     setPage(1);
   }, []);
+  const graphSelection = useMemo<ConnectionSelection>(
+    () => ({ application: selectedApplications[0], outbound: selectedOutbounds[0] }),
+    [selectedApplications, selectedOutbounds]
+  );
   useStatsTopic<ConnectionsSnapshot>('detail', setSnapshot);
   const current =
     snapshot && (running ? snapshot.source !== 'device' : snapshot.source === 'device')
@@ -137,6 +141,7 @@ export default function ConnectionsPage() {
           applications={applications}
           display={display}
           onSelect={onSelect}
+          selection={graphSelection}
         />
         <TablePanel>
           <QueryForm mode="local">
