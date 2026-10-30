@@ -89,6 +89,12 @@ export interface ISystemDnsManager {
    * 必须在 setDns 改写系统 DNS 之前读（此刻生效解析器仍是 LAN）。只读、无副作用。
    */
   getLanResolverForDns(): Promise<string | null>;
+  /**
+   * 运行中重探当前网络的 LAN 解析器（**免劫持**，不得读被接管改写的系统 resolver 配置）。
+   * 供链路变化 watcher 的漂移检测：换网后解析器变化 → 重生成配置（dns-lan 的 udp 目标在配置里）+ 去抖重启核。
+   * 只读、无副作用、失败返回空数组（调用方按「无信息」处理，不据此重启）。
+   */
+  readLanResolversLive(): Promise<string[]>;
   /** 注入日志 sink。 */
   setLogManager(lm: LogManager): void;
 }
@@ -203,14 +209,32 @@ export abstract class SystemDnsBase implements ISystemDnsManager {
    */
   async getLanResolverForDns(): Promise<string | null> {
     try {
+      // 新鲜值优先：此刻系统 DNS 尚未接管（探测发生在 setDns 之前），scutil/netsh/resolvectl 反映**当前**
+      // 网络的真实解析器。marker.original（上一会话/上次接管前捕获）只作回退——顺序至关重要：换网后残留的
+      // 旧 marker 若排在前面，会把 dns-lan 指到旧网关的解析器（新网络里不可达），内网域名全灭。两路合并去重，
+      // pickLanResolverIp 按序取第一个私网 IPv4（异常态：系统 DNS 仍是受控 IP → 新鲜值无私网 → 自然落 marker）。
+      const fresh = await this.readEffectiveResolvers().catch((): string[] => []);
       const marker = SystemDnsBase.readMarker();
-      const candidates = marker
-        ? Object.values(marker.original).flat()
-        : await this.readEffectiveResolvers();
+      const fromMarker = marker ? Object.values(marker.original).flat() : [];
+      const candidates = [...fresh];
+      for (const ip of fromMarker) {
+        if (!candidates.includes(ip)) candidates.push(ip);
+      }
       return pickLanResolverIp(candidates, this.controlledIp);
     } catch {
       return null;
     }
+  }
+
+  /**
+   * 运行中重探当前网络的 LAN 解析器（**免劫持**：不得读被接管改写的系统 resolver 配置）。
+   * 供链路变化 watcher 的漂移检测：换网后解析器变了 → 重生成配置（dns-lan 的 udp 目标 IP 在配置里）并重启核。
+   * 默认实现= readEffectiveResolvers——Windows(netsh per-interface，setDns 已收敛 no-op 不改系统)与
+   * Linux(resolvectl per-link 且排除 TUN 链路)的该读取在接管后仍反映真实 LAN 解析器；macOS 的 scutil 会被
+   * 接管改写成受控 IP，故 Mac 子类覆写为直读 DHCP lease（ipconfig getoption，无 DISCOVER、不受应答限速）。
+   */
+  async readLanResolversLive(): Promise<string[]> {
+    return this.readEffectiveResolvers();
   }
 
   /**
@@ -459,6 +483,39 @@ export class MacOSSystemDns extends SystemDnsBase {
     // scutil --dns 反映生效解析器（含 DHCP 下发的，networksetup -getdnsservers 对 DHCP 返空拿不到）。
     const { stdout } = await execAsync('scutil --dns', { timeout: DNS_CMD_TIMEOUT_MS });
     return parseScutilNameservers(stdout);
+  }
+
+  /** 默认路由所在 BSD 接口（en0 等）；读不到返回 null（调用方退回空候选，宁缺勿错）。 */
+  private async defaultRouteInterface(): Promise<string | null> {
+    try {
+      const { stdout } = await execAsync('route -n get default', { timeout: DNS_CMD_TIMEOUT_MS });
+      return /^interface:\s+(\S+)/m.exec(stdout)?.[1] ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 免劫持活体探测（覆写基类 scutil 版）：接管后 scutil --dns 已被改写成受控 IP，零判别力。
+   * 直读 DHCP lease（`ipconfig getoption <if> domain_name_server`）——本地 lease 数据库，不发 DHCP
+   * DISCOVER（校园网对已租约客户端的重发现不应答，2026-10-30 实证 103/106 超时）、不受系统 DNS 劫持影响。
+   */
+  override async readLanResolversLive(): Promise<string[]> {
+    const iface = await this.defaultRouteInterface();
+    if (!iface) return [];
+    try {
+      const { stdout } = await execFileAsync(
+        'ipconfig',
+        ['getoption', iface, 'domain_name_server'],
+        {
+          timeout: DNS_CMD_TIMEOUT_MS,
+        }
+      );
+      // 输出形如“10.20.220.50”或多值“{10.20.220.50, 10.20.220.51}”（ip_mult/string 两形态都有人报），提取全部 IPv4。
+      return [...String(stdout).matchAll(/(\d{1,3}(?:\.\d{1,3}){3})/g)].map((m) => m[1]);
+    } catch {
+      return [];
+    }
   }
 }
 

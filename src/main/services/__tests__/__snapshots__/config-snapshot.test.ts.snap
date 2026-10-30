@@ -1066,7 +1066,7 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
 }
 `;
 
-exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线） DNS lanResolverForDns 注入（systemProxy）→ 锁 dns-lan(type:dhcp 动态) + internalResolverTag=dns-lan 三路拆分 1`] = `
+exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线） DNS lanResolverForDns 注入（systemProxy）→ 锁 dns-lan(udp 直指实测解析器) + internalResolverTag=dns-lan 三路拆分 1`] = `
 {
   "config": {
     "dns": {
@@ -1236,8 +1236,10 @@ exports[`generateSingBoxConfig — characterization 快照（抽取前锁基线�
           "type": "fakeip",
         },
         {
+          "server": "192.168.1.1",
+          "server_port": 53,
           "tag": "dns-lan",
-          "type": "dhcp",
+          "type": "udp",
         },
       ],
       "strategy": "ipv4_only",
