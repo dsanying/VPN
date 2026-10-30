@@ -1,4 +1,5 @@
 import { formatDateTime } from '@/utils/dateTime';
+import { memo } from 'react';
 import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -52,7 +53,8 @@ function statusView(
   return { tone: 'neutral', text: statuses.idle };
 }
 
-export function ServiceAvailability() {
+// 无 props：父页每秒的实时帧重渲染与它无关（数据只来自 unlock store），memo 隔离。
+export const ServiceAvailability = memo(function ServiceAvailability() {
   const { t } = useTranslation();
   const snapshot = useAppStore((s) => s.unlock);
   const statuses: Record<UnlockStatus, string> = {
@@ -138,4 +140,4 @@ export function ServiceAvailability() {
       </div>
     </DesktopSection>
   );
-}
+});

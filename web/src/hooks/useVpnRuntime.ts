@@ -10,9 +10,44 @@ import { unlockApi, api } from '@/ipc';
 import { ipcClient } from '@/ipc/ipc-client';
 import { useAppStore } from '@/store/app-store';
 import { IPC_CHANNELS } from '@shared/ipc-channels';
+import type { NodeProbeDetails } from '@shared/speed-test';
 import type { UserConfig } from '@shared/types';
 
 const state = () => useAppStore.getState();
+
+// 测速流合批：主进程按节点逐条推 EVENT_SPEED_TEST_RESULT / DETAILS / progress
+// （51 节点全量测速 ≈ 153 次事件），每次直达 store 都会让全部 app-store 订阅者
+// （节点页 50+ 组件）跑一轮选择器。80ms 窗口合并为一次写入，视觉无感——延迟
+// 标签本就以秒级节奏逐个亮起，合批只把「逐条闪烁」变成「小批亮起」。
+// active true/false 的起止事件不经窗口立即生效（开始/结束必须即时反馈）。
+interface LatencyBatch {
+  results: Record<string, number>;
+  details: Record<string, NodeProbeDetails>;
+  proxyIds: string[];
+  entryIds: string[];
+  progress?: { tested: number; ok: number; total: number };
+}
+const latencyBatch: LatencyBatch = { results: {}, details: {}, proxyIds: [], entryIds: [] };
+let latencyBatchTimer: ReturnType<typeof setTimeout> | undefined;
+function flushLatencyBatch(): void {
+  latencyBatchTimer = undefined;
+  const { results, details, proxyIds, entryIds, progress } = latencyBatch;
+  latencyBatch.results = {};
+  latencyBatch.details = {};
+  latencyBatch.proxyIds = [];
+  latencyBatch.entryIds = [];
+  delete latencyBatch.progress;
+  if (Object.keys(results).length || Object.keys(details).length)
+    state().applyLatencyResults(results, [], details);
+  if (proxyIds.length || entryIds.length) {
+    const pending = useSpeedTestStore.getState();
+    useSpeedTestStore.setState({
+      proxyPending: pending.proxyPending.filter((id) => !proxyIds.includes(id)),
+      entryPending: pending.entryPending.filter((id) => !entryIds.includes(id)),
+    });
+  }
+  if (progress) useSpeedTestStore.setState({ progress });
+}
 const handleProxyError: Parameters<typeof api.proxy.onError>[0] = ({ message, error }) => {
   const reason = message ?? error ?? i18n.t('common.requestFailed');
   const current = state();
@@ -143,32 +178,49 @@ export function useVpnRuntime() {
       }),
       api.proxy.onInvalidNodes(handleInvalidNodes),
       api.server.onSpeedTestProgress((event) => {
-        const store = useSpeedTestStore.getState();
-        useSpeedTestStore.setState({
-          ...(event.active === true
-            ? {
-                testing: event.serverIds ?? [],
-                ...(event.tested === 0
-                  ? { proxyPending: event.serverIds ?? [], entryPending: event.serverIds ?? [] }
-                  : {}),
-              }
-            : event.active === false
-              ? { testing: [], proxyPending: [], entryPending: [] }
-              : {}),
-          progress: {
-            tested: event.tested ?? store.progress.tested,
-            ok: event.ok ?? store.progress.ok,
-            total: event.total ?? store.progress.total,
-          },
-        });
+        // 起止事件（active true/false）立即生效；进行中的计数进 80ms 合批窗口，
+        // 只保留最新值（进度条读数只关心终点）。
+        if (event.active !== undefined) {
+          if (latencyBatchTimer) {
+            clearTimeout(latencyBatchTimer);
+            flushLatencyBatch();
+          }
+          const store = useSpeedTestStore.getState();
+          useSpeedTestStore.setState({
+            ...(event.active === true
+              ? {
+                  testing: event.serverIds ?? [],
+                  ...(event.tested === 0
+                    ? { proxyPending: event.serverIds ?? [], entryPending: event.serverIds ?? [] }
+                    : {}),
+                }
+              : event.active === false
+                ? { testing: [], proxyPending: [], entryPending: [] }
+                : {}),
+            progress: {
+              tested: event.tested ?? store.progress.tested,
+              ok: event.ok ?? store.progress.ok,
+              total: event.total ?? store.progress.total,
+            },
+          });
+          return;
+        }
+        latencyBatch.progress = {
+          tested: event.tested ?? latencyBatch.progress?.tested ?? 0,
+          ok: event.ok ?? latencyBatch.progress?.ok ?? 0,
+          total: event.total ?? latencyBatch.progress?.total ?? 0,
+        };
+        latencyBatchTimer ??= setTimeout(flushLatencyBatch, 80);
       }),
       api.server.onSpeedTestResult(({ serverId, latency }) => {
-        state().applyLatencyResults({ [serverId]: latency });
-        useSpeedTestStore.getState().received(serverId, 'proxy');
+        latencyBatch.results[serverId] = latency;
+        latencyBatch.proxyIds.push(serverId);
+        latencyBatchTimer ??= setTimeout(flushLatencyBatch, 80);
       }),
       api.server.onSpeedTestDetails(({ serverId, detail }) => {
-        state().applyLatencyResults({}, [], { [serverId]: detail });
-        useSpeedTestStore.getState().received(serverId, 'entry');
+        latencyBatch.details[serverId] = detail;
+        latencyBatch.entryIds.push(serverId);
+        latencyBatchTimer ??= setTimeout(flushLatencyBatch, 80);
       }),
       api.ipInfo.onUpdated((ipInfo) => useAppStore.setState({ ipInfo })),
       api.proxy.onTailscaleAuth(({ serverId, url }) => {

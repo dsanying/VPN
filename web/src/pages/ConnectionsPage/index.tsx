@@ -1,6 +1,6 @@
 import './ConnectionsPage.css';
 import { NodeRoute } from '@/components/vpn/NodeRoute';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Form } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/components/client';
 import { useInstalledApplications } from '@/hooks/use-installed-applications';
 import { useStatsTopic } from '@/hooks/use-stats-topic';
+import { useStable } from '@/hooks/use-stable';
 import { useAppStore } from '@/store/app-store';
 import type { ConnectionsSnapshot } from '@shared/types';
 import {
@@ -52,13 +53,21 @@ export default function ConnectionsPage() {
     () => ({ application: selectedApplications[0], outbound: selectedOutbounds[0] }),
     [selectedApplications, selectedOutbounds]
   );
-  useStatsTopic<ConnectionsSnapshot>('detail', setSnapshot);
+  // 实时帧交互暂停：焦点在筛选表单内（搜索输入 / 下拉选择）时挂起帧应用——
+  // 输入过程页面不再逐秒重渲染，离开表单一次性补上最新帧（heldFrame 只留最新，
+  // 不积压）。不暂停时行为与原来完全一致：每秒一帧。
+  const pausedRef = useRef(false);
+  const heldFrameRef = useRef<ConnectionsSnapshot | undefined>(undefined);
+  useStatsTopic<ConnectionsSnapshot>('detail', (frame) => {
+    if (pausedRef.current) heldFrameRef.current = frame;
+    else setSnapshot(frame);
+  });
   const current =
     snapshot && (running ? snapshot.source !== 'device' : snapshot.source === 'device')
       ? snapshot
       : undefined;
   const all = useMemo(() => current?.connections ?? [], [current]);
-  const applications = useMemo(() => {
+  const mergedApplications = useMemo(() => {
     const merged = new Map((current?.applications ?? []).map((app) => [app.path, app]));
     for (const app of installedApplications)
       merged.set(app.path, {
@@ -67,6 +76,16 @@ export default function ConnectionsPage() {
       });
     return [...merged.values()];
   }, [current?.applications, installedApplications]);
+  // 签名 = 路径 + 名称 + 图标数据长度（图标只在加载完成时出现一次，长度足以区分）。
+  // 合并结果每帧重建但内容几乎不变，锁引用让下游列定义 / 筛选选项 / 图标组件不随帧抖动。
+  const applicationSig = useMemo(
+    () =>
+      mergedApplications
+        .map((app) => `${app.path}\u0000${app.name}\u0000${app.iconDataUrl?.length ?? -1}`)
+        .join('\u0001'),
+    [mergedApplications]
+  );
+  const applications = useStable(mergedApplications, applicationSig);
   const display = useCallback(
     (value: string) =>
       value === 'direct'
@@ -99,7 +118,14 @@ export default function ConnectionsPage() {
       ),
     [searched, selectedApplications, selectedOutbounds, network, applications]
   );
-  const applicationOptions = useMemo(
+  // Preserve a selected graph identity while its last active connection disappears.
+  const withSelected = (options: { value: string; label: string }[], values: string[]) => [
+    ...options,
+    ...values
+      .filter((value) => !options.some((option) => option.value === value))
+      .map((value) => ({ value, label: display(value) })),
+  ];
+  const computedApplicationOptions = useMemo(
     () => [
       ...new Map(
         all.map((c) => {
@@ -110,12 +136,30 @@ export default function ConnectionsPage() {
     ],
     [all, applications, display]
   );
-  const outboundOptions = useMemo(
+  // 签名 = 选项值序列：稳态下连接集合不变（只有字节在变），选项引用保持不变，
+  // antd Select 不再逐秒 reconcile。
+  const applicationOptions = useStable(
+    computedApplicationOptions,
+    computedApplicationOptions.map((option) => option.value).join('\u0001')
+  );
+  const applicationSelectOptions = useStable(
+    withSelected(applicationOptions, selectedApplications),
+    `${applicationOptions.map((option) => option.value).join('\u0001')}#${selectedApplications.join('\u0001')}`
+  );
+  const computedOutboundOptions = useMemo(
     () =>
       [...new Set(all.map(connectionOutbound))].map((value) => ({ value, label: display(value) })),
     [all, display]
   );
-  const networks = useMemo(
+  const outboundOptions = useStable(
+    computedOutboundOptions,
+    computedOutboundOptions.map((option) => option.value).join('\u0001')
+  );
+  const outboundSelectOptions = useStable(
+    withSelected(outboundOptions, selectedOutbounds),
+    `${outboundOptions.map((option) => option.value).join('\u0001')}#${selectedOutbounds.join('\u0001')}`
+  );
+  const computedNetworks = useMemo(
     () =>
       [
         ...new Set(
@@ -124,13 +168,12 @@ export default function ConnectionsPage() {
       ].map((value) => ({ value, label: value.toUpperCase() })),
     [all]
   );
-  // Preserve a selected graph identity while its last active connection disappears.
-  const withSelected = (options: { value: string; label: string }[], values: string[]) => [
-    ...options,
-    ...values
-      .filter((value) => !options.some((option) => option.value === value))
-      .map((value) => ({ value, label: display(value) })),
-  ];
+  const networks = useStable(
+    computedNetworks,
+    computedNetworks.map((option) => option.value).join('\u0001')
+  );
+  // 列定义随 applications（已锁引用）memo 化：实时帧期间 antd Table 不再每秒重建列。
+  const columns = useMemo(() => buildConnectionColumns(t, applications), [t, applications]);
   return (
     <AppPage showBreadcrumb={false}>
       <PageStack>
@@ -144,7 +187,27 @@ export default function ConnectionsPage() {
           selection={graphSelection}
         />
         <TablePanel>
-          <QueryForm mode="local">
+          {/* 焦点进出走 React 合成的 focusin/focusout（onFocus/onBlur 冒泡）：进入表单挂起实时帧，
+              焦点仍在表单内部转移（relatedTarget 命中）不恢复，真正离开才恢复并补最新帧。 */}
+          <div
+            onFocus={() => {
+              pausedRef.current = true;
+            }}
+            onBlur={(event) => {
+              if (
+                event.relatedTarget &&
+                event.currentTarget.contains(event.relatedTarget as Node)
+              )
+                return;
+              pausedRef.current = false;
+              const held = heldFrameRef.current;
+              if (held) {
+                heldFrameRef.current = undefined;
+                setSnapshot(held);
+              }
+            }}
+          >
+            <QueryForm mode="local">
             <Form.Item label={t('common.vocab.search')} data-filter-purpose="keyword">
               <SearchInput
                 allowClear
@@ -166,7 +229,7 @@ export default function ConnectionsPage() {
                 className="vpn-connection-filter-control"
                 aria-label={t('common.vocab.application')}
                 showSearch
-                options={withSelected(applicationOptions, selectedApplications)}
+                options={applicationSelectOptions}
                 optionFilterProp="label"
                 value={selectedApplications}
                 onChange={(value) => {
@@ -187,7 +250,7 @@ export default function ConnectionsPage() {
                 labelRender={(option) => (
                   <NodeRoute values={[String(option.value)]} display={display} />
                 )}
-                options={withSelected(outboundOptions, selectedOutbounds)}
+                options={outboundSelectOptions}
                 optionFilterProp="label"
                 value={selectedOutbounds}
                 onChange={(value) => {
@@ -210,11 +273,12 @@ export default function ConnectionsPage() {
               />
             </Form.Item>
           </QueryForm>
+          </div>
           <Table
             rowKey="id"
             dataSource={filtered}
             orderBy={(row) => {const value=connectionDestination(row);return value===UNKNOWN_DESTINATION?'':value;}}
-            columns={buildConnectionColumns(t, applications)}
+            columns={columns}
             pagination={buildTablePagination({
               current: Math.min(page, Math.max(1, Math.ceil(filtered.length / size))),
               pageSize: size,
