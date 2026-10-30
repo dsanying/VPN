@@ -134,21 +134,19 @@ test('WireGuard 使用同一个保存按钮，完整提交密钥和本地地址'
   await page.goto('/#/nodes');
   await addNode(page);
   const drawer = page.getByRole('dialog');
-  await drawer
-    .getByLabel('节点链接或配置', { exact: true })
-    .fill(
-      JSON.stringify({
-        protocol: 'wireguard',
-        name: '示例 WireGuard',
-        address: 'example.com',
-        port: 443,
-        wireguardSettings: {
-          privateKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-          peerPublicKey: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=',
-          localAddress: ['10.0.0.2/32'],
-        },
-      })
-    );
+  await drawer.getByLabel('节点链接或配置', { exact: true }).fill(
+    JSON.stringify({
+      protocol: 'wireguard',
+      name: '示例 WireGuard',
+      address: 'example.com',
+      port: 443,
+      wireguardSettings: {
+        privateKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        peerPublicKey: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=',
+        localAddress: ['10.0.0.2/32'],
+      },
+    })
+  );
   await expect(drawer.getByText('WIREGUARD', { exact: true })).toBeVisible();
   await drawer.getByLabel('名称', { exact: true }).fill('示例 WireGuard');
   await drawer.getByLabel('地址', { exact: true }).fill('example.com');
@@ -499,9 +497,7 @@ test('代理延迟常驻卡片，入口延迟降级为提示，实际备用目�
     page.locator('[data-slot="proxy"]').getByText('92 ms', { exact: true })
   ).toBeVisible();
   // 入口延迟不再是独立槽位（d0a9873 卡片重构），以 tooltip 形式挂在代理延迟上。
-  await expect(
-    page.locator('[data-slot="proxy"]')
-  ).toHaveAttribute('title', '入口延迟 52 ms');
+  await expect(page.locator('[data-slot="proxy"]')).toHaveAttribute('title', '入口延迟 52 ms');
   await expect(page.locator('[data-slot="proxy"] [title="cp.cloudflare.com"]')).toBeAttached();
   await mock.expectNoUnexpectedRequests();
 });
@@ -878,7 +874,10 @@ test('入口状态区分直测受限与 UDP，不将二者当成代理失败', a
       const id = w.desktopTest.getConfig().servers[0].id;
       w.desktopTest.emit('event:speedTestDetails', { serverId: id, detail: { entry } });
     }, entry);
-    await expect(page.getByText(text, { exact: true })).toBeVisible();
+    // 入口结论挂在代理延迟单元格的 tooltip 上，不再作为独立文本展示。
+    await expect(
+      page.locator('.vpn-node-list > li').first().locator('[data-slot="proxy"]')
+    ).toHaveAttribute('title', `入口延迟 ${text}`);
     await expect(page.getByText('92 ms', { exact: true })).toBeVisible();
   }
   await mock.expectNoUnexpectedRequests();
