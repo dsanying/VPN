@@ -34,7 +34,7 @@ function setup(exitBeforeReady = false) {
     stop: jest.Mock;
     respond: jest.Mock;
     checkHealth: jest.Mock;
-    exit?: () => void;
+    exit?: (reason?: string) => void;
   }[] = [];
   let adapter: Parameters<
     ConstructorParameters<typeof EnterpriseVpnService>[3]['setNodeAdapters']
@@ -43,13 +43,14 @@ function setup(exitBeforeReady = false) {
     stop: jest.fn(async () => {
       await adapter.stop();
     }),
-    // 前置清理契约（生产为 ProxyManager.ensureSystemProxyCleared）：企业触发的停止必须先于 stop() 调用，
-    // 否则接管 DNS 与 marker 无人还原（真机事故：企业隧道中断 → 自动停代理 → 系统 DNS 残留 8.8.8.8）。
+    // 企业服务不再触发全局代理停止（单节点故障与全局开关解耦）；保留此桩仅为断言
+    // 「隧道中断绝不调用前置清理/停代理」。
     ensureSystemProxyCleared: jest.fn(async () => {}),
     setNodeAdapters: (value: typeof adapter) => {
       adapter = value;
     },
   };
+  const log = jest.fn();
   const service = new EnterpriseVpnService(
     store,
     new EnterpriseDiscovery(),
@@ -80,13 +81,15 @@ function setup(exitBeforeReady = false) {
         config = value;
       },
     },
-    () => {}
+    () => {},
+    log
   );
   return {
     identity,
     service,
     engines,
     proxy,
+    log,
     getConfig: () => config,
     close: async () => {
       await service.close();
@@ -102,8 +105,9 @@ test('migrates once to ordinary nodes; an unselected explicit rule owns its own 
     const c = f.getConfig();
     expect(c.servers).toHaveLength(2);
     expect(JSON.stringify(c)).not.toContain('fictional');
-    expect(await f.service.prepare(c)).toBe(true);
-    expect(f.engines).toHaveLength(1);
+    // 与普通节点统一：未被选中、未被规则引用的企业节点不建立隧道，对全局代理零影响。
+    expect(await f.service.prepare(c)).toBe(false);
+    expect(f.engines).toHaveLength(0);
     c.customRules = [
       {
         id: 'route',
@@ -114,6 +118,8 @@ test('migrates once to ordinary nodes; an unselected explicit rule owns its own 
         targetServerId: f.identity.id,
       },
     ];
+    expect(await f.service.prepare(c)).toBe(true);
+    expect(f.engines).toHaveLength(1);
     const before = structuredClone(c);
     expect(await f.service.prepare(c)).toBe(false);
     const runtime = f.service.project(c);
@@ -136,40 +142,29 @@ test('migrates once to ordinary nodes; an unselected explicit rule owns its own 
     await f.close();
   }
 });
-test('global/direct ignore inactive rules; tunnel loss closes the global proxy', async () => {
+test('tunnel loss marks the node failed and never touches the global proxy', async () => {
   const f = setup();
   try {
     await f.service.initialize();
     const c = f.getConfig();
     c.proxyMode = 'global';
-    c.customRules = [
-      {
-        id: 'rule',
-        enabled: true,
-        type: 'domain',
-        values: ['private.example.com'],
-        action: 'proxy',
-        targetServerId: f.identity.id,
-      },
-    ];
-    await f.service.prepare(c);
-    expect(f.engines).toHaveLength(0);
     c.selectedServerId = f.identity.id;
     await f.service.prepare(c);
-    f.engines[0].exit!();
-    // fire-and-forget 的 stopTunnelOwner 现在是「前置清理 → stop()」两跳异步链，单次微任务
-    // 只够跑完第一跳；两次 macrotask 让全链（清理 → stop → adapter.stop）落地再断言。
+    expect(f.engines).toHaveLength(1);
+    f.engines[0].exit!('engine-exit-SIGTERM');
+    // 中断处理是 fire-and-forget：两次 macrotask 让会话置态与日志落地再断言。
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
-    // 前置清理必须先于 stop()（与 IPC PROXY_STOP / 托盘 onStop 契约一致）：stop() 置位 stopping 后
-    // 信号死分支会跳过 ensureSystemProxyCleared，还原责任在调用方。
-    expect(f.proxy.ensureSystemProxyCleared).toHaveBeenCalledTimes(1);
-    expect(f.proxy.ensureSystemProxyCleared.mock.invocationCallOrder[0]).toBeLessThan(
-      f.proxy.stop.mock.invocationCallOrder[0]
-    );
-    expect(f.proxy.stop).toHaveBeenCalledTimes(1);
+    // 单节点故障与全局开关解耦：既不停代理，也不做前置清理（代理在跑，DNS/系统代理无需还原）。
+    expect(f.proxy.stop).not.toHaveBeenCalled();
+    expect(f.proxy.ensureSystemProxyCleared).not.toHaveBeenCalled();
     expect(f.service.snapshot().sessions).toEqual(
       expect.arrayContaining([expect.objectContaining({ state: 'failed' })])
+    );
+    // 中断原因必须落日志（用户可原样反馈给开发者）。
+    expect(f.log).toHaveBeenCalledWith(
+      'warn',
+      expect.stringContaining('reason=engine-exit-SIGTERM')
     );
     c.proxyMode = 'direct';
     await f.service.prepare(c);
@@ -223,6 +218,14 @@ test('smart mode appends gateway-owned resources after user rules only in the ru
         values: ['private.example.com'],
         action: 'direct',
       },
+      {
+        id: 'ent',
+        enabled: true,
+        type: 'domain',
+        values: ['ent.example.com'],
+        action: 'proxy',
+        targetServerId: f.identity.id,
+      },
     ];
     await f.service.prepare(c);
     const active = f.engines[0];
@@ -259,7 +262,7 @@ test('smart mode appends gateway-owned resources after user rules only in the ru
         }),
       ])
     );
-    expect(c.customRules).toHaveLength(1);
+    expect(c.customRules).toHaveLength(2);
     c.proxyMode = 'global';
     expect(f.service.project(c).customRules).toEqual(c.customRules);
   } finally {
@@ -272,6 +275,8 @@ test('active tunnel checks refresh forwarding evidence without authentication or
   try {
     await f.service.initialize();
     const c = f.getConfig();
+    // 隧道激活前提：节点被选中为默认节点（与其他节点统一机制）。
+    c.selectedServerId = f.identity.id;
     await f.service.prepare(c);
     const node = c.servers.find((n) => n.protocol === 'enterprise')!;
     expect((await f.service.measure(node)).availability).toBe('available');

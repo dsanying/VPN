@@ -2281,7 +2281,9 @@ if (gotTheLock) {
         ),
       proxyManager,
       configManager,
-      (snapshot) => ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_ENTERPRISE_CHANGED, snapshot)
+      (snapshot) => ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_ENTERPRISE_CHANGED, snapshot),
+      // 企业隧道中断/建立失败的分类原因落 app.log（不含 stderr 原文，防凭据泄漏），用户可原样反馈。
+      (level, message) => logManager.addLog(level, message, 'EnterpriseVpnService')
     );
     await enterpriseService.initialize();
     registerEnterpriseHandlers(enterpriseService);

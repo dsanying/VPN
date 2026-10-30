@@ -16,10 +16,10 @@ interface ConfigStore {
   loadConfig(): Promise<UserConfig>;
   saveConfig(config: UserConfig): Promise<void>;
 }
+/** 企业服务诊断日志出口（生产注入 LogManager.addLog）：隧道中断原因必须落日志供用户原样反馈。 */
+export type EnterpriseLogger = (level: 'info' | 'warn' | 'error', message: string) => void;
 interface TunnelOwner {
   stop(): Promise<void>;
-  /** 前置清理（生产注入的 ProxyManager 实现）：系统代理 + 接管 DNS 的 marker 门控收口。可选——测试桩只实现 stop()。 */
-  ensureSystemProxyCleared?(): Promise<void>;
   on?(event: 'stopped', listener: () => void): unknown;
   setNodeAdapters(adapter: {
     prepare(config: UserConfig): Promise<boolean>;
@@ -42,7 +42,8 @@ export class EnterpriseVpnService {
     private readonly createEngine: () => EnterpriseEngine,
     private readonly proxy: TunnelOwner,
     private readonly configStore: ConfigStore,
-    private readonly publish: (snapshot: EnterpriseSnapshot) => void
+    private readonly publish: (snapshot: EnterpriseSnapshot) => void,
+    private readonly log?: EnterpriseLogger
   ) {
     proxy.on?.('stopped', () => {
       void this.disconnect();
@@ -120,21 +121,15 @@ export class EnterpriseVpnService {
     this.notify();
     return saved;
   }
-  /**
-   * 终态停隧道统一入口：先做前置清理再 stop()。与 IPC PROXY_STOP / 托盘 onStop 的既有契约一致——
-   * stop() 会置位 stopping，信号死分支 emit('stopped') → index 监听器的 ensureSystemProxyCleared 被
-   * 设计性跳过（防重启 stop 腿与 start reconcile 打架，C1）；企业触发的停止若不做前置清理，接管 DNS
-   * 与 marker 就无人还原（真机事故：企业隧道中断自动停代理后系统 DNS 停在 8.8.8.8，用户手动还原）。
-   * 可选成员：测试桩只实现 stop() 时前置清理自然 no-op。
-   */
-  private async stopTunnelOwner(): Promise<void> {
-    await this.proxy.ensureSystemProxyCleared?.().catch(() => {});
-    await this.proxy.stop();
-  }
   async remove(id: string): Promise<void> {
-    if (this.active.has(id)) {
-      await this.stopTunnelOwner();
-      await this.disconnect();
+    // 单节点语义：删除一个企业节点只停它自己的引擎，绝不连锁停全局代理——
+    // 节点从配置消失后，配置对账流程（prepare → 会话集变化 → 核重启）会让投影自然收敛。
+    const engine = this.active.get(id)?.engine ?? this.pending.get(id);
+    this.active.delete(id);
+    this.pending.delete(id);
+    if (engine) {
+      this.sessions.set(id, { profileId: id, state: 'idle' });
+      await engine.stop();
     }
     this.store.remove(id);
     this.sessions.delete(id);
@@ -165,8 +160,8 @@ export class EnterpriseVpnService {
     const required =
       config.proxyMode === 'direct' ? new Set<string>() : referencedServerIds(effective);
     const explicit = new Set(required);
-    if (config.proxyMode === 'smart')
-      for (const node of config.servers) if (node.protocol === 'enterprise') required.add(node.id);
+    // 企业节点与其他节点统一机制：只在被选中为默认节点、或被启用的规则引用时才建立隧道。
+    // 不再按协议无条件全量拉起——用户没把企业节点配进规则/选为默认时，它不应产生任何全局影响。
     let changed = false;
     for (const [id, adapter] of this.active)
       if (!required.has(id)) {
@@ -217,11 +212,16 @@ export class EnterpriseVpnService {
                 state: 'failed',
                 error:
                   reason === 'tunnel-backpressure'
-                    ? '企业 VPN 数据报通道持续拥塞，代理已关闭，请稍后重试'
-                    : '企业 VPN 隧道已中断，代理已关闭',
+                    ? '企业 VPN 数据报通道持续拥塞，节点已不可用，请稍后重试'
+                    : '企业 VPN 隧道已中断，节点不可用',
               });
               this.notify();
-              void this.stopTunnelOwner();
+              // 与普通节点统一：单节点隧道中断只标记该节点失败，绝不连锁停全局代理——
+              // 路由到该节点的连接自然失败，其他流量不受影响。中断原因必须落日志供反馈。
+              this.log?.(
+                'warn',
+                `企业 VPN 隧道中断（${profile.name}）：reason=${reason ?? 'unknown'}，节点已标记不可用，代理继续运行`
+              );
             }
           },
           (phase) => {
@@ -251,7 +251,14 @@ export class EnterpriseVpnService {
           });
           this.notify();
         }
-        if (explicit.has(node.id)) throw error;
+        // 隧道建立失败必须落日志（认证失败/网关不可达/完整性校验等都走这里）。
+        this.log?.(
+          'warn',
+          `企业 VPN 隧道建立失败（${profile.name}）：${error instanceof Error ? error.message : String(error)}`
+        );
+        // 仅当选中的默认节点建立失败才向上抛（开启代理需要明确反馈）；被规则引用的节点
+        // 失败只标记该节点，规则自然失配，不影响全局代理。
+        if (node.id === config.selectedServerId) throw error;
       }
     }
     return changed;
