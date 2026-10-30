@@ -339,6 +339,7 @@
     "remarks": "notes",
     "repairHelper": "Repair",
     "responseStatus": "HTTP {code}",
+    "latencyMs": "{ms} ms",
     "restartProxyUpdate": "restart proxy to apply updates",
     "restartSoftwareUpdate": "restart app to apply updates",
     "restoreImpact": "selected categories will be replaced by the backup.",

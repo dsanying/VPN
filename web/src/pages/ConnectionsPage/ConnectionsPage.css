@@ -1,1 +1,34 @@
-.vpn-connection-filter-control { min-width: var(--ds-layout-control-width); }
+.vpn-connection-filter-control {
+  min-width: var(--ds-layout-control-width);
+}
+
+/* 网站连通性：表格感栅格——等宽列，词条（图标+名称）左对齐成竖线，状态值靠右成第二列。 */
+.service-availability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px 28px;
+  margin-top: 8px;
+}
+
+.service-availability-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.service-availability__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.service-availability__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.service-availability__value {
+  margin-left: auto;
+  flex: none;
+}
