@@ -5,15 +5,18 @@ import type { LogManager } from './services/LogManager';
 import type { ConfigManager } from './services/ConfigManager';
 import type { ProxyManager } from './services/ProxyManager';
 import type { CoreUpdateService } from './services/CoreUpdateService';
+import type { UpdateRestartState } from './services/update-restart-state';
 import { getWarpDeregisterQueue } from './services/WarpDeregisterQueue';
 
-/** 注入依赖：服务单例 + proxyManager getter（call-time 取值）+ 托盘状态刷新。 */
+/** 注入依赖：服务单例 + proxyManager getter（call-time 取值）+ 托盘状态刷新 + 更新重启标记消费。 */
 export interface StartupTaskDeps {
   configManager: ConfigManager;
   coreUpdateService: CoreUpdateService;
   logManager: LogManager;
   getProxyManager: () => ProxyManager | null;
   updateTrayMenuState: (isProxyRunning: boolean, hasError?: boolean) => void;
+  /** App 自更新重启后消费一次性标记（userData/update-restart.json）；无标记/已过期 → null。 */
+  consumeUpdateRestart?: () => UpdateRestartState | null;
 }
 
 /**
@@ -52,6 +55,11 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
       // 时反复触发）。更新当下已有一次性反馈（applyStagedNow 的 EVENT_CORE_VERSION_CHANGED），回滚入口常驻内核管理设置，
       // 故启动期不再主动弹。
 
+      // 更新重启状态恢复：autoConnect 关着的用户，升级前代理在跑 → 重启后也恢复连接（一次性，消费标记）。
+      // 标记由 UpdateService 在安装退出前（停代理之前）写入；新鲜窗口 15 分钟，错过窗口按常规逻辑。
+      // 无论走哪个分支都先消费（删除文件），开 autoConnect 的用户已由下方恢复，不留陈旧标记。
+      const restartState = deps.consumeUpdateRestart?.() ?? null;
+
       if (config.autoConnect && config.selectedServerId) {
         logManager.addLog('info', '启动时自动连接已启用，正在连接...', 'Main');
 
@@ -62,6 +70,16 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
           logManager.addLog('info', '启动时自动连接成功', 'Main');
           updateTrayMenuState(true);
         }
+      } else if (restartState?.proxyRunning && config.selectedServerId && proxyManager) {
+        // autoConnect 未命中但更新前代理在跑 → 恢复连接（更新重启状态恢复，一次性）。
+        logManager.addLog(
+          'info',
+          `检测到更新重启（目标版本 v${restartState.targetVersion}），恢复更新前的代理连接...`,
+          'Main'
+        );
+        await proxyManager.start(config);
+        logManager.addLog('info', '更新重启后已恢复代理连接', 'Main');
+        updateTrayMenuState(true);
       } else if (config.autoConnect && !config.selectedServerId) {
         logManager.addLog('warn', '启动时自动连接已启用，但未选择服务器', 'Main');
       }

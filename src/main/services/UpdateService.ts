@@ -21,6 +21,7 @@ import type {
   UpdatePopupLabels,
 } from '../../shared/types/update';
 import { UPDATE_POPUP_WIDTH, popupHeightFor, popupPosition } from './update-popup-layout';
+import { UpdateRestartStateStore } from './update-restart-state';
 import { APP_USER_AGENT } from '../../shared/constants';
 import { getUserDataPath } from '../utils/paths';
 import { system32 } from '../utils/win-system32';
@@ -255,6 +256,9 @@ export class UpdateService {
   // #60：注入配置读取器（仅用于读 ghProxyPrefix 下载镜像前缀），构造后注入。未配置→null（直连，旧行为）。
   // 与 CoreUpdateService.configProvider / CoreDownloader 同口径——App 自更新与内核/资源下载共用同一 gh 加速前缀。
   private configProvider: (() => Promise<UserConfig | null>) | null = null;
+  // 更新重启状态恢复：退出前记录「代理当时是否在跑」（index.ts 注入），重启后 startup-tasks 据此恢复连接。
+  private stateProvider: (() => { proxyRunning: boolean }) | null = null;
+  private updateRestartStore: UpdateRestartStateStore | null = null;
   // 更新链路统一会话层（类2：viaProxy/port 决策已收口到 UpdateNetwork.resolveSessionForMainUpdate，providers
   // 由 index.ts 一次注入 updateNetwork.setMainUpdateProviders；本服务只持 updateNetwork 引用）。
   // 未注入 → updateSession 返回 undefined（net.request 回落 default session，旧行为兜底）。
@@ -276,6 +280,38 @@ export class UpdateService {
   /** #60：注入配置读取器（读 ghProxyPrefix）。仿 CoreUpdateService.setConfigProvider，构造后由 index.ts 注入。 */
   setConfigProvider(provider: () => Promise<UserConfig | null>): void {
     this.configProvider = provider;
+  }
+
+  /**
+   * 注入代理运行态读取器 + 更新重启标记存储（均构造后由 index.ts 注入）。
+   * 安装更新退出前记录「代理当时是否在跑」，供重启后恢复更新前的连接状态。
+   */
+  setUpdateRestartCapture(
+    stateProvider: () => { proxyRunning: boolean },
+    store: UpdateRestartStateStore
+  ): void {
+    this.stateProvider = stateProvider;
+    this.updateRestartStore = store;
+  }
+
+  /** 安装更新退出前记录运行态（失败安全：标记写不出时行为退化为现状——重启后按 autoConnect 决定）。 */
+  private captureUpdateRestartState(targetVersion: string): void {
+    if (!this.stateProvider || !this.updateRestartStore) return;
+    try {
+      this.updateRestartStore.write({
+        reason: 'app-update',
+        proxyRunning: this.stateProvider().proxyRunning,
+        targetVersion,
+        at: new Date().toISOString(),
+      });
+      this.logManager.addLog('info', '已记录更新前运行态，重启后恢复连接', 'UpdateService');
+    } catch (error) {
+      this.logManager.addLog(
+        'warn',
+        `记录更新前运行态失败（重启后按常规逻辑启动）: ${error instanceof Error ? error.message : String(error)}`,
+        'UpdateService'
+      );
+    }
   }
 
   /** 注入更新链路统一会话层（类2：决策 providers 改由 index.ts 注入 updateNetwork.setMainUpdateProviders）。 */
@@ -512,6 +548,12 @@ export class UpdateService {
         this.readyUpdate.attempted = true;
         this.savePending();
       }
+
+      // 更新重启状态恢复（三平台共用）：退出前记录代理运行态，重启后 startup-tasks 据此恢复连接。
+      // 必须在 cleanupCallback 停代理之前取态——停完再取永远是 false。
+      this.captureUpdateRestartState(
+        this.readyUpdate?.filePath === installerPath ? this.readyUpdate.info.version : 'unknown'
+      );
 
       // 在安装更新前，先清理资源（停止代理进程等）
       // 这是关键步骤，否则 Windows 上会因为文件被占用而安装失败

@@ -112,6 +112,7 @@ import type { HelperStatus, UserConfig } from '../shared/types';
 import { ipcEventEmitter } from './ipc/ipc-events';
 import { buildTrayCallbacks } from './tray-actions';
 import { scheduleStartupTasks } from './startup-tasks';
+import { UpdateRestartStateStore } from './services/update-restart-state';
 import { replayConfigOnRendererReady } from './renderer-ready-replay';
 import { registerConfigChangeListener } from './config-change-handler';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
@@ -2400,6 +2401,11 @@ if (gotTheLock) {
     // 更新流程用非终态的 runCleanup（不消耗退出管线的一次性清理 promise）：安装失败 app 续命后，
     // 后续真正退出仍能完整拆除代理；安装成功则 app.exit 直接退，runCleanup 已先行清理。
     updateService.setCleanupCallback(runCleanup);
+    // 更新重启状态恢复：退出前记录代理运行态（须在 runCleanup 停代理之前取态），重启后 startup-tasks 消费恢复。
+    updateService.setUpdateRestartCapture(
+      () => ({ proxyRunning: !!proxyManager?.getStatus().running }),
+      new UpdateRestartStateStore(app.getPath('userData'))
+    );
     registerUpdateHandlers();
 
     // 注册测速处理器（注入唯一编排器依赖：含 getTrayManager 惰性访问器，使渲染入口测速也回写托盘列表）
@@ -2515,6 +2521,8 @@ if (gotTheLock) {
       logManager,
       getProxyManager: () => proxyManager,
       updateTrayMenuState,
+      // App 自更新重启后恢复更新前的连接状态（autoConnect 关着也恢复，一次性）。
+      consumeUpdateRestart: () => new UpdateRestartStateStore(app.getPath('userData')).consume(),
     });
 
     // 订阅自动更新由 GlobalUpdateService 的六小时维护时钟与共享同步入口接管。
