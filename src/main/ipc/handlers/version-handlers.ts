@@ -23,7 +23,11 @@ interface VersionInfo {
 
 import { CoreUpdateService } from '../../services/CoreUpdateService';
 
-export function registerVersionHandlers(coreUpdateService?: CoreUpdateService): void {
+export function registerVersionHandlers(
+  coreUpdateService?: CoreUpdateService,
+  /** 生效版本 getter（渲染端热替换覆盖领先磁盘版本时返回覆盖版本）；缺省 = app.getVersion()。 */
+  getEffectiveAppVersion?: () => string
+): void {
   registerIpcHandler<void, VersionInfo>(
     IPC_CHANNELS.VERSION_GET_INFO,
     async (_event: IpcMainInvokeEvent) => {
@@ -41,7 +45,7 @@ export function registerVersionHandlers(coreUpdateService?: CoreUpdateService): 
       }
 
       return {
-        appVersion: app.getVersion(),
+        appVersion: getEffectiveAppVersion?.() ?? app.getVersion(),
         appName: '暗影VPN',
         buildDate: BUILD_DATE,
         buildCommit: BUILD_COMMIT,
