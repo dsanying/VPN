@@ -22,6 +22,7 @@ import type {
 } from '../../shared/types/update';
 import { UPDATE_POPUP_WIDTH, popupHeightFor, popupPosition } from './update-popup-layout';
 import { UpdateRestartStateStore } from './update-restart-state';
+import { effectiveAppVersion, tryRendererHotSwap } from './renderer-hot-swap';
 import { APP_USER_AGENT } from '../../shared/constants';
 import { getUserDataPath } from '../utils/paths';
 import { system32 } from '../utils/win-system32';
@@ -117,7 +118,8 @@ export class UpdateService {
       record.schema !== 1 ||
       record.platform !== process.platform ||
       record.arch !== process.arch ||
-      !this.isNewerVersion(record.info?.version?.replace(/^v/, '') ?? '', app.getVersion())
+      // 用生效版本（含热更覆盖）判定：热替换已生效的版本的遗留 pending 记录视为过期清除。
+      !this.isNewerVersion(record.info?.version?.replace(/^v/, '') ?? '', effectiveAppVersion())
     ) {
       fs.unlinkSync(target);
       return false;
@@ -376,7 +378,9 @@ export class UpdateService {
       }
 
       const latestRelease = validReleases[0];
-      const currentVersion = app.getVersion();
+      // 生效版本 = 磁盘版本与热更覆盖版本取新：渲染端热替换已把界面更到 N 时，不再把 N 当「新版本」
+      // 重复弹窗重复下载（app.getVersion() 仍是磁盘旧版本，直到某个 dist/main 有变化的版本触发整包安装）。
+      const currentVersion = effectiveAppVersion();
       const latestVersion = latestRelease.tag_name.replace(/^v/, '');
 
       if (!this.isNewerVersion(latestVersion, currentVersion)) {
@@ -544,6 +548,42 @@ export class UpdateService {
       }
 
       if (!app.isPackaged) throw new Error(mt('updDevelopment'));
+
+      // 渲染端热替换（免整包重启）：候选包 dist/main 与当前运行逐字节一致（preload 未变 ⇒ IPC 面一致）
+      // 时只换 dist/renderer + reload 主窗口——主进程/代理全程不动，代理不断流。
+      // main-changed / unsupported（Windows 无法离线提取）/ failed → 全部回退下方整包安装路径。
+      const hotVersion =
+        this.readyUpdate?.filePath === installerPath ? this.readyUpdate.info.version : 'unknown';
+      const hotOutcome = await tryRendererHotSwap(installerPath, hotVersion, this.logManager);
+      if (hotOutcome === 'applied') {
+        // 热替换不退出进程：清 pending 记录（防下次启动 promptReadyUpdate 重复提示已生效版本）、
+        // 删整包（dist/main 无变化的版本无需换包；下个有主进程变化的版本会重新下载）。
+        if (this.readyUpdate?.filePath === installerPath) {
+          this.readyUpdate = null;
+          try {
+            fs.rmSync(this.pendingPath(), { force: true });
+          } catch {
+            /* pending 清理失败无害：effectiveAppVersion 已挡重复提示 */
+          }
+        }
+        try {
+          fs.unlinkSync(installerPath);
+        } catch {
+          /* 安装包删除失败无害（临时目录） */
+        }
+        this.updateProgress({
+          status: 'downloaded',
+          percentage: 100,
+          message: '界面已热更新，无需重启',
+        });
+        this.closeUpdatePopup();
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.reload();
+        }
+        this.logManager.addLog('info', '更新以渲染端热替换方式生效（未重启应用）', 'UpdateService');
+        return true;
+      }
+
       if (this.readyUpdate?.filePath === installerPath) {
         this.readyUpdate.attempted = true;
         this.savePending();

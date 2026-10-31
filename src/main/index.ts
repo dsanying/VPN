@@ -113,6 +113,11 @@ import { ipcEventEmitter } from './ipc/ipc-events';
 import { buildTrayCallbacks } from './tray-actions';
 import { scheduleStartupTasks } from './startup-tasks';
 import { UpdateRestartStateStore } from './services/update-restart-state';
+import {
+  effectiveAppVersion,
+  getActiveHotRendererIndexPath,
+  validateHotRendererOnStartup,
+} from './services/renderer-hot-swap';
 import { replayConfigOnRendererReady } from './renderer-ready-replay';
 import { registerConfigChangeListener } from './config-change-handler';
 import { mainEventEmitter, MAIN_EVENTS } from './ipc/main-events';
@@ -969,7 +974,12 @@ async function createWindow(forceShow = false) {
         logManager.addLog('error', `Failed to load dev server: ${err.message}`, 'Main');
       });
     } else {
-      const indexPath = path.join(__dirname, '../../renderer/index.html');
+      // 渲染端热替换覆盖：存在有效热更（版本领先磁盘）→ 从 userData 外置目录加载新界面（主进程不动）。
+      const hotIndex = getActiveHotRendererIndexPath();
+      const indexPath = hotIndex ?? path.join(__dirname, '../../renderer/index.html');
+      if (hotIndex) {
+        logManager.addLog('info', `加载热更新渲染端（免重启覆盖）: ${hotIndex}`, 'Main');
+      }
       win.loadFile(indexPath).catch((err) => {
         logManager.addLog('error', `Failed to load index.html: ${err.message}`, 'Main');
       });
@@ -1457,6 +1467,9 @@ if (gotTheLock) {
     configManager = new ConfigManager();
     protocolParser = new ProtocolParser();
     logManager = new LogManager();
+    // 渲染端热替换启动校验：磁盘版本已追上热更覆盖（整包安装真正发生）→ 清覆盖回归原生加载；
+    // 覆盖仍领先 → 保留（重启/崩溃重开继续用新界面）。必须在任何窗口创建之前执行。
+    validateHotRendererOnStartup(logManager);
     logManager.addLog(
       'info',
       JSON.stringify({
@@ -2299,7 +2312,8 @@ if (gotTheLock) {
     registerIpInfoHandlers(ipInfoService);
     registerUnlockHandlers(unlockService);
     registerSystemHandlers();
-    registerVersionHandlers(coreUpdateService);
+    // 生效版本注入关于页：热更覆盖领先磁盘版本时显示覆盖版本，避免「界面是新的、版本号是旧的」错位。
+    registerVersionHandlers(coreUpdateService, effectiveAppVersion);
 
     registerRulesHandlers(configManager);
 
