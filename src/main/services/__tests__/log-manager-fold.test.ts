@@ -6,16 +6,27 @@ import type { LogEntry } from '../../../shared/types';
 
 describe('Log folding keeps disk evidence complete while the UI tail shows key info', () => {
   let directory: string;
+  // 收集本用例创建的 manager：afterEach 删目录前排空其异步写尾，避免落盘与 rm 竞争。
+  const managers: LogManager[] = [];
+  const createManager = () => {
+    const manager = new LogManager(directory);
+    managers.push(manager);
+    return manager;
+  };
   beforeEach(async () => {
     directory = await fs.mkdtemp(path.join(os.tmpdir(), 'shadowvpn-log-fold-'));
+    managers.length = 0;
   });
   afterEach(async () => {
+    // 只断言内存视图的用例不会 await flush，其写尾（enqueue 链）仍在飞行；
+    // 不排空就删目录会偶发 ENOTEMPTY（删除途中落盘又造出文件）或 EINVAL/ENOENT（写时目录已删）。
+    await Promise.all(managers.map((manager) => manager.flush()));
     await fs.rm(directory, { recursive: true, force: true });
     jest.restoreAllMocks();
   });
 
   it('folds same-key repeats into one entry with a count; disk keeps every occurrence', async () => {
-    const manager = new LogManager(directory);
+    const manager = createManager();
     const emitted: LogEntry[] = [];
     manager.on('log', (log) => emitted.push(log));
     // 目录命中的常量事件（dns-race POISONED，生产中每污染响应一条）
@@ -39,7 +50,7 @@ describe('Log folding keeps disk evidence complete while the UI tail shows key i
   });
 
   it('merges the sing-box dns/router pair of one failed lookup into a single key-info entry', async () => {
-    const manager = new LogManager(directory);
+    const manager = createManager();
     // 生产中的归因包裹文本（查询 id 每次不同，外观前缀不同）
     const dnsLine =
       'DNS 解析失败：无法解析服务器域名，请检查 DNS 设置 [[4243907428 1.50s] dns: lookup failed for firefoxusercontent.com: SERVFAIL]';
@@ -64,7 +75,7 @@ describe('Log folding keeps disk evidence complete while the UI tail shows key i
     jest.spyOn(Date, 'now');
     let now = 1_000_000;
     (Date.now as jest.Mock).mockImplementation(() => now);
-    const manager = new LogManager(directory);
+    const manager = createManager();
     manager.addLog('warn', 'same key', 'Example');
     now += 1_000; // 窗口内 → 合并
     manager.addLog('warn', 'same key', 'Example');
@@ -79,17 +90,7 @@ describe('Log folding keeps disk evidence complete while the UI tail shows key i
   });
 
   it('does not fold different levels or sources', () => {
-    const manager = new LogManager(directory);
-    manager.addLog('warn', 'same key', 'A');
-    manager.addLog('error', 'same key', 'A');
-    manager.addLog('warn', 'same key', 'B');
-    const same = manager.getLogs().filter((log) => log.message === 'same key');
-    expect(same).toHaveLength(3);
-    expect(same.every((log) => log.repeatCount === undefined)).toBe(true);
-  });
-
-  it('does not fold different levels or sources', () => {
-    const manager = new LogManager(directory);
+    const manager = createManager();
     manager.addLog('warn', 'same key', 'A');
     manager.addLog('error', 'same key', 'A');
     manager.addLog('warn', 'same key', 'B');
@@ -101,7 +102,7 @@ describe('Log folding keeps disk evidence complete while the UI tail shows key i
   it('never folds operation lifecycle evidence even when start/success share the same key', async () => {
     // 真机回归（e565519 折叠上线）：traceOperation 的 record 以 operation 为 message，start 与 success
     // 事件同键折叠 → 终态证据被 start 快照吞掉，operation-context 诊断链与 DiagnosticArchive 失明。
-    const manager = new LogManager(directory);
+    const manager = createManager();
     const ctx = {
       traceId: 't1',
       operation: 'proxy:start',
@@ -132,7 +133,7 @@ describe('Log folding keeps disk evidence complete while the UI tail shows key i
   });
 
   it('clear resets the fold index', async () => {
-    const manager = new LogManager(directory);
+    const manager = createManager();
     manager.addLog('warn', 'same key', 'Example');
     const cleared = manager.clearLogs();
     manager.addLog('warn', 'same key', 'Example');
