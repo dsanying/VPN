@@ -82,7 +82,9 @@ function findAppAsar(root: string, maxDepth = 5): string | null {
  * Windows 与未知形态返回 null（调用方走整包安装路径）。
  * 导出供真机 e2e 驱动复用（提取是平台执行项，jest 只能测其上的纯逻辑）。
  */
-export async function extractCandidateAsar(packagePath: string): Promise<ExtractedCandidate | null> {
+export async function extractCandidateAsar(
+  packagePath: string
+): Promise<ExtractedCandidate | null> {
   if (process.platform === 'win32') return null;
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shadow-vpn-hotswap-'));
   const cleanup = (extra?: string | null) => () => {

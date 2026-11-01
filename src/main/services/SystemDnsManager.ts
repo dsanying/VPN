@@ -493,13 +493,40 @@ export class MacOSSystemDns extends SystemDnsBase {
     return parseScutilNameservers(stdout);
   }
 
-  /** 默认路由所在 BSD 接口（en0 等）；读不到返回 null（调用方退回空候选，宁缺勿错）。 */
-  private async defaultRouteInterface(): Promise<string | null> {
+  /**
+   * 字面 default 路由所在 BSD 接口（en0 等），返回全部候选（多默认路由时按表序）。
+   *
+   * 为什么直读 `netstat -rn` 的字面 default 表项而非 `route -n get default`：sing-tun 的 auto_route
+   * 在 macOS 上不安装字面 0.0.0.0/0，而是把 0/0 拆成 0/1、128.0/1 等更具体路由（sing-tun#80 实证，
+   * BuildAutoRouteRanges 拆分排除保留段）——核运行中 `route get` 的最长前缀匹配会命中 /1 路由返回
+   * utun，而路由表里**字面 default 行仍是物理网卡**。运行中的换网漂移探测（readLanResolversLive）
+   * 只有走字面 default 才能定位真实接入网接口。虚拟接口（utun/tap/bridge 等其它 VPN 与共享桥）剔除；
+   * 解析失败/无字面行 → 回退 `route -n get default`（核停止时二者等价，行为兼容）。
+   */
+  private async defaultRouteInterfaces(): Promise<string[]> {
+    const virtual = /^(utun|tun|tap|bridge|lo\d|awdl|ap\d|llw|anpi|vmenet|vmnet|pktap|gif|stf|fa\d|fw\d)/;
+    try {
+      const { stdout } = await execAsync('netstat -rn -f inet', { timeout: DNS_CMD_TIMEOUT_MS });
+      const found: string[] = [];
+      for (const line of stdout.split('\n')) {
+        // 形如「default  10.31.15.254  UGScg  en0」；网关可能为 link#N（共享桥/失效项），一并取接口名，
+        // 由虚拟过滤与 ipconfig getoption 的可用性兜底（无 lease 的接口读不到东西）。
+        const m = /^default\s+\S+\s+\S+\s+(\S+)/.exec(line.trim());
+        if (!m) continue;
+        const netif = m[1];
+        if (virtual.test(netif) || found.includes(netif)) continue;
+        found.push(netif);
+      }
+      if (found.length > 0) return found;
+    } catch {
+      /* netstat 失败 → 回退 route get */
+    }
     try {
       const { stdout } = await execAsync('route -n get default', { timeout: DNS_CMD_TIMEOUT_MS });
-      return /^interface:\s+(\S+)/m.exec(stdout)?.[1] ?? null;
+      const iface = /^interface:\s+(\S+)/m.exec(stdout)?.[1];
+      return iface ? [iface] : [];
     } catch {
-      return null;
+      return [];
     }
   }
 
@@ -507,23 +534,31 @@ export class MacOSSystemDns extends SystemDnsBase {
    * 免劫持活体探测（覆写基类 scutil 版）：接管后 scutil --dns 已被改写成受控 IP，零判别力。
    * 直读 DHCP lease（`ipconfig getoption <if> domain_name_server`）——本地 lease 数据库，不发 DHCP
    * DISCOVER（校园网对已租约客户端的重发现不应答，2026-10-30 实证 103/106 超时）、不受系统 DNS 劫持影响。
+   * 接口定位走 defaultRouteInterfaces（字面 default 表项）：核运行中被 auto_route /1 路由劫走的
+   * `route get` 拿不到物理网卡，本探测在换网漂移场景（核运行中）必须仍能定位真实接入网。
    */
   override async readLanResolversLive(): Promise<string[]> {
-    const iface = await this.defaultRouteInterface();
-    if (!iface) return [];
-    try {
-      const { stdout } = await execFileAsync(
-        'ipconfig',
-        ['getoption', iface, 'domain_name_server'],
-        {
-          timeout: DNS_CMD_TIMEOUT_MS,
+    const ifaces = await this.defaultRouteInterfaces();
+    if (ifaces.length === 0) return [];
+    const out: string[] = [];
+    for (const iface of ifaces) {
+      try {
+        const { stdout } = await execFileAsync(
+          'ipconfig',
+          ['getoption', iface, 'domain_name_server'],
+          {
+            timeout: DNS_CMD_TIMEOUT_MS,
+          }
+        );
+        // 输出形如“10.20.220.50”或多值“{10.20.220.50, 10.20.220.51}”（ip_mult/string 两形态都有人报），提取全部 IPv4。
+        for (const m of String(stdout).matchAll(/(\d{1,3}(?:\.\d{1,3}){3})/g)) {
+          if (!out.includes(m[1])) out.push(m[1]);
         }
-      );
-      // 输出形如“10.20.220.50”或多值“{10.20.220.50, 10.20.220.51}”（ip_mult/string 两形态都有人报），提取全部 IPv4。
-      return [...String(stdout).matchAll(/(\d{1,3}(?:\.\d{1,3}){3})/g)].map((m) => m[1]);
-    } catch {
-      return [];
+      } catch {
+        /* 该接口无 DHCP lease（静态 IP/虚拟网卡）→ 跳过，fail-soft */
+      }
     }
+    return out;
   }
 }
 
