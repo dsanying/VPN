@@ -142,6 +142,21 @@ describe('getLanResolverForDns（新鲜值优先、marker 回退）', () => {
     await expect(dns.getLanResolverForDns()).resolves.toBe('10.20.221.240');
   });
 
+  it('mid-session 重启（2026-11-01 内网 API 断真机场景）：scutil=受控 IP、marker 因 DHCP 模式返空 → DHCP lease 直读兜住', async () => {
+    // 更新 apply 停→立刻起：stop 腿不还原 DNS → scutil 只剩受控 8.8.8.8；
+    // 校园网 DHCP 模式 → marker.original 是空数组（networksetup 对 DHCP 返空，setDns 捕获时即空）；
+    // 唯一能给出校园解析器的是接管免疫的 ipconfig getoption（DHCP lease 直读）。
+    jest.spyOn(SystemDnsBase, 'readMarker').mockReturnValue(JSON.parse(markerOf({ 'Wi-Fi': [] })));
+    stubChildProcess({
+      scutil: 'resolver #1\n  nameserver[0] : 8.8.8.8\n',
+      ipconfig: '10.20.221.240',
+      // route -n get default（readLanResolversLive 先找默认路由接口）
+      route: '   route to: 0.0.0.0\ndestination: default\ninterface: en0\n',
+    });
+    const dns = new MacOSSystemDns();
+    await expect(dns.getLanResolverForDns()).resolves.toBe('10.20.221.240');
+  });
+
   it('读 marker 抛错/无 marker 且 scutil 失败 → null（退回 dns-local，不 brick 起核）', async () => {
     jest.spyOn(SystemDnsBase, 'readMarker').mockImplementation(() => {
       throw new Error('fs broken');
