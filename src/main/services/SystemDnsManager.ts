@@ -211,13 +211,21 @@ export abstract class SystemDnsBase implements ISystemDnsManager {
     try {
       // 新鲜值优先：此刻系统 DNS 尚未接管（探测发生在 setDns 之前），scutil/netsh/resolvectl 反映**当前**
       // 网络的真实解析器。marker.original（上一会话/上次接管前捕获）只作回退——顺序至关重要：换网后残留的
-      // 旧 marker 若排在前面，会把 dns-lan 指到旧网关的解析器（新网络里不可达），内网域名全灭。两路合并去重，
-      // pickLanResolverIp 按序取第一个私网 IPv4（异常态：系统 DNS 仍是受控 IP → 新鲜值无私网 → 自然落 marker）。
+      // 旧 marker 若排在前面，会把 dns-lan 指到旧网关的解析器（新网络里不可达），内网域名全灭。三路合并去重，
+      // pickLanResolverIp 按序取第一个私网 IPv4（异常态：系统 DNS 仍是受控 IP → 新鲜值无私网 → 落活体/marker）。
       const fresh = await this.readEffectiveResolvers().catch((): string[] => []);
+      // 活体探测（接管免疫）：mid-session 重启（更新 apply / 换配置的停→立刻起）时系统 DNS 仍是上一会话的
+      // 受控 IP（stop 腿按设计不还原），新鲜值=scutil 只剩受控 IP；marker.original 又因 setDns 捕获用的
+      // networksetup -getdnsservers 对 DHCP 模式返空（校园网正是 DHCP 下发）而无私网候选——两路同时失效 →
+      // lanResolver=null → split-horizon 三腿整条不发 → ai.cuhk.edu.cn 单腿落公网 DoH 视图 → 内网 API 断
+      // （2026-11-01 真机实证：14:58 内核 apply 重启后即坏，此前 11 小时的内网答案全靠 cache.db 旧缓存掩盖）。
+      // DHCP lease 直读（mac ipconfig getoption / win netsh / linux resolvectl）不受接管与 networksetup 空读
+      // 影响，作第二路补上；marker 仍殿后（换网后旧 marker 最陈旧，语义不变）。
+      const live = await this.readLanResolversLive().catch((): string[] => []);
       const marker = SystemDnsBase.readMarker();
       const fromMarker = marker ? Object.values(marker.original).flat() : [];
       const candidates = [...fresh];
-      for (const ip of fromMarker) {
+      for (const ip of [...live, ...fromMarker]) {
         if (!candidates.includes(ip)) candidates.push(ip);
       }
       return pickLanResolverIp(candidates, this.controlledIp);
