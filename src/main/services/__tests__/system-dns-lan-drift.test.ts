@@ -85,8 +85,34 @@ describe('shouldFollowLanResolverDrift（漂移判定纯函数）', () => {
 });
 
 describe('MacOSSystemDns.readLanResolversLive（免劫持活体探测）', () => {
-  it('route 定位默认接口 → ipconfig getoption 直读 DHCP lease，解析单/多值 IPv4', async () => {
+  it('netstat 字面 default 表项定位物理网卡 → ipconfig getoption 直读 DHCP lease（核运行中 /1 路由不干扰）', async () => {
+    // 模拟核运行中的真实路由表：auto_route 拆出的 0/1、128.0/1 经 utun，字面 default 仍指 en0，
+    // 另有 Internet 共享桥（gateway=link#N）与其它 VPN 的 utun 字面 default 干扰项。
     stubChildProcess({
+      netstat: [
+        'Routing tables',
+        '',
+        'Internet:',
+        'Destination        Gateway            Flags               Netif Expire',
+        'default            10.31.15.254       UGScg                 en0',
+        'default            link#22            UCSIg           bridge100      !',
+        'default            198.18.0.1         UGScg                utun9',
+        '0/1                198.18.0.1         UGScg                utun9',
+        '128.0/1            198.18.0.1         UGScg                utun9',
+      ].join('\n'),
+      ipconfig: '{ 10.20.220.50, 10.20.220.51 }',
+    });
+    const dns = new MacOSSystemDns();
+    await expect(dns.readLanResolversLive()).resolves.toEqual(['10.20.220.50', '10.20.220.51']);
+    // 只对过滤后存活的物理接口读 lease：bridge/utun 全部剔除
+    expect((execFile as unknown as jest.Mock).mock.calls.map((c) => c[1])).toEqual([
+      ['getoption', 'en0', 'domain_name_server'],
+    ]);
+  });
+
+  it('netstat 失败 → 回退 route -n get default（核停止时二者等价，旧路径兼容）', async () => {
+    stubChildProcess({
+      netstat: undefined,
       route: '   gateway: 10.31.15.254\ninterface: en0\n',
       ipconfig: '{ 10.20.220.50, 10.20.220.51 }',
     });
@@ -99,11 +125,11 @@ describe('MacOSSystemDns.readLanResolversLive（免劫持活体探测）', () =>
     ]);
   });
 
-  it('route 读不到默认接口 / ipconfig 失败 → 空数组（fail-soft，调用方按无信息处理）', async () => {
-    stubChildProcess({ route: undefined, ipconfig: '10.20.220.50' });
+  it('路由均读不到 / ipconfig 失败 → 空数组（fail-soft，调用方按无信息处理）', async () => {
+    stubChildProcess({ netstat: undefined, route: undefined, ipconfig: '10.20.220.50' });
     await expect(new MacOSSystemDns().readLanResolversLive()).resolves.toEqual([]);
 
-    stubChildProcess({ route: 'interface: en0', ipconfig: undefined });
+    stubChildProcess({ netstat: undefined, route: 'interface: en0', ipconfig: undefined });
     await expect(new MacOSSystemDns().readLanResolversLive()).resolves.toEqual([]);
   });
 });
@@ -150,8 +176,8 @@ describe('getLanResolverForDns（新鲜值优先、marker 回退）', () => {
     stubChildProcess({
       scutil: 'resolver #1\n  nameserver[0] : 8.8.8.8\n',
       ipconfig: '10.20.221.240',
-      // route -n get default（readLanResolversLive 先找默认路由接口）
-      route: '   route to: 0.0.0.0\ndestination: default\ninterface: en0\n',
+      // netstat -rn -f inet（readLanResolversLive 先读字面 default 表项定位接入网接口）
+      netstat: '   default            10.31.15.254       UGScg                 en0\n',
     });
     const dns = new MacOSSystemDns();
     await expect(dns.getLanResolverForDns()).resolves.toBe('10.20.221.240');
