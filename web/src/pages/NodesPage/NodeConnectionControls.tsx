@@ -3,10 +3,10 @@ import { ServerSelect } from '@/components/vpn/ServerSelect';
 import { actionColor } from '@/config/theme';
 import {tFragment} from '@/i18n';
 import {isSubscriptionNotice} from '@shared/subscription-notice';
-import { PoweroffOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PoweroffOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { Stack, ViewSwitch, ResponsiveActions, Popconfirm } from '@/components/client';
+import { Stack, ViewSwitch, ResponsiveActions } from '@/components/client';
 import { SubscriptionQuota } from '@/components/vpn/SubscriptionQuota';
 import { useAppStore } from '@/store/app-store';
 import { useSpeedTestStore } from '@/store/useSpeedTestStore';
@@ -22,7 +22,6 @@ export function NodeConnectionControls({ onAddSubscription }: { onAddSubscriptio
   const busy = useAppStore(s => s.proxyBusy);
   const phase = useAppStore(s => s.proxyPhase);
   const disconnectAction = phase === 'stopping' || (phase !== 'starting' && running);
-  const pending = useAppStore(s => s.pendingChanges);
   const start = useAppStore(s => s.startProxy);
   const stop = useAppStore(s => s.stopProxy);
   const { t } = useTranslation();
@@ -45,8 +44,6 @@ export function NodeConnectionControls({ onAddSubscription }: { onAddSubscriptio
     {/* 行右侧常驻所选组的剩余/总量（SubscriptionQuota 无数据时自身渲染 null，自建组自然留白）。 */}
     {selectedGroupQuota ? <div className="vpn-nodes-controls__quota"><SubscriptionQuota info={selectedGroupQuota.userInfo} /></div> : null}
   </Stack></Card>
-
-  {pending.added.length || pending.modified.length ? <Alert showIcon type="warning" title={t('vpn.pending')} action={<Popconfirm title={t('common.confirm.execute')} description={t('vpn.applyImpact')} onConfirm={async () => {try{if(!(await api.proxy.applyPendingChanges()).ok)throw new Error(t('common.requestFailed'));await useAppStore.getState().refreshPendingChanges();notifyActionSuccess('apply');}catch(e){notifyActionFailed('save',e);}}}><Button icon={<ReloadOutlined aria-hidden/>}>{t('common.vocab.apply')}</Button></Popconfirm>} /> : null}
   </>;
 }
 
