@@ -1,7 +1,7 @@
 import { test, expect } from './console-guard';
 import { installDesktopMock } from './desktop-mock';
 
-test('pending updates stay dismissible, remain in settings and only apply on an explicit click', async ({
+test('pending updates surface only as the persistent sidebar button and apply on an explicit click', async ({
   page,
 }) => {
   await page.addInitScript(() => localStorage.setItem('shadowvpn-lang', 'zh-CN'));
@@ -17,19 +17,23 @@ test('pending updates stay dismissible, remain in settings and only apply on an 
     },
   });
   await page.goto('/#/settings');
-  const notice = page.locator('.ant-notification-notice').filter({ hasText: '有待生效的更新' });
-  await expect(notice).toBeVisible();
+  // 更新就绪不再自动弹 toast：入口收敛到侧边栏左下角常驻按钮 + 设置页面板。
+  await expect(page.locator('.ant-notification-notice')).toHaveCount(0);
   expect(
     await page.evaluate(() =>
       (window as any).desktopTest.calls.filter((call: any) => call.channel === 'update:install')
     )
   ).toEqual([]);
-  await notice.locator('.ant-notification-notice-close').click();
-  await expect(notice).toHaveCount(0);
+  // 侧边栏按钮的 accessible name 是 aria-label（重启代理应用更新），按可见文案 + 容器类定位。
+  const siderCore = page
+    .locator('.ds-basic-layout__sider-update')
+    .filter({ hasText: '1.13.9' });
+  await expect(siderCore).toBeVisible();
+  await expect(page.locator('.ds-basic-layout__sider-update')).toHaveCount(2);
   await expect(
     page.getByRole('main').getByRole('button', { name: '重启代理应用更新', exact: true })
   ).toBeVisible();
-  // Repeated status publications do not reopen a dismissed update.
+  // Repeated status publications do not spawn a toast either.
   await page.evaluate(() =>
     (window as any).desktopTest.emit('update:progress', {
       globalUpdates: {
@@ -42,11 +46,9 @@ test('pending updates stay dismissible, remain in settings and only apply on an 
       },
     })
   );
-  await expect(notice).toHaveCount(0);
-  await page
-    .getByRole('main')
-    .getByRole('button', { name: '重启代理应用更新', exact: true })
-    .click();
+  await expect(page.locator('.ant-notification-notice')).toHaveCount(0);
+  // The sidebar button applies the core update on an explicit click.
+  await siderCore.click();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -56,17 +58,6 @@ test('pending updates stay dismissible, remain in settings and only apply on an 
       )
     )
     .toEqual([{ kind: 'core' }]);
-  // New content has a distinct revision and reopens the pending notice.
-  await page.evaluate(() =>
-    (window as any).desktopTest.emit('update:progress', {
-      globalUpdates: {
-        checking: false,
-        lastCheckedAt: Date.now(),
-        items: [{ kind: 'data', status: 'ready', revision: 'two', restart: 'proxy' }],
-      },
-    })
-  );
-  await expect(notice).toBeVisible();
   await mock.expectNoUnexpectedRequests();
 });
 

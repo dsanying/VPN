@@ -314,7 +314,6 @@
     "or": "任一满足",
     "originalOrder": "原始顺序",
     "pending": "节点变更尚未应用到运行中的内核",
-    "pendingUpdates": "有待生效的更新",
     "preparingRegion": "准备地区规则…",
     "privateKey": "私钥",
     "regionUnknownHint": "尚未获取到地区信息；检测会自动查询公网网关 IP 的地区，并在支持时识别代理出口地区。",

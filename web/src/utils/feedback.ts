@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { translateLogMessage } from '@shared/log-presentation';
 import i18n from '@/i18n';
 import { notification } from './antdStatic';
@@ -62,10 +61,4 @@ export function notifyActionFailed(action: WriteAction, reason?: unknown) {
 }
 export function notifyWarning(title: string, description?: string) {
   result('warning', title, description);
-}
-export function showPendingUpdates(title: string, actions: ReactNode, onClose: () => void) {
-  notification.open({ key: 'global-pending-updates', title, actions, onClose, duration: 0, placement: 'topRight' });
-}
-export function closePendingUpdates() {
-  notification.destroy('global-pending-updates');
 }

@@ -8,12 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/ipc';
 import { useUpdateStore } from '@/store/update-store';
 import { ContentStack, ResponsiveActions } from '@/components/client';
-import {
-  notifyActionFailed,
-  notifyActionSuccess,
-  showPendingUpdates,
-  closePendingUpdates,
-} from '@/utils/feedback';
+import { notifyActionFailed, notifyActionSuccess } from '@/utils/feedback';
 
 export function UpdateActions() {
   const { t } = useTranslation();
@@ -63,14 +58,8 @@ export function UpdateActions() {
 }
 
 export function GlobalUpdateNotice() {
-  const { t } = useTranslation();
-  const snapshot = useUpdateStore((s) => s.snapshot);
-  const dismissed = useUpdateStore((s) => s.dismissed);
-  const fingerprint = snapshot.items
-    .filter((item) => item.status === 'ready')
-    .map((item) => `${item.kind}:${item.version ?? item.revision ?? ''}`)
-    .sort()
-    .join('|');
+  // 只做 store 同步（状态轮询 + 进度推送），不再自动弹 toast：更新就绪的入口统一收敛到
+  // 侧边栏左下角常驻按钮（BasicLayout）与设置页 GlobalUpdatePanel，弹窗与常驻按钮二选一，弹窗属打扰。
   useEffect(() => {
     const off = api.update.onProgress((progress) => {
       if (progress.globalUpdates) useUpdateStore.getState().setSnapshot(progress.globalUpdates);
@@ -83,16 +72,6 @@ export function GlobalUpdateNotice() {
       .catch(() => {});
     return off;
   }, []);
-  useEffect(() => {
-    if (!fingerprint || fingerprint === dismissed) {
-      closePendingUpdates();
-      return;
-    }
-    showPendingUpdates(t('vpn.pendingUpdates'), <UpdateActions />, () =>
-      useUpdateStore.getState().dismiss(fingerprint)
-    );
-    return closePendingUpdates;
-  }, [fingerprint, dismissed, t]);
   return null;
 }
 

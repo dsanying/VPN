@@ -314,7 +314,6 @@
     "or": "any condition",
     "originalOrder": "original order",
     "pending": "nodes changes have not been applied to the running core",
-    "pendingUpdates": "updates ready to apply",
     "preparingRegion": "preparing region rules…",
     "privateKey": "private key",
     "regionUnknownHint": "Region is unknown. Detection looks up the public gateway IP and measures the proxy exit where supported.",
