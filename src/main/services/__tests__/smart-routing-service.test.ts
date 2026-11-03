@@ -91,6 +91,38 @@ describe('automatic local-network routing', () => {
     }
   );
 
+  it('transient detection failure on an unchanged network retains the ready policy', async () => {
+    const f = fixture();
+    await f.service.refresh();
+    expect(f.policies.at(-1)).toEqual({
+      automatic: true,
+      enabled: true,
+      region: 'us',
+      reverse: false,
+    });
+    // 同网探测失败（上游 DNS 抖动）：UI 降级为 unavailable，但路由策略保留——不触发策略翻面重启。
+    f.detect.mockResolvedValue(null);
+    await f.service.refresh(true);
+    expect(f.service.getState().status).toBe('unavailable');
+    expect(f.policies.at(-1)).toEqual({
+      automatic: true,
+      enabled: true,
+      region: 'us',
+      reverse: false,
+    });
+    // 探测恢复：策略原样，无翻动。
+    f.detect.mockResolvedValue({ ip: '192.0.2.1', countryCode: 'US' });
+    await f.service.refresh(true);
+    expect(f.service.getState()).toEqual({ countryCode: 'us', status: 'ready' });
+    expect(f.policies.at(-1)?.enabled).toBe(true);
+    // 换网后旧策略必须下线（安全语义不变）。
+    f.changeNetwork();
+    f.detect.mockResolvedValue(null);
+    await f.service.refresh(true);
+    expect(f.policies.at(-1)?.enabled).toBe(false);
+    f.service.dispose();
+  });
+
   it('missing country rules never activate direct-country routing', async () => {
     const f = fixture();
     f.ensureRules.mockResolvedValue(false);
