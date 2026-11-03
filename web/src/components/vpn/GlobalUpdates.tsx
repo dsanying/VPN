@@ -1,7 +1,7 @@
 import './global-updates.css';
 import { clientHost } from '@/config/client-host';
 import { updateKindLabels } from '@/i18n/updateLabels';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { ReloadOutlined, SyncOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -58,8 +58,17 @@ export function UpdateActions() {
 }
 
 export function GlobalUpdateNotice() {
-  // 只做 store 同步（状态轮询 + 进度推送），不再自动弹 toast：更新就绪的入口统一收敛到
-  // 侧边栏左下角常驻按钮（BasicLayout）与设置页 GlobalUpdatePanel，弹窗与常驻按钮二选一，弹窗属打扰。
+  // store 同步（状态轮询 + 进度推送）+ 非软件更新自动应用。策略：
+  //  - core/data/subscriptions（restart=proxy）：发现 ready 即自动 apply，换核/数据刷新由主进程
+  //    自动重启代理完成，全自动无提示；软件（restart=software）需退出 App，留给侧边栏
+  //    左下角常驻按钮手动触发——那是全应用唯一保留的重启提示。
+  //  - apply 走串行队列：主进程同时只允许一个 apply（GlobalUpdateService.applying 互斥），
+  //    并发第二个会抛 busy；按 kind:version|revision 指纹去重。
+  //  - 失败语义：busy（检查/另一 apply 在飞）→ 摘除指纹，随下次 publish 重试；其余失败
+  //    保留指纹不再自动重试（防失败风暴），设置页更新面板（GlobalUpdatePanel）可手动重试。
+  const snapshot = useUpdateStore((s) => s.snapshot);
+  const autoApplied = useRef<Set<string>>(new Set());
+  const autoQueue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     const off = api.update.onProgress((progress) => {
       if (progress.globalUpdates) useUpdateStore.getState().setSnapshot(progress.globalUpdates);
@@ -72,6 +81,24 @@ export function GlobalUpdateNotice() {
       .catch(() => {});
     return off;
   }, []);
+  useEffect(() => {
+    for (const item of snapshot.items) {
+      if (item.status !== 'ready' || item.restart === 'software') continue;
+      const fingerprint = `${item.kind}:${item.version ?? item.revision ?? ''}`;
+      if (autoApplied.current.has(fingerprint)) continue;
+      autoApplied.current.add(fingerprint);
+      autoQueue.current = autoQueue.current.then(async () => {
+        try {
+          const result = await api.update.apply(item.kind);
+          if (!result.success) throw new Error(result.error ?? 'apply failed');
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('busy')) {
+            autoApplied.current.delete(fingerprint);
+          }
+        }
+      });
+    }
+  }, [snapshot]);
   return null;
 }
 

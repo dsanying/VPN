@@ -87,13 +87,15 @@ for (const language of ['zh-CN', 'en-US']) {
    globalUpdates: {
     checking: true,
     lastCheckedAt: Date.now(),
-    items: [{ kind: 'core', status: 'ready', restart: 'proxy' }],
+    // 锁定软件更新（restart=software）：非软件更新已自动化（自动 apply，检查在飞时主进程 busy
+    // 互斥），检查进行中仍需手动按钮的场景只剩软件更新——按钮可点、apply 等待而非报错。
+    items: [{ kind: 'software', status: 'ready', version: '0.4.0', restart: 'software' }],
    },
   });
   await page.goto('/#/settings');
   const main = page.locator('main');
   const restart = main.getByRole('button', {
-   name: chinese ? '重启代理应用更新' : /restart.*update/i,
+   name: chinese ? /重启软件应用更新|安装软件更新/ : /restart.*update|install.*update/i,
   });
   await restart.scrollIntoViewIfNeeded();
   await expect(restart).toBeEnabled();
@@ -103,7 +105,7 @@ for (const language of ['zh-CN', 'en-US']) {
     page.evaluate(
      () =>
       (window as any).desktopTest.calls.filter(
-       (c: any) => c.channel === 'update:install' && c.args?.kind === 'core'
+       (c: any) => c.channel === 'update:install' && c.args?.kind === 'software'
       ).length
     )
    )
