@@ -94,7 +94,9 @@ function launch(name: 'mihomo' | 'xray', config: object): void {
   });
 }
 async function ready(): Promise<void> {
-  for (let attempt = 0; attempt < 400; attempt++) {
+  // 1200×~130ms≈2.5min 上界：Windows runner 冷启动时 Defender 全量扫描核心二进制可吃掉数十秒
+  // （v0.3.7 release 实测 400 次≈52s 在 win-2022 上超时「Fixture core API not ready」，mac/android 均过）。
+  for (let attempt = 0; attempt < 1200; attempt++) {
     if (children.some((child) => child.exitCode !== null)) throw new Error('Fixture core exited');
     try {
       await probeMihomoReadiness(api!, expectedMihomoConfig, 100);
