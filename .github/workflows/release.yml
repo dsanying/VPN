@@ -89,10 +89,16 @@ jobs:
         run: npm run fetch:core
 
       - name: Validate application
+        shell: bash
         run: |
-          npm test -- --runInBand &&
-          npm run lint &&
-          npm run typecheck:renderer &&
+          # Windows 冷 runner 上真实核心 fixture 起核偶发超时（暖跑必过，v0.3.7/0.3.8 连续实测）——
+          # 测试步有界重试一次；真坏会在重试时继续失败，不会吞掉。
+          if ! npm test -- --runInBand; then
+            echo "::warning::测试首跑失败，重试一次（冷 runner 真实核心 fixture 已知 flake）"
+            npm test -- --runInBand
+          fi
+          npm run lint
+          npm run typecheck:renderer
           npm run build
 
       - name: Prepare private Android signing key
