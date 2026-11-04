@@ -8,7 +8,8 @@ import { join, resolve } from 'path';
 import { createServer } from 'net';
 import { once } from 'events';
 
-jest.setTimeout(30000);
+// 120s：整个生命周期含两次真实起核（每次内部就绪上界 45s，Windows 冷启动 Defender 扫描可吃满）+ 重启 + 停止。
+jest.setTimeout(120000);
 const platform =
   process.platform === 'darwin'
     ? process.arch === 'arm64'
