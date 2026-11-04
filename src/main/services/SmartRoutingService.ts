@@ -8,8 +8,6 @@ type State = NonNullable<IpInfoSnapshot['smartRouting']>;
 export class SmartRoutingService {
   private state: State = { status: 'detecting' };
   private policy: RegionRoutingConfig | null = null;
-  /** 最近一次 ready 观测时的网络指纹：同网探测失败时凭它保留策略（换网即失效）。 */
-  private readyFingerprint: string | null = null;
   private generation = 0;
   private inflight: Promise<void> | null = null;
   private fingerprint: string | null = null;
@@ -41,17 +39,12 @@ export class SmartRoutingService {
       region: state.countryCode ?? '',
       reverse: false,
     };
-    // 同网探测失败不拆路由（瞬态上游故障零重启）：上次 ready 策略仍是对当前网络的真实观测，
-    // 探测不可用只降级 UI 状态。换网（指纹对不上）或从未 ready 过才随策略下线——
-    // 「新网络不得沿用旧国家的直连策略」的安全语义不变。曾实测缺陷：上游 DNS 抖动 6 分钟内
-    // 探测失败把 enabled true→false 再翻回 true，两次整核重启掀掉全部 TCP（RDP 会话被杀）。
-    const retainReady =
-      !next.enabled &&
-      this.policy?.enabled === true &&
-      this.readyFingerprint !== null &&
-      this.readyFingerprint === this.fingerprint;
-    const effective = retainReady ? this.policy! : next;
-    if (state.status === 'ready') this.readyFingerprint = this.fingerprint;
+    // 探测不可观测（失败/进行中）一律保留在跑策略，换网判定交给「成功的观测」而非网络指纹：
+    // 暗唤醒/Wi-Fi 重连会让 en0 地址瞬失（指纹瞬变），上游故障又让探测拿不到结果；若按指纹下线，
+    // 故障期拆策略 → 整核重启、恢复后翻回 → 二次重启，两次掀掉全部 TCP（2026-11-04 实测，RDP 被杀）。
+    // 保留的代价：真实换网且探测始终拿不到结果时，旧国家的直连规则暂留——但直连规则只影响对应国家
+    // IP 走不走代理，私有段恒直连，无泄漏面；观测成功（含不同国家）即正常切换或翻回。
+    const effective = !next.enabled && this.policy?.enabled === true ? this.policy : next;
     this.policy = effective;
     this.deps.onPolicy(effective);
     this.deps.onState(this.getState());

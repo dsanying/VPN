@@ -91,7 +91,7 @@ describe('automatic local-network routing', () => {
     }
   );
 
-  it('transient detection failure on an unchanged network retains the ready policy', async () => {
+  it('unobservable detection retains the ready policy across network changes', async () => {
     const f = fixture();
     await f.service.refresh();
     expect(f.policies.at(-1)).toEqual({
@@ -115,11 +115,27 @@ describe('automatic local-network routing', () => {
     await f.service.refresh(true);
     expect(f.service.getState()).toEqual({ countryCode: 'us', status: 'ready' });
     expect(f.policies.at(-1)?.enabled).toBe(true);
-    // 换网后旧策略必须下线（安全语义不变）。
+    // 换网（指纹变化）但探测拿不到结果（暗唤醒/Wi-Fi 重连 + 上游故障）：同样保留，零重启
+    // ——2026-11-04 实测：指纹瞬变被当换网下线策略 → 故障期拆路由整核重启、恢复再翻回二次重启。
     f.changeNetwork();
     f.detect.mockResolvedValue(null);
     await f.service.refresh(true);
-    expect(f.policies.at(-1)?.enabled).toBe(false);
+    expect(f.service.getState().status).toBe('unavailable');
+    expect(f.policies.at(-1)).toEqual({
+      automatic: true,
+      enabled: true,
+      region: 'us',
+      reverse: false,
+    });
+    // 新网络上拿到成功观测且国家不同 → 策略切换（唯一允许的变更路径）。
+    f.detect.mockResolvedValue({ ip: '198.51.100.1', countryCode: 'JP' });
+    await f.service.refresh(true);
+    expect(f.policies.at(-1)).toEqual({
+      automatic: true,
+      enabled: true,
+      region: 'jp',
+      reverse: false,
+    });
     f.service.dispose();
   });
 
@@ -147,11 +163,24 @@ describe('automatic local-network routing', () => {
     f.changeNetwork();
     f.detect.mockResolvedValue({ ip: '198.51.100.1', countryCode: 'JP' });
     const next = f.service.refresh();
-    expect(f.policies.at(-1)?.enabled).toBe(false);
+    // 检测期间保留在跑策略（探测不可观测不下线——2026-11-04 实测按指纹立即下线会掀掉全部 TCP）；
+    // 过期 in-flight 结果由世代压制，不落地。
+    expect(f.policies.at(-1)).toEqual({
+      automatic: true,
+      enabled: true,
+      region: 'us',
+      reverse: false,
+    });
     await next;
     finish({ ip: '192.0.2.1', countryCode: 'CN' });
     await old;
     expect(f.service.getState()).toEqual({ countryCode: 'jp', status: 'ready' });
+    expect(f.policies.at(-1)).toEqual({
+      automatic: true,
+      enabled: true,
+      region: 'jp',
+      reverse: false,
+    });
     f.service.dispose();
   });
 
