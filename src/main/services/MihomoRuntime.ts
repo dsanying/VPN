@@ -108,7 +108,9 @@ export class MihomoRuntime {
         });
         const api = new MihomoApiClient(port, secret);
         try {
-          const deadline = Date.now() + 12000;
+          const deadline = Date.now() + 45000;
+          // 45s：Windows 冷启动 Defender 全量扫描核心二进制可吃掉数十秒（v0.3.8 release 实测 12s 在
+          // win-2022 上「Mihomo controller did not become ready」；就绪探测廉价且世代守护可让位，放宽有界）。
           for (;;) {
             if (generation !== this.generation) throw new Error('Core startup superseded');
             if (spawnError || child.exitCode !== null || child.signalCode !== null)
