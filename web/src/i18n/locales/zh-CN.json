@@ -306,6 +306,7 @@
     "nodeSource": "节点链接或配置",
     "nodeSourceHint": "粘贴节点链接、配置内容或企业 VPN 网关地址，自动识别类型；账密仅保存在本机加密数据库。",
     "nodeSourceInvalid": "无法识别单个节点，请检查配置内容",
+    "stillDetecting": "正在识别配置，请稍候再保存",
     "notApplicable": "不适用",
     "notInstalledPlatform": "当前系统不需要此助手",
     "onePerLine": "每行一个值",

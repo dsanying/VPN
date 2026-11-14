@@ -306,6 +306,7 @@
     "nodeSource": "node link or configuration",
     "nodeSourceHint": "Paste a node link, configuration or enterprise VPN gateway. Type is detected automatically; credentials stay in the local encrypted database.",
     "nodeSourceInvalid": "cannot identify a single node; check the configuration",
+    "stillDetecting": "still detecting the configuration; try saving again shortly",
     "notApplicable": "not applicable",
     "notInstalledPlatform": "this system does not require this helper",
     "onePerLine": "one value per line",

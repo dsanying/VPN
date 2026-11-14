@@ -504,7 +504,8 @@ export class MacOSSystemDns extends SystemDnsBase {
    * 解析失败/无字面行 → 回退 `route -n get default`（核停止时二者等价，行为兼容）。
    */
   private async defaultRouteInterfaces(): Promise<string[]> {
-    const virtual = /^(utun|tun|tap|bridge|lo\d|awdl|ap\d|llw|anpi|vmenet|vmnet|pktap|gif|stf|fa\d|fw\d)/;
+    const virtual =
+      /^(utun|tun|tap|bridge|lo\d|awdl|ap\d|llw|anpi|vmenet|vmnet|pktap|gif|stf|fa\d|fw\d)/;
     try {
       const { stdout } = await execAsync('netstat -rn -f inet', { timeout: DNS_CMD_TIMEOUT_MS });
       const found: string[] = [];

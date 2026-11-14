@@ -17,8 +17,10 @@ import type { ServerConfig } from '@shared/types';
 import { mergeNodeDraft } from './nodeModel';
 export function NodeEditor({ node, onClose }: { node?: ServerConfig; onClose: () => void }) {
   const { t } = useTranslation(); const [form] = Form.useForm();
-  const [raw, setRaw] = useState(formatJson(node ?? {}) ?? '{}');
-  const [source, setSource] = useState(node?.enterpriseSettings?.gateway ?? '');
+  const initialSource = node?.enterpriseSettings?.gateway ?? '';
+  const initialRaw = formatJson(node ?? {}) ?? '{}';
+  const [raw, setRaw] = useState(initialRaw);
+  const [source, setSource] = useState(initialSource);
   const [sourceChanged, setSourceChanged] = useState(false);
   const [authFields, setAuthFields] = useState<EnterpriseAuthField[]>([]);
   const [profile, setProfile] = useState<EnterpriseProfile>();
@@ -86,9 +88,10 @@ export function NodeEditor({ node, onClose }: { node?: ServerConfig; onClose: ()
   const [sessionBusy,setSessionBusy]=useState(false);
   const loginInitiated=useAppStore(s=>node?s.tailscaleLoginInitiated[node.id]:false);
   const sessionAction=async(action:()=>Promise<void>,feedback:'login'|'cancel'|'logout')=>{setSessionBusy(true);try{await action();}catch(e){notifyActionFailed(feedback,e);}finally{setSessionBusy(false);}};
-  return <DrawerForm<Partial<ServerConfig> & {selections?:Record<string,string>}> form={form} open title={t('common.vocab.nodes')} onOpenChange={open => { if (!open) onClose(); }} initialValues={{ ...node }} onFinish={async values => {
+  return <DrawerForm<Partial<ServerConfig> & {selections?:Record<string,string>}> form={form} open title={t('common.vocab.nodes')} additionalDirty={source.trim() !== initialSource || raw !== initialRaw} onOpenChange={open => { if (!open) onClose(); }} initialValues={{ ...node }} onFinish={async values => {
     try {
-      if ((protocol === 'enterprise' && !source.trim()) || detecting || sourceError || (!node && !detected) || (source.trim() && !detected)) { setSourceError(true); throw new Error(t('vpn.nodeSourceInvalid')); }
+      if (detecting) throw new Error(t('vpn.stillDetecting'));
+      if ((protocol === 'enterprise' && !source.trim()) || sourceError || (!node && !detected) || (source.trim() && !detected)) { setSourceError(true); throw new Error(t('vpn.nodeSourceInvalid')); }
       if (protocol === 'enterprise' && detected?.enterpriseSettings) {
         await api.enterprise.save({id:node?.enterpriseSettings?.profileId,name:values.name,gateway:detected.enterpriseSettings.gateway,username:values.username,password:values.password,selections:values.selections});
         await useAppStore.getState().loadConfig(); notifyActionSuccess('save'); return true;

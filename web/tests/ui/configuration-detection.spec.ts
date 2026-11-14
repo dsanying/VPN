@@ -45,6 +45,29 @@ test('单节点自动识别填充完整字段，说明位于标题问号', async
   await mock.expectNoUnexpectedRequests();
 });
 
+test('编辑已有节点仅修改来源即出现保存按钮，重新识别后可保存', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('shadowvpn-lang', 'zh-CN'));
+  const mock = await installDesktopMock(page);
+  await page.goto('/#/nodes');
+  await page.getByRole('button', { name: '更多', exact: true }).first().click();
+  await page.getByRole('menuitem', { name: '编辑', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  // 未修改时只有关闭按钮。
+  await expect(dialog.getByRole('button', { name: /保存$/ })).toHaveCount(0);
+  // 来源不在表单字段内，改动同样必须把抽屉置为已修改并出现保存按钮。
+  await dialog.getByLabel('节点链接或配置', { exact: true }).fill('vless://00000000-0000-4000-8000-000000000001@example.com:443?type=ws&security=tls#node');
+  // 编辑已有节点时协议栏本就显示 VLESS，须等 400ms 防抖识别完成（「识别中」消失）再保存。
+  await expect(dialog.getByText('识别中', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('识别中', { exact: true })).toBeHidden();
+  await expect(dialog.getByRole('button', { name: /保存$/ })).toBeVisible();
+  await dialog.getByRole('button', { name: /保存$/ }).click();
+  await expect(dialog).not.toBeVisible();
+  const payload = await page.evaluate(() => (window as any).desktopTest.calls.find((c: any) => c.channel === 'server:update').args);
+  expect(payload.protocol).toBe('vless');
+  expect(payload.network).toBe('ws');
+  await mock.expectNoUnexpectedRequests();
+});
+
 test('单节点识别失败保留输入且禁止保存，不猜测协议', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('shadowvpn-lang', 'zh-CN'));
   registerExpectedConsoleReport(page, { level: 'error', message: '[IPC Client] Error invoking localImport:parse: Error: Action rejected' });

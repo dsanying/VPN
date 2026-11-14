@@ -661,6 +661,7 @@ export function DrawerForm<T extends object>({
   initialValues,
   onFinish,
   submitter = true,
+  additionalDirty = false,
 }: {
   form?: FormInstance<T>;
   children?: ReactNode;
@@ -670,15 +671,18 @@ export function DrawerForm<T extends object>({
   initialValues?: Partial<T>;
   onFinish?: (values: T) => Promise<boolean | void>;
   submitter?: boolean;
+  /** Inputs kept outside the Form (import source, raw JSON) report their own changes here. */
+  additionalDirty?: boolean;
 }) {
   const [local] = Form.useForm<T>();
   const form = provided ?? local;
   const [busy, setBusy] = useState(false);
   const { t } = useTranslation();
-  const [dirty, setDirty] = useState(!initialValues || Object.keys(initialValues).length === 0);
+  const [formDirty, setFormDirty] = useState(!initialValues || Object.keys(initialValues).length === 0);
   const baseline = useRef(initialValues);
   const changed = () =>
-    setDirty(JSON.stringify(form.getFieldsValue(true)) !== JSON.stringify(baseline.current ?? {}));
+    setFormDirty(JSON.stringify(form.getFieldsValue(true)) !== JSON.stringify(baseline.current ?? {}));
+  const dirty = formDirty || additionalDirty;
   const close = () => {
     if (!busy) onOpenChange?.(false);
   };
@@ -731,7 +735,7 @@ export function DrawerForm<T extends object>({
           initialValues={initialValues}
           onInitialized={() => {
             baseline.current = form.getFieldsValue(true);
-            setDirty(!initialValues || Object.keys(initialValues).length === 0);
+            setFormDirty(!initialValues || Object.keys(initialValues).length === 0);
           }}
         />
         {children}

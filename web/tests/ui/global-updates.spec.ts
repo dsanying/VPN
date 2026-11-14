@@ -17,6 +17,8 @@ test('non-software updates auto-apply without prompts; only software keeps the s
     },
   });
   await page.goto('/#/settings');
+  // 等设置页真正渲染（懒加载 chunk 完成），否则拆线诊断会在 Suspense fallback 上数出 0 个 h1。
+  await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible();
   // 更新就绪不弹任何提示；core/data（非软件）自动应用，无需点击。
   await expect(page.locator('.ant-notification-notice')).toHaveCount(0);
   await expect
