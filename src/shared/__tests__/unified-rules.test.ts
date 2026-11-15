@@ -105,24 +105,38 @@ describe('mergeApplicationRuleGroups — 应用规则按多选分组存储', () 
     ...over,
   });
 
-  it('同去向/开关/目标的单应用存量行合并为一条多选规则，取首条位置与 id，值去重拼接', () => {
+  it('同去向/开关/目标的单应用存量行（application: 前缀 id）合并为一条多选规则，取首条位置与 id，值去重拼接', () => {
     const merged = mergeApplicationRuleGroups([
       { ...domain, id: 'domain' },
-      appRule({ id: 'a1' }),
+      appRule({ id: 'application:preset-1' }),
       appRule({
-        id: 'a2',
+        id: 'application:preset-2',
         applications: [{ ...app2, iconDataUrl: undefined }],
         values: applicationRuleValues(app2),
       }),
     ]);
     expect(merged).toHaveLength(2);
-    expect(merged[1]!.id).toBe('a1');
+    expect(merged[1]!.id).toBe('application:preset-1');
     expect(merged[1]!.applications).toHaveLength(2);
     expect(merged[1]!.values).toEqual([
       ...new Set([...applicationRuleValues(application), ...applicationRuleValues(app2)]),
     ]);
     // 幂等：再合并无变化。
     expect(mergeApplicationRuleGroups(merged)).toEqual(merged);
+  });
+
+  it('用户显式创建的规则（uuid id）即使去向/开关/条件完全相同也保持分开，不自动合并', () => {
+    const rules = [
+      appRule({ id: '0f0e0d0c-1111-4222-8333-444455556666' }),
+      appRule({
+        id: 'aabbccdd-1111-4222-8333-444455556667',
+        applications: [{ ...app2, iconDataUrl: undefined }],
+        values: applicationRuleValues(app2),
+      }),
+      // 存量行与 uuid 规则也不跨类合并：合并仅限存量行之间。
+      appRule({ id: 'application:preset-3' }),
+    ];
+    expect(mergeApplicationRuleGroups(rules)).toEqual(rules);
   });
 
   it('去向或目标不同不合并；无应用身份的规则不受影响', () => {
@@ -137,7 +151,7 @@ describe('mergeApplicationRuleGroups — 应用规则按多选分组存储', () 
   });
 });
 
-it('旧版单数字段（application）的存量行归一并按组合并', () => {
+it('旧版单数字段（application）的存量行归一并按组合并（旧字段本身即合并资格）', () => {
   const legacy = (id: string, name: string, regex: string) =>
     ({
       id,
@@ -148,11 +162,11 @@ it('旧版单数字段（application）的存量行归一并按组合并', () =>
       enabled: true,
     }) as unknown as Rule;
   const merged = mergeApplicationRuleGroups([
-    legacy('a1', 'App One', '^/Applications/AppOne\\.app/'),
-    legacy('a2', 'App Two', '^/Applications/AppTwo\\.app/'),
+    legacy('application:a1', 'App One', '^/Applications/AppOne\\.app/'),
+    legacy('application:a2', 'App Two', '^/Applications/AppTwo\\.app/'),
   ]);
   expect(merged).toHaveLength(1);
-  expect(merged[0]!.id).toBe('a1');
+  expect(merged[0]!.id).toBe('application:a1');
   expect(merged[0]!.applications!.map((a) => a.name)).toEqual(['App One', 'App Two']);
   expect((merged[0] as unknown as { application?: unknown }).application).toBeUndefined();
   expect(mergeApplicationRuleGroups(merged)).toEqual(merged);
