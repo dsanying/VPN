@@ -66,7 +66,10 @@ function makeSvc() {
   const sent: { channel: string; data: any }[] = [];
   const mainWindow: any = {
     isDestroyed: () => false,
-    webContents: { send: (channel: string, data: any) => sent.push({ channel, data }) },
+    webContents: {
+      isDestroyed: () => false,
+      send: (channel: string, data: any) => sent.push({ channel, data }),
+    },
   };
   const svc: any = new ProxyManager(
     { addLog: jest.fn() } as any,

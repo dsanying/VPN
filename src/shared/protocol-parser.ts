@@ -361,9 +361,21 @@ export class ProtocolParser implements IProtocolParser {
     const name = decodeURIComponent(url.hash ? url.hash.slice(1) : '');
 
     // Credentials format: tuic://uuid:password@...
-    const credentials = decodeURIComponent(url.username + (url.password ? ':' + url.password : ''));
-    const [uuid, ...passwordParts] = credentials.split(':');
-    const password = passwordParts.join(':');
+    // 两种在野形态都得吃：① 标准 userinfo「uuid:pass@」URL 解析器已分段；② 生成侧
+    // encodeURIComponent(`${uuid}:${password}`) 整体塞进 username（冒号也编码）。故 password 段
+    // 缺失时回退「解码 username 后按首个 : 切」——UUID 本身不含冒号，首个 : 必为分隔符；而 username
+    // 里的 %3A（字面冒号）若按旧法「拼回再切」会把冒号后的 uuid 残段错并进密码。
+    let uuid: string;
+    let password: string;
+    if (url.password) {
+      uuid = decodeURIComponent(url.username);
+      password = decodeURIComponent(url.password);
+    } else {
+      const decoded = decodeURIComponent(url.username);
+      const sep = decoded.indexOf(':');
+      uuid = sep >= 0 ? decoded.slice(0, sep) : decoded;
+      password = sep >= 0 ? decoded.slice(sep + 1) : '';
+    }
 
     if (!uuid || !password) {
       throw new Error('TUIC 协议缺少 uuid 或 password');
@@ -843,12 +855,9 @@ export class ProtocolParser implements IProtocolParser {
   private parseSocks(urlObj: URL): ServerConfig {
     const { address, port, name } = this.parseBase(urlObj, 1080);
 
-    const credentials = decodeURIComponent(
-      urlObj.username + (urlObj.password ? ':' + urlObj.password : '')
-    );
-    const username = urlObj.username ? credentials.split(':')[0] : undefined;
-    const password = urlObj.password ? credentials.split(':').slice(1).join(':') : undefined;
-
+    // 先 split 再分别 decode：username 中的 %3A（字面冒号）若先拼回再 decode 会切进密码段。
+    const username = urlObj.username ? decodeURIComponent(urlObj.username) : undefined;
+    const password = urlObj.password ? decodeURIComponent(urlObj.password) : undefined;
     const config: ServerConfig = {
       id: randomUUID(),
       name,
@@ -868,11 +877,9 @@ export class ProtocolParser implements IProtocolParser {
     const defaultPort = urlObj.protocol.includes('https') ? 443 : 80;
     const { address, port, params, name } = this.parseBase(urlObj, defaultPort);
 
-    const credentials = decodeURIComponent(
-      urlObj.username + (urlObj.password ? ':' + urlObj.password : '')
-    );
-    const username = urlObj.username ? credentials.split(':')[0] : undefined;
-    const password = urlObj.password ? credentials.split(':').slice(1).join(':') : undefined;
+    // 先 split 再分别 decode：username 中的 %3A（字面冒号）若先拼回再 decode 会切进密码段。
+    const username = urlObj.username ? decodeURIComponent(urlObj.username) : undefined;
+    const password = urlObj.password ? decodeURIComponent(urlObj.password) : undefined;
 
     const isHttps = urlObj.protocol.includes('https');
 

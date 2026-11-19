@@ -12,8 +12,20 @@
 import * as path from 'path';
 import { getUserDataPath } from '../utils/paths';
 
+/**
+ * serverId 白名单：节点 id 由 protocol-parser 的 randomUUID() 生成（UUID/`__direct__`），
+ * 全部落在 `[A-Za-z0-9_-]`。渲染端传来的 serverId 直接拼路径 + `rm -rf`（删节点/登出清理），
+ * 不校验即路径穿越（`../../../X` 任意目录删除，SecAudit M2）。不匹配一律抛错，绝不落盘。
+ */
+function assertSafeServerId(serverId: string): void {
+  if (!/^[A-Za-z0-9_-]+$/.test(serverId)) {
+    throw new Error(`非法的节点 ID: ${JSON.stringify(serverId.slice(0, 64))}`);
+  }
+}
+
 /** Tailscale state 目录：`<userData>/tailscale/<serverId>`，跨重启免重认证、删节点时清理。 */
 export function tailscaleStateDir(serverId: string): string {
+  assertSafeServerId(serverId);
   return path.join(getUserDataPath(), 'tailscale', serverId);
 }
 

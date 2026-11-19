@@ -26,6 +26,8 @@ export interface IConfigManager {
   saveConfig(config: UserConfig): Promise<void>;
   get<T>(key: keyof UserConfig): T | undefined;
   set(key: keyof UserConfig, value: any): Promise<void>;
+  /** 原子「读最新→改→落盘」临界区：mutator 内返回值即最终配置；改动在串行链上无交错。 */
+  mutateConfig(mutator: (config: UserConfig) => void | Promise<void>): Promise<UserConfig>;
   validateConfig(config: UserConfig): void;
   getConfigPath(): string;
 }
@@ -35,6 +37,10 @@ export class ConfigManager implements IConfigManager {
   private currentConfig: UserConfig | null = null;
   private tmpSwept = false;
   private logManager?: LogManager;
+  // 写操作串行链：saveConfig/mutateConfig 依次入队；loadConfig 先等链尾再读盘。
+  // 防多写方（resize 保存/IPC set/订阅同步/自动切节点…）并发「load→改→save」lost-update
+  // 互相整份覆盖，也挡 tmp 原子写在并发下互相 rename 踩踏。opChain 永不 reject（链内已吞）。
+  private opChain: Promise<void> = Promise.resolve();
 
   /**
    * 注入 LogManager（由主流程在 index.ts 统一注入）。ConfigManager 可能早于 LogManager 初始化，
@@ -102,8 +108,13 @@ export class ConfigManager implements IConfigManager {
     return this.configPath;
   }
 
-  /** 如果文件不存在或损坏，返回默认配置。 */
+  /** 如果文件不存在或损坏，返回默认配置。先等在途写链落盘，读到的一定是链上最新态。 */
   async loadConfig(): Promise<UserConfig> {
+    await this.opChain;
+    return this.doLoadConfig();
+  }
+
+  private async doLoadConfig(): Promise<UserConfig> {
     void this.sweepStaleTmpFiles(); // 首次加载清扫原子写孤儿 tmp（fire-and-forget，不阻塞）
     try {
       // 检查配置文件是否存在
@@ -128,7 +139,7 @@ export class ConfigManager implements IConfigManager {
       // 验证配置（内含旧规则 → 新规则迁移）
       const retiredDataRemoved = clearRetiredConfigData(config);
       this.validateConfig(config);
-      if (retiredDataRemoved) await this.saveConfig(config);
+      if (retiredDataRemoved) await this.doSaveConfig(config);
 
       // Save the untouched on-disk configuration before any migration writes occur.
       let bypassBackupReady = false;
@@ -156,7 +167,7 @@ export class ConfigManager implements IConfigManager {
       // 旧配置回填 clash_api secret（首次升级时随机生成并持久化，后续稳定，供 external_ui/外部客户端复用）
       if (!config.clashApiSecret) {
         config.clashApiSecret = randomBytes(16).toString('hex');
-        await this.saveConfig(config).catch((e) =>
+        await this.doSaveConfig(config).catch((e) =>
           this.log('warn', `持久化 clashApiSecret 失败（不阻断）: ${e}`)
         );
       }
@@ -169,7 +180,7 @@ export class ConfigManager implements IConfigManager {
         config.privacyPassword = '';
         try {
           if (!readPrivacyHash()) writePrivacyHash(hashPasswordSync(legacyPlain));
-          await this.saveConfig(config).catch((e) =>
+          await this.doSaveConfig(config).catch((e) =>
             this.log('warn', `隐私密码迁移后落盘失败（不阻断）: ${e}`)
           );
         } catch (e) {
@@ -185,7 +196,7 @@ export class ConfigManager implements IConfigManager {
       const grouped = mergeApplicationRuleGroups(config.customRules ?? []);
       if (grouped !== (config.customRules ?? [])) {
         config.customRules = grouped;
-        await this.saveConfig(config).catch((e) =>
+        await this.doSaveConfig(config).catch((e) =>
           this.log('warn', `应用规则分组迁移落盘失败（不阻断）: ${e}`)
         );
       }
@@ -194,7 +205,7 @@ export class ConfigManager implements IConfigManager {
       const consolidated = migrateBypassRules(config);
       if (bypassBackupReady && consolidated !== config) {
         try {
-          await this.saveConfig(consolidated);
+          await this.doSaveConfig(consolidated);
           Object.assign(config, consolidated);
         } catch {
           this.log('warn', '直连例外迁移暂缓，原配置保留');
@@ -205,7 +216,7 @@ export class ConfigManager implements IConfigManager {
       const takeover = prepareAutomaticTakeover(config);
       if (takeover !== config) {
         Object.assign(config, takeover);
-        await this.saveConfig(config);
+        await this.doSaveConfig(config);
       }
 
       // 缓存配置
@@ -240,7 +251,7 @@ export class ConfigManager implements IConfigManager {
       // 内存返回默认配置让应用能启动，但磁盘真实文件原样保留、下次修复后即可恢复。
       if (isMissing) {
         try {
-          await this.saveConfig(defaultConfig);
+          await this.doSaveConfig(defaultConfig);
           this.log('info', `默认配置已保存到: ${this.configPath}`);
         } catch (saveError) {
           this.log('error', `保存默认配置失败: ${saveError}`);
@@ -265,7 +276,36 @@ export class ConfigManager implements IConfigManager {
     }
   }
 
+  /** 串行写入口：排队执行，写方之间永不交错。 */
   async saveConfig(config: UserConfig): Promise<void> {
+    const op = this.opChain.then(() => this.doSaveConfig(config));
+    this.opChain = op.then(
+      () => undefined,
+      () => undefined
+    );
+    return op;
+  }
+
+  /**
+   * 原子「读最新→改→落盘」临界区：mutator 拿到的 config 是链上最新（已等前置写落盘），
+   * 回调内对 config 的修改与其后落盘与其他写方完全隔离——load→改→save 的 lost-update 全消。
+   * mutator 内绝不许再调 saveConfig/mutateConfig（会自锁）；纯 mutate 即可，落盘由本函数收尾。
+   */
+  async mutateConfig(mutator: (config: UserConfig) => void | Promise<void>): Promise<UserConfig> {
+    const op = this.opChain.then(async () => {
+      const config = await this.doLoadConfig();
+      await mutator(config);
+      await this.doSaveConfig(config);
+      return config;
+    });
+    this.opChain = op.then(
+      () => undefined,
+      () => undefined
+    );
+    return op;
+  }
+
+  private async doSaveConfig(config: UserConfig): Promise<void> {
     // Removed resource data is never accepted through save/import.
     clearRetiredConfigData(config);
     this.validateConfig(config);
@@ -299,22 +339,11 @@ export class ConfigManager implements IConfigManager {
   }
 
   async set(key: keyof UserConfig, value: any): Promise<void> {
-    // 未加载守卫：currentConfig===null（loadConfig 从未成功跑过）时，绝不能用 createDefaultConfig 兜底后
-    // 直接 saveConfig——那会用默认配置整份覆盖磁盘上真实的 config.json，静默清空用户 servers/订阅/规则。
-    // 改为先 loadConfig 加载磁盘真实配置（文件不存在才回落默认，见 loadConfig catch），再改单键落盘。
-    if (!this.currentConfig) {
-      await this.loadConfig();
-    }
-    // loadConfig 必置 currentConfig（成功→磁盘配置；失败→内存默认）；防御性再兜底一层，杜绝 null 解引用。
-    if (!this.currentConfig) {
-      this.currentConfig = this.createDefaultConfig();
-    }
-
-    // 更新配置项
-    (this.currentConfig as any)[key] = value;
-
-    // 保存配置
-    await this.saveConfig(this.currentConfig);
+    // 走 mutateConfig 临界区：读到的一定是链上最新配置（含其他写方刚落盘的改动），
+    // 单键覆盖不会再把并发写方的字段改回旧值（原 load→改→save 模式存在 lost-update）。
+    await this.mutateConfig((config) => {
+      (config as any)[key] = value;
+    });
   }
 
   /** 损坏配置备份用的文件系统安全时间戳（ISO 去掉冒号/点，避免 Windows 非法文件名）。 */
@@ -365,7 +394,7 @@ export class ConfigManager implements IConfigManager {
       }
       delete dns.nodeDomainResolver;
       dns.nodeResolverMigrated = true;
-      await this.saveConfig(config).catch((e) =>
+      await this.doSaveConfig(config).catch((e) =>
         this.log('warn', `节点解析器迁移后落盘失败（不阻断，下次重试）: ${e}`)
       );
     } catch (e) {
@@ -388,7 +417,7 @@ export class ConfigManager implements IConfigManager {
     try {
       // 纯逻辑收敛到 shared/tun-defaults#migrateTunDefaults（可单测）；本壳只负责落盘 + 吞异常。
       if (!migrateTunDefaults(config)) return; // 幂等/无变更（含新装）→ 不落盘
-      await this.saveConfig(config).catch((e) =>
+      await this.doSaveConfig(config).catch((e) =>
         this.log('warn', `TUN 默认值迁移后落盘失败（不阻断，下次重试）: ${e}`)
       );
     } catch (e) {

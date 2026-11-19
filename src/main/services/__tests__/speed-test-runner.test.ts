@@ -22,7 +22,7 @@ function makeDeps(servers: unknown[], speedTestUrl?: string) {
   const logManager = { addLog: jest.fn() };
   const speedTestService = new SpeedTestService(logManager as never, () => null);
   const send = jest.fn();
-  const win = { isDestroyed: () => false, webContents: { send } };
+  const win = { isDestroyed: () => false, webContents: { isDestroyed: () => false, send } };
   const tray = { setSpeedTesting: jest.fn(), updateSpeedTestResults: jest.fn() };
   const deps = {
     configManager: { loadConfig: jest.fn().mockResolvedValue({ servers, speedTestUrl }) },

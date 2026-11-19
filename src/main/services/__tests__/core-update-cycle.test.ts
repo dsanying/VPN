@@ -64,11 +64,14 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
       version: opts.checkResult.latestVersion,
       versionLine: `sing-box version ${opts.checkResult.latestVersion}`,
     });
-    const stageSpy = jest.spyOn(svc as any, 'stageCore').mockImplementation((_d: any, v: any) => ({
-      version: v,
-      dir: '/tmp/staged',
-      stagedAt: 'now',
-    }));
+    const stageSpy = jest
+      .spyOn(svc as any, 'stageCore')
+      .mockImplementation((_d: any, v: any, _h: any) => ({
+        version: v,
+        dir: '/tmp/staged',
+        stagedAt: 'now',
+        coreSha256: 'a'.repeat(64),
+      }));
     jest.spyOn(svc as any, 'saveAutoState').mockImplementation(() => {});
     let autoState: any = {};
     jest.spyOn(svc as any, 'loadAutoState').mockImplementation(() => autoState);
@@ -93,7 +96,7 @@ describe('CoreUpdateService.runAutoUpdateCycle', () => {
     });
     await svc.runAutoUpdateCycle();
     expect(downloadSpy).toHaveBeenCalledTimes(1);
-    expect(stageSpy).toHaveBeenCalledWith(expect.any(String), '1.13.14');
+    expect(stageSpy).toHaveBeenCalledWith(expect.any(String), '1.13.14', 'a'.repeat(64));
   });
 
   /**
@@ -203,8 +206,15 @@ describe('CoreUpdateService.tryApplyStaged / applyStagedNow', () => {
   const realPath = require('path');
   const stagedDir = fs.mkdtempSync(realPath.join(os.tmpdir(), 'shadowvpn-staged-'));
   const coreName = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
+  const { createHash } = require('crypto');
+  const STAGED_CORE_SHA = createHash('sha256').update('fake-core').digest('hex');
   fs.writeFileSync(realPath.join(stagedDir, coreName), 'fake-core');
-  const STAGED = { version: '1.13.14', dir: stagedDir, stagedAt: 'now' };
+  const STAGED = {
+    version: '1.13.14',
+    dir: stagedDir,
+    stagedAt: 'now',
+    coreSha256: STAGED_CORE_SHA,
+  };
 
   afterAll(() => {
     try {
@@ -251,6 +261,9 @@ describe('CoreUpdateService.tryApplyStaged / applyStagedNow', () => {
     // 文件/状态边界打桩
     let staged: any = opts.hasStaged === false ? undefined : { ...STAGED };
     jest.spyOn(svc as any, 'loadAutoState').mockImplementation(() => ({ staged }));
+    // getStagedDir 打桩到测试的真实暂存目录（生产实现依赖 electron app.getPath('userData')），
+    // 使凭证闸的 dirWithinStaged 校验按真实路径放行。
+    jest.spyOn(svc as any, 'getStagedDir').mockReturnValue(stagedDir);
     const clearSpy = jest
       .spyOn(svc as any, 'clearStaged')
       .mockImplementation(() => (staged = undefined));

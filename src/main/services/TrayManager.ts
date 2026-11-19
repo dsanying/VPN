@@ -525,7 +525,11 @@ export class TrayManager implements ITrayManager {
     } else {
       // 默认行为：显示窗口并导航到设置页面
       this.handleShowWindow();
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (
+        this.mainWindow &&
+        !this.mainWindow.isDestroyed() &&
+        !this.mainWindow.webContents.isDestroyed()
+      ) {
         this.mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/settings');
       }
     }
@@ -538,7 +542,11 @@ export class TrayManager implements ITrayManager {
     } else {
       // 默认行为：显示窗口并导航到服务器页面
       this.handleShowWindow();
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (
+        this.mainWindow &&
+        !this.mainWindow.isDestroyed() &&
+        !this.mainWindow.webContents.isDestroyed()
+      ) {
         this.mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, '/nodes/groups');
       }
     }
@@ -632,6 +640,7 @@ export class TrayManager implements ITrayManager {
       (resultList.length > 0 || opts.outcome === 'interrupted') &&
       this.mainWindow &&
       !this.mainWindow.isDestroyed() &&
+      !this.mainWindow.webContents.isDestroyed() &&
       this.mainWindow.isVisible()
     ) {
       // §16.2：payload 从数组升级为 { outcome, items, skipped }——App.tsx 据 outcome 分「完成/中断」toast + 副行未纳入数。

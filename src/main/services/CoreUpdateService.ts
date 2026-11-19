@@ -31,6 +31,7 @@ import type { UpdateNetwork } from './UpdateNetwork';
 import coreManifest from '../../shared/core-manifest.json';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { normalizeAssetDigest } from './singbox-asset';
+import { sha256File } from '../../shared/file-hash';
 import { system32 } from '../utils/win-system32';
 
 export interface CoreUpdateCheckResult {
@@ -715,8 +716,10 @@ export class CoreUpdateService {
     };
   }
 
-  /** 把解压目录（含核心+配套文件）复制到 userData/core-staged 暂存，写元数据。返回 staged 信息。 */
-  private stageCore(sourceDir: string, version: string): StagedCoreInfo {
+  /** 把解压目录（含核心+配套文件）复制到 userData/core-staged 暂存，写元数据。返回 staged 信息。
+   *  coreSha256：主二进制官方摘要（下载链路已验），随 state 持久化——applyStagedNow 落位时交 helper 复验，
+   *  防「state 文件被改指向任意目录」借道 install-core 写 root 受保护目录（SecAudit H1 的 staging 侧收口）。 */
+  private stageCore(sourceDir: string, version: string, coreSha256: string): StagedCoreInfo {
     const dir = this.getStagedDir();
     // 清掉旧暂存目录，避免不同版本文件残留混入
     try {
@@ -731,7 +734,12 @@ export class CoreUpdateService {
         fs.copyFileSync(src, path.join(dir, file));
       }
     }
-    const staged: StagedCoreInfo = { version, dir, stagedAt: new Date().toISOString() };
+    const staged: StagedCoreInfo = {
+      version,
+      dir,
+      stagedAt: new Date().toISOString(),
+      coreSha256,
+    };
     this.saveAutoState({ staged });
     this.logManager.addLog(
       'info',
@@ -840,8 +848,8 @@ export class CoreUpdateService {
           );
           throw new Error('Core compatibility validation failed');
         }
-        // 暂存（从解压目录复制到 core-staged，因临时目录随后清理）
-        this.stageCore(path.dirname(extracted.corePath), preflight.version ?? latest);
+        // 暂存（从解压目录复制到 core-staged，因临时目录随后清理）。sha256 随 staged 持久化，落位时 helper 复验。
+        this.stageCore(path.dirname(extracted.corePath), preflight.version ?? latest, sha256);
         this.emitAutoStatus();
         // 下载后立即尝试落位（代理未运行→直接换；运行中→保持 staged，延到安全窗口）
         await this.tryApplyStaged('post-download', true);
@@ -921,10 +929,35 @@ export class CoreUpdateService {
       }
 
       // 落位（代理未运行）：重预检（下载到落位间 config 可能变）→ installCoreFromDir
+      // 凭证闸（SecAudit H1 staging 侧收口）：旧 state 无 coreSha256、或摘要与盘上主二进制不符、
+      // 或 dir 不在本 userData/core-staged 下 → 判「无凭证/被篡改 staged」拒装清理。
+      // install-core 的源路径本身不设防（helper 无身份体系可校验），防伪锚点只能是 app 自持的 state 凭证。
       const corePath = path.join(
         staged.dir,
         process.platform === 'win32' ? 'sing-box.exe' : 'sing-box'
       );
+      const stagedRoot = this.getStagedDir();
+      const dirResolved = path.resolve(staged.dir);
+      const dirWithinStaged =
+        dirResolved === stagedRoot || dirResolved.startsWith(stagedRoot + path.sep);
+      const hashMatches = (() => {
+        if (!staged.coreSha256 || !/^[a-f0-9]{64}$/i.test(staged.coreSha256)) return false;
+        try {
+          return sha256File(corePath) === staged.coreSha256.toLowerCase();
+        } catch {
+          return false;
+        }
+      })();
+      if (!dirWithinStaged || !hashMatches) {
+        this.logManager.addLog(
+          'warn',
+          `staged 内核凭证缺失或与盘上文件不符（dir 在管${dirWithinStaged ? '内' : '外'}、摘要${hashMatches ? '匹配' : '缺失/不匹配'}），拒绝落位并清理：${staged.version}`,
+          'CoreUpdateService'
+        );
+        this.clearStaged();
+        this.emitAutoStatus();
+        return 'discarded';
+      }
       if (!fs.existsSync(corePath)) {
         this.logManager.addLog(
           'warn',

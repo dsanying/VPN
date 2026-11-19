@@ -7,6 +7,9 @@ export interface StagedCoreInfo {
   version: string;
   dir: string; // userData/core-staged，含解压后的 sing-box + 配套文件
   stagedAt: string; // ISO
+  /** staged 主二进制 sing-box 的 sha256（下载时来自官方 asset.digest，安装期 helper 复验）。
+   *  旧 state 文件无此字段 → applyStagedNow 判「无凭证 staged」拒装（防 state 被篡改指向任意目录）。 */
+  coreSha256?: string;
 }
 
 /** 内核自动更新持久状态（userData/core-update-state.json，不进 config，避免每次 check 触发配置原子写）。 */

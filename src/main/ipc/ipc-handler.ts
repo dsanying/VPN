@@ -84,18 +84,15 @@ export class IpcHandlerRegistry {
           data: result,
         };
       } catch (error) {
-        console.error(
-          `[IPC] Error handling channel "${channel}":`,
-          redactLogText(error instanceof Error ? error.message : String(error))
-        );
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[IPC] Error handling channel "${channel}":`, redactLogText(rawMessage));
 
-        const errorMessage = error instanceof Error ? error.message : String(error);
         const errorCode = (error as any)?.code;
         const errorStack = error instanceof Error ? error.stack : undefined;
         // Arguments are intentionally excluded: they may contain subscription credentials.
         ipcLogger?.addLog(
           'error',
-          `IPC request failed: ${channel}; code=${errorCode ?? 'unknown'}; ${errorMessage}`,
+          `IPC request failed: ${channel}; code=${errorCode ?? 'unknown'}; ${rawMessage}`,
           'IpcHandlerRegistry',
           errorStack
         );
@@ -105,9 +102,11 @@ export class IpcHandlerRegistry {
           console.error(`[IPC] Stack trace:`, redactLogText(errorStack));
         }
 
+        // 渲染端回传脱敏后的错误（SecAudit M4）：服务侧错误文本可能内嵌节点字段/订阅 URL 残段，
+        // 与日志 console 走同一 redactLogText 口径，不再「日志脱敏、回传明文」漂移。
         return {
           success: false,
-          error: errorMessage,
+          error: redactLogText(rawMessage),
           code: errorCode,
         };
       }

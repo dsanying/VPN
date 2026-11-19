@@ -165,6 +165,9 @@ describe('T2：CoreUpdateService 4 写核路径 setCoreSwapInProgress try/finall
   const stagedDir = fsSync.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-gate-staged-'));
   const coreName = process.platform === 'win32' ? 'sing-box.exe' : 'sing-box';
   fsSync.writeFileSync(path.join(stagedDir, coreName), 'fake-core');
+  // 凭证闸（stageCore 落 sha256 后）要求的 staged 摘要与 getStagedDir 归属桩：dir 指到本测试暂存目录本身
+  // 不在管内 → 需要 getStagedDir 返回其父级的等价路径。直接把 dir 视作在管内：桩 getStagedDir 返回 stagedDir。
+  const STAGED_CORE_SHA = require('crypto').createHash('sha256').update('fake-core').digest('hex');
 
   afterAll(() => {
     try {
@@ -263,8 +266,14 @@ describe('T2：CoreUpdateService 4 写核路径 setCoreSwapInProgress try/finall
     const { proxy, calls } = makeProxyWithSpy();
     const svc = makeSvc(proxy);
     jest.spyOn(svc as any, 'loadAutoState').mockReturnValue({
-      staged: { version: '1.13.14', dir: stagedDir, stagedAt: 'now' },
+      staged: {
+        version: '1.13.14',
+        dir: stagedDir,
+        stagedAt: 'now',
+        coreSha256: STAGED_CORE_SHA,
+      },
     });
+    jest.spyOn(svc as any, 'getStagedDir').mockReturnValue(stagedDir);
     jest.spyOn(svc as any, 'clearStaged').mockImplementation(() => {});
     jest.spyOn(svc as any, 'emitAutoStatus').mockImplementation(() => {});
     jest.spyOn(svc as any, 'getCurrentVersion').mockResolvedValue('1.13.13');
@@ -285,8 +294,14 @@ describe('T2：CoreUpdateService 4 写核路径 setCoreSwapInProgress try/finall
     const { proxy, calls } = makeProxyWithSpy();
     const svc = makeSvc(proxy);
     jest.spyOn(svc as any, 'loadAutoState').mockReturnValue({
-      staged: { version: '1.13.14', dir: stagedDir, stagedAt: 'now' },
+      staged: {
+        version: '1.13.14',
+        dir: stagedDir,
+        stagedAt: 'now',
+        coreSha256: STAGED_CORE_SHA,
+      },
     });
+    jest.spyOn(svc as any, 'getStagedDir').mockReturnValue(stagedDir);
     jest.spyOn(svc as any, 'clearStaged').mockImplementation(() => {});
     jest.spyOn(svc as any, 'emitAutoStatus').mockImplementation(() => {});
     jest.spyOn(svc as any, 'getCurrentVersion').mockResolvedValue('1.13.13');

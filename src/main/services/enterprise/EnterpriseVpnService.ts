@@ -15,6 +15,8 @@ import { EnterpriseEngine, type EnterpriseBridge } from './EnterpriseEngine';
 interface ConfigStore {
   loadConfig(): Promise<UserConfig>;
   saveConfig(config: UserConfig): Promise<void>;
+  /** 原子「读最新→改→落盘」临界区（ConfigManager.mutateConfig）。 */
+  mutateConfig(mutator: (config: UserConfig) => void | Promise<void>): Promise<UserConfig>;
 }
 /** 企业服务诊断日志出口（生产注入 LogManager.addLog）：隧道中断原因必须落日志供用户原样反馈。 */
 export type EnterpriseLogger = (level: 'info' | 'warn' | 'error', message: string) => void;
@@ -101,13 +103,13 @@ export class EnterpriseVpnService {
     const detected = await this.discovery.detect(gateway);
     const previous = input.id && this.store.has(input.id) ? this.store.get(input.id) : undefined;
     const saved = this.store.save({ ...input, gateway }, detected);
-    const config = await this.configStore.loadConfig();
-    const node = this.node(saved);
-    const index = config.servers.findIndex((s) => s.id === saved.id);
-    if (index >= 0) config.servers[index] = { ...config.servers[index], ...node };
-    else config.servers.push(node);
     try {
-      await this.configStore.saveConfig(config);
+      await this.configStore.mutateConfig((config) => {
+        const node = this.node(saved);
+        const index = config.servers.findIndex((s) => s.id === saved.id);
+        if (index >= 0) config.servers[index] = { ...config.servers[index], ...node };
+        else config.servers.push(node);
+      });
     } catch (error) {
       if (previous)
         this.store.save(previous, {

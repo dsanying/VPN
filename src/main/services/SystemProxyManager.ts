@@ -895,7 +895,7 @@ export class LinuxSystemProxy extends SystemProxyBase {
    * 与 disableProxy 行为分裂——正常退出恢复原始代理，异常/关机退出抹成 none）。
    */
   disableProxySync(): void {
-    const { execSync, execFileSync } = require('child_process');
+    const { execFileSync } = require('child_process');
     // 攻击面收口：gsettings 经 execFileSync argv 下发——host 来自系统 gsettings 可投毒，
     // argv 形式不经 /bin/sh -c 插值。best-effort，关机语境不抛；记录是否有一条真生效（gsettingsOk）。
     let gsettingsOk = false;
@@ -936,10 +936,27 @@ export class LinuxSystemProxy extends SystemProxyBase {
     // 不静默丢回滚信号。enableProxy 仅走 GNOME 路径，故以 gsettings 是否生效为准。
     if (gsettingsOk) this.clearMarker();
     try {
-      // KDE（best-effort，无原始快照恢复——KDE 路径未在 enableProxy 采集 originalSettings）
-      execSync('kwriteconfig5 --file kioslaverc --group "Proxy Settings" --key "ProxyType" 0', {
-        stdio: 'ignore',
-      });
+      // KDE（best-effort，无原始快照恢复——KDE 路径未在 enableProxy 采集 originalSettings）。
+      // EdgeAudit L2：KDE Plasma 6 无 kwriteconfig5（改名 kwriteconfig6）→ 单写 5 在新版静默失败，
+      // 关机残留代理。5/6 依次尝试，任一成功即止。
+      const kwriteArgs = [
+        '--file',
+        'kioslaverc',
+        '--group',
+        'Proxy Settings',
+        '--key',
+        'ProxyType',
+        '0',
+      ];
+      for (const bin of ['kwriteconfig5', 'kwriteconfig6']) {
+        try {
+          execFileSync(bin, kwriteArgs, { stdio: 'ignore' });
+          break;
+        } catch (e: any) {
+          // ENOENT = 该版本二进制不存在 → 试下一个；其它错误（权限等）同样没有更好出路，继续兜底。
+          if (e?.code !== 'ENOENT') break;
+        }
+      }
     } catch {
       /* ignore */
     }

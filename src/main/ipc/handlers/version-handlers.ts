@@ -63,6 +63,12 @@ export function registerVersionHandlers(
   registerIpcHandler<string, boolean>(
     IPC_CHANNELS.SHELL_OPEN_EXTERNAL,
     async (_event: IpcMainInvokeEvent, url: string) => {
+      // SecAudit H2：仅放行 http(s)。shell.openExternal 对 file://（macOS 打开/执行本地 bundle）、
+      // smb://（NTLM hash 外泄）、自定义 scheme 均原样转发——渲染端任一 XSS 即由此升级为 OS 级执行。
+      // 应用内所有外链（releases/changelog/仓库/官网）均为 https。
+      if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+        throw new Error('仅允许打开 http(s) 链接');
+      }
       await shell.openExternal(url);
       return true;
     }

@@ -28,17 +28,17 @@ export function registerRulesHandlers(configManager: ConfigManager): void {
     IPC_CHANNELS.RULES_ADD,
     async (_event: IpcMainInvokeEvent, rule: Rule) => {
       assertValidRule(rule);
-      const config = await configManager.loadConfig();
       const newRule: Rule = {
         ...rule,
         id: rule.id || `rule_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       };
 
-      if (!config.customRules) {
-        config.customRules = [];
-      }
-      config.customRules.push(newRule);
-      await configManager.saveConfig(config);
+      const config = await configManager.mutateConfig((config) => {
+        if (!config.customRules) {
+          config.customRules = [];
+        }
+        config.customRules.push(newRule);
+      });
 
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);
@@ -51,19 +51,18 @@ export function registerRulesHandlers(configManager: ConfigManager): void {
     IPC_CHANNELS.RULES_UPDATE,
     async (_event: IpcMainInvokeEvent, rule: Rule) => {
       assertValidRule(rule);
-      const config = await configManager.loadConfig();
+      const config = await configManager.mutateConfig((config) => {
+        if (!config.customRules) {
+          throw new Error('No rules found');
+        }
 
-      if (!config.customRules) {
-        throw new Error('No rules found');
-      }
+        const index = config.customRules.findIndex((r) => r.id === rule.id);
+        if (index === -1) {
+          throw new Error(`Rule not found: ${rule.id}`);
+        }
 
-      const index = config.customRules.findIndex((r) => r.id === rule.id);
-      if (index === -1) {
-        throw new Error(`Rule not found: ${rule.id}`);
-      }
-
-      config.customRules[index] = rule;
-      await configManager.saveConfig(config);
+        config.customRules[index] = rule;
+      });
 
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);
@@ -73,19 +72,18 @@ export function registerRulesHandlers(configManager: ConfigManager): void {
   registerIpcHandler<{ ruleId: string }, void>(
     IPC_CHANNELS.RULES_DELETE,
     async (_event: IpcMainInvokeEvent, args: { ruleId: string }) => {
-      const config = await configManager.loadConfig();
+      const config = await configManager.mutateConfig((config) => {
+        if (!config.customRules) {
+          throw new Error('No rules found');
+        }
 
-      if (!config.customRules) {
-        throw new Error('No rules found');
-      }
+        const index = config.customRules.findIndex((r) => r.id === args.ruleId);
+        if (index === -1) {
+          throw new Error(`Rule not found: ${args.ruleId}`);
+        }
 
-      const index = config.customRules.findIndex((r) => r.id === args.ruleId);
-      if (index === -1) {
-        throw new Error(`Rule not found: ${args.ruleId}`);
-      }
-
-      config.customRules.splice(index, 1);
-      await configManager.saveConfig(config);
+        config.customRules.splice(index, 1);
+      });
 
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);
@@ -96,22 +94,27 @@ export function registerRulesHandlers(configManager: ConfigManager): void {
   registerIpcHandler<{ orderedIds: string[] }, void>(
     IPC_CHANNELS.RULES_REORDER,
     async (_event: IpcMainInvokeEvent, args: { orderedIds: string[] }) => {
-      const config = await configManager.loadConfig();
-      const rules = config.customRules || [];
-      const ids = args?.orderedIds || [];
-      if (ids.length !== rules.length || new Set(ids).size !== ids.length) {
-        throw new Error('orderedIds must be a permutation of existing rule ids');
-      }
-      const byId = new Map(rules.map((r) => [r.id, r]));
-      if (!ids.every((id) => byId.has(id))) {
-        throw new Error('orderedIds contains unknown rule id');
-      }
-      // 净零变更（debounce 窗口内下移又上移=原序）→ 跳过 save+广播+重启，避免无意义断流
-      if (rules.every((r, i) => r.id === ids[i])) {
+      // 净零变更（debounce 窗口内下移又上移=原序）→ 跳过广播+重启，避免无意义断流
+      let unchanged = false;
+      const config = await configManager.mutateConfig((config) => {
+        const rules = config.customRules || [];
+        const ids = args?.orderedIds || [];
+        if (ids.length !== rules.length || new Set(ids).size !== ids.length) {
+          throw new Error('orderedIds must be a permutation of existing rule ids');
+        }
+        const byId = new Map(rules.map((r) => [r.id, r]));
+        if (!ids.every((id) => byId.has(id))) {
+          throw new Error('orderedIds contains unknown rule id');
+        }
+        if (rules.every((r, i) => r.id === ids[i])) {
+          unchanged = true;
+          return;
+        }
+        config.customRules = ids.map((id) => byId.get(id)!);
+      });
+      if (unchanged) {
         return;
       }
-      config.customRules = ids.map((id) => byId.get(id)!);
-      await configManager.saveConfig(config);
 
       ipcEventEmitter.sendToAll('event:configChanged', { newValue: config });
       mainEventEmitter.emit(MAIN_EVENTS.CONFIG_CHANGED, config);

@@ -45,7 +45,10 @@ function freshPm(): any {
 describe('ProxyManager.setMainWindow', () => {
   it('旧窗口销毁后未刷新引用 → 事件静默丢弃（回归场景）；调用 setMainWindow 刷新后重新送达新窗口', () => {
     const pm = freshPm();
-    const oldWindow = { isDestroyed: () => false, webContents: { send: jest.fn() } };
+    const oldWindow = {
+      isDestroyed: () => false,
+      webContents: { isDestroyed: () => false, send: jest.fn() },
+    };
     pm.setMainWindow(oldWindow);
 
     // 模拟窗口关闭销毁：若 createWindow() 不再调 setMainWindow 刷新，pm 仍会永久持有这个已销毁引用。
@@ -53,7 +56,10 @@ describe('ProxyManager.setMainWindow', () => {
     pm.sendEventToRenderer('test:channel', { a: 1 });
     expect(oldWindow.webContents.send).not.toHaveBeenCalled();
 
-    const newWindow = { isDestroyed: () => false, webContents: { send: jest.fn() } };
+    const newWindow = {
+      isDestroyed: () => false,
+      webContents: { isDestroyed: () => false, send: jest.fn() },
+    };
     pm.setMainWindow(newWindow);
     pm.sendEventToRenderer('test:channel', { a: 1 });
     expect(newWindow.webContents.send).toHaveBeenCalledWith('test:channel', { a: 1 });

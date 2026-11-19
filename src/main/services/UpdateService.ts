@@ -962,6 +962,7 @@ export class UpdateService {
       this.positionPopup(win, UPDATE_POPUP_WIDTH, height);
       this.lastPopupHeight = height;
     }
+    if (win.webContents.isDestroyed()) return;
     win.webContents.send(IPC_CHANNELS.UPDATE_POPUP_STATE, state);
   }
 

@@ -46,6 +46,8 @@ export function commitSubscriptionResult(
     subscription.lastUpdated = now;
     if (result.etag) subscription.etag = result.etag;
     if (result.lastModified) subscription.lastModified = result.lastModified;
+    // EdgeAudit L1：304 也可能携带新 subscription-userinfo（服务器侧计量独立于正文）→ 一并回写。
+    if (result.userInfo) subscription.userInfo = result.userInfo;
     return { result: unchanged, restartRequired: false };
   }
   if (!Array.isArray(result.servers) || (!result.servers.length && !result.partial))

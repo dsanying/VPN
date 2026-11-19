@@ -229,12 +229,15 @@ export class SubscriptionService {
     // **仅当本次确实发了条件头才认 304**（fail-safe）：provider 拉取从不带条件头，若某 CDN/缓存对无验证器请求
     // 违规返 304，认它会得空 body→0 节点→permanent 删节点；此时应维持原「304 非 ok → throw」→ transient → merge-only 保留。
     if (response.status === 304 && Object.keys(condHeaders).length > 0) {
+      // EdgeAudit L1：304 仍读 subscription-userinfo——流量/到期由服务器独立计量，机场常每响应都回最新值；
+      // 丢弃会让 UI 流量信息冻结在上次 200（正文不变≠用量不变）。headers 读到即回传，commit 侧回写。
+      const userInfo = this.parseUserInfo(response.headers.get('subscription-userinfo'));
       try {
         await response.body?.cancel();
       } catch {
         // ignore
       }
-      return { text: '', notModified: true };
+      return { text: '', notModified: true, ...(userInfo ? { userInfo } : {}) };
     }
     if (!response.ok) {
       try {
@@ -385,7 +388,14 @@ export class SubscriptionService {
       // §16.3.4：304 → 内容无变化，短路 parse/reconcile（零节点扰动）。
       if (notModified) {
         this.logManager.addLog('info', '订阅无变化（304），跳过解析', 'Subscription');
-        return { servers: [], notModified: true, etag, lastModified };
+        // EdgeAudit L1：304 响应头的 subscription-userinfo 随路径带回，供 commit 回写（流量不冻结）。
+        return {
+          servers: [],
+          notModified: true,
+          etag,
+          lastModified,
+          ...(userInfo ? { userInfo } : {}),
+        };
       }
       if (userInfo) {
         this.logManager.addLog('info', '订阅流量信息已获取', 'Subscription');

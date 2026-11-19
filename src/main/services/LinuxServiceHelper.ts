@@ -21,13 +21,13 @@ import { assertPersistentHelperProfile } from '../validation-profile';
 
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import { requestHelper, formatHelperResult, waitForHelperStopped } from './helper-rpc-client';
 import * as path from 'path';
 import type { HelperStatus } from '../../shared/types';
 import type { IPrivilegedHelper, HelperStartResult } from './IPrivilegedHelper';
 import type { ILogManager } from './LogManager';
 import { resourceManager } from './ResourceManager';
-import { getUserDataPath } from '../utils/paths';
 import { shq } from '../utils/shell-quote';
 import { sha256File } from '../../shared/file-hash';
 
@@ -357,7 +357,9 @@ echo shadowvpn-helper-uninstall-ok
 `;
   }
 
-  /** 写脚本到 userData 后用 pkexec 以 root 执行（弹一次密码框）。区分取消/无认证代理(126)与命令缺失(127)。 */
+  /** 写脚本到私有临时目录后用 pkexec 以 root 执行（弹一次密码框）。区分取消/无认证代理(126)与命令缺失(127)。
+   *  SecAudit M1：脚本必须落 0700 私有目录 + 随机名 + O_EXCL，杜绝「固定名可预置 + 写入→pkexec 之间被同用户
+   *  恶意进程改写」的 TOCTOU（用户授权的是改写后的任意 root 脚本）。对齐 HelperManager.runRootScript 加固口径。 */
   private runPkexecScript(
     name: string,
     script: string
@@ -365,8 +367,12 @@ echo shadowvpn-helper-uninstall-ok
     return new Promise((resolve) => {
       let scriptPath: string;
       try {
-        scriptPath = path.join(getUserDataPath(), name);
-        fs.writeFileSync(scriptPath, script, { mode: 0o755 });
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shadowvpn-pkexec-'));
+        fs.chmodSync(dir, 0o700);
+        scriptPath = path.join(dir, name.replace(/[^A-Za-z0-9._-]/g, '_'));
+        const fd = fs.openSync(scriptPath, 'wx', 0o700); // O_EXCL：拒绝预置同名文件
+        fs.writeFileSync(fd, script);
+        fs.closeSync(fd);
       } catch (e) {
         resolve({ success: false, error: e instanceof Error ? e.message : String(e) });
         return;
@@ -378,7 +384,7 @@ echo shadowvpn-helper-uninstall-ok
       });
       proc.on('exit', (code) => {
         try {
-          fs.unlinkSync(scriptPath);
+          fs.rmSync(path.dirname(scriptPath), { recursive: true, force: true });
         } catch {
           /* 忽略 */
         }

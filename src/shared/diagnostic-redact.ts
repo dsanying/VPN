@@ -33,6 +33,8 @@ export const SECRET_KEYS: ReadonlySet<string> = new Set([
   'privatekeypassphrase',
   'presharedkey',
   'authkey',
+  'authstr', // SecAudit L2：hysteria v1 节点认证串（auth-str 归一后）——等价凭据，明文落诊断导出即泄漏
+  'license', // SecAudit L2：WARP+ license（WARP_APPLY_LICENSE）
   'secret',
   'clashapisecret',
   'token',

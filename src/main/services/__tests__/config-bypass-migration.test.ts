@@ -89,7 +89,10 @@ describe('persist direct exceptions as editable rules without data loss', () => 
 
   it('retains old configuration on save failure and successfully retries on next load', async () => {
     const manager = new ConfigManager(file);
-    jest.spyOn(manager, 'saveConfig').mockRejectedValue(new Error('example write failure'));
+    // 迁移写走内部 doSaveConfig（串行化重构后 saveConfig 只是排队包装，迁移语义在 doSaveConfig 内）。
+    jest
+      .spyOn(manager as any, 'doSaveConfig')
+      .mockRejectedValue(new Error('example write failure'));
     const loaded = await manager.loadConfig();
     expect(loaded.bypassLANList).toEqual(original.bypassLANList);
     expect(loaded.customRules).toEqual(original.customRules);

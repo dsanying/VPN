@@ -594,6 +594,7 @@ function flushWindowNavigation(): void {
     mainWindow.webContents.id !== readyNavigationContentsId
   )
     return;
+  if (mainWindow.webContents.isDestroyed()) return;
   mainWindow.webContents.send(IPC_CHANNELS.EVENT_NAVIGATE, pendingNavigation);
   pendingNavigation = null;
 }
@@ -868,7 +869,7 @@ async function createWindow(forceShow = false) {
 
   // Linux frameless 自绘标题栏：最大化态变更（含 WM 双击标题/拖顶等非按钮操作）推渲染端，同步 max/restore 图标。
   const sendMaximizeState = () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.send(
         IPC_CHANNELS.EVENT_WINDOW_MAXIMIZE_CHANGED,
         mainWindow.isMaximized()

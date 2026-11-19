@@ -80,6 +80,13 @@ function setup(exitBeforeReady = false) {
       saveConfig: async (value) => {
         config = value;
       },
+      // EnterpriseVpnService.save() 已迁移到 mutateConfig 临界区（lost-update 修复）。
+      mutateConfig: async (mutator: (config: UserConfig) => void) => {
+        const draft = structuredClone(config);
+        mutator(draft);
+        config = draft;
+        return config;
+      },
     },
     () => {},
     log

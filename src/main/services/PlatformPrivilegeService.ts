@@ -403,7 +403,7 @@ rm -f "$STOPFLAG"
     ];
 
     const fsSync = require('fs');
-    const { execSync } = require('child_process');
+    const { execFileSync } = require('child_process');
 
     for (const filePath of filesToFix) {
       try {
@@ -414,8 +414,9 @@ rm -f "$STOPFLAG"
             const currentUser = process.env.USER || process.env.LOGNAME;
             if (currentUser) {
               try {
-                // 尝试使用 chown（可能需要密码）
-                execSync(`chown ${currentUser} "${filePath}"`, { stdio: 'ignore' });
+                // 尝试使用 chown（可能需要密码）。SecAudit L6：execFileSync argv 形式，USER/LOGNAME
+                // 即便被父进程环境注入也不经 shell 插值（`USER="x;id"` 不再逃逸成命令）。
+                execFileSync('chown', [currentUser, filePath], { stdio: 'ignore' });
               } catch {
                 // 如果 chown 失败，尝试删除文件让 sing-box 重新创建
                 try {
@@ -540,14 +541,19 @@ rm -f "$STOPFLAG"
       `chmod 755 ${shq(dest)}`,
       '',
     ].join('\n');
-    const scriptPath = path.join(app.getPath('temp'), `shadowvpn-core-install-${process.pid}.sh`);
-    fs.writeFileSync(scriptPath, script, { mode: 0o755 });
+    // SecAudit M1：0700 私有目录 + 随机目录名 + O_EXCL 独占创建，杜绝预置/改写 TOCTOU（同 runPkexecScript 口径）。
+    const scriptDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'shadowvpn-core-install-'));
+    fs.chmodSync(scriptDir, 0o700);
+    const finalScriptPath = path.join(scriptDir, 'core-install.sh');
+    const fd = fs.openSync(finalScriptPath, 'wx', 0o700);
+    fs.writeFileSync(fd, script);
+    fs.closeSync(fd);
     try {
       await new Promise<void>((resolve, reject) => {
         // 路径单引号包裹容忍空格；暗影VPN 路径不含单/双引号（同 runRootScript 约束）。
         const proc = spawn('/usr/bin/osascript', [
           '-e',
-          `do shell script "/bin/bash '${scriptPath}'" with administrator privileges`,
+          `do shell script "/bin/bash '${finalScriptPath}'" with administrator privileges`,
         ]);
         let stderr = '';
         proc.stderr?.on('data', (d) => (stderr += d.toString()));
@@ -560,7 +566,7 @@ rm -f "$STOPFLAG"
       });
     } finally {
       try {
-        fs.unlinkSync(scriptPath);
+        fs.rmSync(scriptDir, { recursive: true, force: true });
       } catch {
         /* ignore */
       }

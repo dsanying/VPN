@@ -60,13 +60,13 @@ export function registerServerHandlers(
   registerIpcHandler<{ server: ServerConfig }, void>(
     IPC_CHANNELS.SERVER_ADD,
     async (_event: IpcMainInvokeEvent, args: { server: ServerConfig }) => {
-      const config = await configManager.loadConfig();
-      config.servers.push(args.server);
-      await configManager.saveConfig(config);
+      await configManager.mutateConfig((config) => {
+        config.servers.push(args.server);
+      });
     }
   );
 
-  // 批量添加自建节点（本地导入）：一次 loadConfig → push 全部 → 一次 saveConfig（避免 N 次原子写 + N 次广播）。
+  // 批量添加自建节点（本地导入）：mutateConfig 临界区内 push 全部、一次落盘（避免 N 次原子写 + N 次广播）。
   // 每条强制重新生成 id（杜绝与存量/批内 id 撞）+ 剥离 subscriptionId/providerName（恒为自建，可编辑可删除）。
   // 入参节点已在 parseLocalContent 经 isServerComplete 过滤，validateConfig 不会因协议/字段 throw。
   registerIpcHandler<{ servers: ServerConfig[] }, { added: number }>(
@@ -74,19 +74,19 @@ export function registerServerHandlers(
     async (_event: IpcMainInvokeEvent, args: { servers: ServerConfig[] }) => {
       const list = Array.isArray(args.servers) ? args.servers : [];
       if (list.length === 0) return { added: 0 };
-      const config = await configManager.loadConfig();
-      const now = new Date().toISOString();
-      for (const s of list) {
-        config.servers.push({
-          ...s,
-          id: randomUUID(),
-          subscriptionId: undefined,
-          providerName: undefined,
-          createdAt: s.createdAt ?? now,
-          updatedAt: now,
-        });
-      }
-      await configManager.saveConfig(config);
+      await configManager.mutateConfig((config) => {
+        const now = new Date().toISOString();
+        for (const s of list) {
+          config.servers.push({
+            ...s,
+            id: randomUUID(),
+            subscriptionId: undefined,
+            providerName: undefined,
+            createdAt: s.createdAt ?? now,
+            updatedAt: now,
+          });
+        }
+      });
       return { added: list.length };
     }
   );
@@ -94,15 +94,15 @@ export function registerServerHandlers(
   registerIpcHandler<{ server: ServerConfig }, void>(
     IPC_CHANNELS.SERVER_UPDATE,
     async (_event: IpcMainInvokeEvent, args: { server: ServerConfig }) => {
-      const config = await configManager.loadConfig();
-      const index = config.servers.findIndex((s) => s.id === args.server.id);
+      await configManager.mutateConfig((config) => {
+        const index = config.servers.findIndex((s) => s.id === args.server.id);
 
-      if (index === -1) {
-        throw new Error(`服务器不存在: ${args.server.id}`);
-      }
+        if (index === -1) {
+          throw new Error(`服务器不存在: ${args.server.id}`);
+        }
 
-      config.servers[index] = args.server;
-      await configManager.saveConfig(config);
+        config.servers[index] = args.server;
+      });
     }
   );
 
@@ -117,31 +117,31 @@ export function registerServerHandlers(
       _event: IpcMainInvokeEvent,
       args: { serverId: string; fallbackSelectedId?: string | null }
     ) => {
-      const config = await configManager.loadConfig();
-      const index = config.servers.findIndex((s) => s.id === args.serverId);
+      let removed!: ServerConfig;
+      const config = await configManager.mutateConfig((config) => {
+        const index = config.servers.findIndex((s) => s.id === args.serverId);
 
-      if (index === -1) {
-        throw new Error(`服务器不存在: ${args.serverId}`);
-      }
+        if (index === -1) {
+          throw new Error(`服务器不存在: ${args.serverId}`);
+        }
 
-      const removed = config.servers[index];
-      config.servers.splice(index, 1);
+        removed = config.servers[index];
+        config.servers.splice(index, 1);
 
-      const wasSelected = config.selectedServerId === args.serverId;
+        const wasSelected = config.selectedServerId === args.serverId;
 
-      // 删当前选中 → 兜底出口（渲染端最快剩余节点）；无剩余(null/undefined) → DIRECT_SERVER_ID 哨兵（干净直连，
-      // proxy-selector default='direct'）。**不可置 null**：null 非哨兵 → 0 节点时 buildOutbounds `nodeTags.length===0
-      // && !isDirect` throw「没有可用节点」→ 重启失败（设计 D4：0 剩余→direct）。
-      // 服务端二次校验 fallbackSelectedId：渲染端 store 可能陈旧（并发订阅刷新在批删途中下架了该兜底节点）→ 传入的是
-      // 悬空 id。悬空 id 直接赋给 selectedServerId 会被 saveConfig→validateConfig 静默置 null（非哨兵）→ 复现 0 节点
-      // 重启 throw / 静默直连。故仅当兜底 id 仍存在于剩余 servers 时采用，否则回退 DIRECT_SERVER_ID 哨兵。
-      if (wasSelected) {
-        const fb = args.fallbackSelectedId;
-        config.selectedServerId =
-          fb && config.servers.some((s) => s.id === fb) ? fb : DIRECT_SERVER_ID;
-      }
-
-      await configManager.saveConfig(config);
+        // 删当前选中 → 兜底出口（渲染端最快剩余节点）；无剩余(null/undefined) → DIRECT_SERVER_ID 哨兵（干净直连，
+        // proxy-selector default='direct'）。**不可置 null**：null 非哨兵 → 0 节点时 buildOutbounds `nodeTags.length===0
+        // && !isDirect` throw「没有可用节点」→ 重启失败（设计 D4：0 剩余→direct）。
+        // 服务端二次校验 fallbackSelectedId：渲染端 store 可能陈旧（并发订阅刷新在批删途中下架了该兜底节点）→ 传入的是
+        // 悬空 id。悬空 id 直接赋给 selectedServerId 会被落盘前 validateConfig 静默置 null（非哨兵）→ 复现 0 节点
+        // 重启 throw / 静默直连。故仅当兜底 id 仍存在于剩余 servers 时采用，否则回退 DIRECT_SERVER_ID 哨兵。
+        if (wasSelected) {
+          const fb = args.fallbackSelectedId;
+          config.selectedServerId =
+            fb && config.servers.some((s) => s.id === fb) ? fb : DIRECT_SERVER_ID;
+        }
+      });
       await runServerRemovalSideEffects(removed);
 
       // F-1：恒双播（对齐 CONFIG_SAVE）。重启分类归 switchMode canSkip；渲染端差集/store 即时刷新（原删除零 sendToAll →
@@ -151,7 +151,7 @@ export function registerServerHandlers(
     }
   );
 
-  // 批量删除服务器：一次 loadConfig → 过滤掉全部 ids → 命中选中清 selectedServerId → 一次 saveConfig，
+  // 批量删除服务器：mutateConfig 临界区内过滤掉全部 ids → 命中选中清 selectedServerId → 一次落盘，
   // 再逐个跑删除副作用。单次配置写避免「N 个并发单删各读旧配置、末次写覆盖前面」的竞态（净删 1 个）。
   // 不存在的 id 静默跳过（幂等）。返回实际删除数。
   registerIpcHandler<{ serverIds: string[]; fallbackSelectedId?: string | null }, number>(
@@ -161,26 +161,27 @@ export function registerServerHandlers(
       args: { serverIds: string[]; fallbackSelectedId?: string | null }
     ) => {
       const idSet = new Set(args.serverIds);
-      const config = await configManager.loadConfig();
-      const removed = config.servers.filter((s) => idSet.has(s.id));
+      let removed: ServerConfig[] = [];
+      const config = await configManager.mutateConfig((config) => {
+        removed = config.servers.filter((s) => idSet.has(s.id));
+        if (removed.length === 0) return;
+
+        config.servers = config.servers.filter((s) => !idSet.has(s.id));
+
+        // F-1：删除集合是否含选中节点 → 决定兜底出口（重启分类归 switchMode canSkip，不再在此复刻规则目标判据）。
+        const selectedDeleted = !!config.selectedServerId && idSet.has(config.selectedServerId);
+
+        // 选中节点在删除集合内（'__direct__' 哨兵不是真实 id，不会命中）→ 置兜底节点（渲染端最快剩余节点）；
+        // 无剩余 → DIRECT_SERVER_ID（同单删：null 会致 0 节点重启 throw）。
+        // 同单删：服务端二次校验 fallbackSelectedId 仍在剩余 servers 内（防渲染端 store 陈旧传入悬空 id → validateConfig
+        // 静默置 null → 0 节点重启 throw / 静默直连）；悬空则回退 DIRECT_SERVER_ID 哨兵。
+        if (selectedDeleted) {
+          const fb = args.fallbackSelectedId;
+          config.selectedServerId =
+            fb && config.servers.some((s) => s.id === fb) ? fb : DIRECT_SERVER_ID;
+        }
+      });
       if (removed.length === 0) return 0;
-
-      config.servers = config.servers.filter((s) => !idSet.has(s.id));
-
-      // F-1：删除集合是否含选中节点 → 决定兜底出口（重启分类归 switchMode canSkip，不再在此复刻规则目标判据）。
-      const selectedDeleted = !!config.selectedServerId && idSet.has(config.selectedServerId);
-
-      // 选中节点在删除集合内（'__direct__' 哨兵不是真实 id，不会命中）→ 置兜底节点（渲染端最快剩余节点）；
-      // 无剩余 → DIRECT_SERVER_ID（同单删：null 会致 0 节点重启 throw）。
-      // 同单删：服务端二次校验 fallbackSelectedId 仍在剩余 servers 内（防渲染端 store 陈旧传入悬空 id → validateConfig
-      // 静默置 null → 0 节点重启 throw / 静默直连）；悬空则回退 DIRECT_SERVER_ID 哨兵。
-      if (selectedDeleted) {
-        const fb = args.fallbackSelectedId;
-        config.selectedServerId =
-          fb && config.servers.some((s) => s.id === fb) ? fb : DIRECT_SERVER_ID;
-      }
-
-      await configManager.saveConfig(config);
       for (const r of removed) {
         await runServerRemovalSideEffects(r);
       }
@@ -203,15 +204,15 @@ export function registerServerHandlers(
   registerIpcHandler<{ serverId: string }, void>(
     IPC_CHANNELS.SERVER_SWITCH,
     async (_event: IpcMainInvokeEvent, args: { serverId: string }) => {
-      const config = await configManager.loadConfig();
-      const server = config.servers.find((s) => s.id === args.serverId);
+      await configManager.mutateConfig((config) => {
+        const server = config.servers.find((s) => s.id === args.serverId);
 
-      if (!server) {
-        throw new Error(`服务器不存在: ${args.serverId}`);
-      }
+        if (!server) {
+          throw new Error(`服务器不存在: ${args.serverId}`);
+        }
 
-      config.selectedServerId = args.serverId;
-      await configManager.saveConfig(config);
+        config.selectedServerId = args.serverId;
+      });
     }
   );
 

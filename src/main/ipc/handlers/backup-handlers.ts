@@ -38,6 +38,8 @@ export function registerBackupHandlers(
   configManager: ConfigManager,
   prepareRoutingData: () => Promise<void>
 ): void {
+  // SecAudit L4：本会话最近一次 PICK 返回的备份路径。APPLY 据此校验 filePath 出身（null=无有效 pick）。
+  let lastPickedImportPath: string | null = null;
   // ── 导出备份（按勾选类别）──────────────────────────────────────────────────
   registerIpcHandler<
     { categories?: BackupCategory[] },
@@ -98,6 +100,7 @@ export function registerBackupHandlers(
       return { canceled: true };
     }
     const filePath = result.filePaths[0];
+    lastPickedImportPath = filePath; // SecAudit L4：APPLY 据此校验 filePath 出身
     let raw: string;
     try {
       raw = await fs.readFile(filePath, 'utf-8');
@@ -123,6 +126,12 @@ export function registerBackupHandlers(
       if (!args?.filePath || !args.categories?.length) {
         return { success: false, error: 'invalid_args' };
       }
+      // SecAudit L4：filePath 必须来自本会话 PICK 返回的路径（对话框产物），拒绝渲染端直传任意路径
+      //（如 /etc/ 下攻击者可控的 JSON 被读入并按备份格式覆盖写 config）。PICK 与 APPLY 总是同会话成对调用。
+      if (!lastPickedImportPath || args.filePath !== lastPickedImportPath) {
+        return { success: false, error: 'invalid_args' };
+      }
+      lastPickedImportPath = null;
       let raw: string;
       try {
         raw = await fs.readFile(args.filePath, 'utf-8');

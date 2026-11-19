@@ -13,7 +13,12 @@ jest.mock('electron', () => ({
   shell: { openExternal: jest.fn() },
   // 可实例化的 BrowserWindow 桩：让 createUpdatePopup 走完新建路径，暴露 webContents.send 以断言初始态下发。
   BrowserWindow: class {
-    webContents = { setWindowOpenHandler: () => {}, on: () => {}, send: jest.fn() };
+    webContents = {
+      isDestroyed: () => false,
+      setWindowOpenHandler: () => {},
+      on: () => {},
+      send: jest.fn(),
+    };
     loadFile = () => Promise.resolve();
     loadURL = () => Promise.resolve();
     setMenu = () => {};

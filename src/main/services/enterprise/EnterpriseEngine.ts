@@ -272,20 +272,19 @@ export class EnterpriseEngine {
     if (JSON.stringify(value).length > 8192) throw new Error('认证响应过大');
     if (this.pending.kind === 'form') {
       const fields = this.pending.fields ?? [];
-      if (
-        !value.fields ||
-        Object.keys(value.fields).length !== fields.length ||
-        fields.some((field) => {
-          const answer = value.fields?.[field.name];
-          return (
-            typeof answer !== 'string' ||
-            !answer ||
-            answer.length > 4096 ||
-            /[\r\n\0]/.test(answer) ||
-            (field.choices && !field.choices.some((choice) => choice.value === answer))
-          );
-        })
-      )
+      // EdgeAudit L3：只要求「每个声明的必填字段都拿到合法答案」，不再要求 keys 数量严格相等——
+      // 动态表单可有 UI 未渲染的可选/隐藏字段、autocomplete 注入的额外 key，严等会令该类网关永远无法认证。
+      const fieldValid = (field: { name: string; choices?: { value: string }[] }): boolean => {
+        const answer = value.fields?.[field.name];
+        return (
+          typeof answer === 'string' &&
+          !!answer &&
+          answer.length <= 4096 &&
+          !/[\r\n\0]/.test(answer) &&
+          (!field.choices || field.choices.some((choice) => choice.value === answer))
+        );
+      };
+      if (!value.fields || fields.some((field) => !fieldValid(field)))
         throw new Error('请完成当前网关要求的认证字段');
     }
     const response =

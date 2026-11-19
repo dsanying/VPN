@@ -1,4 +1,15 @@
 /** Last defense shared by storage, IPC display and diagnostic export. Never interpolate real credentials into fixtures. */
+import { SUPPORTED_URL_SCHEMES } from './protocol-url-schemes';
+
+// 节点分享链接 scheme 面：与 protocol-url-schemes#SUPPORTED_URL_SCHEMES 对齐（SecAudit L1——名单漂移会让
+// wireguard://<privateKey>@、snell://<psk>@、anytls://<password>@ 等整段落日志）。手工同步两处没有机制约束，
+// 这里改为运行时由 SUPPORTED_URL_SCHEMES 构造，彻底消漂移；排除 http/https（它们走下方参数级 URL 脱敏）。
+const LINK_SCHEME_PATTERN = SUPPORTED_URL_SCHEMES.filter(
+  (scheme) => scheme !== 'http' && scheme !== 'https'
+)
+  .map((scheme) => scheme.replace(/[+]/g, '\\+'))
+  .join('|');
+
 export function redactLogText(text: string): string {
   return text
     .replace(/(?:\/Users\/|\/home\/)[^/\s]+/g, '<home>')
@@ -7,10 +18,7 @@ export function redactLogText(text: string): string {
       /-----BEGIN [^-]*(?:PRIVATE KEY|PRIVATE)-----[\s\S]*?-----END [^-]+-----/g,
       '<redacted-private-key>'
     )
-    .replace(
-      /\b(?:vmess|vless|trojan|ssr?|hysteria2?|hy2|tuic):\/\/[^\s<>"']+/gi,
-      '<redacted-link>'
-    )
+    .replace(new RegExp(`\\b(?:${LINK_SCHEME_PATTERN}):\\/\\/[^\\s<>"']+`, 'gi'), '<redacted-link>')
     .replace(/https?:\/\/[^\s<>"'）)]+/gi, (value) => {
       try {
         const url = new URL(value);
@@ -33,7 +41,7 @@ export function redactLogText(text: string): string {
     .replace(/\b(authorization\s*[:=]\s*)(?:Bearer|Basic)\s+[^\s,;]+/gi, '$1<redacted>')
     .replace(/\b(cookie|set-cookie)\s*:\s*[^\r\n]+/gi, '$1: <redacted>')
     .replace(
-      /(["']?(?:(?:privacy|obfs|tls[_-]?)?password|passwd|username|otp|passcode|verification[_-]?code|samlresponse|prelogin[_-]?cookie|portal[_-]?userauthcookie|uuid|private[_-]?key(?:passphrase)?|preshared[_-]?key|psk|(?:clashApi)?secret|(?:access[_-]?|refresh[_-]?)?token|auth[_-]?key|api[_-]?key)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;}&"']+)/gi,
+      /(["']?(?:(?:privacy|obfs|tls[_-]?)?password|passwd|username|otp|passcode|verification[_-]?code|samlresponse|prelogin[_-]?cookie|portal[_-]?userauthcookie|uuid|private[_-]?key(?:passphrase)?|preshared[_-]?key|psk|(?:clashApi)?secret|(?:access[_-]?|refresh[_-]?)?token|auth[_-]?key|auth[_-]?str|license|api[_-]?key)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;}&"']+)/gi,
       '$1<redacted>'
     );
 }

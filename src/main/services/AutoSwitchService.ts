@@ -297,7 +297,7 @@ export class AutoSwitchService extends EventEmitter {
 
       // 通知渲染进程
       const mainWindow = this.getMainWindow();
-      if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.EVENT_AUTO_NODE_SWITCHED, {
           reason,
           newServerName: best.server.name,

@@ -17,15 +17,19 @@ export class IpcEventEmitter {
 
   sendToAll<T = any>(channel: string, data: T): void {
     for (const window of this.windows) {
-      if (!window.isDestroyed() && window.webContents) {
-        window.webContents.send(channel, data);
+      // webContents 可在 window 仍存活时先死（render-process-gone/GPU 崩溃/退出竞态），
+      // 对死 wc send 会同步 throw——判 webContents.isDestroyed 而不只是 window.isDestroyed。
+      const wc = window.isDestroyed() ? null : window.webContents;
+      if (wc && !wc.isDestroyed()) {
+        wc.send(channel, data);
       }
     }
   }
 
   sendToWindow<T = any>(window: BrowserWindow, channel: string, data: T): void {
-    if (!window.isDestroyed() && window.webContents) {
-      window.webContents.send(channel, data);
+    const wc = window.isDestroyed() ? null : window.webContents;
+    if (wc && !wc.isDestroyed()) {
+      wc.send(channel, data);
     }
   }
 

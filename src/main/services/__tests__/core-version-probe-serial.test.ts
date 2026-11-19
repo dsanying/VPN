@@ -71,7 +71,10 @@ afterAll(() => {
 });
 
 function makeSvc(): any {
-  const mainWindow: any = { isDestroyed: () => false, webContents: { send: jest.fn() } };
+  const mainWindow: any = {
+    isDestroyed: () => false,
+    webContents: { isDestroyed: () => false, send: jest.fn() },
+  };
   return new ProxyManager(
     { addLog: jest.fn() } as any,
     mainWindow,

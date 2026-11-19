@@ -718,12 +718,32 @@ export const MAX_FILTER_NAME_LEN = 256;
 
 /**
  * 裸编译正则（不加 i/u，匹 mihomo 大小写敏感 + emoji）。非法正则返回 null（调用方跳过+warn）。
- * ReDoS 护栏：pattern 超长（>MAX_FILTER_PATTERN_LEN）也返回 null（调用方按非法 filter 处理），
- * 避免恶意超长 pattern + 同步 test 触发灾难性回溯冻结主进程。
+ * ReDoS 护栏（两层）：
+ * 1. pattern 超长（>MAX_FILTER_PATTERN_LEN）返回 null——界定输入规模；
+ * 2. 嵌套/重叠量词启发式拒绝——`(a+)+`、`(a|aa)+`、`a*+` 这类灾难回溯源不受长度约束，
+ *    7 字符即可在 256 字节 name 上冻结主进程数十秒（同步 test 无超时可言）。仅拒「嵌套量词」这一
+ *    明确红队模式：误杀面窄（mihomo 实用 filter 极少写嵌套量词），换不来完整正则分析器的复杂度。
  */
 export function compileProviderFilter(pattern: string | undefined): RegExp | null {
   if (!pattern) return null;
   if (pattern.length > MAX_FILTER_PATTERN_LEN) return null;
+  // 字符类内量词（如 [a+]+）安全；排除 [...] 段后再查嵌套模式。strip 不需完整解析——
+  // 只要保守地移除最外层字符类（含转义），量词嵌套检测在类外段进行即可（宁可漏放不误杀）。
+  const outsideCharClass = pattern.replace(/\[(?:[^\]\\]|\\.)*\]/g, ' ');
+  if (/\((?:[^()\\]|\\.)*\)[+*{]/.test(outsideCharClass)) {
+    // 组后量词 → 二判嵌套危险源（裸组 `(abc)+` 不回溯爆炸，放行）：
+    // 1) 组内还有量词：(a+)+ / (a*)*；
+    // 2) 组内有交替且某分支是另一分支的前缀：(a|aa)+。
+    const group = outsideCharClass.match(/\((?:[^()\\]|\\.)*\)[+*{]/)?.[0] ?? '';
+    const inner = group.slice(1, group.lastIndexOf(')'));
+    const innerHasQuantifier = /[+*]|[{]\d/.test(inner.replace(/\[(?:[^\]\\]|\\.)*\]/g, ' '));
+    const overlappingAlt = inner
+      .split('|')
+      .map((b) => b.replace(/\\./g, 'x').replace(/[^\\]?[{]\d+(,\d*)?[}]/g, 'x'))
+      .filter(Boolean)
+      .some((a, i, arr) => arr.some((b, j) => j !== i && (a.startsWith(b) || b.startsWith(a))));
+    if (innerHasQuantifier || overlappingAlt) return null;
+  }
   try {
     return new RegExp(pattern);
   } catch {

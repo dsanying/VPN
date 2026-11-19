@@ -90,6 +90,8 @@ import {
   type PendingRuleSelector,
 } from './singbox-outbound-builder';
 import { NodeDnsRaceServer } from './node-dns-race-server';
+import { assertHostAllowed } from '../../shared/ssrf-guard';
+import * as dns from 'dns';
 import { resolveUpstreams, DEFAULT_POOL_IDS } from '../../shared/node-resolver-upstreams';
 import {
   isEndpointProtocol,
@@ -802,18 +804,29 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
   async start(config: UserConfig, options: { interactive?: boolean } = {}): Promise<void> {
     config = prepareAutomaticTakeover(config);
     this.beginLifecycleOp();
+    // per-leg 世代令牌 + 进入时快照：catch 据此判「本腿被接管/从未接管到 gen」。
+    const legToken = { gen: -1 };
+    const genBefore = this.lifecycleGeneration;
     // B0：阶段耗时收集器在此建（而非 startInternal 内）——public 包装是 start 的唯一入口，且它的 finally 是
     //   成功/失败/让位三条出口的共同收口，收集器的生死与这次 start 严格同域。
     const timeline = new StartTimeline();
     this.startTimeline = timeline;
     let outcome = 'failed';
     try {
-      await this.startWithTunAddressAvoidance(config, options);
+      await this.startWithTunAddressAvoidance(config, options, legToken);
       outcome = 'ok';
     } catch (e) {
       // issue #176：本腿在就绪等待期被更新的 start/stop 接管 → 静默让位，**绝不 cleanup**（接管方已拥有/正在
       //   建立进程与系统代理状态，cleanup 会清掉它的 refs）。镜像 attemptAutoRestart「自动重启已让位」语义。
-      if (e instanceof CoreStartSupersededError) {
+      // 兜底：supersede 判定只在就绪检查点抛 CoreStartSupersededError；更早死的隐性让位腿（本腿 gen++ 后
+      //   又有新 start/stop 接管，或本腿从未走到 gen++）靠 per-leg 世代不等式让位——否则走通用失败收口会
+      //   cleanup 接管方 refs + ensureSystemProxyCleared 拆掉接管方刚设的系统代理（UI 已连接却直连泄漏）。
+      const superseded =
+        e instanceof CoreStartSupersededError ||
+        (legToken.gen < 0
+          ? this.lifecycleGeneration !== genBefore
+          : legToken.gen !== this.lifecycleGeneration);
+      if (superseded) {
         this.lastStartSuperseded = true; // 供 attemptAutoRestart 判别，跳过让位时的多余 started 事件
         outcome = 'superseded';
         this.logToManager('info', '启动已让位（检测到更新的启动/停止操作接管）');
@@ -876,7 +889,8 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
 
   private async startInternal(
     config: UserConfig,
-    options: { interactive?: boolean } = {}
+    options: { interactive?: boolean } = {},
+    legToken?: { gen: number }
   ): Promise<void> {
     const restarting = this.lifecycleDepth > 1;
     // core-swap 手动轴门控：内核替换窗口中拒绝启动（防撞半替换核 FATAL）。须在 lifecycleGeneration++ 之前——
@@ -890,6 +904,7 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     this.lastStartSuperseded = false;
     // 生命周期世代 +1：标记一次新的 start 接管（供退避中的 attemptAutoRestart 比对让位，M-2′）。
     this.lifecycleGeneration++;
+    if (legToken) legToken.gen = this.lifecycleGeneration; // per-leg 记录——catch 兜底判「本腿被接管」用
     // 新启动接管 → 清掉任何陈旧的 supersede-崩溃补发标记（防上一会话遗留的标记误触发补发，M-2′-G1 防陈旧）。
     this.crashWhileSuperseded = false;
     // 新会话从干净状态开始：清 TS「选中节点已 Running」去重标记。stop() 断 tailscaleApiClient 后不再有 STATUS 帧
@@ -4284,11 +4299,23 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
    * HEAD 预检单个远程 rule_set URL 是否存在。仅"确定缺失"(404/403/410) 返回 false→剪枝；2xx/3xx 返回 true；
    * 瞬时错误（超时/5xx/网络错）乐观返回 true（不剪，交 sing-box 下载重试）。结果按"确定结论"缓存（见 ruleSetReachCache）。
    */
-  private isRemoteRuleSetReachable(url: string): Promise<boolean> {
+  private async isRemoteRuleSetReachable(url: string): Promise<boolean> {
     const now = Date.now();
     const cached = this.ruleSetReachCache.get(url);
     if (cached && observationIsFresh(cached.at, now)) {
       return Promise.resolve(cached.reachable);
+    }
+    // SecAudit L3：HEAD 预检先过 SSRF guard——customRuleSets[].url 经 CONFIG_SAVE/BACKUP_IMPORT_APPLY
+    // 由渲染端/备份写入，不设防即成为「代理每次 start 就向 169.254.169.254/10.x 发包」的内网探测面
+    //（与订阅链路 assertHostAllowed 口径对齐）。guard 拒绝 → 视为瞬时不确定（乐观保留、不缓存），
+    // sing-box 下载同一 URL 时自身仍会发起请求（核侧无 guard），此处至少不把不可达误判成可剪枝。
+    try {
+      const u = new URL(url);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return true;
+      // DnsLookupAll 是 promise 形态（见 ssrf-guard#DnsLookupAll）——用 dns.promises.lookup {all:true} 适配。
+      await assertHostAllowed(u, (host) => dns.promises.lookup(host, { all: true }));
+    } catch {
+      return true;
     }
     return new Promise<boolean>((resolve) => {
       let settled = false;
@@ -4891,11 +4918,12 @@ rm -f "$STOPFLAG"
    */
   private async startWithTunAddressAvoidance(
     config: UserConfig,
-    options: { interactive?: boolean }
+    options: { interactive?: boolean },
+    legToken?: { gen: number }
   ): Promise<void> {
     this.tunAddressAvoidanceArmed = false;
     try {
-      await this.startInternal(config, options);
+      await this.startInternal(config, options, legToken);
     } catch (e) {
       // 判据取 `lastStartupFatal.kind`（核自己写的失败原因）而不是错误文案：文案会随 i18n/措辞变，
       // kind 是 classifySingBoxFatal 的结构化结论，#324 真机实证过。终态类型也要对上——瞬态族
@@ -4909,7 +4937,7 @@ rm -f "$STOPFLAG"
       this.tunAddressAvoidanceArmed = true;
       this.logToManager('warn', 'TUN 地址冲突：正在探测可用地址并重试一次...');
       this.markStart('tunAddrConflictRetry');
-      await this.startInternal(config, options);
+      await this.startInternal(config, options, legToken);
     }
   }
 
@@ -5417,6 +5445,9 @@ rm -f "$STOPFLAG"
           // （stdio 已 pipe，无功能影响）。macOS/Linux 忽略此项。
           windowsHide: true,
         });
+        // exit 闭包用：per-spawn 身份锚点。this.singboxProcess 是共享引用，新会话接管后会覆写；
+        // 迟到的 exit 事件据 child !== this.singboxProcess 识别为被接管腿的退出并静默忽略。
+        const child = this.singboxProcess;
 
         this.pid = this.singboxProcess.pid || null;
         this.startTime = new Date();
@@ -5466,6 +5497,12 @@ rm -f "$STOPFLAG"
 
         this.singboxProcess.on('exit', (code, signal) => {
           this.logToManager('info', `sing-box process exited with code ${code}, signal ${signal}`);
+
+          // 身份校验：exit 回调闭包捕获本次 spawn 的 child。若 this.singboxProcess 已被新会话 B 覆写
+          //   （B spawn 更快完成），这是被接管腿 A 的迟到退出——A 的退出与 B 的进程无关，任何记账/自动
+          //   重启/清理都是对 B 的踩踏（清空 B 的 refs、以「领养世代」对 B 的在途 start 发起二次 supersede）。
+          //   静默忽略。startupResolved 前/后的分支都须拦——崩溃分支的危害尤其大（写 refs + attemptAutoRestart）。
+          if (this.singboxProcess !== child) return;
 
           // 对于 macOS TUN 模式，osascript 退出码为 0 表示成功启动了后台进程
           // code === null（被信号杀，如 stop/模式切换的 SIGTERM）不是授权失败 → 交下方通用启动期退出判定，
@@ -5532,6 +5569,14 @@ rm -f "$STOPFLAG"
           // 本 attempt 已判定（启动期退出已 reject 并置 startupResolved）→ 不再发 'started'（修 H1 幻影启动）。
           // startupResolved 是本次 startSingBoxProcess 的局部量，故跨 retry 各 attempt 互不污染。
           if (startupResolved) return;
+          // 世代守卫（与 helper 路径 isSuperseded 哨兵对称）：本腿 1s 后进入就绪判定，此前/期间可能已被
+          // 新 start/stop 接管。被接管就抛 CoreStartSupersededError 让位——绝不读共享 refs（会把接管方
+          // B 刚写的 PID 认成自己的 → 幻影 started）、绝不 cleanup 踩 B 的记账、绝不以可重试错误回流
+          // runStartWithRetry 二次起核抢端口/弹授权框。
+          if (this.lifecycleGeneration !== startGen) {
+            reject(new CoreStartSupersededError());
+            return;
+          }
           // macOS TUN 模式或 Windows TUN 模式：检查 singboxPid（从 PID 文件读取）
           // 其他模式：检查 singboxProcess 和 pid
           // 同 exit 回调：按本次 spawn 的实际启动路径判定（局部量），不现查当前模式。
@@ -5539,8 +5584,13 @@ rm -f "$STOPFLAG"
           const isWindowsTunMode = launchViaWindowsUAC;
 
           if (isMacTunMode || isWindowsTunMode) {
-            // TUN 模式：等待 PID 文件被写入
-            await this.waitForPidFile();
+            // TUN 模式：等待 PID 文件被写入（带世代哨兵——接管即提前返回）
+            await this.waitForPidFile(startGen);
+            // 哨兵触发（接管方已拥有生命周期）→ 让位，绝不发幻影 started / cleanup 踩接管方记账。
+            if (this.lifecycleGeneration !== startGen) {
+              reject(new CoreStartSupersededError());
+              return;
+            }
 
             if (this.singboxPid) {
               // 启动日志文件监控（macOS 和 Windows TUN 模式都需要，因为后台进程的 stdout 无法被捕获）
@@ -5565,6 +5615,12 @@ rm -f "$STOPFLAG"
             }
           } else {
             // 系统代理模式或 Linux
+            // 1s 等待期可能被接管（B 已 spawn 写 refs / B 尚未 spawn）——读共享 refs 前判世代，防
+            // 把 B 的进程认成自己的（幻影 started）或在 B 未 spawn 时 cleanup+reject 回流重试双起核。
+            if (this.lifecycleGeneration !== startGen) {
+              reject(new CoreStartSupersededError());
+              return;
+            }
             if (this.singboxProcess && this.pid) {
               // Linux TUN 的 logFileWatcher 已在 spawn 后立即启动（见上方 stderr 监听后），此处不重复。
               // 启动健康检查定时器
@@ -6521,7 +6577,9 @@ rm -f "$STOPFLAG"
 
       // 尝试自动重启
       if (this.shouldAutoRestart()) {
-        this.attemptAutoRestart();
+        // void：attemptAutoRestart 内部 giveUpAutoRestart 的 emit 若同步抛会 reject 成 unhandledRejection
+        //（其余调用点均 void，此处补齐同款守卫）。
+        void this.attemptAutoRestart();
       } else {
         // 无法自动重启，通知用户
         this.emit('error', {
@@ -7333,19 +7391,24 @@ rm -f "$STOPFLAG"
   }
 
   /** 重要：在调用此方法前，必须先删除旧的 PID 文件，否则可能读到旧的 PID（macOS/Windows TUN 模式）。 */
-  private async waitForPidFile(): Promise<void> {
+  private async waitForPidFile(startGen?: number): Promise<void> {
     const pidFile = this.getPidFilePath();
     const maxWaitTime = 60000; // 最多等待 60 秒（给 macOS 权限提升过程留足时间）
     const checkInterval = 200; // 每 200ms 检查一次
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
+      // 世代守卫：本腿被新 start/stop 接管即提前退出——空转 60s 毫无意义，且被接管期间接管方看护脚本
+      // 写的 PID 文件若被本腿读到，会把接管方的 PID 写进共享 singboxPid/pid（幻影 started + 踩接管方记账）。
+      if (startGen !== undefined && this.lifecycleGeneration !== startGen) return;
       try {
         const pidContent = await fs.readFile(pidFile, 'utf-8');
         const pid = parseInt(pidContent.trim(), 10);
         if (!isNaN(pid) && pid > 0) {
           // 验证这个 PID 对应的进程确实存在且是 sing-box
           if (this.isProcessAlive(pid)) {
+            // 读到 PID 的瞬间再判一次（readFile+isProcessAlive 期间接管可能已发生）。
+            if (startGen !== undefined && this.lifecycleGeneration !== startGen) return;
             this.singboxPid = pid;
             this.pid = pid;
             this.logToManager('info', `sing-box 后台进程 PID: ${pid}`);
@@ -7355,7 +7418,7 @@ rm -f "$STOPFLAG"
       } catch {
         // 文件还不存在，继续等待
       }
-      await new Promise((resolve) => setTimeout(resolve, checkInterval));
+      await new Promise<void>((resolve) => setTimeout(resolve, checkInterval));
     }
 
     this.logToManager('warn', 'PID 文件等待超时');
@@ -8008,6 +8071,13 @@ rm -f "$STOPFLAG"
   getTailscaleStatusSnapshot(): TailscaleStatusSnapshot {
     // 仅返回当前 config 在册的 TS 节点：删/改名节点的缓存条目不外泄给渲染端（防幽灵条目重灌 store）。
     const liveIds = new Set((this.currentConfig?.servers || []).map((s) => s.id));
+    // 对账删除：节点从 config 消失后其含 peers 的整帧不再驻留内存（否则每删一个节点泄漏一帧，慢速累积）。
+    for (const id of this.tailscaleStatusCache.keys()) {
+      if (!liveIds.has(id)) {
+        this.tailscaleStatusCache.delete(id);
+        this.tailscaleStatusGen.delete(id);
+      }
+    }
     return {
       connected: this.getStatus().running,
       statuses: Array.from(this.tailscaleStatusCache.values()).filter((s) =>
@@ -8639,8 +8709,11 @@ rm -f "$STOPFLAG"
   }
 
   private sendEventToRenderer(channel: string, data: any): void {
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send(channel, data);
+    // webContents 可在 window 仍存活时先死（崩溃/退出竞态），对死 wc send 会同步 throw。
+    const wc =
+      this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.webContents : null;
+    if (wc && !wc.isDestroyed()) {
+      wc.send(channel, data);
     }
   }
 
