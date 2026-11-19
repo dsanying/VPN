@@ -254,7 +254,6 @@ it('mihomo native nodes carry requests through authenticated loopback bridges an
     await new Promise<void>((done) => http.close(() => done()));
   }
 });
-
 it('official Xray and mihomo validate preserved XHTTP extra and SSR shapes', () => {
   const bridge = { port: 19081, username: 'fixture-user', password: 'fixture-password' };
   const base = {
