@@ -64,6 +64,7 @@ import { localProxyPort, controlApiPort } from '../../shared/proxy-ports';
 import { isCoreProcessOutput } from '../../shared/core-process';
 import { isDirectSelection, resolveGlobalExitTag } from '../../shared/direct-selection';
 import { parseDefaultGateway, parseScutilRouter } from '../../shared/default-route';
+import { effectiveBypassLan } from '../../shared/system-proxy-bypass';
 import {
   isIpv4Host,
   isIpv6Host,
@@ -1334,6 +1335,42 @@ export class ProxyManager extends EventEmitter implements IProxyManager {
     if (config.proxyModeType === 'tun') {
       void this.meshExitRoute.reconcile(config, !!config.enableIPv6);
     }
+
+    // 系统代理单一写者收口（拆双轨）：systemProxy 模式 → 置系统代理（marker + 防自指在 SystemProxyManager 内，
+    // 杜绝把自己当原始保存致 disable restore 死端口）；TUN/manual 模式 → 反向清掉可能残留的系统代理
+    // （覆盖「切接管方式 systemProxy→TUN 经 switchMode 去抖重启」这条不经 IPC handler 的路径）。
+    // best-effort：networksetup/reg 失败仅告警不阻断启动（enableProxy 内含重试 + 失败回滚 + 清 marker）。
+    try {
+      if (config.proxyModeType === 'systemProxy') {
+        await this.systemProxyManager?.enableProxy(
+          '127.0.0.1',
+          localProxyPort(config), // mixed-only：HTTP 与 SOCKS 同口（mac 三代理同口、win 仅 http）
+          localProxyPort(config),
+          // 系统代理「忽略列表」= 绕过局域网完整清单（CIDR+域名），受 bypassLAN 开关管理（单一真值 effectiveBypassLan）。
+          effectiveBypassLan(config)
+        );
+      } else {
+        await this.ensureSystemProxyCleared();
+        // 仅 TUN：清掉 暗影VPN 自己的(marker)系统代理后，若仍有系统代理开着 = 无 marker 残留(外部/他软件/丢 marker)。
+        // TUN 下它会截走代理感知 app 的流量致连接异常；direct/manual 模式不接管路由，残留是用户自己的事，不提示。
+        // 不自动清(7890 等业内共用端口、无法证明归属，自动清会误伤别的代理软件)→ 一次性提示，交用户决定。
+        if (config.proxyModeType === 'tun') await this.adviseIfResidualSystemProxy();
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logToManager('warn', `系统代理状态同步失败: ${msg}`);
+      // 非致命：核心已起但系统代理没设上 → UI 会显示「已连接」而流量实未走代理。发一条非终态提示告知用户
+      // （enableProxy 内部已 fail-closed 关掉半残留，不会留死端口），避免「显示连上、实际没代理」的静默不一致（L-4）。
+      if (config.proxyModeType === 'systemProxy') {
+        this.sendEventToRenderer(IPC_CHANNELS.EVENT_PROXY_ERROR, {
+          message: `系统代理设置失败：${msg}。核心已启动但流量可能未走代理，请检查系统网络权限后重试。`,
+          errorCode: ProxyErrorCode.SYSTEM_PROXY_FAILED,
+          code: -3,
+        });
+      }
+    }
+
+    this.markStart('systemProxySync'); // systemProxy 模式=置代理（mac 上的 networksetup 风暴在这一格）；TUN=反向清
 
     // 系统 DNS 接管收口（macOS scoped resolver 治本）：仅 TUN 模式接管——on-link 的 LAN/ISP DNS 不进
     // TUN → hijack-dns 看不到；且 macOS scoped resolver 绑定物理接口、连路由劫持都绕开（真机实测：本机
@@ -6891,6 +6928,32 @@ rm -f "$STOPFLAG"
    * 因 7890 等是业内共用端口、无法据地址证明归属，**绝不自动清**(会误伤别的软件)→ 发一次性 advisory 交用户一键关。
    * best-effort：读状态失败/无残留则静默。
    */
+  private async adviseIfResidualSystemProxy(): Promise<void> {
+    const mgr = this.systemProxyManager;
+    if (!mgr) return;
+    try {
+      const status = await mgr.getProxyStatus().catch(() => null);
+      if (!status?.enabled) return;
+      const proxy = status.httpProxy || status.httpsProxy || status.socksProxy || '';
+      // 防自指：若残留指向 暗影VPN 自己的本地端口(127.0.0.1:mixedPort)=我们自己的代理清理半失败(非外部)，不报「外部残留」
+      //（会误导）。仅 ensureSystemProxyCleared 的清理偶发部分失败时出现；下个终态点会重试清（mac/linux 误报修复）。
+      const ownHostPort = `127.0.0.1:${localProxyPort(this.currentConfig ?? {})}`;
+      if ([status.httpProxy, status.httpsProxy, status.socksProxy].some((p) => p === ownHostPort)) {
+        this.logToManager(
+          'warn',
+          `系统代理仍指向 暗影VPN 自身(${proxy})但清理未净——非外部残留，跳过提示，下个终态点重试清理`
+        );
+        return;
+      }
+      this.logToManager(
+        'warn',
+        `TUN 模式下检测到非 暗影VPN 设置的系统代理仍开启(${proxy || '未知地址'})，已提示用户（不自动清，避免误伤其它代理软件）`
+      );
+      this.sendEventToRenderer(IPC_CHANNELS.EVENT_SYSTEM_PROXY_RESIDUAL, { proxy });
+    } catch {
+      /* best-effort：提示失败不影响 TUN 启动 */
+    }
+  }
 
   /**
    * 用户主动关闭系统代理（TUN 残留提示的「关闭系统代理」一键动作）。用户显式意图 → 直接 disable

@@ -1943,19 +1943,34 @@ if (gotTheLock) {
     });
     smartRoutingService = new SmartRoutingService({
       watchNetwork: (changed) => {
+        // 事件源子进程死亡自愈：failed() 只说明本次通道断，60s 后重拉（start 幂等，已复活则 no-op）；
+        // 连续死亡仅是周期性 warn + 重试，不成风暴。此前仅 powerMonitor resume 触发重拉——长期不换网/不眠
+        // 时该通道静默失效，地区策略变化漏检。
+        let respawnTimer: NodeJS.Timeout | null = null;
         const monitor = new NetworkChangeMonitor(
           changed,
-          () =>
+          () => {
             logManager.addLog(
               'warn',
               '网络变更监听不可用，将在恢复运行及定期维护时刷新',
               'RoutingData'
-            ),
+            );
+            if (respawnTimer === null) {
+              respawnTimer = setTimeout(() => {
+                respawnTimer = null;
+                if (networkChangeMonitor === monitor) monitor.start();
+              }, 60_000);
+            }
+          },
           path.join(path.dirname(resourceManager.getMacHelperPath()), 'shadowvpn-network-events')
         );
         networkChangeMonitor = monitor;
         monitor.start();
         return () => {
+          if (respawnTimer !== null) {
+            clearTimeout(respawnTimer);
+            respawnTimer = null;
+          }
           monitor.dispose();
           if (networkChangeMonitor === monitor) networkChangeMonitor = null;
         };
