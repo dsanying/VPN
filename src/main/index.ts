@@ -1948,7 +1948,16 @@ if (gotTheLock) {
         // 时该通道静默失效，地区策略变化漏检。
         let respawnTimer: NodeJS.Timeout | null = null;
         const monitor = new NetworkChangeMonitor(
-          changed,
+          () => {
+            changed();
+            // 链路变化即时连通性探测（issue 补漏：换网后隧道可能半死但无人验）。autoSwitch 开着走其
+            // 心跳（含失败计数→换节点）；关着只告警——探测是观测、切换是用户关掉的自动行为，两轴分开。
+            // 懒引用 autoSwitchService：本回调注册在前、该服务装配在后，首次触发时必然已就绪。
+            void autoSwitchService?.probeNow();
+            // 链路变化再武装：崩溃自动重启达上限 giveUp 后，换网是天然重试点（网络条件已变）。
+            // 只在「配置在/核死/非用户停」时复位计数重试；用户停止/已在跑/正在重启 → 内部各自 no-op。
+            proxyManager?.notifyNetworkChanged();
+          },
           () => {
             logManager.addLog(
               'warn',

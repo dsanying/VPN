@@ -7146,6 +7146,25 @@ rm -f "$STOPFLAG"
           // （2026-10-28 事故的直接修复之一）。activePid 为 null 视同不存活——记账缺失时宁可漏灌。
           const activePid = this.activeCorePid();
           const engineAlive = activePid !== null && this.isProcessAlive(activePid);
+          const cfg = this.currentConfig;
+          // systemProxy 模式的等价重灌：新出现的网络服务（插坞站/新网卡）没有我们的代理设置 → 直连泄漏。
+          // enableProxy 对已有服务是幂等重写（防自指 stripSelf 保护原始快照），对新服务补上设置；
+          // 与 DNS 接管同样要求引擎存活（核已死时 proxy 指向死端口，绝不应重灌）。
+          if (cfg?.proxyModeType === 'systemProxy' && engineAlive) {
+            try {
+              await this.systemProxyManager?.enableProxy(
+                '127.0.0.1',
+                localProxyPort(cfg),
+                localProxyPort(cfg),
+                effectiveBypassLan(cfg)
+              );
+            } catch (e) {
+              this.logToManager(
+                'warn',
+                `链路变化重灌系统代理失败: ${e instanceof Error ? e.message : String(e)}`
+              );
+            }
+          }
           if (!shouldReconcileDns(this.currentConfig, mgr.hasMarker(), engineAlive)) return;
           await mgr.reconcileDns();
           // LAN 解析器漂移检测（dns-lan 弃 type:dhcp 后的换网跟随）：核配置里的 dns-lan 是启动时实测的
@@ -7233,6 +7252,29 @@ rm -f "$STOPFLAG"
   setAutoRestartEnabled(enabled: boolean): void {
     this.autoRestartEnabled = enabled;
     this.logToManager('info', `自动重启已${enabled ? '启用' : '禁用'}`);
+  }
+
+  /**
+   * 链路变化即时恢复（index.ts 经 watchNetwork 接线）：崩溃自动重启达上限 giveUp 后，换网/唤醒
+   * 是天然的重试点——网络条件已变，上次失败的前提不复存在。用户主动停止（autoRestartAborted）绝
+   * 不复活，只在「配置还在、进程死了、不是用户停的」这一条态上复位计数再试。正在重启/已在跑
+   * 或配置缺失 → no-op。
+   */
+  notifyNetworkChanged(): void {
+    if (!this.currentConfig) return;
+    if (this.autoRestartAborted) return; // 用户停止/在飞接管：用户意图优先
+    if (this.getStatus().running) return;
+    if (this.isRestarting) return;
+    if (!this.shouldAutoRestart()) {
+      // restartCount 达上限是唯一「再武装值得」的拦路条件——冷却/开关/suppress 语义不变。
+      if (this.restartCount >= ProxyManager.MAX_RESTART_COUNT) {
+        this.resetRestartCount();
+        this.logToManager('info', '网络环境已变化，复位崩溃重启计数，自动重启再试一次');
+      } else {
+        return;
+      }
+    }
+    void this.attemptAutoRestart();
   }
 
   private resetRestartCount(): void {

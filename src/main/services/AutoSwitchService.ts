@@ -95,6 +95,33 @@ export class AutoSwitchService extends EventEmitter {
     }
   }
 
+  /**
+   * 链路变化即时探测（单发，不启用心跳）：换网/插拔/唤醒后立刻验一次代理链，避免干等下个 30s 心跳。
+   * - enabled：直接跑一次心跳（内部连续失败计数照常累计，达阈值仍会换节点）；
+   * - disabled：只探测+告警，不换节点——换节点是用户关掉的自动行为，探测只是观测，语义必须分开。
+   * 返回探测结果（null = 代理未运行/无端口可探，视为无事发生）。
+   */
+  async probeNow(): Promise<boolean | null> {
+    if (this.enabled) {
+      await this.runHeartbeat();
+      return null; // runHeartbeat 不返结果，结果体现在它的失败计数/切换动作上
+    }
+    const status = this.proxyManager.getStatus();
+    if (!status?.running) return null;
+    const port = this.proxyManager.getProbePorts()?.proxy;
+    if (!port) return null;
+    const alive = await this.speedTestService.checkProxyHealth(port).catch(() => null);
+    if (alive === null) return null;
+    if (!alive) {
+      this.logManager.addLog(
+        'warn',
+        '网络变化后代理连通性检测失败：隧道可能未跟随新链路（自动换节点未启用，请手动切换或检查节点）',
+        'AutoSwitch'
+      );
+    }
+    return alive;
+  }
+
   private async runHeartbeat(): Promise<void> {
     if (!this.enabled || this.isSwitching || this.heartbeatBusy) return;
     const generation = this.generation;
