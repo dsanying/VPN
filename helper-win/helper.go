@@ -38,7 +38,10 @@ var (
 	confDir    string // 允许的配置文件目录
 	supportDir string // 命名管道 token 所在目录（SYSTEM 侧）
 	// coreDir：Windows 上接受并忽略（镜像 macOS flag 形态，便于 TS 侧统一安装脚本；Windows 无 install-core）。
-	coreDir string
+	coreDir  string
+	pinsPath string // 安装包内核摘要白名单（install-mihomo 的写入授权锚点，SYSTEM 侧）
+
+	corePins *helperrpc.CorePins // 启动时从 pinsPath 加载；nil/加载失败 = 拒绝一切安装（fail-closed）
 
 	mu           sync.Mutex
 	child        *exec.Cmd
@@ -265,8 +268,13 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 		}
 		fmt.Fprintf(conn, "OK stopping %d\n", beginStopLocked())
 	case "install-mihomo":
-		if err := helperrpc.InstallMihomo(singboxBin, args.Next(), args.Next()); err != nil {
-			fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+		err := helperrpc.InstallMihomo(singboxBin, args.Next(), args.Next(), corePins)
+		if err != nil {
+			if err == helperrpc.ErrPinMismatch {
+				fmt.Fprintln(conn, "ERR pin-mismatch")
+			} else {
+				fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+			}
 			return
 		}
 		fmt.Fprintln(conn, "OK installed")

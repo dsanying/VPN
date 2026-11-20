@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"shadowvpn/helperrpc"
 	"shadowvpn/helperrpc/entryprobe"
 	"syscall"
 
@@ -24,8 +25,12 @@ func main() {
 	flag.StringVar(&confDir, "confdir", "", "allowed config directory")
 	flag.StringVar(&supportDir, "support", `C:\ProgramData\ShadowVPN`, "dir holding helper.token + state (SYSTEM side)")
 	flag.StringVar(&coreDir, "coredir", "", "accepted and ignored on Windows (mirrors macOS flag; no install-core)")
+	flag.StringVar(&pinsPath, "pins", `C:\ProgramData\ShadowVPN\core-pins.json`, "core digest whitelist (SYSTEM-side copy of bundled pins; install-mihomo authorizes against it)")
 	flag.BoolVar(&console, "console", false, "run as a foreground console process (dev/test without SCM)")
 	flag.Parse()
+
+	// pins fail-closed：文件缺失/解析失败时 corePins 为空集（Allows 恒 false）→ install-mihomo 被拒。
+	corePins, _ = helperrpc.LoadCorePins(pinsPath)
 
 	// 确保 supportDir 存在（helper.token 落此目录）。Windows 上权限由安装期 ACL 设定（SYSTEM 私有），此处仅建目录。
 	if err := os.MkdirAll(supportDir, 0o755); err != nil {

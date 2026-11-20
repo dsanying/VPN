@@ -31,6 +31,9 @@ var (
 	confDir    string // 允许的配置文件目录
 	supportDir string // socket + token 所在目录
 	coreDir    string // 安装时锁定的受保护内核目录（install-core 只写此目录，防写任意路径）
+	pinsPath   string // 安装包内核摘要白名单（install-core/install-mihomo 的写入授权锚点，root-owned）
+
+	corePins *helperrpc.CorePins // 启动时从 pinsPath 加载；nil/加载失败 = 拒绝一切安装（fail-closed）
 
 	mu        sync.Mutex
 	child     *exec.Cmd
@@ -125,8 +128,14 @@ func installCore(srcDir, wantHash string) string {
 		return "ERR read-singbox " + err.Error()
 	}
 	sum := sha256.Sum256(sbData)
-	if !strings.EqualFold(hex.EncodeToString(sum[:]), wantHash) {
+	actualHex := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(actualHex, wantHash) {
 		return "ERR hash-mismatch"
+	}
+	// pin 白名单（SecAudit H1）：token 只证通道身份，安装授权只认安装包锚定的 pins。fail-closed：
+	// pins 未加载/摘要不在清单 → 拒绝（错误码区分，app 侧据此引导用户更新 helper 获取新内核 pin）。
+	if !corePins.Allows("sing-box", actualHex) {
+		return "ERR pin-mismatch"
 	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
@@ -559,9 +568,16 @@ func executeCommand(_ context.Context, cmd string, args *helperrpc.Arguments) (r
 		}
 		fmt.Fprintln(conn, "OK flushed")
 	case "install-mihomo":
-		if err := helperrpc.InstallMihomo(singboxBin, args.Next(), args.Next()); err != nil {
-			fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
-			return
+		{
+			err := helperrpc.InstallMihomo(singboxBin, args.Next(), args.Next(), corePins)
+			if err != nil {
+				if err == helperrpc.ErrPinMismatch {
+					fmt.Fprintln(conn, "ERR pin-mismatch")
+				} else {
+					fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+				}
+				return
+			}
 		}
 		binary := helperrpc.MihomoPath(singboxBin)
 		_ = execRun(execTimeout, "/usr/bin/xattr", "-c", binary)
@@ -694,7 +710,16 @@ func main() {
 	flag.StringVar(&confDir, "confdir", "", "allowed config directory")
 	flag.StringVar(&supportDir, "support", "/Library/Application Support/ShadowVPN", "dir holding helper.sock + helper.token")
 	flag.StringVar(&coreDir, "coredir", "", "locked protected core dir for install-core (proto v5)")
+	flag.StringVar(&pinsPath, "pins", "", "core digest whitelist (root-owned copy of bundled pins; install-core/install-mihomo authorize against it)")
 	flag.Parse()
+
+	// pins fail-closed：文件缺失/解析失败只记日志，corePins 保持非 nil 空集（Allows 恒 false）→ 安装被拒。
+	// 安装能力与 pin 可用性绑定：装坏 helper（脚本漏拷 pins）时宁可拒绝安装也不能退回「持 token 装任意核」。
+	var pinsErr error
+	corePins, pinsErr = helperrpc.LoadCorePins(pinsPath)
+	if pinsErr != nil {
+		fmt.Fprintf(os.Stderr, "core pins unavailable (%v) — install-core/install-mihomo will be denied\n", pinsErr)
+	}
 
 	if err := os.MkdirAll(supportDir, 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, err)

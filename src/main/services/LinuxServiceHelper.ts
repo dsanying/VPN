@@ -30,6 +30,8 @@ import type { ILogManager } from './LogManager';
 import { resourceManager } from './ResourceManager';
 import { shq } from '../utils/shell-quote';
 import { sha256File } from '../../shared/file-hash';
+import { corePinsJson } from '../../shared/core-pins';
+import { randomBytes } from 'crypto';
 
 const SERVICE_NAME = 'shadowvpn-helper.service';
 // 受管安装根（避开 /opt/暗影VPN —— 那是 electron-builder deb 的应用目录，混放会与 dpkg 生命周期冲突）。
@@ -40,6 +42,8 @@ const HELPER_DEST = `${INSTALL_DIR}/shadowvpn-helper`;
 // helper 只跑此目录内的 sing-box（路径锁），与 macOS 受保护目录 / Windows 锁定 --singbox 一致。
 const CORE_DIR = `${INSTALL_DIR}/core`;
 const CORE_BIN = `${CORE_DIR}/sing-box`;
+// 内核摘要白名单（SecAudit H1）：install-core/install-mihomo 的写入授权锚点；root:root 0644。
+const PINS_FILE = `${INSTALL_DIR}/core-pins.json`;
 const UNIT_PATH = `/etc/systemd/system/${SERVICE_NAME}`;
 const STATE_DIR = '/var/lib/shadowvpn';
 const AUTH_FILE = `${STATE_DIR}/authorized-uids`;
@@ -223,7 +227,15 @@ export class LinuxServiceHelper implements IPrivilegedHelper {
     try {
       const hash = sha256File(path.join(srcDir, 'sing-box'));
       const resp = await this.sendCommand(['install-core', srcDir, hash], 30_000);
-      return resp.startsWith('OK') ? { ok: true } : { ok: false, error: resp };
+      if (resp.startsWith('OK')) return { ok: true };
+      // pin-mismatch（SecAudit H1 pins 白名单）：该核摘要不在 helper 的安装授权清单内——新版官方核须先更新
+      // helper 获取新 pin（重装一次密码框）。
+      if (resp.includes('pin-mismatch'))
+        return {
+          ok: false,
+          error: 'pin-mismatch: 该内核不在提权助手的安装白名单内，请先更新/修复提权助手',
+        };
+      return { ok: false, error: resp };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
@@ -304,7 +316,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=${HELPER_DEST} --socket=${SOCKET_PATH} --authfile=${AUTH_FILE} --coredir=${CORE_DIR}
+ExecStart=${HELPER_DEST} --socket=${SOCKET_PATH} --authfile=${AUTH_FILE} --coredir=${CORE_DIR} --pins=${PINS_FILE}
 RuntimeDirectory=shadowvpn
 RuntimeDirectoryMode=0755
 Restart=on-failure
@@ -319,11 +331,19 @@ WantedBy=multi-user.target
     // 单脚本一次 pkexec：拷 helper 二进制 → 播种 root 受管核（仅当尚无核，重装/修复不覆盖已 install-core 更新的核）
     // → 授权 uid **合并追加**（不覆写：多用户各自装/修复不互相抹掉授权）→ 装 unit → daemon-reload → enable --now。
     // uid 已是数字，安全内插。libcronet 若随包（naive 出站需）随核一并播种。
+    // pins 白名单（SecAudit H1）：install-core/install-mihomo 的写入授权锚点，装/修时用当前 app manifest 刷新。
     const bundledDir = path.dirname(bundledCore);
     const bundledCronet = path.join(bundledDir, 'libcronet.so');
+    const pinsTmp = path.join(
+      os.tmpdir(),
+      `shadowvpn-core-pins-${randomBytes(6).toString('hex')}.json`
+    );
+    fs.writeFileSync(pinsTmp, corePinsJson(CORE_DIR), { mode: 0o600, flag: 'wx' });
     return `#!/bin/sh
 set -e
+trap 'rm -f ${shq(pinsTmp)}' EXIT
 install -D -o root -g root -m 0755 ${shq(srcBinary)} ${shq(HELPER_DEST)}
+install -D -o root -g root -m 0644 ${shq(pinsTmp)} ${shq(PINS_FILE)}
 mkdir -p ${shq(CORE_DIR)}
 chown root:root ${shq(CORE_DIR)}
 chmod 0755 ${shq(CORE_DIR)}

@@ -24,8 +24,12 @@ func main() {
 	flag.StringVar(&sockPath, "socket", "/run/shadowvpn/helper.sock", "unix socket path")
 	flag.StringVar(&authFile, "authfile", "/var/lib/shadowvpn/authorized-uids", "authorized uid list file (one decimal uid per line)")
 	flag.StringVar(&coreDir, "coredir", "/usr/local/lib/shadowvpn/core", "locked root-owned managed core dir (only sing-box here is run; install-core writes only here)")
+	flag.StringVar(&pinsPath, "pins", "/usr/local/lib/shadowvpn/core-pins.json", "core digest whitelist (root-owned copy of bundled pins; install-core/install-mihomo authorize against it)")
 	flag.BoolVar(&console, "console", false, "run in foreground for dev/test (systemd not required)")
 	flag.Parse()
+
+	// pins fail-closed：文件缺失/解析失败只记日志，corePins 保持非 nil 空集（Allows 恒 false）→ 安装被拒。
+	corePins, _ = helperrpc.LoadCorePins(pinsPath)
 
 	// socket 目录必须 0755 可被任意登录用户穿越 → app 才能连；socket 本身 0666 + SO_PEERCRED + 授权列表把关。
 	sockDir := filepath.Dir(sockPath)

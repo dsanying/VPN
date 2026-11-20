@@ -30,6 +30,7 @@ import type { ILogManager } from './LogManager';
 import type { IPrivilegedHelper, HelperStartResult } from './IPrivilegedHelper';
 import { resourceManager } from './ResourceManager';
 import { getUserDataPath } from '../utils/paths';
+import { corePinsJson } from '../../shared/core-pins';
 
 /** SCM 服务名。 */
 const SERVICE_NAME = 'ShadowVPNHelper';
@@ -37,6 +38,8 @@ const SERVICE_NAME = 'ShadowVPNHelper';
 const PIPE_PATH = '\\\\.\\pipe\\shadowvpn-helper';
 /** SYSTEM 侧支持目录：服务以 LocalSystem 读 helper.token；安装时 elevated 写入并设 ACL（SYSTEM + Administrators）。 */
 const SUPPORT_DIR = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ShadowVPN');
+/** 内核摘要白名单（SecAudit H1）：install-mihomo 的写入授权锚点；落 $support（SYSTEM/Admin 私有 ACL）。 */
+const PINS_FILE = path.join(SUPPORT_DIR, 'core-pins.json');
 /** sc query 不存在服务时的退出码（ERROR_SERVICE_DOES_NOT_EXIST）。 */
 const ERROR_SERVICE_DOES_NOT_EXIST = 1060;
 // 通信使用 JSON-RPC 2.0；助手应用版本与功能列表来自 ping 元数据。
@@ -317,7 +320,17 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
         }
       }
 
-      const script = this.buildInstallScript(exe, singboxPath, confDir, token);
+      // pins（SecAudit H1）：install-mihomo 的授权锚点，装/修时用当前 app manifest 刷新，经 UAC 脚本拷入 SYSTEM 侧。
+      const pinsTmp = path.join(
+        os.tmpdir(),
+        `shadowvpn-core-pins-${randomBytes(6).toString('hex')}.json`
+      );
+      // 现役核目录（userData/core_update）：在线更新的核不在 manifest，并入防 helper 升级后 install-mihomo 回滚被拒。
+      fs.writeFileSync(pinsTmp, corePinsJson(path.dirname(singboxPath)), {
+        mode: 0o600,
+        flag: 'wx',
+      });
+      const script = this.buildInstallScript(exe, singboxPath, confDir, token, pinsTmp);
       const result = await this.runElevatedPowerShell(script);
       if (!result.success) {
         return { success: false, error: result.error, status: await this.computeStatus() };
@@ -417,7 +430,8 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     exe: string,
     singboxPath: string,
     confDir: string,
-    token: string
+    token: string,
+    pinsSource: string
   ): string {
     // 外置 helper.exe 到 ProgramData（根因修复）：旧实现把服务 binPath 指向 **app 目录内**的 helper.exe，致
     //   ① app 更新：NSIS 覆盖被「正在运行的服务锁定」的 helper.exe → 占用失败/残留；
@@ -433,13 +447,15 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
     // 退化为字面引号 → 含空格安装路径（默认 C:\Program Files\暗影VPN）下 argv 碎裂、flag 值带字面引号 → 服务侧
     // singboxBin/confDir/supportDir 全污染（isLockedSingbox/cfgAllowed/tokenValue 全失效）。
     // 注：binPath 指向 ProgramData 外置副本（$helperDst，无空格）；--singbox 仍可能含空格（app 安装目录）→ 仍需真双引号。
-    const binPath = `"${helperDst}" --singbox "${singboxPath}" --confdir "${confDir}" --support "${SUPPORT_DIR}"`;
+    const binPath = `"${helperDst}" --singbox "${singboxPath}" --confdir "${confDir}" --support "${SUPPORT_DIR}" --pins "${PINS_FILE}"`;
     const tokenFile = path.join(SUPPORT_DIR, 'helper.token');
     return [
       `$support = '${this.psq(SUPPORT_DIR)}'`,
       `$tokenFile = '${this.psq(tokenFile)}'`,
       `$helperSrc = '${this.psq(exe)}'`,
       `$helperDst = '${this.psq(helperDst)}'`,
+      `$pinsSrc = '${this.psq(pinsSource)}'`,
+      `$pinsDst = '${this.psq(PINS_FILE)}'`,
       `$bp = '${this.psq(binPath)}'`,
       'New-Item -ItemType Directory -Force -Path $support | Out-Null',
       // 先锁**目录**ACL（防本地提权 + 闭 token TOCTOU）：ProgramData 默认 ACL 经继承给 Users「创建文件」+ 父级
@@ -458,6 +474,9 @@ export class WindowsServiceHelper implements IPrivilegedHelper {
       // SYSTEM/Admin 全权即可：SYSTEM 可读（服务鉴权用）、Admin 可写（**重装可覆盖**）。刻意不再单独给 token 上「只读」
       // ACL——只读对机密性零增益（Users 已被目录挡死），却会令重装时 Set-Content 覆盖被拒（即上面那个真机根因）。
       `Set-Content -Path $tokenFile -Value '${this.psq(token)}' -NoNewline -Encoding ascii`,
+      // pins 白名单（SecAudit H1）：install-mihomo 的写入授权锚点，落已锁 ACL 的 $support → 出生即 SYSTEM/Admin 私有。
+      // 装/修时用当前 app manifest 刷新（让新版 app 能带新核 pin）。
+      'Copy-Item -LiteralPath $pinsSrc -Destination $pinsDst -Force',
       // 幂等重装：停 + 删旧服务（按名）
       `& '${system32('sc.exe')}' stop ${SERVICE_NAME} 2>$null | Out-Null`,
       `& '${system32('sc.exe')}' delete ${SERVICE_NAME} 2>$null | Out-Null`,

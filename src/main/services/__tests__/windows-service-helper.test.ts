@@ -59,7 +59,8 @@ describe('WindowsServiceHelper', () => {
         'C:\\Program Files\\暗影VPN\\com.dsanying.shadowvpn.helper.exe',
         'C:\\Program Files\\暗影VPN\\sing-box.exe',
         'C:\\Users\\doveh\\AppData\\Roaming\\暗影VPN',
-        'deadbeefdeadbeef'
+        'deadbeefdeadbeef',
+        'C:\\Users\\doveh\\AppData\\Local\\Temp\\shadowvpn-core-pins-test.json'
       );
       // New-Service（非 sc create binPath=）：BinaryPathName 单一字符串直达 CreateService，绕开 CommandLineToArgvW 碎裂
       expect(script).toContain('New-Service -Name ShadowVPNHelper -BinaryPathName $bp');

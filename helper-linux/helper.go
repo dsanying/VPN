@@ -36,6 +36,9 @@ var (
 	sockPath string // 监听的 unix socket 路径
 	authFile string // 授权 uid 列表文件（root 写；每行一个十进制 uid）
 	coreDir  string // root-owned 受管核目录（只跑/只写此目录内的 sing-box，锁定）
+	pinsPath string // 安装包内核摘要白名单（install-core/install-mihomo 的写入授权锚点，root-owned）
+
+	corePins *helperrpc.CorePins // 启动时从 pinsPath 加载；nil/加载失败 = 拒绝一切安装（fail-closed）
 
 	mu           sync.Mutex
 	child        *exec.Cmd
@@ -147,8 +150,13 @@ func installCore(srcDir, wantHash string) string {
 		return "ERR read-singbox " + err.Error()
 	}
 	sum := sha256.Sum256(sbData)
-	if !strings.EqualFold(hex.EncodeToString(sum[:]), wantHash) {
+	actualHex := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(actualHex, wantHash) {
 		return "ERR hash-mismatch"
+	}
+	// pin 白名单（SecAudit H1）：授权只认安装包锚定的 pins，fail-closed。
+	if !corePins.Allows("sing-box", actualHex) {
+		return "ERR pin-mismatch"
 	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
@@ -348,8 +356,13 @@ func executeCommand(ctx context.Context, cmd string, args *helperrpc.Arguments) 
 			fmt.Fprintln(conn, "ERR root-required")
 			return
 		}
-		if err := helperrpc.InstallMihomo(coreBin(), args.Next(), args.Next()); err != nil {
-			fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+		err := helperrpc.InstallMihomo(coreBin(), args.Next(), args.Next(), corePins)
+		if err != nil {
+			if err == helperrpc.ErrPinMismatch {
+				fmt.Fprintln(conn, "ERR pin-mismatch")
+			} else {
+				fmt.Fprintf(conn, "ERR install-mihomo %v\n", err)
+			}
 			return
 		}
 		fmt.Fprintln(conn, "OK installed")

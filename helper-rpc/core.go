@@ -18,8 +18,13 @@ func MihomoPath(legacyBinary string) string {
 	return filepath.Join(filepath.Dir(legacyBinary), "mihomo-runtime", name)
 }
 
+// ErrPinMismatch 表示源核摘要不在安装包 pins 白名单内（SecAudit H1 fail-closed）。
+// app 侧据此区分「校验失败」与「需更新 helper 以获取新内核 pin」。
+var ErrPinMismatch = fmt.Errorf("core digest not in pins whitelist")
+
 // InstallMihomo writes only a fixed executable location. Verified bytes are the written bytes.
-func InstallMihomo(legacyBinary, source, digest string) error {
+// pins 为 nil 时只走 hash 校验（兼容旧调用方/测试）；helper 侧恒传非 nil 白名单（fail-closed）。
+func InstallMihomo(legacyBinary, source, digest string, pins *CorePins) error {
 	if !filepath.IsAbs(legacyBinary) || len(digest) != 64 {
 		return fmt.Errorf("invalid core installation arguments")
 	}
@@ -28,8 +33,12 @@ func InstallMihomo(legacyBinary, source, digest string) error {
 		return fmt.Errorf("read core: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	if !strings.EqualFold(hex.EncodeToString(sum[:]), digest) {
+	actualHex := hex.EncodeToString(sum[:])
+	if !strings.EqualFold(actualHex, digest) {
 		return fmt.Errorf("core hash mismatch")
+	}
+	if pins != nil && !pins.Allows("mihomo", actualHex) {
+		return ErrPinMismatch
 	}
 	destination := MihomoPath(legacyBinary)
 	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {

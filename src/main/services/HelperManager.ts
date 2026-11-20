@@ -33,6 +33,7 @@ const HELPER_DEST = `/Library/PrivilegedHelperTools/${LABEL}`;
 const PLIST_PATH = `/Library/LaunchDaemons/${LABEL}.plist`;
 const SYSTEM_SUPPORT = '/Library/Application Support/ShadowVPN';
 const SOCKET_PATH = `${SYSTEM_SUPPORT}/helper.sock`;
+const CORE_PINS_DEST = `${SYSTEM_SUPPORT}/core-pins.json`;
 // 通信使用 JSON-RPC 2.0；助手应用版本与功能列表来自 ping 元数据。
 /** launchctl 加载态探测缓存 TTL：getStatus 被首页/设置页高频轮询，避免每次都 spawn launchctl。 */
 const LOADED_PROBE_TTL_MS = 10_000;
@@ -484,6 +485,13 @@ export class HelperManager implements IPrivilegedHelper {
       const hash = sha256File(path.join(srcDir, 'sing-box'));
       const resp = await this.sendCommand(['install-core', srcDir, hash], 30_000);
       if (resp.startsWith('OK')) return { ok: true };
+      // pin-mismatch（SecAudit H1 pins 白名单）：该核摘要不在 helper 的安装授权清单内——新版官方核须先更新
+      // helper 获取新 pin（重装一次密码框）；同 UID 攻击者自备的任意核同样被此码拒。
+      if (resp.includes('pin-mismatch'))
+        return {
+          ok: false,
+          error: 'pin-mismatch: 该内核不在提权助手的安装白名单内，请先更新/修复提权助手',
+        };
       return { ok: false, error: resp };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -496,7 +504,13 @@ export class HelperManager implements IPrivilegedHelper {
       if (!this.capabilities.includes('install-mihomo'))
         return { ok: false, error: '提权助手需要更新才能安装 Mihomo' };
       const resp = await this.sendCommand(['install-mihomo', source, sha256File(source)], 30_000);
-      return resp.startsWith('OK') ? { ok: true } : { ok: false, error: resp };
+      if (resp.startsWith('OK')) return { ok: true };
+      if (resp.includes('pin-mismatch'))
+        return {
+          ok: false,
+          error: 'pin-mismatch: 该 Mihomo 内核不在提权助手的安装白名单内，请先更新/修复提权助手',
+        };
+      return { ok: false, error: resp };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
@@ -556,12 +570,17 @@ export class HelperManager implements IPrivilegedHelper {
       }
 
       const confDir = getUserDataPath();
-      const staged = stageHelperInstallation(srcBinary, resourceManager.getBundledSingBoxPath());
+      const staged = stageHelperInstallation(
+        srcBinary,
+        resourceManager.getBundledSingBoxPath(),
+        resourceManager.getProtectedCoreDir()
+      );
       let result: { success: boolean; error?: string };
       try {
         const script = this.buildInstallScript(
           staged.helper,
           staged.core,
+          staged.pins,
           confDir,
           token,
           resourceManager.getProtectedCoreDir(),
@@ -857,6 +876,7 @@ export class HelperManager implements IPrivilegedHelper {
   private buildInstallScript(
     srcBinary: string,
     bundledSingbox: string,
+    pinsSource: string,
     confDir: string,
     token: string,
     coreDir: string,
@@ -876,6 +896,7 @@ export class HelperManager implements IPrivilegedHelper {
     <string>--confdir</string><string>${this.xmlEscape(confDir)}</string>
     <string>--support</string><string>${this.xmlEscape(SYSTEM_SUPPORT)}</string>
     <string>--coredir</string><string>${this.xmlEscape(coreDir)}</string>
+    <string>--pins</string><string>${this.xmlEscape(CORE_PINS_DEST)}</string>
   </array>
   <key>KeepAlive</key><true/>
   <key>RunAtLoad</key><true/>
@@ -902,6 +923,10 @@ launchctl bootout system "$PLIST" 2>/dev/null || true
 mv -f "$DEST.new" "$DEST"
 printf '%s' ${shq(token)} > "$SUPPORT/helper.token"
 chown root:wheel "$SUPPORT/helper.token"; chmod 600 "$SUPPORT/helper.token"
+# pins 白名单（SecAudit H1）：helper 对 install-core/install-mihomo 的安装授权只认此文件。
+# 拷到 root 专属位置（root:wheel 0644：helper 可读、普通用户只读不可写）——锚定后 app bundle 被同 UID
+# 攻击者改写不影响已装 pins。每次装/修 helper 都用 app 当前 manifest 刷新（让新版 app 能带新核）。
+install -o root -g wheel -m 0644 ${shq(pinsSource)} ${shq(CORE_PINS_DEST)}
 # B 块 seed：把内置内核播种进受保护目录，作为 macOS 现役核「单一稳定真相」（root owner、755 → all 读/exec，
 # 仅 root 可写）。plist 的 --singbox 锁定 $COREDIR/sing-box，故 seed 后「写/读/执行」三处路径恒一致。
 # 守卫「仅当受保护目录尚无可执行 sing-box」→ 重装/修复 helper 不覆盖用户已更新的核；v4→v5 升级时目录为空、

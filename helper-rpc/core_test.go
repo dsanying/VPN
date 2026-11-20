@@ -17,7 +17,7 @@ func TestInstallMihomoUsesVerifiedBytesAndSeparateLocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(data)
-	if err := InstallMihomo(legacy, source, hex.EncodeToString(sum[:])); err != nil {
+	if err := InstallMihomo(legacy, source, hex.EncodeToString(sum[:]), nil); err != nil {
 		t.Fatal(err)
 	}
 	actual, err := os.ReadFile(MihomoPath(legacy))
@@ -30,7 +30,7 @@ func TestInstallMihomoUsesVerifiedBytesAndSeparateLocation(t *testing.T) {
 	if err := os.WriteFile(source, []byte("replacement"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := InstallMihomo(legacy, source, hex.EncodeToString(sum[:])); err == nil {
+	if err := InstallMihomo(legacy, source, hex.EncodeToString(sum[:]), nil); err == nil {
 		t.Fatal("unverified replacement accepted")
 	}
 	actual, _ = os.ReadFile(MihomoPath(legacy))
@@ -46,5 +46,53 @@ func TestMihomoCommandPaths(t *testing.T) {
 	args := MihomoArguments(filepath.Join("user data", "config.json"))
 	if len(args) != 4 || args[0] != "-d" || args[2] != "-f" || args[3] != filepath.Join("user data", "config.json") {
 		t.Fatal(args)
+	}
+}
+
+func TestInstallMihomoPinsWhitelist(t *testing.T) {
+	directory := t.TempDir()
+	legacy := filepath.Join(directory, "core", "sing-box")
+	source := filepath.Join(directory, "fixture-core")
+	data := []byte("fictional executable")
+	if err := os.WriteFile(source, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	hexSum := hex.EncodeToString(sum[:])
+
+	// pins 不在清单 → ErrPinMismatch，且不落盘
+	pins := NewCorePins()
+	if err := InstallMihomo(legacy, source, hexSum, pins); err != ErrPinMismatch {
+		t.Fatalf("want ErrPinMismatch, got %v", err)
+	}
+	if _, err := os.Stat(MihomoPath(legacy)); !os.IsNotExist(err) {
+		t.Fatal("pin-mismatch wrote bytes anyway")
+	}
+
+	// 清单内 → 通过
+	pinsFilePath := filepath.Join(directory, "pins.json")
+	pinsJSON := `{"sing-box": [], "mihomo": ["` + hexSum + `"]}`
+	if err := os.WriteFile(pinsFilePath, []byte(pinsJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+	pins, err := LoadCorePins(pinsFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallMihomo(legacy, source, hexSum, pins); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(MihomoPath(legacy))
+	if err != nil || string(actual) != string(data) {
+		t.Fatalf("unexpected installed bytes: %v", err)
+	}
+
+	// 缺失 pins 文件 → fail-closed 空集
+	empty, err := LoadCorePins(filepath.Join(directory, "nonexistent.json"))
+	if err == nil {
+		t.Fatal("expected load error for missing file")
+	}
+	if empty.Allows("mihomo", hexSum) {
+		t.Fatal("missing pins file should not allow anything")
 	}
 }
