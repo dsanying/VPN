@@ -45,19 +45,19 @@ describe('ProxyManager.isRemoteRuleSetReachable（HEAD 预检 + 缓存）', () =
   it('200 → true 且缓存（6h 内再调不重发 https）', async () => {
     setupMock(200);
     const svc = makeSvc();
-    expect(await svc.isRemoteRuleSetReachable('https://x/a.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/a.srs')).toBe(true);
     expect(https.request).toHaveBeenCalledTimes(1);
     // 缓存命中：不再发请求
-    expect(await svc.isRemoteRuleSetReachable('https://x/a.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/a.srs')).toBe(true);
     expect(https.request).toHaveBeenCalledTimes(1);
   });
 
   it('404 → false 且缓存（确定缺失，30min 内不重发）', async () => {
     setupMock(404);
     const svc = makeSvc();
-    expect(await svc.isRemoteRuleSetReachable('https://x/b.srs')).toBe(false);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/b.srs')).toBe(false);
     expect(https.request).toHaveBeenCalledTimes(1);
-    expect(await svc.isRemoteRuleSetReachable('https://x/b.srs')).toBe(false);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/b.srs')).toBe(false);
     expect(https.request).toHaveBeenCalledTimes(1);
   });
 
@@ -65,8 +65,8 @@ describe('ProxyManager.isRemoteRuleSetReachable（HEAD 预检 + 缓存）', () =
     for (const code of [403, 410]) {
       setupMock(code);
       const svc = makeSvc();
-      expect(await svc.isRemoteRuleSetReachable(`https://x/${code}.srs`)).toBe(false);
-      expect(await svc.isRemoteRuleSetReachable(`https://x/${code}.srs`)).toBe(false);
+      expect(await svc.isRemoteRuleSetReachable(`https://example.com/${code}.srs`)).toBe(false);
+      expect(await svc.isRemoteRuleSetReachable(`https://example.com/${code}.srs`)).toBe(false);
       expect(https.request).toHaveBeenCalledTimes(1);
       jest.clearAllMocks();
     }
@@ -75,32 +75,32 @@ describe('ProxyManager.isRemoteRuleSetReachable（HEAD 预检 + 缓存）', () =
   it('500 → true 但不缓存（瞬时，下次仍重发）', async () => {
     setupMock(500);
     const svc = makeSvc();
-    expect(await svc.isRemoteRuleSetReachable('https://x/c.srs')).toBe(true);
-    expect(await svc.isRemoteRuleSetReachable('https://x/c.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/c.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/c.srs')).toBe(true);
     expect(https.request).toHaveBeenCalledTimes(2); // 未缓存 → 重发
   });
 
   it('timeout → true 不缓存', async () => {
     setupMock('timeout');
     const svc = makeSvc();
-    expect(await svc.isRemoteRuleSetReachable('https://x/d.srs')).toBe(true);
-    expect(await svc.isRemoteRuleSetReachable('https://x/d.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/d.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/d.srs')).toBe(true);
     expect(https.request).toHaveBeenCalledTimes(2);
   });
 
   it('error → true 不缓存', async () => {
     setupMock('error');
     const svc = makeSvc();
-    expect(await svc.isRemoteRuleSetReachable('https://x/e.srs')).toBe(true);
-    expect(await svc.isRemoteRuleSetReachable('https://x/e.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/e.srs')).toBe(true);
+    expect(await svc.isRemoteRuleSetReachable('https://example.com/e.srs')).toBe(true);
     expect(https.request).toHaveBeenCalledTimes(2);
   });
 
   it('不同 URL 独立缓存', async () => {
     setupMock(200);
     const svc = makeSvc();
-    await svc.isRemoteRuleSetReachable('https://x/a.srs');
-    await svc.isRemoteRuleSetReachable('https://x/b.srs'); // 不同 URL
+    await svc.isRemoteRuleSetReachable('https://example.com/a.srs');
+    await svc.isRemoteRuleSetReachable('https://example.com/b.srs'); // 不同 URL
     expect(https.request).toHaveBeenCalledTimes(2); // 两个 URL 各发一次
   });
 });
