@@ -8,7 +8,7 @@
 import type { ServerConfig } from './types';
 import { isServerComplete } from './server-completeness';
 import { meshNodeCarriesFullTunnel } from './endpoint-routes';
-import { pickFallbackExit } from './direct-selection';
+import { rankExitCandidates, type ExitRankingContext } from './exit-selection';
 
 /**
  * 兜底出口候选可用性谓词：配置齐备（isServerComplete，内含 !isMeshNodeUnroutable）+ 承载全出网流量
@@ -19,15 +19,13 @@ export function isViableFallbackExit(server: ServerConfig): boolean {
 }
 
 /**
- * 从 servers（按列表序传入）选可用兜底出口 id：先过 isViableFallbackExit，再 pickFallbackExit（最快正延迟/无则首个）。
- * 空候选 → null（调用方置 DIRECT 哨兵 = 显式可见直连，非静默泄漏）。latencyMap 可选（main 侧无会话延迟 → {}）。
+ * 从 servers（按列表序传入）选可用兜底出口 id：先过 isViableFallbackExit，再按
+ * rankExitCandidates 排序取首（同订阅 > 同地区 > 最低延迟 > 列表序）。空候选 → null
+ * （调用方置 DIRECT 哨兵 = 显式可见直连，非静默泄漏）。context 见 exit-selection.ts。
  */
 export function pickViableFallbackExit(
   servers: ServerConfig[],
-  latencyMap: Record<string, number> = {}
+  context: ExitRankingContext = {}
 ): string | null {
-  return pickFallbackExit(
-    servers.filter(isViableFallbackExit).map((s) => s.id),
-    latencyMap
-  );
+  return rankExitCandidates(servers.filter(isViableFallbackExit), context)[0]?.id ?? null;
 }

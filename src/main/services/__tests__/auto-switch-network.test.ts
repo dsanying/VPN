@@ -5,6 +5,9 @@ const node = (id: string, protocol = 'vless') => ({
   address: 'example.com',
   port: 443,
   protocol,
+  // isViableFallbackExit 候选过滤（新引入，与生产同真值）要求协议必填齐备。
+  ...(protocol === 'vless' || protocol === 'vmess' ? { uuid: `${id}-uuid` } : {}),
+  ...(protocol === 'hysteria2' ? { password: `${id}-pass` } : {}),
 });
 function harness() {
   let config = {

@@ -44,7 +44,13 @@ describe('WindowsServiceHelper', () => {
 
   describe('提权脚本生成', () => {
     const helper = new WindowsServiceHelper() as unknown as {
-      buildInstallScript(exe: string, sb: string, conf: string, token: string): string;
+      buildInstallScript(
+        exe: string,
+        sb: string,
+        conf: string,
+        token: string,
+        pins: string
+      ): string;
       buildUninstallScript(): string;
       psq(s: string): string;
     };

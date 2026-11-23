@@ -24,6 +24,11 @@ import type { ProxyManager } from './ProxyManager';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { ProxyErrorCode } from '../../shared/types';
 import type { SpeedTestService } from './SpeedTestService';
+import type { ServerConfig } from '../../shared/types';
+import type { NodeMeasurements } from './NodeMeasurementStore';
+import { rankExitCandidates } from '../../shared/exit-selection';
+import { nodeRegionCode } from '../../shared/node-identity';
+import { isViableFallbackExit } from '../../shared/fallback-exit';
 
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30 秒检测一次
 const MAX_CONSECUTIVE_FAILURES = 3; // 连续 3 次失败触发换节点
@@ -48,7 +53,11 @@ export class AutoSwitchService extends EventEmitter {
     private readonly proxyManager: ProxyManager,
     private readonly logManager: LogManager,
     private readonly getMainWindow: () => BrowserWindow | null,
-    private readonly speedTestService: SpeedTestService
+    private readonly speedTestService: SpeedTestService,
+    /** 测速记录读取（延迟 + 探测地区），注入防跨层 import；缺省 → 只按新鲜测速排名。 */
+    private readonly getMeasurements: (
+      servers: ServerConfig[]
+    ) => Promise<NodeMeasurements | undefined> = async () => undefined
   ) {
     super();
   }
@@ -224,8 +233,12 @@ export class AutoSwitchService extends EventEmitter {
       const config = await this.configManager.loadConfig();
       const currentId = config.selectedServerId;
 
-      // 过滤出其他可用节点（排除当前节点）
-      const candidates = config.servers.filter((s) => s.id !== currentId);
+      const current = config.servers.find((s) => s.id === currentId);
+      // 候选 = 其他节点中经完整出口校验者（isViableFallbackExit：配置齐备 + 承载全出网流量，
+      // 排除 subnet-only 组网节点——原代码无此过滤，可能切到不承载公网流量的节点）。
+      const candidates = config.servers.filter(
+        (s) => s.id !== currentId && isViableFallbackExit(s)
+      );
       if (candidates.length === 0) {
         this.logManager.addLog('warn', '没有其他可用节点，无法自动切换', 'AutoSwitch');
         return;
@@ -237,12 +250,19 @@ export class AutoSwitchService extends EventEmitter {
         'AutoSwitch'
       );
 
-      const measured = await this.speedTestService.testAllServers(
-        candidates,
-        undefined,
-        undefined,
-        DEFAULT_SPEED_TEST_URL
-      );
+      // 统一出口排名（exit-selection）：同订阅 > 同地区 > 新鲜延迟。测量记录一并提供候选
+      // 与上一出口（被测失败的当前节点）的地区证据；读取失败 → 空记录，退化为纯延迟排名。
+      const [measured, records] = await Promise.all([
+        this.speedTestService.testAllServers(
+          candidates,
+          undefined,
+          undefined,
+          DEFAULT_SPEED_TEST_URL
+        ),
+        this.getMeasurements(current ? [...candidates, current] : candidates).catch(
+          () => undefined
+        ),
+      ]);
       if (
         !this.enabled ||
         generation !== this.generation ||
@@ -252,28 +272,32 @@ export class AutoSwitchService extends EventEmitter {
         return;
       const latest = await this.configManager.loadConfig();
       if (latest.selectedServerId !== currentId || latest.proxyMode === 'direct') return;
-      const available = candidates
-        .map((server) => ({ server, latency: measured.results.get(server.id) }))
-        .filter(
-          (r): r is { server: (typeof candidates)[number]; latency: number } =>
-            typeof r.latency === 'number' && r.latency >= 0
-        )
-        .sort((a, b) => a.latency - b.latency);
+      const reachable = candidates.filter((s) => {
+        const l = measured.results.get(s.id);
+        return typeof l === 'number' && l >= 0;
+      });
+      const ranked = rankExitCandidates(reachable, {
+        previousSubscriptionId: current?.subscriptionId ?? undefined,
+        previousRegionCode: currentId ? nodeRegionCode(records?.[currentId]?.detail) : undefined,
+        latencyMap: Object.fromEntries(measured.results.entries() as Iterable<[string, number]>),
+        regionMap: Object.fromEntries(
+          Object.entries(records ?? {})
+            .filter(([, r]) => r.detail)
+            .map(([id, r]) => [id, r.detail!])
+        ),
+      });
 
-      if (available.length === 0) {
+      if (ranked.length === 0) {
         this.logManager.addLog('warn', '所有候选节点均不可达，无法自动切换', 'AutoSwitch');
         return;
       }
 
-      const best = available[0];
-      this.logManager.addLog(
-        'info',
-        `选中最优节点: ${best.server.name} (${best.latency}ms)`,
-        'AutoSwitch'
-      );
+      const best = ranked[0];
+      const bestLatency = measured.results.get(best.id)!;
+      this.logManager.addLog('info', `选中最优节点: ${best.name} (${bestLatency}ms)`, 'AutoSwitch');
 
       // 切换配置（先落盘，保证 UI/重启都用新选中节点）
-      const newConfig = { ...latest, selectedServerId: best.server.id };
+      const newConfig = { ...latest, selectedServerId: best.id };
       await this.configManager.saveConfig(newConfig);
 
       // 优先经 clash_api 热切换（switchMode 内部 canHotSwitch，失败/不适用自动退回重启）
@@ -281,7 +305,7 @@ export class AutoSwitchService extends EventEmitter {
         await this.proxyManager.switchMode(newConfig);
       } catch (error) {
         const afterFailure = await this.configManager.loadConfig();
-        if (afterFailure.selectedServerId === best.server.id) {
+        if (afterFailure.selectedServerId === best.id) {
           await this.configManager.saveConfig({ ...afterFailure, selectedServerId: currentId });
         }
         throw error;
@@ -293,15 +317,15 @@ export class AutoSwitchService extends EventEmitter {
         this.breakerTrippedAt = Date.now();
       }
 
-      this.logManager.addLog('info', `✅ 自动换节点成功: ${best.server.name}`, 'AutoSwitch');
+      this.logManager.addLog('info', `✅ 自动换节点成功: ${best.name}`, 'AutoSwitch');
 
       // 通知渲染进程
       const mainWindow = this.getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
         mainWindow.webContents.send(IPC_CHANNELS.EVENT_AUTO_NODE_SWITCHED, {
           reason,
-          newServerName: best.server.name,
-          latency: best.latency,
+          newServerName: best.name,
+          latency: bestLatency,
         });
       }
     } catch (err) {

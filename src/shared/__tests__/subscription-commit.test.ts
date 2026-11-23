@@ -67,6 +67,69 @@ describe('shared subscription commit semantics', () => {
     expect(result.result.deletedServers).toBe(1);
     expect(result.restartRequired).toBe(false);
   });
+  it('prefers same-subscription candidates over unrelated manual nodes when reselecting', () => {
+    const config = fixture();
+    const manual: ServerConfig = { ...node('manual-campus'), subscriptionId: undefined };
+    config.servers = [manual, node('old'), node('peer')];
+    config.selectedServerId = 'old';
+    commitSubscriptionResult(config, source, { servers: [node('peer')] }, 'now');
+    expect(config.selectedServerId).toBe('peer');
+  });
+  it('ranks a same-region peer above a cross-region one when reselecting', () => {
+    const config = fixture();
+    config.servers = [node('old'), node('jp-peer'), node('us-peer')];
+    config.selectedServerId = 'old';
+    const region = (code: string) => ({
+      exit: { ip: '1.1.1.1', countryCode: code, measuredAt: 1, provider: 'test' },
+    });
+    commitSubscriptionResult(
+      config,
+      source,
+      { servers: [node('us-peer'), node('jp-peer')] },
+      'now',
+      undefined,
+      undefined,
+      {
+        latencyMap: { 'us-peer': 50, 'jp-peer': 300 },
+        regionMap: {
+          old: region('JP'),
+          'jp-peer': region('JP'),
+          'us-peer': region('US'),
+        },
+      }
+    );
+    expect(config.selectedServerId).toBe('jp-peer');
+  });
+  it('cross-region fallback stays inside the subscription over an unrelated manual node', () => {
+    const config = fixture();
+    const manual: ServerConfig = {
+      ...node('manual'),
+      subscriptionId: undefined,
+      id: 'manual-node',
+      name: 'manual-node',
+    };
+    config.servers = [manual, node('old'), node('remote-peer')];
+    config.selectedServerId = 'old';
+    const region = (code: string) => ({
+      exit: { ip: '1.1.1.1', countryCode: code, measuredAt: 1, provider: 'test' },
+    });
+    commitSubscriptionResult(
+      config,
+      source,
+      { servers: [node('remote-peer')] },
+      'now',
+      undefined,
+      undefined,
+      {
+        regionMap: {
+          old: region('JP'),
+          'manual-node': region('JP'),
+          'remote-peer': region('BR'),
+        },
+      }
+    );
+    expect(config.selectedServerId).toBe('remote-peer');
+  });
   it('304 updates metadata without changing nodes or dropping validators', () => {
     const config = fixture();
     const before = config.servers;

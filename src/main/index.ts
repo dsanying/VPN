@@ -2012,7 +2012,10 @@ if (gotTheLock) {
       proxyManager,
       logManager,
       () => mainWindow,
-      speedTestService
+      speedTestService,
+      (servers) =>
+        getNodeMeasurementStore(configManager)?.get(servers, DEFAULT_SPEED_TEST_URL) ??
+        Promise.resolve(undefined)
     );
     {
       const cfg = await configManager.loadConfig().catch(() => null);
@@ -2352,7 +2355,8 @@ if (gotTheLock) {
       subscriptionService,
       configManager,
       (cfg) => proxyManager?.applyConfigForcingRestart(cfg),
-      () => proxyManager?.getProbePorts()?.direct ?? null
+      () => proxyManager?.getProbePorts()?.direct ?? null,
+      logManager
     );
 
     // 注册备份与恢复处理器（恢复后自动准备实际引用的分流数据）

@@ -21,7 +21,9 @@ import {
   loadTailscaleLoginStatesFromCache,
   useTailscaleLoginCacheStore,
 } from './use-tailscale-login-cache-store';
-import { pickFallbackExit, isDirectSelection } from '@shared/direct-selection';
+import { isDirectSelection } from '@shared/direct-selection';
+import { rankExitCandidates } from '@shared/exit-selection';
+import { nodeRegionCode } from '@shared/node-identity';
 import { isServerComplete } from '@shared/server-completeness';
 import { meshNodeCarriesFullTunnel } from '@shared/endpoint-routes';
 import {
@@ -121,6 +123,36 @@ function fallbackExitCandidateIds(
         meshNodeCarriesFullTunnel(s)
     )
     .map((s) => s.id);
+}
+
+/**
+ * 删选中节点的兜底出口（统一排名，exit-selection）：候选集合不变（D4 三条件），
+ * 排序 = 同订阅 > 同地区（probeDetails 实测出口地区，不按名猜）> 最快延迟 > 列表序。
+ * 与后端 commitSubscriptionResult 下架重选、AutoSwitchService 故障切换共用同一排序真值。
+ */
+function rankedFallbackExit(
+  cfg: UserConfig,
+  excluded: ReadonlySet<string>,
+  st: {
+    pendingChanges: { added: string[] };
+    latencyMap: Record<string, number>;
+    probeDetails: Record<string, NodeProbeDetails>;
+  }
+): string | null {
+  const candidateIds = new Set(
+    fallbackExitCandidateIds(cfg.servers, excluded, st.pendingChanges.added)
+  );
+  const previous = cfg.servers.find((s) => s.id === cfg.selectedServerId);
+  const candidates = cfg.servers.filter((s) => candidateIds.has(s.id));
+  const ranked = rankExitCandidates(candidates, {
+    previousSubscriptionId: previous?.subscriptionId ?? undefined,
+    previousRegionCode: cfg.selectedServerId
+      ? nodeRegionCode(st.probeDetails[cfg.selectedServerId])
+      : undefined,
+    latencyMap: st.latencyMap,
+    regionMap: st.probeDetails,
+  });
+  return ranked[0]?.id ?? null;
 }
 
 interface ConnectionStatus {
@@ -826,10 +858,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const cfg = st.config;
       const fallback =
         cfg && cfg.selectedServerId === serverId
-          ? pickFallbackExit(
-              fallbackExitCandidateIds(cfg.servers, new Set([serverId]), st.pendingChanges.added),
-              st.latencyMap
-            )
+          ? rankedFallbackExit(cfg, new Set([serverId]), st)
           : undefined;
       await api.server.delete(serverId, fallback);
       // 清该节点 Tailscale 登录态缓存（仅 TS 节点有此缓存，非 TS 为 no-op）：免删-增循环陈旧缓存累积，
@@ -862,10 +891,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const delSet = new Set(serverIds);
       const fallback =
         cfg && cfg.selectedServerId && delSet.has(cfg.selectedServerId)
-          ? pickFallbackExit(
-              fallbackExitCandidateIds(cfg.servers, delSet, st.pendingChanges.added),
-              st.latencyMap
-            )
+          ? rankedFallbackExit(cfg, delSet, st)
           : undefined;
       const count = await api.server.deleteBatch(serverIds, fallback);
       // 同 deleteServer：批量清各节点 Tailscale 登录态缓存（非 TS 为 no-op）。

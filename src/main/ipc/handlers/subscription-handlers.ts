@@ -12,6 +12,9 @@ import { registerIpcHandler } from '../ipc-handler';
 import { SubscriptionService, SubscriptionUpdateResult } from '../../services/SubscriptionService';
 import type { SubscriptionPreviewResult } from '../../../shared/subscription-preview';
 import { ConfigManager } from '../../services/ConfigManager';
+import type { LogManager } from '../../services/LogManager';
+import { getNodeMeasurementStore } from '../../services/speed-test-runner';
+import { DEFAULT_SPEED_TEST_URL } from '../../../shared/speed-test';
 import { commitSubscriptionResult } from '../../../shared/subscription-commit';
 import { mt } from '../../i18n';
 import { randomUUID } from 'crypto';
@@ -24,7 +27,8 @@ export function registerSubscriptionHandlers(
   subscriptionService: SubscriptionService,
   configManager: ConfigManager,
   applyConfigForcingRestart?: (config: UserConfig) => void,
-  directPortProvider: () => number | null = () => null
+  directPortProvider: () => number | null = () => null,
+  logManager?: LogManager
 ): void {
   const measurements =
     typeof configManager.getConfigPath === 'function'
@@ -184,14 +188,41 @@ export function registerSubscriptionHandlers(
           config = fresh;
           subscription = live;
 
+          const prevSelectedId = config.selectedServerId;
+          // 统一出口重选上下文：把已测延迟/地区记录喂给同订阅>同地区>延迟排序；
+          // store 失败降级为无测量兜底（列表序），不阻断订阅提交。
+          const records = await getNodeMeasurementStore(configManager)
+            ?.get(config.servers, DEFAULT_SPEED_TEST_URL)
+            .catch(() => undefined);
           const committed = commitSubscriptionResult(
             config,
             subscription,
             result,
             new Date().toISOString(),
             SubscriptionService.reconcileServers,
-            SubscriptionService.leftoverToKeep
+            SubscriptionService.leftoverToKeep,
+            {
+              latencyMap: Object.fromEntries(
+                Object.entries(records ?? {}).map(([id, r]) => [id, r.latency])
+              ),
+              regionMap: Object.fromEntries(
+                Object.entries(records ?? {})
+                  .filter(([, r]) => r.detail)
+                  .map(([id, r]) => [id, r.detail!])
+              ),
+            }
           );
+          if (config.selectedServerId !== prevSelectedId) {
+            const nextName =
+              config.servers.find((s) => s.id === config.selectedServerId)?.name ??
+              String(config.selectedServerId);
+            logManager?.addLog(
+              'warn',
+              `订阅 ${subscription.name ?? subscriptionId} 更新下架了选中节点，已自动重选为 ${nextName}` +
+                `（deleted=${committed.result.deletedServers}）`,
+              'Subscription'
+            );
+          }
           await configManager.saveConfig(config);
           ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_CONFIG_CHANGED, {
             newValue: { ...config, privacyPassword: undefined },
