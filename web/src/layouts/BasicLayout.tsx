@@ -81,50 +81,47 @@ function Preferences({ compact, items = [] }: { compact?: boolean; items?: MenuP
       {items?.length ? (
         <SidebarMenu mode="inline" inlineCollapsed={compact} selectable={false} items={items} />
       ) : null}
-      {ready.map((item) => {
-        const restartLabel = t(
-          clientHost().bundledCore
-            ? 'vpn.installSoftwareUpdate'
-            : item.restart === 'software'
-              ? 'vpn.restartSoftwareUpdate'
-              : 'vpn.restartProxyUpdate'
-        );
-        return (
-          <Tooltip key={item.kind} title={compact ? restartLabel : undefined}>
-            <Button
-              type="primary"
-              ghost
-              block
-              size="small"
-              className="ds-basic-layout__sider-update"
-              aria-label={restartLabel}
-              icon={<SyncOutlined aria-hidden />}
-              loading={busy === item.kind}
-              disabled={busy !== null && busy !== item.kind}
-              onClick={() => {
-                setBusy(item.kind);
-                void api.update
-                  .apply(item.kind)
-                  .then((result) => {
-                    if (!result.success) throw new Error(result.error);
-                    // Native Android installation is completed by the system, after its visible confirmation.
-                    if (!result.installationRequested && !result.permissionRequired)
-                      notifyActionSuccess('update');
-                  })
-                  .catch((error) => notifyActionFailed('update', error))
-                  .finally(() => setBusy(null));
-              }}
-            >
-              {compact ? null : (
-                <span>
-                  {t('vpn.siderRestartUpdate')}
-                  {item.version ? ` · ${item.version}` : ''}
-                </span>
-              )}
-            </Button>
-          </Tooltip>
-        );
-      })}
+      {pending.length > 0
+        ? (() => {
+            const item = pending[0];
+            const restartLabel = t(
+              clientHost().bundledCore ? 'vpn.installSoftwareUpdate' : 'vpn.restartSoftwareUpdate'
+            );
+            return (
+              <Tooltip title={compact ? restartLabel : undefined}>
+                <Button
+                  type="text"
+                  size="small"
+                  className="ds-basic-layout__sider-update"
+                  aria-label={restartLabel}
+                  icon={<SyncOutlined aria-hidden />}
+                  loading={busy === item.kind}
+                  disabled={busy !== null && busy !== item.kind}
+                  onClick={() => {
+                    setBusy(item.kind);
+                    void api.update
+                      .apply(item.kind)
+                      .then((result) => {
+                        if (!result.success) throw new Error(result.error);
+                        // Native Android installation is completed by the system, after its visible confirmation.
+                        if (!result.installationRequested && !result.permissionRequired)
+                          notifyActionSuccess('update');
+                      })
+                      .catch((error) => notifyActionFailed('update', error))
+                      .finally(() => setBusy(null));
+                  }}
+                >
+                  {compact ? null : (
+                    <span>
+                      {t('vpn.siderRestartUpdate')}
+                      {item.version ? ` · ${item.version}` : ''}
+                    </span>
+                  )}
+                </Button>
+              </Tooltip>
+            );
+          })()
+        : null}
       <div className="ds-basic-layout__sider-prefs">
         <IconButton
           type="text"
