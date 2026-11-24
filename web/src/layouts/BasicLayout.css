@@ -60,13 +60,16 @@
 .ds-basic-layout__sider-update {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 14px;
   margin: 0 8px 6px;
   width: calc(100% - 16px);
   height: 32px;
+  min-width: 0;
   justify-content: flex-start;
-  color: var(--ds-color-primary-text);
+  /* 与上方菜单项逐列对齐（图标列 x=32、文字列 x=62）；ant 文本按钮自带 1px 透明边框，左 padding 23px 补偿 */
+  padding-inline: 23px 16px;
   border-radius: 6px;
+  box-sizing: border-box;
 }
 .ds-basic-layout__sider-update:hover {
   color: var(--ds-color-primary);
@@ -74,6 +77,8 @@
 }
 .ds-basic-layout__sider-update .ant-btn-icon {
   flex: none;
+  width: 16px;
+  justify-content: center;
 }
 .ds-basic-layout__sider-update > span:not(.ant-btn-icon) {
   overflow: hidden;
@@ -88,6 +93,12 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  /* 与更新行/菜单项同一边缘：外距 8px + 内边距 24px，按钮左缘对齐菜单图标列 32px */
+  margin-inline: 8px;
+  padding-inline: 24px 8px;
+}
+
+.ant-layout-sider-collapsed .ds-basic-layout__sider-prefs {
   padding-inline: 8px;
 }
 .ds-basic-layout__sider-prefs > .ant-btn {
