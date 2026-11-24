@@ -37,7 +37,7 @@ A cross-platform proxy / VPN client for macOS, Windows, Linux, and Android. sing
 
 ## Routing modes
 
-- **Takeover**: system proxy (default, no system DNS changes); TUN virtual adapter engages on demand, or can be forced on; system DNS takeover under TUN is a separate toggle
+- **Takeover**: a TUN virtual adapter takes over automatically (system DNS is taken over while connected and restored on stop/exit/crash)
 - **Smart split**: auto-detects the egress IP country/region — same-region destinations go direct, the rest proxied; falls back to proxy when detection fails
 - **Per-app routing**: proxy / direct / block / pin a node per installed app or process
 - **Custom rules**: domain, IP CIDR and GeoIP rules with hot reload (no reconnect)

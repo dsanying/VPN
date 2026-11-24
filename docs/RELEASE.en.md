@@ -2,12 +2,12 @@
 
 [简体中文](RELEASE.md) · **English**
 
-This document describes how to ship a new ShadowVPN release. The single trigger for a release is **pushing a `v*` tag**: CI (`.github/workflows/release.yml`) then builds on three platforms and creates the GitHub Release automatically. Local full packaging is for verification / offline builds only and is not part of the release path.
+This document describes how to ship a new ShadowVPN release. The single trigger for a release is **pushing a `v*` tag**: CI (`.github/workflows/release.yml`) then builds all platform artifacts and creates the GitHub Release automatically. Before pushing the tag, native acceptance evidence for the current commit must already exist (run the same workflow via `workflow_dispatch` to produce candidate artifacts, then collect them into `artifacts/client-platform-evidence.json`; see the platform/release spec). Local full packaging is for verification / offline builds only and is not part of the release path.
 
 ## Prerequisites
 
 1. **Push access** to the repo (to push tags to `origin`).
-2. **Node.js 26** — match CI (`actions/setup-node@v4`, `node-version: 26`) to avoid local/CI drift.
+2. **Node.js 26** — match CI (`actions/setup-node@v7`, `node-version: 26`) to avoid local/CI drift.
 3. **GitHub CLI (optional)** — only for manually inspecting/editing a published Release. The standard flow lets CI create the Release with the built-in `GITHUB_TOKEN`; no local `gh` is required.
 4. **Go (only for building the helper locally)** — `build:helper` compiles the macOS/Windows privileged helper on the fly (the binaries are not committed). CI installs Go on the mac/win runners automatically; you only need Go locally when running `npm run dist:mac` / `dist:win`.
 
@@ -15,15 +15,15 @@ This document describes how to ship a new ShadowVPN release. The single trigger 
 
 1. **Bump the version**
 
-   Edit `version` in `package.json` (currently `4.1.3`):
+   Edit `version` in `package.json` (e.g. `0.4.1`):
    ```json
-   { "version": "4.1.4" }
+   { "version": "0.4.2" }
    ```
 
 2. **Commit and push**
    ```bash
    git add package.json
-   git commit -m "chore: bump version to 4.1.4"
+   git commit -m "chore: bump version to 0.4.2"
    git push
    ```
 
@@ -40,7 +40,7 @@ This document describes how to ship a new ShadowVPN release. The single trigger 
 4. **CI builds and publishes automatically**
 
    On a `v*` tag push, `release.yml`:
-   - runs `npm run package:<platform>` in parallel on `windows-2022` / `macos-14` / `ubuntu-latest`;
+   - runs `npm run package:<platform>` in parallel on `windows-2022` / `macos-15` / `ubuntu-latest`;
    - fetches the core and dashboard at build time (see "Build-time external artifacts"); on macOS it also packs both the arm64 and x64 `.app` into DMGs;
    - collects each platform's artifacts, generates Release Notes, and creates the GitHub Release via `softprops/action-gh-release`, uploading all installers.
 
@@ -77,7 +77,8 @@ The core and dashboard are **no longer committed to the repo**; they are fetched
 |----------|-----------|------|
 | Windows | NSIS installer + portable | x64 |
 | macOS | DMG | arm64, x64 |
-| Linux | AppImage + deb | x64 |
+| Android | signed APK | arm64 |
+| Linux (local packaging only, not in Release) | AppImage + deb | x64 |
 
 > The privileged helper binary is compiled by `build:helper` (Go) into the mac/win packages; CI installs Go on the mac/win runners. Missing Go → "helper binary missing" at install time.
 
@@ -89,7 +90,7 @@ Follow [Semantic Versioning](https://semver.org/):
 - **MINOR** — backward-compatible features
 - **PATCH** — backward-compatible fixes
 
-Tags look like `v4.1.4` (`push-release.js` adds the `v` prefix automatically — do not put `v` in the `version` field).
+Tags look like `v0.4.2` (`push-release.js` adds the `v` prefix automatically — do not put `v` in the `version` field).
 
 ## Troubleshooting
 
@@ -102,8 +103,8 @@ Tags look like `v4.1.4` (`push-release.js` adds the `v` prefix automatically —
 
 ## CI/CD
 
-- **`.github/workflows/build.yml`** — build verification on branch pushes.
-- **`.github/workflows/release.yml`** — packages on three platforms + auto-creates the Release on a `v*` tag push.
+- **`.github/workflows/ci.yml`** — build and test verification on branch pushes; **`.github/workflows/package.yml`** — packaging smoke tests.
+- **`.github/workflows/release.yml`** — packages all platforms + auto-creates the Release on a `v*` tag push.
 - Env: CI uses the built-in `GITHUB_TOKEN` (`permissions: contents: write`) to create the Release; the electron binary is pulled via an npmmirror mirror for speed.
 - To change CI: edit the files under `.github/workflows/`.
 

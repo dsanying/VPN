@@ -2,12 +2,12 @@
 
 **简体中文** · [English](RELEASE.en.md)
 
-本文档描述如何发布暗影VPN新版本。发布的「单一触发点」是**推送 `v*` tag**：CI（`.github/workflows/release.yml`）随后在三平台构建并自动创建 GitHub Release。本地全量打包仅用于验证/离线出包，不走发布路径。
+本文档描述如何发布暗影VPN新版本。发布的「单一触发点」是**推送 `v*` tag**：CI（`.github/workflows/release.yml`）随后构建各平台产物并自动创建 GitHub Release。推送 tag 前须已有对应当前提交的原生验收证据（先以 `workflow_dispatch` 运行同一工作流生成候选产物并归集 `artifacts/client-platform-evidence.json`，见 [规范/平台与发布.md](规范/平台与发布.md)）；本地全量打包仅用于验证/离线出包，不走发布路径。
 
 ## 前置要求
 
 1. **仓库写权限**：能向 `origin` 推送 tag。
-2. **Node.js 26**：与 CI（`actions/setup-node@v4`，`node-version: 26`）一致，避免本地/CI 行为漂移。
+2. **Node.js 26**：与 CI（`actions/setup-node@v7`，`node-version: 26`）一致，避免本地/CI 行为漂移。
 3. **GitHub CLI（可选）**：仅用于手动查看/编辑已发布 Release；标准流程由 CI 用内置 `GITHUB_TOKEN` 自动建 Release，无需本地 `gh`。
 4. **Go（仅本地打包 helper 时需要）**：`build:helper` 现编现打 macOS/Windows 提权 helper（二进制不入库）。CI 已在 mac/win runner 自动装 Go；仅当你本地 `npm run dist:mac`/`dist:win` 时才需本机有 Go。
 
@@ -15,15 +15,15 @@
 
 1. **更新版本号**
 
-   编辑 `package.json` 的 `version`（当前 `4.1.3`）：
+   编辑 `package.json` 的 `version`（例如 `0.4.1`）：
    ```json
-   { "version": "4.1.4" }
+   { "version": "0.4.2" }
    ```
 
 2. **提交并推送**
    ```bash
    git add package.json
-   git commit -m "chore: bump version to 4.1.4"
+   git commit -m "chore: bump version to 0.4.2"
    git push
    ```
 
@@ -40,7 +40,7 @@
 4. **CI 自动构建并发布**
 
    推送 `v*` tag 后，`release.yml` 自动：
-   - 在 `windows-2022` / `macos-14` / `ubuntu-latest` 三平台并行 `npm run package:<platform>`；
+   - 在 `windows-2022` / `macos-15` / `ubuntu-latest` 三平台并行 `npm run package:<platform>`；
    - 构建期拉取内核与面板（见下「构建期外部产物」），mac 额外把 arm64/x64 两份 `.app` 打成 DMG；
    - 汇总各平台产物，生成 Release Notes，经 `softprops/action-gh-release` 创建 GitHub Release 并上传全部安装包。
 
@@ -77,7 +77,8 @@ npm run dist:linux        # Linux（AppImage + deb，x64）
 |------|------|------|
 | Windows | NSIS 安装器 + portable | x64 |
 | macOS | DMG | arm64、x64 |
-| Linux | AppImage + deb | x64 |
+| Android | 签名 APK | arm64 |
+| Linux（本地打包，不进 Release） | AppImage + deb | x64 |
 
 > 提权 helper 二进制由 `build:helper`（Go）现编现打进 mac/win 包；CI 在 mac/win runner 装 Go。缺 Go → 安装时报「提权助手二进制缺失」。
 
@@ -89,7 +90,7 @@ npm run dist:linux        # Linux（AppImage + deb，x64）
 - **MINOR**：向下兼容的新功能
 - **PATCH**：向下兼容的修复
 
-tag 形如 `v4.1.4`（`push-release.js` 自动加 `v` 前缀，勿手写带 `v` 的 version）。
+tag 形如 `v0.4.2`（`push-release.js` 自动加 `v` 前缀，勿手写带 `v` 的 version）。
 
 ## 故障排除
 
@@ -102,8 +103,8 @@ tag 形如 `v4.1.4`（`push-release.js` 自动加 `v` 前缀，勿手写带 `v` 
 
 ## CI/CD 配置
 
-- **`.github/workflows/build.yml`**：推送到分支时构建校验。
-- **`.github/workflows/release.yml`**：推送 `v*` tag 时三平台打包 + 自动建 Release。
+- **`.github/workflows/ci.yml`**：分支推送时的构建与测试校验；**`.github/workflows/package.yml`**：打包冒烟。
+- **`.github/workflows/release.yml`**：推送 `v*` tag 时打包 + 自动建 Release。
 - 环境变量：CI 用内置 `GITHUB_TOKEN`（`permissions: contents: write`）创建 Release；electron 二进制走 npmmirror 镜像加速。
 - 修改 CI：编辑 `.github/workflows/` 下的文件。
 
