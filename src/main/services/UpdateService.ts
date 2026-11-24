@@ -72,6 +72,17 @@ export class UpdateService {
       throw new Error('Software update installation failed');
   }
 
+  /**
+   * 整包软件更新的「无打扰自动安装」可行性判定（index.ts 空闲自动安装闸门用）:
+   * - 已有已校验的就绪安装包;
+   * - 且不需要途中再向用户征询——Linux deb 形态安装前必经 confirmDebElevation 授权说明框,
+   *   自动路径弹出它是惊吓,故 deb 留给页脚「重启更新」手动入口;其余形态(hot-swap /
+   *   mac dmg / win nsis / AppImage)安装途中无任何交互。
+   */
+  canAutoInstallPreparedUpdate(): boolean {
+    return !!this.readyUpdate && !this.isDebUpdateForm(this.readyUpdate.filePath);
+  }
+
   confirmUpdateStartup(): void {
     if (!app.isPackaged) return;
     const token = process.argv

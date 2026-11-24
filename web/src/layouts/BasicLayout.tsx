@@ -66,13 +66,13 @@ function Preferences({ compact, items = [] }: { compact?: boolean; items?: MenuP
   const mode = useThemeStore((state) => state.mode);
   const toggle = useThemeStore((state) => state.toggle);
   const language = i18n.language === 'en-US' ? 'zh-CN' : 'en-US';
-  // 侧边栏左下角只保留「软件更新」重启入口（需退出 App，必须手动）；core/data 等非软件更新
-  // 由 GlobalUpdateNotice 自动应用（自动重启代理），不再占用常驻按钮。更新就绪的兜底手动入口
-  // 在设置页 GlobalUpdatePanel。
-  // selector 必须返回稳定引用：zustand v5 走 useSyncExternalStore，这里若 .filter() 会在
-  // 每次 getSnapshot 产生新数组 → 「getSnapshot should be cached」无限重渲染（整页抽搐级）。
+  // 软件更新整包安装需退出 App——先由主进程在代理空闲时自动应用（见 index.ts 自动安装闸门）；
+  // 代理在跑或自动安装失败时,这里保留兜底入口。core/data/订阅(restart=proxy)由
+  // GlobalUpdateNotice 自动应用,不占常驻入口。设置页 GlobalUpdatePanel 为完整面板。
+  // selector 必须返回稳定引用:zustand v5 走 useSyncExternalStore,这里若 .filter() 会在
+  // 每次 getSnapshot 产生新数组 → 「getSnapshot should be cached」无限重渲染(整页抽搐级)。
   const updateItems = useUpdateStore((state) => state.snapshot.items);
-  const ready = updateItems.filter(
+  const pending = updateItems.filter(
     (item) => item.status === 'ready' && item.restart === 'software'
   );
   const [busy, setBusy] = useState<string | null>(null);

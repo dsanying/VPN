@@ -2044,13 +2044,17 @@ if (gotTheLock) {
           unlockService?.run(true),
         ]);
       },
-      publish: (snapshot) =>
+      publish: (snapshot) => {
         ipcEventEmitter.sendToAll(IPC_CHANNELS.EVENT_UPDATE_PROGRESS, {
           status: snapshot.checking ? 'checking' : 'idle',
           percentage: 0,
           message: '',
           globalUpdates: snapshot,
-        }),
+        });
+        // 就绪快照落地 → 检查空闲自动安装闸门(内部判 readiness,代理在跑时 no-op)。
+        // 异步推迟:apply() 内的 publish 若同步回调 apply 会撞 applying 互斥锁。
+        setTimeout(() => void maybeAutoInstallSoftwareUpdate('snapshot'), 0).unref?.();
+      },
       prepare: {
         software: async () => {
           if (!app.isPackaged) return { kind: 'software', status: 'unsupported' };
@@ -2292,12 +2296,56 @@ if (gotTheLock) {
       // 正常停止时，重置错误状态
       updateTrayMenuState(false, false);
 
+      // 代理进入空闲 → 软件更新(已下载就绪)可自动安装而不断流。
+      void maybeAutoInstallSoftwareUpdate('proxy-stopped');
+
       // 系统代理清理不在此监听器内做：emit('stopped') 与 stop() 的 finally（复位 stopping）有时序竞态，
       // 在此清理会绕过 stopping 门控 → 重启路径误清并删新会话 marker（C1 的 H-1 回归）。
       // 所有「进程不再运行」的路径都已在 ProxyManager 内部**同步门控**地调过 ensureSystemProxyCleared：
       // handleProcessExit（信号死/崩溃终态）、performHealthCheck（达上限）、giveUpAutoRestart、restart 的 start
       // 腿失败、退避 abort；用户主动停止由 IPC/托盘在 stop() 前置清理。故此处删除，避免越过门控。
     });
+
+    // ── 软件更新空闲自动安装 ─────────────────────────────────────────────
+    // 整包软件更新必须退出 App(脚本退出后自动替换 + 重开),代理在跑时装更新会强制断流。
+    // 故仅在「代理空闲」时自动执行:就绪快照发布时 + 代理停止时 + 周期兜底,三路共用本闸门。
+    // captureUpdateRestartState 已记录退出前代理态,重启后自动恢复连接;hot-swap 路径更是不重启。
+    // 失败不静默重试——同一版本每会话只自动试一次,随后交页脚「重启更新」手动入口。
+    let softwareAutoInstallPending = false;
+    const softwareAutoInstallTried = new Set<string>();
+    async function maybeAutoInstallSoftwareUpdate(trigger: string): Promise<void> {
+      if (!globalUpdateService || !updateService.canAutoInstallPreparedUpdate()) return;
+      const item = globalUpdateService
+        .getSnapshot()
+        .items.find((entry) => entry.kind === 'software' && entry.status === 'ready');
+      if (!item) return;
+      if (softwareAutoInstallTried.has(item.version ?? '')) return;
+      if (proxyManager?.getStatus().running) return;
+      softwareAutoInstallTried.add(item.version ?? '');
+      if (softwareAutoInstallPending) return;
+      softwareAutoInstallPending = true;
+      logManager.addLog(
+        'info',
+        `软件更新 v${item.version ?? '?'} 已就绪且代理空闲,自动安装(${trigger})`,
+        'Main'
+      );
+      try {
+        await globalUpdateService.apply('software');
+      } catch (error) {
+        logManager.addLog(
+          'warn',
+          `软件更新自动安装失败,保留侧边栏手动入口: ${error instanceof Error ? error.message : error}`,
+          'Main'
+        );
+      } finally {
+        softwareAutoInstallPending = false;
+      }
+    }
+
+    // 兜底心跳:覆盖「就绪时代理在跑,之后代理从未停、但会话中再无人触发 publish/stopped」
+    // 的角落(例如长开应用 + 用户某天手动关了代理但没产生任何快照变化——其实 stop 会发 stopped,
+    // 此节拍主要兜底「prepare 成功但 publish 时机错过」类边角)。60s 周期、闸门内零成本。
+    setInterval(() => void maybeAutoInstallSoftwareUpdate('interval'), 60_000).unref?.();
 
     // 注入 LogManager 供 IPC 注册器在生产环境记录「同名 channel 重复注册」等异常（须在任意 register* 之前）
     setIpcLogger(logManager);
