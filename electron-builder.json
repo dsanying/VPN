@@ -9,10 +9,13 @@
   },
   "files": [
     "dist/**/*",
+    "!**/*.map",
+    "!**/*.d.ts",
     "package.json",
     "LICENSE.txt",
     "licenses/**/*"
   ],
+  "compression": "maximum",
   "electronLanguages": [
     "zh-CN",
     "zh-TW",
@@ -159,6 +162,7 @@
     ],
     "title": "${productName}-${version}",
     "icon": "build/icon.icns",
+    "format": "ULFO",
     "backgroundColor": "#ffffff",
     "window": {
       "width": 540,

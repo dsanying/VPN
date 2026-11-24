@@ -168,7 +168,7 @@ jobs:
             # 此构建无 Developer ID/公证；发布说明必须如实注明，不能引导关闭系统保护。
             node scripts/create-dmg.mjs -volname "暗影VPN ${VERSION} (${ARCH})" \
               -srcfolder "$TEMP_DIR" \
-              -ov -format UDZO \
+              -ov -format ULFO \
               "$DMG_PATH"
             rm -rf "$TEMP_DIR"
             trap - EXIT
