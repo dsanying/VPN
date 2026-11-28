@@ -520,6 +520,25 @@ async function promptHelperGate(
   return 'proceed';
 }
 
+/**
+ * 更新重启收尾（startup-tasks 在消费 restartState 后调用，一次性）：macOS app 更新只换 .app，
+ * 已注册的 helper daemon 仍是旧二进制（helperBinaryMismatch →「需修复」）。把它并入「重启更新」
+ * 同一流程：首启检测漂移即经统一 helper 引导弹一次授权重装，不再等用户到设置页手动点「修复」。
+ * 仅限 darwin+打包版+二进制漂移；confdir/pathMismatch、!ready、backgroundDisabled 仍走连接时既有引导。
+ */
+async function maybeRepairHelperAfterUpdate(): Promise<void> {
+  if (process.platform !== 'darwin' || !app.isPackaged || !helperManager) return;
+  let hs: HelperStatus;
+  try {
+    hs = await helperManager.getStatus(true);
+  } catch {
+    return;
+  }
+  if (!hs.helperBinaryMismatch) return;
+  logManager.addLog('info', '检测到更新后 helper 二进制漂移，走统一引导重装修复', 'Main');
+  await promptHelperGate(hs, {} as UserConfig);
+}
+
 process.on('uncaughtException', (error: Error) => {
   console.error('Uncaught Exception:', error);
   if (logManager) {
@@ -2614,6 +2633,9 @@ if (gotTheLock) {
       updateTrayMenuState,
       // App 自更新重启后恢复更新前的连接状态（autoConnect 关着也恢复，一次性）。
       consumeUpdateRestart: () => new UpdateRestartStateStore(app.getPath('userData')).consume(),
+
+      // 更新重启收尾：macOS helper 二进制漂移 → 统一引导重装（并入「重启更新」流程，不再手动点修复）。
+      onUpdateRestart: () => maybeRepairHelperAfterUpdate(),
     });
 
     // 订阅自动更新由 GlobalUpdateService 的六小时维护时钟与共享同步入口接管。

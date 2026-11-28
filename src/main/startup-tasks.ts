@@ -15,8 +15,10 @@ export interface StartupTaskDeps {
   logManager: LogManager;
   getProxyManager: () => ProxyManager | null;
   updateTrayMenuState: (isProxyRunning: boolean, hasError?: boolean) => void;
-  /** App 自更新重启后消费一次性标记（userData/update-restart.json）；无标记/已过期 → null。 */
+  /** App 自更新重启后恢复更新前的连接状态（一次性，消费标记）。 */
   consumeUpdateRestart?: () => UpdateRestartState | null;
+  /** 更新重启后的附加收尾（如 macOS helper 二进制漂移 → 统一引导重装）；注入 index.ts 侧实现。 */
+  onUpdateRestart?: () => Promise<void>;
 }
 
 /**
@@ -60,6 +62,14 @@ export function scheduleStartupTasks(deps: StartupTaskDeps): void {
       // 无论走哪个分支都先消费（删除文件），开 autoConnect 的用户已由下方恢复，不留陈旧标记。
       const restartState = deps.consumeUpdateRestart?.() ?? null;
 
+      // 更新重启收尾（一次性，标记已消费防每启重复）：macOS app 更新携带新 helper → 统一引导重装修复。
+      if (restartState) {
+        try {
+          await deps.onUpdateRestart?.();
+        } catch (hookErr) {
+          logManager.addLog('warn', `更新重启收尾异常: ${hookErr}`, 'Main');
+        }
+      }
       if (config.autoConnect && config.selectedServerId) {
         logManager.addLog('info', '启动时自动连接已启用，正在连接...', 'Main');
 
